@@ -15,6 +15,3 @@ Done when:
 - the client writes `params` (`DaemonClient`), shown against `ScriptedDaemon`;
 - the skill `add-daemon-method` says how a method reads its parameters, and is applied once to the scripted method;
 - `bin/ci` green, coverage 100%.
-
-Depends on: 30-10-2026-2001-strings-with-escapes-become-text-blocks (the same tests and sources: the text blocks pass
-comes first, then the diagnostics chain).

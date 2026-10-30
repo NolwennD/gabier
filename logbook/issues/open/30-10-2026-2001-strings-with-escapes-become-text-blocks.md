@@ -1,15 +1,16 @@
 # Concatenated strings with escapes become text blocks
 
 Opened: 30-10-2026 20:01
+On hold: it waits for gabier to run a jdtls code action itself (dogfooding, decision of the user of 30-10-2026: no throwaway
+driver in any language); the daemon chain (parameters, diagnostics, jdtls on demand) and a command for code actions come first.
 
 `.claude/rules/domain.md` ("Modern Java") asks for text blocks wherever a string spans several lines or escapes special
 characters. The code written before has about thirty concatenations with `\"` or `\n` (JSON messages and fixtures of the
 tests above all). One pass rewrites them, through jdtls and not by text editing (`.claude/rules/workflow.md`): its quick
 assist "Convert to text block" is a code action, and the cleanup `stringConcatToTextBlock` is the same rewrite over a
-file. The driver is written in Java, not in Python: `JdtlsSession`, `JdtlsClient` and LSP4J of the `daemon` module
-already start jdtls and talk to it (see `:daemon:jdtlsProbe`), and the worker adds a throwaway program next to its
-work, outside the repository, which sends the code action and applies its edit; it is not committed. The first check
-is that jdtls really offers the action on the sites; if it does not, say so and stop.
+file. The pass is done with gabier itself (`.claude/rules/workflow.md`, dogfooding), by the command that runs a jdtls
+code action on a range or a file, not by a script. The first check is that jdtls really offers the action on the
+sites; if it does not, say so and stop.
 
 Done when:
 - every concatenation of literals with an escaped quote or a `\n` in the main and test code is a text block, or stays

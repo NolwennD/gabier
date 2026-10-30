@@ -7,8 +7,11 @@
    the expected reason**.
 3. Write the minimum code to make it pass, without breaking the previous ones. Cases discovered along the way go to the
    list, not to the code.
-4. Refactor if useful, tests green. Back to 2 as long as the list is not empty. A Java refactoring goes through jdtls,
-   not through text editing: with gabier itself once it can do it, until then with chatbot's `jdtls-driver.py`.
+4. Refactor if useful, tests green. Back to 2 as long as the list is not empty. A Java refactoring goes through gabier
+   itself (dogfooding): the latest installed version that works, not the build in progress, so that a broken build does
+   not stop its own repair. An operation gabier does not have yet is done as a text edit and becomes an issue
+   (`ticket --issue-only`); no other tool, no script of any language stands in for it, and chatbot's Python driver is
+   not used any more.
 
 Let the compiler drive: a type or a method is **used** before it is created. Never write code "for later".
 
