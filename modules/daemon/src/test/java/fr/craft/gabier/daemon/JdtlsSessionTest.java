@@ -355,6 +355,27 @@ class JdtlsSessionTest {
         }
 
         @Test
+        void endsTheChildrenOfALauncherThatDiedBeforeTheClose() throws Exception {
+            fake.listsProjects(URI_A).child("sh", "-c", "sleep 300 & wait");
+            JdtlsSession session = start();
+            List<ProcessHandle> orphans = fake.process().descendants().toList();
+            assertThat(orphans).as("the process the launcher started in turn").isNotEmpty();
+            fake.process().destroyForcibly().onExit().get();
+            assertThat(orphans).as("orphaned, not dead").allMatch(ProcessHandle::isAlive);
+            assertThat(fake.process().descendants())
+                    .as("the tree is now unreadable")
+                    .isEmpty();
+
+            session.close();
+
+            for (ProcessHandle orphan : orphans) {
+                orphan.onExit().get(10, TimeUnit.SECONDS);
+            }
+            assertThat(orphans).noneMatch(ProcessHandle::isAlive);
+            assertThat(session.dataDirectory()).doesNotExist();
+        }
+
+        @Test
         void deletesTheDataDirectoryWithWhatJdtlsWroteInIt() throws Exception {
             fake.listsProjects(URI_A);
             JdtlsSession session = start();

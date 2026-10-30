@@ -27,7 +27,7 @@ import org.eclipse.lsp4j.services.LanguageServer;
  * when the process dies (with its exit code) or when jdtls reports an error, and every timeout names what was awaited.
  *
  * <p>Closing the session asks jdtls to shut down and ends the whole process tree (the launcher starts a java process
- * in turn), then deletes the data folder; it does so too when the start fails.
+ * in turn, even when the launcher died first: the tree is recorded once the session is ready), then deletes the data folder; it does so too when the start fails.
  */
 final class JdtlsSession implements AutoCloseable {
 
@@ -42,6 +42,7 @@ final class JdtlsSession implements AutoCloseable {
     private final JdtlsWatch watch;
     private final Future<Void> listening;
     private List<Path> projects = List.of();
+    private List<ProcessHandle> started = List.of();
     private boolean closed;
 
     private JdtlsSession(
@@ -138,6 +139,8 @@ final class JdtlsSession implements AutoCloseable {
             return client.serviceReady();
         });
         projects = awaitProjects();
+        // The tree can only be read while its launcher lives: what runs now is remembered for the close.
+        started = process.descendants().toList();
     }
 
     /** Asks {@code java.project.getAll} until jdtls lists every expected project, and returns what it listed. */
@@ -181,7 +184,10 @@ final class JdtlsSession implements AutoCloseable {
             return;
         }
         closed = true;
-        List<ProcessHandle> tree = Stream.concat(process.descendants(), Stream.of(process.toHandle()))
+        // The descendants recorded at the start answer for the launcher having died since: its children outlive it.
+        List<ProcessHandle> tree = Stream.of(process.descendants(), started.stream(), Stream.of(process.toHandle()))
+                .flatMap(members -> members)
+                .distinct()
                 .toList();
         try {
             if (askToLeave()) {
