@@ -24,3 +24,12 @@ Depends on: core-operations-on-a-fake-language-server (the core comes first, wit
 The daemon will depend on the domain of the core (the change set, the port): the architecture rule that keeps the
 contexts off each other's domain sees `daemon` as a context. The daemon is the composition root and the home of the
 adapters, so the rule is adjusted here (it is part of this ticket) and the reason is said in the resolution.
+
+## Resolution
+
+Done in e9f484f.
+
+- `bin/ci` (worker, one full run): format, build, test, jdtls passed; native skipped ("no changed file reaches the native cli"). Tests: cli 9, core 218, daemon 80, quickProbeTest 27, protocol 4, shared 236, architecture 16, 0 failures. JaCoCo 100% line and branch, no coverage exclusion left in the adapter.
+- Kill proof: `kill -9` of jdtls by pid made the probe fail with `jdtls exited with code 137 ...`; no process or `/tmp/gabier-jdtls-data-*` left.
+- Review (once): one blocking finding, fixed in the commit: the exclusion on `JdtlsSession.awaitEnd` was not justified (a hand-written `Process` reaches both branches: `StubbornProcess`). The `opens fr.craft.gabier.daemon to com.google.gson, org.eclipse.lsp4j.jsonrpc` in `module-info.java` is needed (LSP4J reflects on `JdtlsClient.status`, Gson fills `Status`) and was confirmed by the review.
+- Left open as issues: orphaned jdtls child when the launcher dies before `close()`; fragile tests in `JdtlsSessionTest`; `selfCheck` blind to the jdtls client on the module path; package conflict reported by jdtls on the integrationTest sources.
