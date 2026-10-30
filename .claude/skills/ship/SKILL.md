@@ -42,6 +42,10 @@ git rev-parse --abbrev-ref HEAD; git worktree list --porcelain; git remote
 
 ### 1. Neutral review
 
+A review is made on code that can go to `main` without breaking anything: the worker's `bin/ci` is green on this very
+commit (the pre-flight checks it, and sends the worker back after a rebase that touched code). What a tool proves is not
+re-read by a person: the reviewer's job starts where the tools stop.
+
 The supervisor does not read the code: a fresh agent does (`general-purpose`, `model: "sonnet"`, no worktree, read-only),
 one that did not do the work and has none of its reasoning. The review starts from the **business cases handled by the
 tests**, not from a full read of the diff, to keep its context small. Give it only: the issue file, the range
@@ -55,7 +59,11 @@ tests**, not from a full read of the diff, to keep its context small. Give it on
 > settle a case, and skip code the issue says is copied from elsewhere or generated. Also check: idiomatic modern Java
 > for the module's release; each `@ExcludeFromGeneratedCodeCoverage` and `@SuppressWarnings` use (`git diff main..<branch>
 > | grep`) has a real reason; the core's purity (the domain depends only on `java..` and the allowed packages); nothing
-> beyond the issue. Answer short, explicit and unambiguous, in under 300 words. Either "nothing to report", or two lists,
+> beyond the issue. The branch has passed `bin/ci` and rebuilds, so what the compiler, Error Prone, NullAway, JaCoCo and
+> the architecture tests prove is not yours to check: a removed method still used, a missing import, a type error, a
+> dependency rule, a line or a branch without a test. Do not search the rest of the project for usages and do not run a
+> build. Only what a tool cannot see is yours: a case no test covers, a test that cannot fail, a wrong or misleading
+> behaviour, a reason that is not real. Answer short, explicit and unambiguous, in under 300 words. Either "nothing to report", or two lists,
 > BLOCKING (a `Done when` point is not met) then SUGGESTIONS, one finding per line in this form: `file:line — the
 > problem — the input or case that shows it`. No hedging ("maybe", "might"): a finding you cannot show with a case is
 > left out. No praise, no summary of the change.
