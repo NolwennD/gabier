@@ -6,6 +6,7 @@ import fr.craft.gabier.editing.domain.ChangeApplier;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.FileChange.EditFile;
+import fr.craft.gabier.editing.domain.FileChange.RenameFile;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.TextEdit;
@@ -15,8 +16,11 @@ import fr.craft.gabier.editing.infrastructure.secondary.NioFileStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -55,6 +59,44 @@ class ScenariosTest {
         String[] lines = scenario.files().get(file).split("\n", -1);
 
         return position.line() < lines.length && position.column() <= lines[position.line()].length();
+    }
+
+    /** The name where it is a whole word: {@code greet} is in {@code greet(} and not in {@code greeter}. */
+    private static Pattern wholeWord(String name) {
+        return Pattern.compile("(?<![\\p{L}\\p{N}_$])" + Pattern.quote(name) + "(?![\\p{L}\\p{N}_$])");
+    }
+
+    /**
+     * What each file of the project should hold once the rename is applied: its source with the whole word of the old
+     * name replaced by the new name, at the path where the change set moves it (the same path if it does not).
+     */
+    private static Map<Path, String> expectedAfter(Scenario inside, String oldName, String newName) {
+        List<FileChange> changes = ((Answer.Renamed) inside.answer()).changes().changes();
+        Map<Path, String> expected = new HashMap<>();
+
+        inside.files().forEach((path, source) -> {
+            Path movedTo = changes.stream()
+                    .filter(RenameFile.class::isInstance)
+                    .map(RenameFile.class::cast)
+                    .filter(rename -> rename.from().equals(path))
+                    .map(RenameFile::to)
+                    .findFirst()
+                    .orElse(path);
+            expected.put(movedTo, wholeWord(oldName).matcher(source).replaceAll(Matcher.quoteReplacement(newName)));
+        });
+
+        return expected;
+    }
+
+    private static Map<Path, String> filesUnder(Path root) throws IOException {
+        Map<Path, String> files = new HashMap<>();
+        try (Stream<Path> written = Files.walk(root)) {
+            for (Path file : written.filter(Files::isRegularFile).toList()) {
+                files.put(file, Files.readString(file));
+            }
+        }
+
+        return files;
     }
 
     private static List<Scenario> answeredWith(Class<? extends Answer> answer) {
@@ -218,8 +260,7 @@ class ScenariosTest {
             inside.writeProject(root);
             Request.Rename request = (Request.Rename) scenario.request();
             String oldName = identifierAt(scenario, request.file(), request.position());
-            Pattern oldWord =
-                    Pattern.compile("(?<![\\p{L}\\p{N}_$])" + Pattern.quote(oldName) + "(?![\\p{L}\\p{N}_$])");
+            Pattern oldWord = wholeWord(oldName);
 
             new ChangeApplier(new NioFileStore()).apply(((Answer.Renamed) inside.answer()).changes());
 
@@ -232,6 +273,24 @@ class ScenariosTest {
                             .isFalse();
                 }
             }
+        }
+    }
+
+    @Test
+    void turnsEveryFileIntoItsSourceWithTheWholeWordOfTheOldNameReplacedByTheNewOne(@TempDir Path directory)
+            throws IOException {
+        for (Scenario scenario : answeredWith(Answer.Renamed.class)) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+            Request.Rename request = (Request.Rename) scenario.request();
+            String oldName = identifierAt(scenario, request.file(), request.position());
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.Renamed) inside.answer()).changes());
+
+            assertThat(filesUnder(root))
+                    .as(scenario.name())
+                    .isEqualTo(expectedAfter(inside, oldName, request.newName()));
         }
     }
 

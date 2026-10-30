@@ -51,9 +51,10 @@ request the adapter already implements adds its replay for free.
    the line `<scenario>: jdtls answered ...` of the replay (indentation and line breaks included), never retyped and
    never split into one edit per occurrence. The replay compares the change set with `isEqualTo` (the order counts:
    edits first, the move of a file last, under its old path), then applies it to a copy of the project and compiles
-   it, and checks that the sources of the project are untouched whatever was asked. `ScenariosTest` only checks what
-   holds for any cut of the edits (inside the file, on the symbol, starting with the new name) and that the old name
-   is gone once the answer is applied.
+   it, and checks that the sources of the project are untouched whatever was asked. `ScenariosTest` checks what
+   holds for any cut of the edits (inside the file, on the symbol, starting with the new name) and that, once the
+   answer is applied, each file of the project is its source with the whole word of the old name replaced by the new
+   name (at its new path when the file is moved).
 8. **A request the adapter does not implement yet** is not replayed: the ticket that adds the request to the adapter
    extends `replayed` in `ScenarioReplayTest`, makes `ask` and `replay` call it, and runs this skill for each scenario
    that was waiting.
