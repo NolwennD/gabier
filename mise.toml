@@ -1,0 +1,10 @@
+[tools]
+# The hk version is also written in the amends URL of hk.pkl: change both together.
+hk = "2.9.0"
+
+[tools."github:openjavaformat/open-java-format"]
+version = "2.98.0.6"
+
+[hooks]
+# Installs the Git pre-commit hook (see hk.pkl) as part of `mise install`.
+postinstall = "hk install --mise"

@@ -8,31 +8,31 @@ import org.junit.jupiter.api.Test;
 
 class ProtocolVersionTest {
 
-  @Nested
-  class Validation {
+    @Nested
+    class Validation {
 
-    @Test
-    void rejectsNegativeMajor() {
-      assertThrows(IllegalArgumentException.class, () -> new ProtocolVersion(-1, 0));
+        @Test
+        void rejectsNegativeMajor() {
+            assertThrows(IllegalArgumentException.class, () -> new ProtocolVersion(-1, 0));
+        }
+
+        @Test
+        void rejectsNegativeMinor() {
+            assertThrows(IllegalArgumentException.class, () -> new ProtocolVersion(0, -1));
+        }
     }
 
-    @Test
-    void rejectsNegativeMinor() {
-      assertThrows(IllegalArgumentException.class, () -> new ProtocolVersion(0, -1));
-    }
-  }
+    @Nested
+    class Rendering {
 
-  @Nested
-  class Rendering {
+        @Test
+        void rendersAsMajorDotMinor() {
+            assertEquals("2.7", new ProtocolVersion(2, 7).toString());
+        }
 
-    @Test
-    void rendersAsMajorDotMinor() {
-      assertEquals("2.7", new ProtocolVersion(2, 7).toString());
+        @Test
+        void currentIsZeroPointOne() {
+            assertEquals("0.1", ProtocolVersion.CURRENT.toString());
+        }
     }
-
-    @Test
-    void currentIsZeroPointOne() {
-      assertEquals("0.1", ProtocolVersion.CURRENT.toString());
-    }
-  }
 }

@@ -1,0 +1,12 @@
+amends "package://github.com/jdx/hk/releases/download/v2.9.0/hk@2.9.0#/Config.pkl"
+
+// The formatter is run from its native binary (pinned in mise.toml), not through Gradle, to keep the hook fast.
+local openJavaFormat = new Step {
+  glob = List("*.java")
+  check = "open-java-format --dry-run --set-exit-if-changed {{files}}"
+  fix = "open-java-format --replace {{files}}"
+}
+
+steps {
+  ["open-java-format"] = openJavaFormat
+}
