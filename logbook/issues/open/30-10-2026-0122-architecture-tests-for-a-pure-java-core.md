@@ -7,7 +7,9 @@ on `java..` (a short allow-list stays empty unless the user decides otherwise), 
 not depend on infrastructure, and primary and secondary adapters do not depend on each other. JPMS
 already enforces the edges between modules at compile time, so these tests cover the package rules
 inside a module and the purity of the domain. One more rule: every use of
-`@ExcludeFromGeneratedCodeCoverage` has a non-blank reason.
+`@ExcludeFromGeneratedCodeCoverage` has a non-blank reason. That annotation lives in the `shared` module
+(`fr.craft.gabier.shared..`): whether the domain may depend on it, and so whether the allow-list admits that
+package, is the user's decision, to ask when the test is written.
 
 Done when:
 - the tests run in `./gradlew check` and pass on the current modules;
