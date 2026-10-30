@@ -6,8 +6,10 @@ import java.nio.channels.Pipe;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -15,6 +17,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 import org.eclipse.lsp4j.Diagnostic;
 import org.eclipse.lsp4j.DidChangeConfigurationParams;
 import org.eclipse.lsp4j.DidChangeTextDocumentParams;
@@ -67,6 +70,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private String[] child = {"sleep", "300"};
 
     private int children;
+    private volatile List<ProcessHandle> launched = List.of();
     private CompletableFuture<ProcessHandle> onExitOfHandle;
     private boolean answersInitialize = true;
     private String status = "ServiceReady";
@@ -237,12 +241,30 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
 
     private void awaitChildren(Process started) throws IOException {
         long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
-        while (started.descendants().count() < children) {
+        List<ProcessHandle> running = executed(started);
+        while (running.size() < children) {
             if (System.nanoTime() > deadline) {
+                started.destroyForcibly();
                 throw new IOException("the launcher did not start " + children + " process(es) in time");
             }
-            Thread.onSpinWait();
+            LockSupport.parkNanos(Duration.ofMillis(5).toNanos());
+            running = executed(started);
         }
+        launched = running;
+    }
+
+    /** The descendants that run their own program: a process just forked still has the arguments of its parent. */
+    private static List<ProcessHandle> executed(Process launcher) {
+        Optional<String[]> own = launcher.info().arguments();
+        return launcher.descendants()
+                .filter(child -> child.info().arguments().isPresent()
+                        && !Arrays.equals(child.info().arguments().get(), own.orElse(null)))
+                .toList();
+    }
+
+    /** The processes the launcher had started when {@code start} returned (see {@link #whoseLauncherStarts}). */
+    List<ProcessHandle> launched() {
+        return launched;
     }
 
     /** Closes the pipes: from now on, writing to the fake fails as writing to a dead jdtls does. */
@@ -313,6 +335,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /** Whatever a test left running is ended, so that a red test leaves nothing behind. */
     @Override
     public void close() throws Exception {
+        launched.forEach(ProcessHandle::destroyForcibly);
         if (process != null) {
             process.descendants().forEach(ProcessHandle::destroyForcibly);
             process.destroyForcibly();

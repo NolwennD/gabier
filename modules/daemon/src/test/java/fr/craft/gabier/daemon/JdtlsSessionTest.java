@@ -424,20 +424,101 @@ class JdtlsSessionTest {
             fake.listsProjects(URI_A).child("sh", "-c", "sleep 300 & wait").whoseLauncherStarts(1);
             JdtlsSession session = start();
             List<ProcessHandle> orphans = fake.process().descendants().toList();
-            assertThat(orphans).as("the process the launcher started in turn").isNotEmpty();
-            fake.process().destroyForcibly().onExit().get();
-            assertThat(orphans).as("orphaned, not dead").allMatch(ProcessHandle::isAlive);
-            assertThat(fake.process().descendants())
-                    .as("the tree is now unreadable")
-                    .isEmpty();
+            try {
+                assertThat(orphans)
+                        .as("the process the launcher started in turn")
+                        .isNotEmpty();
+                fake.process().destroyForcibly().onExit().get();
+                assertThat(orphans).as("orphaned, not dead").allMatch(ProcessHandle::isAlive);
+                assertThat(fake.process().descendants())
+                        .as("the tree is now unreadable")
+                        .isEmpty();
 
-            session.close();
+                session.close();
 
-            for (ProcessHandle orphan : orphans) {
-                orphan.onExit().get(10, TimeUnit.SECONDS);
+                assertEnded(orphans);
+                assertThat(session.dataDirectory()).doesNotExist();
+            } finally {
+                orphans.forEach(ProcessHandle::destroyForcibly);
             }
-            assertThat(orphans).noneMatch(ProcessHandle::isAlive);
-            assertThat(session.dataDirectory()).doesNotExist();
+        }
+
+        @Test
+        void endsWhatALauncherStartedBeforeItDiedDuringTheStart() throws Exception {
+            // The launcher leaves while jdtls has not answered initialize, one second after it started a process.
+            fake.child("sh", "-c", "sleep 300 & sleep 1; exit 3")
+                    .whoseLauncherStarts(1)
+                    .neverAnswersInitialize();
+
+            assertThatThrownBy(() -> start())
+                    .isInstanceOf(JdtlsException.class)
+                    .hasMessageContaining("jdtls exited with code 3");
+
+            List<ProcessHandle> orphans = fake.launched();
+            try {
+                assertThat(orphans).as("the process the launcher started").isNotEmpty();
+                assertEnded(orphans);
+            } finally {
+                orphans.forEach(ProcessHandle::destroyForcibly);
+            }
+        }
+
+        @Test
+        void endsWhatALauncherStartedAfterTheSessionWasReady() throws Exception {
+            fake.listsProjects(URI_A)
+                    .child("sh", "-c", "sleep 300 & sleep 1; sleep 301 & wait")
+                    .whoseLauncherStarts(1);
+            JdtlsSession session = start();
+            List<ProcessHandle> late = List.of();
+            try {
+                late = awaitProcess("301");
+                awaitRecorded(session, late.getFirst());
+                fake.process().destroyForcibly().onExit().get();
+
+                session.close();
+
+                assertEnded(late);
+                assertEnded(fake.launched());
+            } finally {
+                late.forEach(ProcessHandle::destroyForcibly);
+            }
+        }
+
+        private List<ProcessHandle> awaitProcess(String seconds) throws InterruptedException {
+            long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            List<ProcessHandle> found = running(fake.process().descendants().toList(), seconds);
+            while (found.isEmpty() && System.nanoTime() < deadline) {
+                Thread.sleep(10);
+                found = running(fake.process().descendants().toList(), seconds);
+            }
+            assertThat(found).as("the process started later by the launcher").isNotEmpty();
+            return found;
+        }
+
+        private void awaitRecorded(JdtlsSession session, ProcessHandle process) throws InterruptedException {
+            long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            while (!session.recordedProcesses().contains(process) && System.nanoTime() < deadline) {
+                Thread.sleep(10);
+            }
+            assertThat(session.recordedProcesses())
+                    .as("the processes recorded by the session")
+                    .contains(process);
+        }
+
+        /** The processes among these that run {@code sleep <seconds>}. */
+        private static List<ProcessHandle> running(List<ProcessHandle> processes, String seconds) {
+            return processes.stream()
+                    .filter(process -> process.info().arguments().stream()
+                            .flatMap(Stream::of)
+                            .anyMatch(seconds::equals))
+                    .toList();
+        }
+
+        private static void assertEnded(List<ProcessHandle> processes) throws Exception {
+            for (ProcessHandle process : processes) {
+                process.onExit().get(10, TimeUnit.SECONDS);
+            }
+            assertThat(processes).noneMatch(ProcessHandle::isAlive);
         }
 
         @Test

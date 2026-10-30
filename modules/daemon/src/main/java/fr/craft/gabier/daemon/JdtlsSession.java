@@ -4,9 +4,13 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -26,12 +30,17 @@ import org.eclipse.lsp4j.services.LanguageServer;
  * to {@code initialize}, for the {@code ServiceReady} status, and for the list of projects jdtls gives. It fails at once
  * when the process dies (with its exit code) or when jdtls reports an error, and every timeout names what was awaited.
  *
- * <p>Closing the session asks jdtls to shut down and ends the whole process tree (the launcher starts a java process
- * in turn, even when the launcher died first: the tree is recorded once the session is ready), then deletes the data folder; it does so too when the start fails.
+ * <p>Closing the session asks jdtls to shut down, ends the whole process tree and deletes the data folder; it does so
+ * too when the start fails. The launcher starts a java process in turn, and the tree of a process that died cannot be
+ * read any more: the session therefore records the tree from the moment the process started, again each time it is
+ * asked (the poll interval of the settings, at most a quarter of a second), and a last time at the close. What the
+ * launcher started and stopped between two readings, or started and left behind in less than that before dying, is
+ * not seen.
  */
 final class JdtlsSession implements AutoCloseable {
 
     private static final String DATA_DIRECTORY_PREFIX = "gabier-jdtls-data-";
+    private static final Duration MAXIMUM_RECORD_INTERVAL = Duration.ofMillis(250);
 
     private final JdtlsSettings settings;
     private final Process process;
@@ -42,7 +51,8 @@ final class JdtlsSession implements AutoCloseable {
     private final JdtlsWatch watch;
     private final Future<Void> listening;
     private List<Path> projects = List.of();
-    private List<ProcessHandle> started = List.of();
+    private final Set<ProcessHandle> started = ConcurrentHashMap.newKeySet();
+    private final Thread recorder;
     private boolean closed;
 
     private JdtlsSession(
@@ -60,6 +70,10 @@ final class JdtlsSession implements AutoCloseable {
         this.listening = launcher.startListening();
         this.server = launcher.getRemoteProxy();
         this.watch = new JdtlsWatch(process, client.error(), settings.timeout());
+        this.recorder = Thread.ofPlatform()
+                .daemon()
+                .name("jdtls-process-tree-" + process.pid())
+                .unstarted(this::record);
     }
 
     /**
@@ -88,6 +102,7 @@ final class JdtlsSession implements AutoCloseable {
         }
         var session = new JdtlsSession(settings, data, connection, log, diagnostics);
         log.accept("jdtls started, pid " + session.pid() + ", data " + data);
+        session.recordTheTree();
         try {
             session.awaitReady();
         } catch (InterruptedException | RuntimeException failure) {
@@ -112,6 +127,29 @@ final class JdtlsSession implements AutoCloseable {
     /** The folders of the projects jdtls has imported, as it listed them when the session became ready. */
     List<Path> projects() {
         return projects;
+    }
+
+    /** The processes of the tree of jdtls that the session has seen so far, and will end at the close. */
+    List<ProcessHandle> recordedProcesses() {
+        return List.copyOf(started);
+    }
+
+    /** Records the tree now, then keeps recording it, until the close, while the launcher may start other processes. */
+    private void recordTheTree() {
+        started.addAll(process.descendants().toList());
+        recorder.start();
+    }
+
+    private void record() {
+        Duration interval = Collections.min(List.of(settings.pollInterval(), MAXIMUM_RECORD_INTERVAL));
+        try {
+            while (true) {
+                started.addAll(process.descendants().toList());
+                Thread.sleep(interval);
+            }
+        } catch (InterruptedException e) {
+            // The close stops the recording.
+        }
     }
 
     /** The raw language server, for whoever keeps talking to jdtls. */
@@ -139,8 +177,6 @@ final class JdtlsSession implements AutoCloseable {
             return client.serviceReady();
         });
         projects = awaitProjects();
-        // The tree can only be read while its launcher lives: what runs now is remembered for the close.
-        started = process.descendants().toList();
     }
 
     /**
@@ -196,11 +232,11 @@ final class JdtlsSession implements AutoCloseable {
             return;
         }
         closed = true;
-        // The descendants recorded at the start answer for the launcher having died since: its children outlive it.
-        List<ProcessHandle> tree = Stream.of(process.descendants(), started.stream(), Stream.of(process.toHandle()))
-                .flatMap(members -> members)
-                .distinct()
-                .toList();
+        // What was recorded answers for the launcher having died since: its children outlive it.
+        recorder.interrupt();
+        started.addAll(process.descendants().toList());
+        started.add(process.toHandle());
+        List<ProcessHandle> tree = List.copyOf(started);
         try {
             if (askToLeave()) {
                 process.waitFor(settings.shutdownTimeout().toMillis(), TimeUnit.MILLISECONDS);
