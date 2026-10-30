@@ -1,14 +1,16 @@
 ---
 paths:
   - 'modules/*/src/main/java/**'
+  - 'modules/*/src/test/java/**'
+  - 'architecture/src/**'
 ---
 
-# Java: domain, modelling and naming
+# Java: domain, modelling, naming and modern idioms
 
 The dependencies between layers, the purity of the domain, null safety and the architecture tests are in
-`.claude/rules/quality.md` and are not repeated here. This rule is about how a context is shaped. What no test checks
-yet is marked _(not checked yet)_: the first change that needs a check adds it as a `@Nested` class of
-`HexagonalArchTest`.
+`.claude/rules/quality.md` and are not repeated here. This rule is about how a context is shaped and how its Java is
+written; the last section applies to the tests too. What no test checks yet is marked _(not checked yet)_: the first
+change that needs a check adds it as a `@Nested` class of `HexagonalArchTest`.
 
 ## Placement
 
@@ -66,3 +68,15 @@ yet is marked _(not checked yet)_: the first change that needs a check adds it a
   is in the context's `XxxErrorKey`; an adapter turns it into a problem object, never into a message of its own.
 - An absence is an error thrown by the domain (`fileMissing`), not a `null` or an empty `Optional` that someone else
   has to read.
+
+## Modern Java
+
+- Write idiomatic code for the release of the module (records, sealed types, pattern matching, sequenced collections,
+  and what the release adds), not older idioms.
+- **Text blocks** (`"""`) for any string that spans several lines or escapes special characters: a JSON or JSON-RPC
+  message, a source file given to jdtls, a diff, a usage text. A concatenation of literals with `\"` or `\n` in it is
+  written as a text block, and `.formatted(...)` fills it in, never a `+` in the middle of it. A short string on one
+  line stays a plain literal, even with an escaped quote.
+- A text block ends with a line break unless its closing delimiter sits on the last line of text. Where the line matters
+  (the protocol of the daemon is one JSON object per line), join the lines with `\<line break>`, and keep a trailing
+  space with `\s`. A test that compares text compares what the block really holds, not what it looks like.
