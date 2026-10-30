@@ -16,4 +16,6 @@ Done when:
 - the hook works from a ticket worktree, since tickets are done there (not yet verified for hk);
 - the formatter reads the project's real code without error, `module-info.java` and the records
   included (Java 25 to 27 syntax is not confirmed by its README), and formatting twice changes
-  nothing.
+  nothing;
+- all the existing Java files are formatted, in this ticket (Nolwenn's go-ahead), so the hook starts
+  from a formatted tree.
