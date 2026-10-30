@@ -24,7 +24,8 @@ the review (see the `ticket` skill). The formatting hook, the coverage gate and 
   adapted from the `HexagonalArchTest` that [seed4j](https://github.com/seed4j/seed4j) generates, without its Spring
   parts; the project `:architecture` sees the classes of every module) also keep the packages free of cycles, the
   contexts (the sub-packages of `fr.craft.gabier` other than `shared`) off each other's domain (the `daemon`, composition
-  root and home of the adapters of the real servers, is the one that may depend on the domain of the others), each
+  root and home of the adapters of the real servers, is held to it too, except for the domains whose ports it
+  implements: `editing` today, the constant `IMPLEMENTED_DOMAINS` of the same test), each
   context a hexagon (domain, application, primary and secondary adapters, pointing towards the domain), the application
   off the infrastructure and the primary and secondary adapters apart, next to the module boundaries that JPMS already
   enforces at compile time.

@@ -36,7 +36,8 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   `JdtlsRequests` tells a request jdtls declines from one that fails). Its unit tests (`modules/daemon/src/test`, run by `:daemon:test`)
   use `FakeJdtls`: a language server in the test process over pipes, with a `sleep` or `sh` child process standing in
   for the jdtls process. No jdtls is started. The daemon depends on the domain of the core (`requires
-  fr.craft.gabier.core`): it is the composition root, the one exemption of the architecture rule on the contexts.
+  fr.craft.gabier.core`): it is the composition root, and the architecture rule on the contexts exempts it only for the
+  `editing` domain it implements (`IMPLEMENTED_DOMAINS` in `HexagonalArchTest`), not for the domain of any other context.
 - The daemon listens on a Unix socket (`gabier-daemon`, no argument): `Main` resolves the path
   (`SocketLocation`, in `protocol`: `GABIER_SOCKET`, else `$XDG_RUNTIME_DIR/gabier/gabier.sock`, else
   `/tmp/gabier-<uid>/gabier.sock`, at most 107 bytes), `DaemonServer` takes the socket (`SocketGuard`: private folder,

@@ -7,6 +7,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tngtech.archunit.base.HasDescription;
 import com.tngtech.archunit.core.domain.JavaAnnotation;
@@ -16,9 +18,15 @@ import com.tngtech.archunit.core.domain.properties.HasAnnotations;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchCondition;
+import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
+import fr.craft.gabier.daemon.violation.DependsOnAnotherContextDomain;
+import fr.craft.gabier.daemon.violation.DependsOnTheEditingDomain;
+import fr.craft.gabier.protocol.domain.ForeignDomainType;
 import fr.craft.gabier.shared.generation.ExcludeFromGeneratedCodeCoverage;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -63,6 +71,10 @@ class HexagonalArchTest {
     /** The only place where LSP4J lives: the daemon module (the {@code daemon} context). */
     private static final String DAEMON_PACKAGE = ROOT_PACKAGE + ".daemon";
 
+    /** The contexts whose domain another context may depend on, because it implements its ports. */
+    private static final Map<String, List<String>> IMPLEMENTED_DOMAINS =
+            Map.of(DAEMON_PACKAGE, List.of(ROOT_PACKAGE + ".editing"));
+
     private static final String LSP4J_PACKAGE = "org.eclipse.lsp4j";
 
     /** The JSpecify annotation that makes NullAway check a package; by name, as the module only needs it to compile. */
@@ -87,6 +99,32 @@ class HexagonalArchTest {
             .map(name -> ROOT_PACKAGE + "." + name)
             .toList();
 
+    /**
+     * The rule that a context only depends on its own domain and on the shared kernel, not on the domain of another
+     * context. The {@code daemon} is not a business context: it is the composition root and the home of the adapters of
+     * the real servers, so the rule applies to it too, except for the domains it implements, listed in {@link
+     * #IMPLEMENTED_DOMAINS} (today the {@code editing} domain, whose port {@code JavaLanguageServer} the jdtls adapter
+     * implements). Empty when no domain is left to forbid.
+     */
+    private static Optional<ArchRule> notDependOnOtherDomains(String context, List<String> allContexts) {
+        List<String> implemented = IMPLEMENTED_DOMAINS.getOrDefault(context, List.of());
+        String[] otherDomains = allContexts.stream()
+                .filter(other -> !other.equals(context) && !implemented.contains(other))
+                .map(other -> other + ".domain..")
+                .toArray(String[]::new);
+        if (otherDomains.length == 0) {
+            return Optional.empty();
+        }
+        return Optional.of(noClasses()
+                .that()
+                .resideInAnyPackage(context + "..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage(otherDomains)
+                .because("Contexts can only depend on classes in the same context or shared kernels")
+                .allowEmptyShould(true));
+    }
+
     @Test
     void importsTheClassesOfTheModules() {
         // Without them every rule below would pass for nothing.
@@ -106,28 +144,29 @@ class HexagonalArchTest {
     @Nested
     class BoundedContexts {
 
-        /**
-         * The daemon is not a business context: it is the composition root and the home of the adapters of the real
-         * servers, so it depends on the domain of the contexts whose ports it implements (as the issue that started
-         * the jdtls adapter said). It is the only exemption, and it only exempts what the daemon depends on.
-         */
         @Test
         void shouldNotDependOnOtherBoundedContextDomains() {
-            contexts.stream().filter(context -> !context.equals(DAEMON_PACKAGE)).forEach(context -> {
-                String[] otherDomains = otherBusinessContextsDomains(context);
-                if (otherDomains.length == 0) {
-                    return;
-                }
-                noClasses()
-                        .that()
-                        .resideInAnyPackage(context + "..")
-                        .should()
-                        .dependOnClassesThat()
-                        .resideInAnyPackage(otherDomains)
-                        .because("Contexts can only depend on classes in the same context or shared kernels")
-                        .allowEmptyShould(true)
-                        .check(classes);
-            });
+            contexts.forEach(
+                    context -> notDependOnOtherDomains(context, contexts).ifPresent(rule -> rule.check(classes)));
+        }
+
+        @Test
+        void shouldApplyToTheDaemonForTheDomainsItDoesNotImplement() {
+            ArchRule rule = notDependOnOtherDomains(DAEMON_PACKAGE, contexts).orElseThrow();
+            JavaClasses daemonClass = new ClassFileImporter().importClasses(DependsOnAnotherContextDomain.class);
+
+            assertThatThrownBy(() -> rule.check(daemonClass))
+                    .isInstanceOf(AssertionError.class)
+                    .hasMessageContaining(DependsOnAnotherContextDomain.class.getName())
+                    .hasMessageContaining(ForeignDomainType.class.getName());
+        }
+
+        @Test
+        void shouldLetTheDaemonDependOnTheDomainItImplements() {
+            ArchRule rule = notDependOnOtherDomains(DAEMON_PACKAGE, contexts).orElseThrow();
+            JavaClasses daemonClass = new ClassFileImporter().importClasses(DependsOnTheEditingDomain.class);
+
+            assertThatCode(() -> rule.check(daemonClass)).doesNotThrowAnyException();
         }
 
         @Test
@@ -151,13 +190,6 @@ class HexagonalArchTest {
                     .mayNotBeAccessedByAnyLayer()
                     .because("Each bounded context should implement a hexagonal architecture")
                     .check(classes));
-        }
-
-        private String[] otherBusinessContextsDomains(String context) {
-            return contexts.stream()
-                    .filter(other -> !context.equals(other))
-                    .map(name -> name + ".domain..")
-                    .toArray(String[]::new);
         }
     }
 
