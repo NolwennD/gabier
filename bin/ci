@@ -15,7 +15,7 @@ import java.util.stream.Stream;
  * Local CI for gabier, a JEP 330 single-file program: run it as {@code bin/ci}, no build tool involved.
  *
  * <p>Runs the verification stages in order and stops at the first failure, like a pipeline. A stage that does not apply
- * yet (no {@code cli} module, no jdtls) is reported as skipped with its reason: a skipped stage is never a green one.
+ * yet (no native build, no jdtls) is reported as skipped with its reason: a skipped stage is never a green one.
  * The output of the tools is never muted.
  *
  * <p>Usage: {@code bin/ci [--list] [--stage <name>]... [<directory>]}. The directory is the checkout to verify (a ticket
@@ -99,7 +99,7 @@ public final class Ci {
 
     private static List<Stage> stages(Path root) {
         boolean hasHk = Files.isRegularFile(root.resolve("hk.pkl"));
-        boolean hasCli = Files.isRegularFile(root.resolve("modules/cli/src/main/java/module-info.java"));
+        boolean hasNative = buildFilesMention(root, "graalvm");
         boolean hasProbe = buildFilesMention(root, "jdtlsProbe");
         String jdtls = System.getenv("GABIER_JDTLS");
 
@@ -118,7 +118,7 @@ public final class Ci {
                 new Stage(
                         "native",
                         "native cli, run alone in an empty directory",
-                        hasCli ? null : "no cli module yet",
+                        hasNative ? null : "no native build yet (no module applies the graalvm plugin)",
                         Ci::nativeCli),
                 new Stage(
                         "jdtls",

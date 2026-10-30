@@ -28,7 +28,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 | `module-info.java`, `build.gradle.kts`, `build-logic/**`          | `./gradlew build`: the modules are compiled as modules, so a forbidden dependency fails here                          |
 | `settings.gradle.kts`, `gradle/libs.versions.toml`                | `./gradlew projects` to see the modules, then `./gradlew build`                                                       |
 | packages created or moved                                         | the architecture tests: `./gradlew :architecture:cleanTest :architecture:test`                                        |
-| `modules/cli/**`, once it exists                                  | `./gradlew :cli:nativeCompile`, then run the binary alone, in an empty directory with an empty environment            |
+| `modules/cli/**`, once the native build exists                    | `./gradlew :cli:nativeCompile`, then run the binary alone, in an empty directory with an empty environment            |
 | any `.java` file                                                  | formatting: `mise exec -- hk check --all`; `hk fix --all` fixes it. Never bypass the hook                             |
 
 `*` after the class name also selects its `@Nested` classes. Always write `cleanTest` before `test`: see below.
