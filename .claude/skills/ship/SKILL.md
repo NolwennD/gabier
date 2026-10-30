@@ -35,7 +35,7 @@ git rev-parse --abbrev-ref HEAD; git worktree list --porcelain; git remote
   Refuse: "Nothing to ship."
 - The subagent's report has no `bin/ci` summary, shows a stage that failed, or does not say how each `Done when` point
   of the issue was proven. Send it back (`SendMessage`): "Run `bin/ci` and prove each `Done when` point, then ask again."
-- The worktree holds uncommitted files (`git -C <worktree> status --porcelain`), the branch has more than one commit, or
+- The worktree holds uncommitted files (`git -C <worktree> status --porcelain`), the branch has more than one commit per issue (a batch has one commit per issue, no more), or
   `main` moved since the branch started (`git merge-base main <branch>` is not `main`). Send the subagent back:
   "Commit or drop the files / squash into one commit / rebase on `main`, run `bin/ci` again, and ask again."
 - Uncommitted files in the main checkout that the branch also changes. Refuse: "The main checkout would be overwritten."
