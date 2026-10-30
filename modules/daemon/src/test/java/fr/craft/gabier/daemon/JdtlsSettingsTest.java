@@ -39,4 +39,15 @@ class JdtlsSettingsTest {
 
         assertThat(settings.expectedProjects()).containsExactly(Path.of("/work/project/modules/a"));
     }
+
+    @Test
+    void aProjectWhoseModulesAreNotKnownWaitsForTheListOfProjectsToSettle() {
+        var settings = JdtlsSettings.ofWhatJdtlsImports(ROOT, Duration.ofMinutes(5));
+
+        assertThat(settings.expectedProjects()).isEmpty();
+        assertThat(settings.awaitSettledProjects()).isTrue();
+        assertThat(settings.timeout()).isEqualTo(Duration.ofMinutes(5));
+        assertThat(JdtlsSettings.of(ROOT, List.of(), Duration.ofMinutes(5)).awaitSettledProjects())
+                .isFalse();
+    }
 }

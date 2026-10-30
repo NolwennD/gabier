@@ -6,8 +6,9 @@ import java.nio.file.Path;
 import java.util.stream.Stream;
 
 /**
- * Stage {@code jdtls} of the local CI (see {@code bin/ci}): the integration probe against a real jdtls. It needs the
- * {@code jdtlsProbe} Gradle task and the {@code GABIER_JDTLS} variable (the path of the jdtls launcher). Runs in the
+ * Stage {@code jdtls} of the local CI (see {@code bin/ci}): the integration probe against a real jdtls, the replay of
+ * the contract scenarios, and the installed daemon serving a small project through jdtls (a {@code diagnostics} through
+ * its socket, then {@code stop} leaves no process). It needs the {@code jdtlsProbe} Gradle task and the {@code GABIER_JDTLS} variable (the path of the jdtls launcher). Runs in the
  * current directory, the checkout under verification.
  */
 public final class Jdtls {
@@ -32,7 +33,8 @@ public final class Jdtls {
             skip = "no changed file reaches what jdtls reads (bin/ci --all forces it)";
         }
         if (args.length > 0 && args[0].equals("--describe")) {
-            System.out.println("integration probe against a real jdtls");
+            System.out.println("integration probe against a real jdtls, scenario replay, and the installed daemon serving a"
+                    + " small project through jdtls");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }

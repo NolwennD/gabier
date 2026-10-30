@@ -43,14 +43,21 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   `/tmp/gabier-<uid>/gabier.sock`, at most 107 bytes), `DaemonServer` takes the socket (`SocketGuard`: private folder,
   stale socket removed, another daemon refused) and serves the clients with `Connection` (lines in, lines out) and
   `RequestHandler` (the method table: `StatusMethod`, `StopMethod`, `DiagnosticsMethod`; adding one is
-  `.claude/skills/add-daemon-method`). The daemon a user starts has `NoProjectServer` behind its methods (every request
-  not ready) until jdtls is started for a project; the `native` stage runs the cli against the installed daemon served by
-  the fake language server instead (`./gradlew :daemon:installFakeServed`, `bin/gabier-daemon-fake <project folder>`,
-  main class `FakeServedMain` in the source set `fakeServed`: a distribution of its own, on the class path, not under
-  the coverage gate).
+  `.claude/skills/add-daemon-method`). The daemon serves one project (`ServedProject`: its root, its language server and
+  where that is): `Main` takes the folder from its argument, `GABIER_PROJECT` or the working directory, and builds
+  `ProjectServer.jdtls`, which starts the real jdtls (`JdtlsLanguageServer`, launcher `GABIER_JDTLS`) at the first request
+  that needs it, once whatever the number of requests, waits for it (5 minutes at most, `jdtls-start-failed` otherwise,
+  and the next request tries again) and ends it when the daemon stops (`DaemonServer.close`: `stop`, SIGTERM). `status`
+  shows the project and `not-started`, `starting`, `ready` or `failed`, and starts nothing. The `native` stage runs the cli
+  against the installed daemon with `GABIER_JDTLS` pointing nowhere (a jdtls that cannot start, `status` shows `failed`)
+  and against the installed daemon served by the fake language server instead (`./gradlew :daemon:installFakeServed`,
+  `bin/gabier-daemon-fake <project folder>`, main class `FakeServedMain` in the source set `fakeServed`: a distribution of
+  its own, on the class path, not under the coverage gate).
   Its unit tests need no jdtls: the lines are tested over streams (`RequestHandlerTest`, `ConnectionTest`), the socket
   on a real Unix socket in a temporary directory (`DaemonServerTest`, `SocketGuardTest`, `MainTest`), always through
-  `@TempDir` and an explicit path: never the default path of the user, and keep the path short (107 bytes). The cli is
+  `@TempDir` and an explicit path: never the default path of the user, and keep the path short (107 bytes). The lazy
+  start, its concurrency, its failure and retry and the stop are tested in `ProjectServerTest` with a counting starter and
+  a hand-written language server (`ScriptedProject` stands for the project in `DaemonServerTest`). The cli is
   tested the same way against `ScriptedDaemon` (`modules/cli/src/test`). Only the `native` stage runs the real cli
   against the real daemon.
 - The integration tests of the daemon (`modules/daemon/src/integrationTest`) all start a real jdtls and need
@@ -72,6 +79,11 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
     compared exactly (jdtls merges the edits of a file, and the scenarios hold what it answered), must compile once
     applied to a copy of the project, and no request may change the sources. How to add one:
     `.claude/skills/add-scenario/SKILL.md`.
+  - `InstalledDaemonTest` runs the installed daemon (`jdtlsProbe` depends on `:daemon:installDist`) on a small project
+    (the scenario `FILE_WITH_AN_ERROR` and an Eclipse `.project`, `EclipseProject`), as a client on its socket: `status`
+    is `not-started` and starts nothing, the first `diagnostics` starts jdtls and answers the error, `status` is `ready`,
+    `stop` ends the daemon and every process jdtls started (watched by handle); a second test stops the daemon while
+    jdtls still starts.
   `JdtlsSession` stops jdtls (the whole process tree) and deletes the data directory in every case. jdtls leaves its
   Eclipse files (`.project`, `.classpath`, `.settings/`, `bin/`) in the checkout: they are git-ignored.
 

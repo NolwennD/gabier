@@ -3,6 +3,8 @@ package fr.craft.gabier.daemon;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import fr.craft.gabier.protocol.DaemonStatus;
+import fr.craft.gabier.protocol.JdtlsState;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -10,7 +12,8 @@ import org.junit.jupiter.api.Test;
 
 class DaemonMethodsTest {
 
-    private static final DaemonStatus STATUS = new DaemonStatus("0.1", 4242, Duration.ofSeconds(5));
+    private static final DaemonStatus STATUS =
+            new DaemonStatus("0.1", 4242, Duration.ofSeconds(5), Path.of("/work/demo"), JdtlsState.READY);
 
     @Test
     void statusIsNamedStatusAndGivesTheStatusAsJson() {

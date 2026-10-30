@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 
 import fr.craft.gabier.protocol.DaemonStatus;
+import fr.craft.gabier.protocol.JdtlsState;
 import fr.craft.gabier.protocol.RpcResponse;
 import fr.craft.gabier.shared.error.domain.ErrorKey;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
 import fr.craft.gabier.shared.error.domain.GeneratorException;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,7 +21,8 @@ import org.junit.jupiter.api.Test;
 
 class RequestHandlerTest {
 
-    private static final DaemonStatus STATUS = new DaemonStatus("0.1", 4242, Duration.ofSeconds(5));
+    private static final DaemonStatus STATUS =
+            new DaemonStatus("0.1", 4242, Duration.ofSeconds(5), Path.of("/work/demo"), JdtlsState.READY);
 
     private final AtomicBoolean stopped = new AtomicBoolean();
     private final Reading reading = new Reading(new ArrayList<>());

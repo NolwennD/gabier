@@ -104,6 +104,12 @@ tasks.register<Test>("jdtlsProbe") {
   extensions.configure<JacocoTaskExtension> { isEnabled = false }
   // The checkout whose modules jdtls must import; GABIER_JDTLS is the jdtls launcher, which mise exports.
   systemProperty("gabier.projectRoot", rootProject.projectDir.path)
+  // The installed daemon (what a user runs): InstalledDaemonTest serves a small project with it.
+  dependsOn(tasks.installDist)
+  systemProperty(
+    "gabier.daemon",
+    layout.buildDirectory.file("install/${application.applicationName}/bin/${application.applicationName}").get().asFile.path,
+  )
   providers.environmentVariable("GABIER_JDTLS").orNull?.let { environment("GABIER_JDTLS", it) }
   // It talks to a real server: never up to date, and the output (pid, status, projects) is the evidence.
   outputs.upToDateWhen { false }

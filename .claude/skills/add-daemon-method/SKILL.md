@@ -35,7 +35,7 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    A method of the catalogue is a record around the use case of the core (`DiagnosticsMethod(Diagnose)`), which maps
    the domain types to the `protocol` ones; the positions stay 0-based in the protocol.
 3. **Register it** in the `List.of(...)` of the `DaemonServer` constructor (which receives the `JavaLanguageServer` the
-   use cases are built on: `NoProjectServer` for the daemon started by hand, until it starts jdtls for a project). A
+   use cases are built on: the `ServedProject` of the daemon, which starts jdtls at the first request that needs it). A
    test on a real socket (`DaemonServerTest`, a temporary directory, never the default path, the fake server) shows it
    answers there.
 4. **A structured result is a type of `protocol`**, written and read with `Json` (`DaemonStatus` is the model: `toJson()`

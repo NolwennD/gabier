@@ -1,0 +1,134 @@
+package fr.craft.gabier.daemon;
+
+import fr.craft.gabier.editing.domain.ChangeSet;
+import fr.craft.gabier.editing.domain.Diagnostic;
+import fr.craft.gabier.editing.domain.LanguageServerException;
+import fr.craft.gabier.editing.domain.Position;
+import fr.craft.gabier.protocol.JdtlsState;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
+
+/**
+ * The project a daemon serves, with its jdtls started when it is needed: the first request that asks the language
+ * server starts it and waits until it is ready, the following ones find it started, and the daemon starting does not
+ * start it, nor does a {@code status}.
+ *
+ * <p>There is one start at a time, whatever the number of requests: the ones that arrive while it goes on wait for the
+ * same one. A start that fails is the failure of every request that waited for it, and stays visible as {@code
+ * FAILED}; the next request starts jdtls again. Closing ends the start in progress or the running jdtls, and nothing
+ * is started afterwards.
+ */
+final class ProjectServer implements ServedProject {
+
+    /** How long jdtls may take to start (all its waits together), then to answer each request. */
+    static final Duration TIMEOUT = Duration.ofMinutes(5);
+
+    private static final String LAUNCHER_VARIABLE = "GABIER_JDTLS";
+
+    /** Starts a language server in the background: the one seam between the project and jdtls. */
+    @FunctionalInterface
+    interface Starter {
+
+        /** Returns at once, the start going on behind the server. */
+        StartedLanguageServer start();
+    }
+
+    private final Path root;
+    private final Starter starter;
+    private volatile @Nullable StartedLanguageServer current;
+    private boolean closed;
+
+    ProjectServer(Path root, Starter starter) {
+        this.root = root;
+        this.starter = starter;
+    }
+
+    /**
+     * The project served by a real jdtls: the launcher is the one {@code GABIER_JDTLS} names, and a project that
+     * cannot start it is told so by the first request, not by the daemon at its start.
+     *
+     * @param root the folder jdtls is initialized on, which must be the project jdtls imports
+     * @param log receives a line for what happens to jdtls
+     */
+    static ProjectServer jdtls(Path root, Map<String, String> environment, Consumer<String> log) {
+        var settings = JdtlsSettings.ofWhatJdtlsImports(root, TIMEOUT);
+        var launcher = environment.getOrDefault(LAUNCHER_VARIABLE, "");
+        JdtlsStarter jdtls = launcher.isBlank()
+                ? data -> {
+                    throw new IOException(LAUNCHER_VARIABLE + " is not set: it must be the path of the jdtls launcher");
+                }
+                : new JdtlsLauncher(Path.of(launcher), Path.of(System.getProperty("java.home")));
+
+        return new ProjectServer(
+                root, () -> JdtlsLanguageServer.start(jdtls, settings, JdtlsLanguageServer.QUIET, log));
+    }
+
+    @Override
+    public Path root() {
+        return root;
+    }
+
+    @Override
+    public JdtlsState state() {
+        var server = current;
+
+        return server == null ? JdtlsState.NOT_STARTED : server.state();
+    }
+
+    @Override
+    public List<Diagnostic> diagnostics(Path file) {
+        return ready().diagnostics(file);
+    }
+
+    @Override
+    public ChangeSet rename(Path file, Position position, String newName) {
+        return ready().rename(file, position, newName);
+    }
+
+    @Override
+    public void close() throws IOException, InterruptedException {
+        StartedLanguageServer server;
+        synchronized (this) {
+            closed = true;
+            server = current;
+            current = null;
+        }
+        if (server != null) {
+            server.close();
+        }
+    }
+
+    /** The language server once it is ready, started by this request if nobody started it. */
+    private StartedLanguageServer ready() {
+        var server = started();
+        try {
+            server.awaitReady();
+        } catch (JdtlsException failure) {
+            throw JdtlsStartException.of(root, failure);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException("Interrupted while waiting for jdtls to start", interrupted);
+        }
+
+        return server;
+    }
+
+    /** The server being started or started; a new one when there is none yet or when the last start failed. */
+    private synchronized StartedLanguageServer started() {
+        if (closed) {
+            throw LanguageServerException.notReady();
+        }
+        var server = current;
+        if (server == null || server.state() == JdtlsState.FAILED) {
+            server = starter.start();
+            current = server;
+        }
+
+        return server;
+    }
+}

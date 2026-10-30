@@ -2,6 +2,9 @@ package fr.craft.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import fr.craft.gabier.protocol.DaemonStatus;
+import fr.craft.gabier.protocol.JdtlsState;
+import fr.craft.gabier.protocol.RpcResponse;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -15,6 +18,7 @@ import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -38,7 +42,11 @@ class MainTest {
     }
 
     private int run(Map<String, String> environment, SelfCheck selfCheck, String... args) {
-        return Main.run(args, environment, selfCheck, printStream(out), printStream(err));
+        return run(environment, directory, selfCheck, args);
+    }
+
+    private int run(Map<String, String> environment, Path workingDirectory, SelfCheck selfCheck, String... args) {
+        return Main.run(args, environment, workingDirectory, selfCheck, printStream(out), printStream(err));
     }
 
     private static PrintStream printStream(ByteArrayOutputStream stream) {
@@ -90,8 +98,8 @@ class MainTest {
 
             assertThat(out()).isEmpty();
             assertThat(err())
-                    .isEqualTo("Usage error: Unsupported arguments; usage: gabier-daemon [--version | --self-check]"
-                            + " (usage-error; arguments=--other)" + System.lineSeparator());
+                    .isEqualTo("Usage error: Unsupported arguments; usage: gabier-daemon [<project folder> | --version"
+                            + " | --self-check] (usage-error; arguments=--other)" + System.lineSeparator());
         }
 
         @Test
@@ -102,6 +110,30 @@ class MainTest {
         @Test
         void theVersionFollowedByAnotherArgumentIsAUsageError() {
             assertThat(run(PASSING, "--version", "--other")).isEqualTo(2);
+        }
+
+        @Test
+        void twoProjectsAreAUsageError() {
+            assertThat(run(PASSING, directory.toString(), directory.toString())).isEqualTo(2);
+        }
+
+        @Test
+        void aProjectThatIsNotAFolderIsAUsageErrorThatNamesIt() throws IOException {
+            var file = Files.writeString(directory.resolve("not-a-folder"), "x");
+
+            assertThat(run(PASSING, file.toString())).isEqualTo(2);
+
+            assertThat(out()).isEmpty();
+            assertThat(err())
+                    .isEqualTo("Usage error: The project " + file + " is not a folder (usage-error; project=" + file
+                            + ")" + System.lineSeparator());
+        }
+
+        @Test
+        void aProjectThatDoesNotExistIsAUsageError() {
+            assertThat(run(PASSING, "no-such-project")).isEqualTo(2);
+
+            assertThat(err()).contains("(usage-error; project=" + directory.resolve("no-such-project") + ")");
         }
     }
 
@@ -143,10 +175,19 @@ class MainTest {
 
         private Path socket;
 
+        private Path socketPath() {
+            return directory.resolve("gabier/gabier.sock");
+        }
+
         private CompletableFuture<Integer> start(Map<String, String> environment, Path expectedSocket)
                 throws Exception {
+            return start(() -> run(environment, PASSING), expectedSocket);
+        }
+
+        private CompletableFuture<Integer> start(java.util.function.IntSupplier run, Path expectedSocket)
+                throws Exception {
             socket = expectedSocket;
-            var daemon = CompletableFuture.supplyAsync(() -> run(environment, PASSING));
+            var daemon = CompletableFuture.supplyAsync(run::getAsInt);
             for (var attempt = 0; attempt < 500 && !Files.exists(socket) && !daemon.isDone(); attempt++) {
                 TimeUnit.MILLISECONDS.sleep(20);
             }
@@ -156,9 +197,7 @@ class MainTest {
         }
 
         private CompletableFuture<Integer> start() throws Exception {
-            var socketPath = directory.resolve("gabier/gabier.sock");
-
-            return start(Map.of("GABIER_SOCKET", socketPath.toString()), socketPath);
+            return start(Map.of("GABIER_SOCKET", socketPath().toString()), socketPath());
         }
 
         private Client connect() throws IOException {
@@ -182,20 +221,90 @@ class MainTest {
 
             assertThat(daemon.orTimeout(10, TimeUnit.SECONDS).join()).isZero();
             assertThat(socket).doesNotExist();
-            assertThat(out()).isEqualTo("gabier-daemon 0.1 listening on " + socket + System.lineSeparator());
+            assertThat(out())
+                    .isEqualTo("gabier-daemon 0.1 listening on " + socket + System.lineSeparator()
+                            + "serving the project " + directory.toRealPath() + System.lineSeparator());
             assertThat(err()).isEmpty();
         }
 
+        private DaemonStatus status() throws IOException {
+            var answer = RpcResponse.parse(ask(STATUS));
+
+            return DaemonStatus.of(((RpcResponse.Success) answer).result());
+        }
+
         @Test
-        void serveNoProjectYetSoItRefusesTheDiagnosticsOfAFileAsNotReady() throws Exception {
+        void servesTheWorkingDirectoryByDefaultWithoutStartingJdtls() throws Exception {
             var daemon = start();
 
-            assertThat(ask("""
-                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"/some/File.java"}}
-                """)).contains("\"key\":\"language-server-not-ready\"");
+            assertThat(status().project()).isEqualTo(directory.toRealPath());
+            assertThat(status().jdtls()).isEqualTo(JdtlsState.NOT_STARTED);
             ask(STOP);
 
             assertThat(daemon.orTimeout(10, TimeUnit.SECONDS).join()).isZero();
+        }
+
+        @Test
+        void servesTheProjectOfTheEnvironmentRatherThanTheWorkingDirectory() throws Exception {
+            var project = Files.createDirectory(directory.resolve("from-the-environment"));
+            var daemon = start(
+                    Map.of("GABIER_SOCKET", socketPath().toString(), "GABIER_PROJECT", project.toString()),
+                    socketPath());
+
+            assertThat(status().project()).isEqualTo(project.toRealPath());
+            ask(STOP);
+
+            daemon.orTimeout(10, TimeUnit.SECONDS).join();
+        }
+
+        @Test
+        void servesTheProjectOfTheArgumentRatherThanTheEnvironmentOnceRelativeToTheWorkingDirectory() throws Exception {
+            Files.createDirectory(directory.resolve("from-the-argument"));
+            var environment = Map.of("GABIER_SOCKET", socketPath().toString(), "GABIER_PROJECT", "/does/not/matter");
+            var daemon = start(() -> run(environment, directory, PASSING, "from-the-argument"), socketPath());
+
+            assertThat(status().project())
+                    .isEqualTo(directory.resolve("from-the-argument").toRealPath());
+            ask(STOP);
+
+            daemon.orTimeout(10, TimeUnit.SECONDS).join();
+        }
+
+        @Test
+        void startsJdtlsAtTheFirstRequestThatNeedsItAndSaysWhyItCannotWhenItHasNoLauncher() throws Exception {
+            var daemon = start();
+
+            var refusal = ask("""
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"%s"}}
+                """.formatted(directory.resolve("File.java")));
+
+            assertThat(refusal)
+                    .contains("\"key\":\"jdtls-start-failed\"")
+                    .contains("GABIER_JDTLS is not set")
+                    .contains("\"project\":\"" + directory.toRealPath() + "\"");
+            assertThat(status().jdtls()).isEqualTo(JdtlsState.FAILED);
+            ask(STOP);
+
+            assertThat(daemon.orTimeout(10, TimeUnit.SECONDS).join()).isZero();
+        }
+
+        @Test
+        void tellsOnItsStandardErrorWhatHappensToJdtls() throws Exception {
+            var launcher = Files.writeString(directory.resolve("jdtls"), """
+                #!/bin/sh
+                exit 3
+                """);
+            Files.setPosixFilePermissions(launcher, PosixFilePermissions.fromString("rwx------"));
+            var environment = Map.of("GABIER_SOCKET", socketPath().toString(), "GABIER_JDTLS", launcher.toString());
+            var daemon = start(() -> run(environment, PASSING), socketPath());
+
+            assertThat(ask("""
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"%s"}}
+                """.formatted(directory.resolve("File.java")))).contains("\"key\":\"jdtls-start-failed\"");
+            ask(STOP);
+
+            daemon.orTimeout(10, TimeUnit.SECONDS).join();
+            assertThat(err()).contains("jdtls: jdtls started, pid ");
         }
 
         @Test

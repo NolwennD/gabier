@@ -1,8 +1,12 @@
 package fr.craft.gabier.daemon;
 
+import fr.craft.gabier.editing.domain.ChangeSet;
+import fr.craft.gabier.editing.domain.Diagnostic;
+import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.fixtures.FakeJavaLanguageServer;
 import fr.craft.gabier.editing.fixtures.Scenario;
 import fr.craft.gabier.editing.fixtures.Scenarios;
+import fr.craft.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,16 +31,17 @@ public final class FakeServedMain {
             System.err.println("usage: gabier-daemon-fake <project folder>");
             System.exit(2);
         }
+        var root = Path.of(args[0]).toAbsolutePath().normalize();
         FakeJavaLanguageServer server;
         try {
-            server = serving(Path.of(args[0]));
+            server = serving(root);
         } catch (IllegalArgumentException refusal) {
             System.err.println(refusal.getMessage());
             System.exit(2);
             return;
         }
 
-        System.exit(Main.serve(System.getenv(), System.out, server));
+        System.exit(Main.serve(System.getenv(), System.out, new Served(root, server)));
     }
 
     /**
@@ -73,6 +78,30 @@ public final class FakeServedMain {
                 throw new IllegalArgumentException(
                         "The project folder " + root + " is not empty: the scenarios would overwrite its files");
             }
+        }
+    }
+
+    /** The project of the fake: always ready, nothing to end. */
+    private record Served(Path root, FakeJavaLanguageServer server) implements ServedProject {
+
+        @Override
+        public JdtlsState state() {
+            return JdtlsState.READY;
+        }
+
+        @Override
+        public List<Diagnostic> diagnostics(Path file) {
+            return server.diagnostics(file);
+        }
+
+        @Override
+        public ChangeSet rename(Path file, Position position, String newName) {
+            return server.rename(file, position, newName);
+        }
+
+        @Override
+        public void close() {
+            // The fake holds no process.
         }
     }
 }

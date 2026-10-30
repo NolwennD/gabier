@@ -273,7 +273,9 @@ class GabierTest {
     class WithADaemon {
 
         private static final String STATUS_REQUEST = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"status\"}";
-        private static final String STATUS_JSON = "{\"version\":\"0.1\",\"pid\":4242,\"uptimeMillis\":65432}";
+        private static final String STATUS_JSON = """
+            {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"starting"}\
+            """;
         private static final Problem REFUSAL = new Problem(
                 "urn:gabier:error:some-key",
                 "Some key",
@@ -294,13 +296,29 @@ class GabierTest {
         class Status {
 
             @Test
-            void saysTheVersionThePidAndTheUptime() throws IOException {
+            void saysTheVersionThePidTheUptimeTheProjectAndWhereJdtlsIs() throws IOException {
                 try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", STATUS_JSON))) {
                     assertThat(runWithSocket("status")).isZero();
 
-                    assertThat(out()).isEqualTo("gabier-daemon 0.1, pid 4242, up 65s" + System.lineSeparator());
+                    assertThat(out())
+                            .isEqualTo("gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls starting"
+                                    + System.lineSeparator());
                     assertThat(err()).isEmpty();
                     assertThat(daemon.requests()).containsExactly(STATUS_REQUEST);
+                }
+            }
+
+            @Test
+            void showsTheProjectWithItsControlCharactersEscaped() throws IOException {
+                var status = """
+                    {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/\\u001b[2Jdemo","jdtls":"ready"}\
+                    """;
+                try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", status))) {
+                    assertThat(runWithSocket("status")).isZero();
+
+                    assertThat(out())
+                            .isEqualTo("gabier-daemon 0.1, pid 4242, up 65s, project /work/\\u001b[2Jdemo, jdtls ready"
+                                    + System.lineSeparator());
                 }
             }
 
@@ -707,7 +725,9 @@ class GabierTest {
             var runtimeDirectory = directory.resolve("run");
             Files.createDirectories(runtimeDirectory.resolve("gabier"));
             var expected = runtimeDirectory.resolve("gabier/gabier.sock");
-            var status = JsonRpc.success("1", "{\"version\":\"0.1\",\"pid\":1,\"uptimeMillis\":0}");
+            var status = JsonRpc.success("1", """
+                {"version":"0.1","pid":1,"uptimeMillis":0,"project":"/p","jdtls":"not-started"}\
+                """);
             try (var daemon = new ScriptedDaemon(expected, status)) {
                 var code = run(Map.of("XDG_RUNTIME_DIR", runtimeDirectory.toString()), "status");
 

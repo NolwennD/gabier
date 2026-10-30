@@ -104,7 +104,9 @@ public final class Gabier {
                 json
                         ? status.toJson()
                         : "gabier-daemon " + status.version() + ", pid " + status.pid() + ", up "
-                                + status.uptime().toSeconds() + "s");
+                                + status.uptime().toSeconds() + "s, project "
+                                + TerminalText.neutralise(status.project().toString()) + ", jdtls "
+                                + TerminalText.neutralise(status.jdtls().text()));
     }
 
     private static void stop(Path socket, boolean json, PrintStream out) {

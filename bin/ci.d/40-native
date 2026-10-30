@@ -18,8 +18,8 @@ import java.util.stream.Stream;
  * streams kept apart, and then the cli against a real daemon: the installed {@code gabier-daemon} is started on a socket
  * in a temporary directory ({@code GABIER_SOCKET}, never the default path of the user), and {@code status} and {@code
  * stop} are run against it, with no daemon, with a stale socket and with a second daemon; {@code diagnostics} is run
- * against it (refused: it serves no project) and against the daemon served by the fake language server, {@code
- * :daemon:installFakeServed}, so that no jdtls runs in this stage. Runs in the current
+ * against it (with no jdtls to start, so refused as a failed start, which {@code status} then shows) and against the
+ * daemon served by the fake language server, {@code :daemon:installFakeServed}, so that no jdtls runs in this stage. Runs in the current
  * directory, the checkout under verification. It starts and signals only the processes it started, by their handle.
  */
 public final class Native {
@@ -55,7 +55,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no project and with the fake language server)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -182,9 +182,10 @@ public final class Native {
     /** The native cli against the installed daemon, on a socket of its own. */
     private static final class Daemon {
 
-        private static final Pattern STATUS = Pattern.compile("gabier-daemon 0\\.1, pid (\\d+), up \\d+s");
-        private static final Pattern STATUS_JSON =
-                Pattern.compile("\\{\"version\":\"0\\.1\",\"pid\":(\\d+),\"uptimeMillis\":\\d+\\}");
+        private static final Pattern STATUS =
+                Pattern.compile("gabier-daemon 0\\.1, pid (\\d+), up \\d+s, project \\S+, jdtls not-started");
+        private static final Pattern STATUS_JSON = Pattern.compile(
+                "\\{\"version\":\"0\\.1\",\"pid\":(\\d+),\"uptimeMillis\":\\d+,\"project\":\"[^\"]+\",\"jdtls\":\"not-started\"\\}");
 
         private final Path cli;
         private final Path daemon;
@@ -212,7 +213,7 @@ public final class Native {
                 statusAndStop();
                 sigterm();
                 secondDaemonAndStaleSocket();
-                diagnosticsWithNoProject();
+                diagnosticsWithNoJdtls();
                 diagnosticsWithTheFakeServer();
                 fakeServedRefusesAFolderThatIsNotEmpty();
             } finally {
@@ -256,6 +257,8 @@ public final class Native {
             builder.environment().put("GABIER_SOCKET", socket.toString());
             // The start script runs the java of JAVA_HOME: the JDK that runs this stage.
             builder.environment().put("JAVA_HOME", System.getProperty("java.home"));
+            // No jdtls in this stage, whatever the environment of the CI run holds: the launcher is a file that is not there.
+            builder.environment().put("GABIER_JDTLS", directory.resolve("no-jdtls").toString());
             Path log = Files.createTempFile(directory, "daemon", ".log");
             builder.redirectErrorStream(true).redirectOutput(log.toFile());
             Process process = builder.start();
@@ -383,8 +386,11 @@ public final class Native {
             expect(ends(third), "the third daemon stops");
         }
 
-        /** The daemon a user starts serves no project yet: it declines the diagnostics as not ready. */
-        private void diagnosticsWithNoProject() throws IOException, InterruptedException {
+        /**
+         * The daemon starts jdtls at the first request that needs it, and says in a problem object why it cannot when
+         * the launcher is not there; {@code status} then shows the failure and the project, and still starts nothing.
+         */
+        private void diagnosticsWithNoJdtls() throws IOException, InterruptedException {
             Process process = startDaemon();
             if (process == null) {
                 failures++;
@@ -392,12 +398,19 @@ public final class Native {
             }
             Run run = gabier("diagnostics", "Main.java");
             expect(
-                    run.exit() == 2
+                    run.exit() == 1
                             && run.out().isEmpty()
-                            && run.err().startsWith("Language server not ready: ")
-                            && run.err().contains("(language-server-not-ready"),
-                    "gabier diagnostics against the installed daemon, which serves no project, is refused as not ready,"
-                            + " exit 2");
+                            && run.err().startsWith("Jdtls start failed: ")
+                            && run.err().contains("no-jdtls")
+                            && run.err().contains("(jdtls-start-failed; project="),
+                    "gabier diagnostics against the installed daemon, whose jdtls cannot start, is a problem object"
+                            + " that says why, exit 1");
+            Run status = gabier("status");
+            expect(
+                    status.exit() == 0 && status.out().endsWith(", jdtls failed"),
+                    "gabier status shows the failed start");
+            Run again = gabier("diagnostics", "Main.java");
+            expect(again.exit() == 1 && again.err().contains("(jdtls-start-failed; "), "the next request tries again");
             gabier("stop");
             expect(ends(process), "the daemon stops");
         }

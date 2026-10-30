@@ -143,35 +143,47 @@ final class JdtlsSession implements AutoCloseable {
         started = process.descendants().toList();
     }
 
-    /** Asks {@code java.project.getAll} until jdtls lists every expected project, and returns what it listed. */
+    /**
+     * Asks {@code java.project.getAll} until jdtls lists every expected project, or, when nothing is expected by name,
+     * until it lists a project and the list is the same twice in a row. Returns what it listed.
+     */
     private List<Path> awaitProjects() throws InterruptedException {
         List<Path> expected = settings.expectedProjects();
         List<Path> listed = List.of();
-        List<Path> missing = expected;
         while (true) {
-            String what = "jdtls to list the modules " + expected + " with java.project.getAll (still missing "
-                    + missing + ", it listed " + listed + ")";
-            var command = new ExecuteCommandParams("java.project.getAll", List.of());
-            Object answer = watch.await(what, () -> server.getWorkspaceService().executeCommand(command));
-            if (!(answer instanceof List<?> uris)) {
-                throw new JdtlsException(
-                        "java.project.getAll answered " + answer + ", which is not a list of projects");
-            }
-            // jdtls names a project by the URI of its folder.
-            listed = uris.stream()
-                    .map(uri -> Path.of(URI.create(String.valueOf(uri)))
-                            .toAbsolutePath()
-                            .normalize())
-                    .toList();
-            List<Path> imported = listed;
-            missing = expected.stream()
-                    .filter(project -> !imported.contains(project))
-                    .toList();
-            if (missing.isEmpty()) {
+            List<Path> before = listed;
+            List<Path> missing = missing(expected, before);
+            String what = settings.awaitSettledProjects()
+                    ? "jdtls to list the projects it imports with java.project.getAll, until the list stops changing"
+                            + " (it listed " + before + ")"
+                    : "jdtls to list the modules " + expected + " with java.project.getAll (still missing " + missing
+                            + ", it listed " + before + ")";
+            listed = listProjects(what);
+            if (settings.awaitSettledProjects()
+                    ? !listed.isEmpty() && listed.equals(before)
+                    : missing(expected, listed).isEmpty()) {
                 return listed;
             }
             watch.pause(what, settings.pollInterval());
         }
+    }
+
+    private static List<Path> missing(List<Path> expected, List<Path> listed) {
+        return expected.stream().filter(project -> !listed.contains(project)).toList();
+    }
+
+    private List<Path> listProjects(String what) throws InterruptedException {
+        var command = new ExecuteCommandParams("java.project.getAll", List.of());
+        Object answer = watch.await(what, () -> server.getWorkspaceService().executeCommand(command));
+        if (!(answer instanceof List<?> uris)) {
+            throw new JdtlsException("java.project.getAll answered " + answer + ", which is not a list of projects");
+        }
+        // jdtls names a project by the URI of its folder.
+        return uris.stream()
+                .map(uri -> Path.of(URI.create(String.valueOf(uri)))
+                        .toAbsolutePath()
+                        .normalize())
+                .toList();
     }
 
     /**

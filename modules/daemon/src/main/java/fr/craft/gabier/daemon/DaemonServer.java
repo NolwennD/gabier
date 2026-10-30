@@ -1,7 +1,6 @@
 package fr.craft.gabier.daemon;
 
 import fr.craft.gabier.editing.application.Diagnose;
-import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.protocol.DaemonStatus;
 import fr.craft.gabier.protocol.ProtocolVersion;
 import java.io.IOException;
@@ -30,21 +29,26 @@ final class DaemonServer implements AutoCloseable {
     private final Path socket;
     private final ServerSocketChannel listener;
     private final RequestHandler handler;
+    private final ServedProject project;
     private final Set<SocketChannel> connections = ConcurrentHashMap.newKeySet();
     private final CompletableFuture<Void> stopRequested = new CompletableFuture<>();
     private boolean closed;
 
-    private DaemonServer(
-            Path socket, ServerSocketChannel listener, Clock clock, long pid, JavaLanguageServer languageServer) {
+    private DaemonServer(Path socket, ServerSocketChannel listener, Clock clock, long pid, ServedProject project) {
         this.socket = socket;
         this.listener = listener;
+        this.project = project;
         var startedAt = clock.instant();
         // The method table: to add a method, add it here (.claude/skills/add-daemon-method/SKILL.md).
         handler = new RequestHandler(List.of(
                 new StatusMethod(() -> new DaemonStatus(
-                        ProtocolVersion.CURRENT.toString(), pid, Duration.between(startedAt, clock.instant()))),
+                        ProtocolVersion.CURRENT.toString(),
+                        pid,
+                        Duration.between(startedAt, clock.instant()),
+                        project.root(),
+                        project.state())),
                 new StopMethod(this::requestStop),
-                new DiagnosticsMethod(new Diagnose(languageServer))));
+                new DiagnosticsMethod(new Diagnose(project))));
     }
 
     /**
@@ -52,10 +56,11 @@ final class DaemonServer implements AutoCloseable {
      *
      * @param socket the path of the socket, already measured by {@code SocketLocation}
      * @param uid the numeric id of the user, as text
-     * @param languageServer the language server that the methods of the catalogue ask
+     * @param project the project served: its language server is the one the methods of the catalogue ask, and it is
+     *     closed when the daemon stops
      * @throws DaemonSocketException when the socket is not the daemon's to take, or cannot be set up
      */
-    static DaemonServer open(Path socket, String uid, Clock clock, long pid, JavaLanguageServer languageServer) {
+    static DaemonServer open(Path socket, String uid, Clock clock, long pid, ServedProject project) {
         var guard = new SocketGuard(uid);
         try {
             guard.prepareFolder(Objects.requireNonNull(socket.getParent(), "the socket is in a folder"));
@@ -64,7 +69,7 @@ final class DaemonServer implements AutoCloseable {
             listener.bind(UnixDomainSocketAddress.of(socket));
             guard.restrict(socket);
 
-            return new DaemonServer(socket, listener, clock, pid, languageServer);
+            return new DaemonServer(socket, listener, clock, pid, project);
         } catch (IOException e) {
             throw DaemonSocketException.unavailable(socket, e);
         }
@@ -83,8 +88,9 @@ final class DaemonServer implements AutoCloseable {
     }
 
     /**
-     * Stops listening, removes the socket, and disconnects the clients still there. They are disconnected last, so that
-     * a client that waits for its connection to end knows the socket is gone.
+     * Stops listening, removes the socket, ends the language server of the project (jdtls, started or still
+     * starting) and disconnects the clients still there. They are disconnected last, so that a client that waits for
+     * its connection to end knows the socket is gone and that no process of the daemon is left.
      */
     @Override
     public synchronized void close() throws IOException {
@@ -97,8 +103,14 @@ final class DaemonServer implements AutoCloseable {
             listener.close();
             Files.deleteIfExists(socket);
         } finally {
-            for (var connection : connections) {
-                connection.close();
+            try {
+                project.close();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            } finally {
+                for (var connection : connections) {
+                    connection.close();
+                }
             }
         }
     }

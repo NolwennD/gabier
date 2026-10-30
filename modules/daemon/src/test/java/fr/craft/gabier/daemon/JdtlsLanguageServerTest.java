@@ -10,6 +10,7 @@ import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
+import fr.craft.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -98,7 +99,8 @@ class JdtlsLanguageServerTest {
     }
 
     private JdtlsLanguageServer start(Duration timeout) {
-        var settings = new JdtlsSettings(root, List.of(root), timeout, Duration.ofMillis(20), Duration.ofSeconds(5));
+        var settings =
+                new JdtlsSettings(root, List.of(root), timeout, Duration.ofMillis(20), Duration.ofSeconds(5), false);
         var server = JdtlsLanguageServer.start(fake, settings, QUIET, log::add);
         fake.initializeParams();
         return server;
@@ -381,6 +383,39 @@ class JdtlsLanguageServerTest {
                 assertThatThrownBy(() -> server.diagnostics(clean))
                         .isInstanceOf(JdtlsException.class)
                         .hasMessageContaining("jdtls did not start");
+            }
+        }
+    }
+
+    @Nested
+    class WhereItIs {
+
+        @Test
+        void isStartingWhileJdtlsImports() throws Exception {
+            fake.neverAnswersInitialize();
+
+            try (var server = start()) {
+                assertThat(server.state()).isEqualTo(JdtlsState.STARTING);
+            }
+        }
+
+        @Test
+        void isReadyOnceJdtlsHasImported() throws Exception {
+            try (var server = start()) {
+                server.awaitReady();
+
+                assertThat(server.state()).isEqualTo(JdtlsState.READY);
+            }
+        }
+
+        @Test
+        void isFailedWhenJdtlsDoesNotStart() throws Exception {
+            fake.sendsStatus("Error");
+
+            try (var server = start()) {
+                assertThatThrownBy(server::awaitReady).isInstanceOf(JdtlsException.class);
+
+                assertThat(server.state()).isEqualTo(JdtlsState.FAILED);
             }
         }
     }

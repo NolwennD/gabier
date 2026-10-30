@@ -4,9 +4,9 @@ import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.Diagnostic.Severity;
 import fr.craft.gabier.editing.domain.FileChange;
-import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
+import fr.craft.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -50,7 +50,7 @@ import org.jspecify.annotations.Nullable;
  * opens them as non-project files and warns that only syntax errors are reported, which is not an answer about the
  * project, so the adapter refuses before it asks.
  */
-final class JdtlsLanguageServer implements JavaLanguageServer, AutoCloseable {
+final class JdtlsLanguageServer implements StartedLanguageServer {
 
     /**
      * How long jdtls must have published nothing before its diagnostics are taken as final. In the real runs of the
@@ -90,6 +90,20 @@ final class JdtlsLanguageServer implements JavaLanguageServer, AutoCloseable {
         });
         starter.start();
         return new JdtlsLanguageServer(diagnostics, quiet, starting, starter);
+    }
+
+    @Override
+    public JdtlsState state() {
+        return switch (starting.state()) {
+            case RUNNING -> JdtlsState.STARTING;
+            case SUCCESS -> JdtlsState.READY;
+            default -> JdtlsState.FAILED;
+        };
+    }
+
+    @Override
+    public void awaitReady() throws InterruptedException {
+        awaitStarted();
     }
 
     /**

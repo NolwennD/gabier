@@ -55,11 +55,26 @@ One daemon runs per user. It is started by hand, with `gabier-daemon` from the i
 `gabier stop` or a SIGTERM; it answers `status`, `stop` and `diagnostics`, and nothing else yet. The cli starting it on
 demand comes later.
 
+It serves **one project**: `gabier-daemon [<project folder>]`, else the folder named by `GABIER_PROJECT`, else the
+directory it is started in (a relative folder is relative to that directory; one that is not a folder is a usage error).
+Starting the daemon starts nothing else. jdtls (the launcher `GABIER_JDTLS` names, as for the probe) is started by the
+first request that needs it, on that folder, and the request waits until it has imported the project: the first
+`diagnostics` takes seconds for a small project and about a minute and a half for this checkout. Requests that arrive
+meanwhile wait for the same start, never for another. jdtls then stays up for the next requests, and is ended, with every
+process it started, by `gabier stop`, by SIGTERM, and when the daemon is stopped while jdtls is still starting. A jdtls
+that does not start within **5 minutes** (the time of the whole start, then of each request to it), whose launcher is
+missing or that exits is not a hang: the request gets the problem object `jdtls-start-failed` (exit code 1), whose
+message says why, and the next request tries again. What jdtls says of itself goes to the standard error of the daemon,
+prefixed with `jdtls:`.
+
+`gabier status` says the project and where jdtls is: `not-started`, `starting`, `ready` or `failed` (the last start
+failed, until a request tries again). It never starts jdtls.
+
 ```text
 $ gabier status
-gabier-daemon 0.1, pid 4242, up 65s
+gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls not-started
 $ gabier --json status
-{"version":"0.1","pid":4242,"uptimeMillis":65432}
+{"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"not-started"}
 $ gabier stop
 gabier-daemon stopped
 $ gabier status
@@ -78,9 +93,8 @@ is not ready) is the problem object, exit code 2. The cli sends the absolute pat
 you mean. This is chosen: the folders of the projects are matched as paths, not as files, so resolving the links in the
 cli would make a file of a project reached through a link (a `~/work` that links to another disk) look outside it. In
 text, the file and the message are shown with control, format and separator characters written as `\uXXXX` escapes and
-each backslash doubled, so that a message quoting source text cannot drive the terminal or fake a line. A daemon
-started by hand serves no project yet, so it refuses every file as `language-server-not-ready` until jdtls is started
-for a project (a ticket of its own).
+each backslash doubled, so that a message quoting source text cannot drive the terminal or fake a line. The daemon
+serves the project it was started for (see above).
 
 ```text
 $ gabier diagnostics src/main/java/demo/Broken.java

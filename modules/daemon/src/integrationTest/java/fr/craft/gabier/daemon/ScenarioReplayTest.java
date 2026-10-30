@@ -48,28 +48,6 @@ class ScenarioReplayTest {
 
     private static final Duration TIMEOUT = Duration.ofMinutes(5);
 
-    private static final String ECLIPSE_PROJECT = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <projectDescription>
-          <name>scenario</name>
-          <comment></comment>
-          <projects></projects>
-          <buildSpec>
-            <buildCommand><name>org.eclipse.jdt.core.javabuilder</name><arguments></arguments></buildCommand>
-          </buildSpec>
-          <natures><nature>org.eclipse.jdt.core.javanature</nature></natures>
-        </projectDescription>
-        """;
-
-    private static final String ECLIPSE_CLASSPATH = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <classpath>
-          <classpathentry kind="src" path="src/main/java"/>
-          <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
-          <classpathentry kind="output" path="bin"/>
-        </classpath>
-        """;
-
     @Test
     void replaysTheScenariosTheAdapterImplements() throws Exception {
         Map<Map<Path, String>, List<Scenario>> projects = new LinkedHashMap<>();
@@ -102,8 +80,7 @@ class ScenarioReplayTest {
         Path root = Files.createTempDirectory("gabier-scenarios-").toRealPath();
         try {
             scenarios.getFirst().writeProject(root);
-            Files.writeString(root.resolve(".project"), ECLIPSE_PROJECT);
-            Files.writeString(root.resolve(".classpath"), ECLIPSE_CLASSPATH);
+            EclipseProject.describe(root);
             var settings = JdtlsSettings.of(root, List.of(root), TIMEOUT);
             try (var server = JdtlsLanguageServer.start(
                     RealJdtls.launcher(), settings, JdtlsLanguageServer.QUIET, System.out::println)) {

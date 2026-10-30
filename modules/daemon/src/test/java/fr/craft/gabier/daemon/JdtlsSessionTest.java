@@ -51,7 +51,8 @@ class JdtlsSessionTest {
     }
 
     private JdtlsSettings settings(Duration timeout, List<Path> expectedProjects) {
-        return new JdtlsSettings(PROJECT_ROOT, expectedProjects, timeout, Duration.ofMillis(20), Duration.ofSeconds(5));
+        return new JdtlsSettings(
+                PROJECT_ROOT, expectedProjects, timeout, Duration.ofMillis(20), Duration.ofSeconds(5), false);
     }
 
     private JdtlsSession start(JdtlsStarter starter, Duration timeout, Path... expectedProjects) throws Exception {
@@ -131,6 +132,40 @@ class JdtlsSessionTest {
                 assertThat(fake.projectRequests()).isEqualTo(3);
                 assertThat(session.projects()).containsExactly(MODULE_A, MODULE_B);
             }
+        }
+
+        @Test
+        void waitsUntilTheListOfProjectsStopsChangingWhenNoneIsExpectedByName() throws Exception {
+            fake.listsProjects().listsProjects(URI_A).listsProjects(URI_A, URI_B);
+
+            try (JdtlsSession session = JdtlsSession.start(
+                    fake,
+                    new JdtlsSettings(
+                            PROJECT_ROOT, List.of(), LONG, Duration.ofMillis(20), Duration.ofSeconds(5), true),
+                    log::add,
+                    published::add)) {
+                assertThat(session.projects()).containsExactly(MODULE_A, MODULE_B);
+                assertThat(fake.projectRequests()).isEqualTo(4);
+            }
+        }
+
+        @Test
+        void givesUpWhenJdtlsNeverListsAProjectAndSaysWhatItWaitedFor() throws Exception {
+            fake.listsProjects();
+
+            assertThatThrownBy(() -> JdtlsSession.start(
+                            fake,
+                            new JdtlsSettings(
+                                    PROJECT_ROOT, List.of(), SHORT, Duration.ofMillis(20), Duration.ofSeconds(5), true),
+                            log::add,
+                            published::add))
+                    .isInstanceOf(JdtlsException.class)
+                    .hasMessageContaining("Timed out")
+                    .hasMessageContaining("jdtls to list the projects it imports")
+                    .hasMessageContaining("until the list stops changing (it listed [])");
+
+            assertThat(fake.process().isAlive()).isFalse();
+            assertThat(fake.data()).doesNotExist();
         }
 
         @Test
@@ -442,7 +477,8 @@ class JdtlsSessionTest {
         }
 
         private JdtlsSettings shortShutdown() {
-            return new JdtlsSettings(PROJECT_ROOT, List.of(), LONG, Duration.ofMillis(20), Duration.ofMillis(300));
+            return new JdtlsSettings(
+                    PROJECT_ROOT, List.of(), LONG, Duration.ofMillis(20), Duration.ofMillis(300), false);
         }
 
         @Test
@@ -450,7 +486,8 @@ class JdtlsSessionTest {
             fake.listsProjects(URI_A).shutdown(FakeJdtls.Shutdown.NEVER_ANSWERS);
             JdtlsSession session = JdtlsSession.start(
                     fake,
-                    new JdtlsSettings(PROJECT_ROOT, List.of(), LONG, Duration.ofMillis(20), Duration.ofMillis(300)),
+                    new JdtlsSettings(
+                            PROJECT_ROOT, List.of(), LONG, Duration.ofMillis(20), Duration.ofMillis(300), false),
                     log::add,
                     published::add);
 

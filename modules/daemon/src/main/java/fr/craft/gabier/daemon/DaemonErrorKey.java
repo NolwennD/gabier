@@ -6,6 +6,7 @@ import fr.craft.gabier.shared.error.domain.ErrorKey;
 enum DaemonErrorKey implements ErrorKey {
     ALREADY_RUNNING("daemon-already-running"),
     INVALID_PARAMETER("invalid-parameter"),
+    JDTLS_START_FAILED("jdtls-start-failed"),
     MISSING_PARAMETER("missing-parameter"),
     SOCKET_NOT_PRIVATE("socket-not-private"),
     SOCKET_UNAVAILABLE("socket-unavailable"),

@@ -14,13 +14,17 @@ import java.util.List;
  * @param pollInterval how long to wait between two questions to jdtls about its projects
  * @param shutdownTimeout how long jdtls is given to answer the shutdown and to exit, and then each process of its tree
  *     to end once killed
+ * @param awaitSettledProjects when no project is expected by name (a project of any build tool is served, and nobody
+ *     knows what jdtls will import): the session is ready once jdtls has listed a project and the list has stopped
+ *     changing between two questions
  */
 record JdtlsSettings(
         Path projectRoot,
         List<Path> expectedProjects,
         Duration timeout,
         Duration pollInterval,
-        Duration shutdownTimeout) {
+        Duration shutdownTimeout,
+        boolean awaitSettledProjects) {
 
     private static final Duration POLL_INTERVAL = Duration.ofSeconds(2);
     private static final Duration SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
@@ -32,6 +36,11 @@ record JdtlsSettings(
     }
 
     static JdtlsSettings of(Path projectRoot, List<Path> expectedProjects, Duration timeout) {
-        return new JdtlsSettings(projectRoot, expectedProjects, timeout, POLL_INTERVAL, SHUTDOWN_TIMEOUT);
+        return new JdtlsSettings(projectRoot, expectedProjects, timeout, POLL_INTERVAL, SHUTDOWN_TIMEOUT, false);
+    }
+
+    /** Settings for a project whose modules are whatever jdtls imports from it, not known beforehand. */
+    static JdtlsSettings ofWhatJdtlsImports(Path projectRoot, Duration timeout) {
+        return new JdtlsSettings(projectRoot, List.of(), timeout, POLL_INTERVAL, SHUTDOWN_TIMEOUT, true);
     }
 }

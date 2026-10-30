@@ -4,13 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
-import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.editing.fixtures.FakeJavaLanguageServer;
 import fr.craft.gabier.editing.fixtures.Scenarios;
 import fr.craft.gabier.protocol.DaemonStatus;
 import fr.craft.gabier.protocol.FileDiagnostics;
 import fr.craft.gabier.protocol.FileDiagnostics.Diagnosis;
 import fr.craft.gabier.protocol.FileDiagnostics.Severity;
+import fr.craft.gabier.protocol.JdtlsState;
 import fr.craft.gabier.protocol.RpcResponse;
 import fr.craft.gabier.protocol.UserId;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -57,6 +58,9 @@ class DaemonServerTest {
     private final List<DaemonServer> servers = new ArrayList<>();
     private final List<CompletableFuture<Void>> serving = new ArrayList<>();
 
+    /** The project served: the fake language server, scripted for the project the scenarios play on (the directory). */
+    private ScriptedProject project;
+
     @AfterEach
     void stopEveryServer() throws IOException {
         for (var server : servers) {
@@ -75,15 +79,17 @@ class DaemonServerTest {
         return directory.resolve("gabier/gabier.sock");
     }
 
-    /** The fake language server of the project the scenario plays on, which is the temporary directory. */
-    private JavaLanguageServer languageServer() {
-        return new FakeJavaLanguageServer(directory)
-                .scripted(Scenarios.FILE_WITH_AN_ERROR)
-                .scripted(Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT);
+    @BeforeEach
+    void serveTheDirectoryAsAProject() {
+        project = new ScriptedProject(
+                directory,
+                new FakeJavaLanguageServer(directory)
+                        .scripted(Scenarios.FILE_WITH_AN_ERROR)
+                        .scripted(Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT));
     }
 
     private DaemonServer open() {
-        var server = DaemonServer.open(socket(), uid, clock, PID, languageServer());
+        var server = DaemonServer.open(socket(), uid, clock, PID, project);
         servers.add(server);
 
         return server;
@@ -162,7 +168,7 @@ class DaemonServerTest {
             serving();
 
             var refusal = catchThrowableOfType(
-                    DaemonSocketException.class, () -> DaemonServer.open(socket(), uid, clock, PID, languageServer()));
+                    DaemonSocketException.class, () -> DaemonServer.open(socket(), uid, clock, PID, project));
 
             assertThat(refusal.key()).isEqualTo(DaemonErrorKey.ALREADY_RUNNING);
             try (var client = connect(socket())) {
@@ -192,7 +198,7 @@ class DaemonServerTest {
             Files.setPosixFilePermissions(folder, PosixFilePermissions.fromString("rwxrwxr-x"));
 
             var refusal = catchThrowableOfType(
-                    DaemonSocketException.class, () -> DaemonServer.open(socket(), uid, clock, PID, languageServer()));
+                    DaemonSocketException.class, () -> DaemonServer.open(socket(), uid, clock, PID, project));
 
             assertThat(refusal.key()).isEqualTo(DaemonErrorKey.SOCKET_NOT_PRIVATE);
             assertThat(socket()).doesNotExist();
@@ -205,7 +211,7 @@ class DaemonServerTest {
                     PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
             Files.writeString(socket(), "precious");
 
-            assertThatThrownBy(() -> DaemonServer.open(socket(), uid, clock, PID, languageServer()))
+            assertThatThrownBy(() -> DaemonServer.open(socket(), uid, clock, PID, project))
                     .isInstanceOf(DaemonSocketException.class);
             assertThat(socket()).hasContent("precious");
         }
@@ -216,7 +222,7 @@ class DaemonServerTest {
 
             var failure = catchThrowableOfType(
                     DaemonSocketException.class,
-                    () -> DaemonServer.open(file.resolve("gabier/gabier.sock"), uid, clock, PID, languageServer()));
+                    () -> DaemonServer.open(file.resolve("gabier/gabier.sock"), uid, clock, PID, project));
 
             assertThat(failure.key()).isEqualTo(DaemonErrorKey.SOCKET_UNAVAILABLE);
             assertThat(failure.status()).isEqualTo(ErrorStatus.INTERNAL_SERVER_ERROR);
@@ -228,7 +234,7 @@ class DaemonServerTest {
     class Requests {
 
         @Test
-        void statusAnswersWithTheVersionThePidAndTheUptime() throws IOException {
+        void statusAnswersWithTheVersionThePidTheUptimeTheProjectAndWhereJdtlsIs() throws IOException {
             serving();
             clock.advance(Duration.ofSeconds(90));
 
@@ -236,7 +242,24 @@ class DaemonServerTest {
                 var answer = RpcResponse.parse(client.ask(STATUS_REQUEST));
 
                 assertThat(DaemonStatus.of(((RpcResponse.Success) answer).result()))
-                        .isEqualTo(new DaemonStatus("0.1", PID, Duration.ofSeconds(90)));
+                        .isEqualTo(new DaemonStatus("0.1", PID, Duration.ofSeconds(90), directory, JdtlsState.READY));
+            }
+        }
+
+        @Test
+        void statusSaysEachStateOfJdtlsAsItIsAtTheTimeOfTheRequest() throws IOException {
+            serving();
+
+            try (var client = connect(socket())) {
+                for (var state : JdtlsState.values()) {
+                    project.in(state);
+
+                    var answer = RpcResponse.parse(client.ask(STATUS_REQUEST));
+
+                    assertThat(DaemonStatus.of(((RpcResponse.Success) answer).result())
+                                    .jdtls())
+                            .isEqualTo(state);
+                }
             }
         }
 
@@ -353,6 +376,45 @@ class DaemonServerTest {
             running.orTimeout(10, TimeUnit.SECONDS).join();
             assertThat(socket()).doesNotExist();
             assertThatThrownBy(() -> connect(socket())).isInstanceOf(IOException.class);
+        }
+
+        @Test
+        void endsTheLanguageServerOfTheProjectBeforeTheClientIsLetGo() throws IOException {
+            var running = serve(open());
+
+            try (var client = connect(socket())) {
+                client.ask(STOP_REQUEST);
+                assertThat(client.readLine()).isNull();
+
+                assertThat(project.closes()).isEqualTo(1);
+            }
+            running.orTimeout(10, TimeUnit.SECONDS).join();
+        }
+
+        @Test
+        void endsTheLanguageServerOnceWhateverTheNumberOfCloses() throws IOException {
+            var server = serving();
+
+            server.close();
+            server.shutdownHook().run();
+
+            assertThat(project.closes()).isEqualTo(1);
+        }
+
+        @Test
+        void stillDisconnectsTheClientsAndKeepsTheInterruptWhenEndingTheLanguageServerIsInterrupted()
+                throws IOException {
+            project.interruptedWhenClosed();
+            var server = serving();
+
+            try (var idle = connect(socket())) {
+                assertThat(idle.ask(STATUS_REQUEST)).contains("\"result\"");
+
+                server.close();
+
+                assertThat(Thread.interrupted()).isTrue();
+                assertThat(idle.readLine()).isNull();
+            }
         }
 
         @Test
