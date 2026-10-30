@@ -24,3 +24,18 @@ Done when:
   to add one (the rule "a mechanism meant to grow ships its skill").
 
 Depends on: jdtls-adapter-starts-and-awaits-jdtls (same adapter and same probe code).
+
+## Resolution
+
+Done in df0c1b9.
+
+- `bin/ci` (worker): format, build, test, jdtls passed; native skipped ("no changed file reaches the native cli"). Tests: cli 9, core 219, daemon 131, protocol 4, shared 236, architecture 16, 0 failures. JaCoCo 100% line and branch, no coverage exclusion added.
+- Real jdtls: the replay (`ScenarioReplayTest`) of every diagnostics scenario (clean, error, warning, outside, not ready) matches; changing an expected message turned it red. The skill `add-scenario` was applied once (scenario FILE_WITH_A_WARNING).
+- Choices: `HexagonalArchTest.shouldNotDependOnOtherBoundedContextDomains` skips the `daemon` context, because the daemon implements the port of `core` and so depends on `editing.domain` (ticket 1028 planned the adjustment). `quickProbeTest` is gone: every integration test now starts jdtls, `check` only compiles them and `jdtlsProbe` runs them. Outside the project, jdtls does not refuse (it opens a non-project file); the adapter refuses a file not under a folder jdtls imported. `NOT_READY` covers the initial start only.
+- One replay run timed out once (300 s) under a machine load of about 10 caused by other projects' jdtls: external load, not a defect.
+- Review (once): no blocking finding. Suggestions: the `daemon` exemption is wider than needed (issue opened); a missing file under the project is reported as outside the project (issue opened); two inline qualified names in `ScenarioReplayTest` (fixed by the supervisor).
+
+Tokens:
+- worker: 285,090
+- reviewer: 100,829
+- supervisor: 26 calls, 20,014 output, 30,403 input + cache write, 3,527,238 cache read; exchanges with the user: 3 messages (a floor). The period runs from the launch of the worker (14:03) to the closing, and includes talk with the user (rules on tokens and on agent exchanges).
