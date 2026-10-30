@@ -44,6 +44,8 @@ final class RenameChanges {
     private RenameChanges() {}
 
     /**
+     * Turns the answer of jdtls to a rename into a change set.
+     *
      * @param texts the text of a file as it is on disk, none for a file that is not there
      * @return the changes in the order of the answer, none when the answer changes nothing
      * @throws JdtlsException for what the adapter did not ask jdtls for and cannot apply: edits given as {@code

@@ -27,6 +27,8 @@ final class JdtlsWatch {
     private final long start = System.nanoTime();
 
     /**
+     * Watches jdtls for the waits of a session.
+     *
      * @param jdtls the jdtls process, whose exit ends every wait
      * @param failure completed, with the reason, when jdtls reports an error
      * @param timeout how long all the waits may last together

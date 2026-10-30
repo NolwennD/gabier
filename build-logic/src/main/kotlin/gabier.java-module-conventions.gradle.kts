@@ -5,6 +5,7 @@ plugins {
   jacoco
   id("org.gradlex.extra-java-module-info")
   id("net.ltgt.errorprone")
+  id("gabier.checkstyle-conventions")
 }
 
 // Every module is built for Java 25, the daemon included: the level of the native image, and the one the user chose.

@@ -202,6 +202,16 @@ final class JdtlsLanguageServer implements JavaLanguageServer, AutoCloseable {
         }
     }
 
+    /** A notification: LSP4J does not throw when jdtls is gone, the next wait for an answer says so. */
+    private static void close(JdtlsSession session, Iterable<Path> files) {
+        for (Path file : files) {
+            session.server()
+                    .getTextDocumentService()
+                    .didClose(new DidCloseTextDocumentParams(
+                            new TextDocumentIdentifier(file.toUri().toString())));
+        }
+    }
+
     private JdtlsSession ready() {
         if (starting.state() == Future.State.RUNNING) {
             throw LanguageServerException.notReady();
@@ -242,16 +252,6 @@ final class JdtlsLanguageServer implements JavaLanguageServer, AutoCloseable {
                                     .didOpen(new DidOpenTextDocumentParams(item))));
         });
         return publications;
-    }
-
-    /** A notification: LSP4J does not throw when jdtls is gone, the next wait for an answer says so. */
-    private static void close(JdtlsSession session, Iterable<Path> files) {
-        for (Path file : files) {
-            session.server()
-                    .getTextDocumentService()
-                    .didClose(new DidCloseTextDocumentParams(
-                            new TextDocumentIdentifier(file.toUri().toString())));
-        }
     }
 
     private static List<Diagnostic> domain(List<org.eclipse.lsp4j.Diagnostic> published) {

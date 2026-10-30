@@ -29,6 +29,8 @@ final class ScriptedDaemon implements AutoCloseable {
     private final List<String> requests = new CopyOnWriteArrayList<>();
 
     /**
+     * Listens on the socket and plays the daemon with a scripted answer.
+     *
      * @param answer the line to write back to each request, or null to hang up without answering
      * @param mayHangUp the connection is kept open until the latch opens, then closed: what a stopping daemon does
      */

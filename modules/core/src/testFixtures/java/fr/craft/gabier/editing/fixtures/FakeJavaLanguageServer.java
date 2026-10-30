@@ -31,6 +31,8 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
     private final List<Request> asked = new ArrayList<>();
 
     /**
+     * Creates a fake that knows no answer yet.
+     *
      * @param root the root of the project the scenarios play on: the directory where a test writes their files
      */
     public FakeJavaLanguageServer(Path root) {

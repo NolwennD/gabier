@@ -3,6 +3,8 @@
 // no single module could give it under JPMS; the tests run in `./gradlew check` like any other.
 plugins {
   java
+  // Checkstyle on its tests too, with the one configuration of the repository.
+  id("gabier.checkstyle-conventions")
 }
 
 java {

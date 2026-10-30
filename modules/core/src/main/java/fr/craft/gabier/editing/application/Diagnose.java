@@ -18,6 +18,8 @@ public final class Diagnose {
     }
 
     /**
+     * Asks the language server for the diagnostics of a file.
+     *
      * @return the diagnostics of the file, none when it is clean
      * @throws fr.craft.gabier.editing.domain.LanguageServerException if the server declines: it is not ready, or the
      *     file is not in its project

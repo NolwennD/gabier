@@ -1,0 +1,144 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<!--
+  The conventions of the Java code of gabier that the formatter (open-java-format, one style, 120 columns) cannot
+  check. Run on the main and the test code of every module and of :architecture (gabier.checkstyle-conventions).
+
+  Base: the Google style of Checkstyle (google_checks.xml), trimmed to what the formatter does not already enforce. The
+  formatter owns the layout, so no rule here looks at it: the two tools would disagree on a style the formatter has
+  just produced. What stays: names, imports, modifiers, declaration order, bug-prone constructs, the form of Javadoc.
+  Sun's style is not used: it is mostly layout and Javadoc on every member, and it contradicts the formatter.
+
+  Left out of the Google file, and why:
+  - Layout, the formatter's job: FileTabCharacter, RegexpSingleline (trailing whitespace), LineLength, Indentation,
+    WhitespaceAfter, WhitespaceAround, WhitespaceBeforeEmptyBody, SingleSpaceSeparator, GenericWhitespace,
+    MethodParamPad, NoWhitespaceBefore, NoWhitespaceBeforeCaseDefaultColon, ParenPad, ArrayBracketNoWhitespace,
+    OperatorWrap, SeparatorWrap, NoLineWrap, LeftCurly, GoogleRightCurly, AnnotationLocation, CommentsIndentation,
+    EmptyLineSeparator, CustomImportOrder, TextBlockGoogleStyleFormatting, JavadocLeadingAsteriskAlign,
+    JavadocMissingLeadingAsterisk, JavadocContentLocation, JavadocTagContinuationIndentation,
+    RequireEmptyLineBeforeBlockTagGroup, MultilineCommentLeadingAsteriskPresence.
+  - MissingJavadocType, MissingJavadocMethod: Javadoc is written when it says something the name and the types do not;
+    on every public type and method it would be noise (and a rewrite of the code copied from seed4j).
+  - AvoidEscapedUnicodeCharacters, IllegalTokenText: tests of the encoding write Unicode and control escapes on purpose.
+  - VariableDeclarationUsageDistance: the three offences are deliberate orders (PlanBuilder.rename reads the source
+    before it checks the target, so a missing source wins; two tests start a fixture before the steps they prove).
+  - UnnecessaryParentheses: parentheses that make a mix of && and || readable are kept.
+  - ModuleDirectiveOrder, AvoidModuleImport, the compact-source-file check, the Google suppression filters and
+    SuppressWithNearbyTextFilter: no convention in the project, no such code; a suppression is
+    suppressions.xml, or a @SuppressWarnings("checkstyle:<rule>") with its reason.
+  - ConstantName stays (not GoogleNonConstantFieldName): a static final field is named as a constant.
+  Added to the Google file: DeclarationOrder (a field after a method), RedundantModifier, UnusedImports,
+  HideUtilityClassConstructor, FinalClass, InterfaceIsType, InnerAssignment, EqualsHashCode, StringLiteralEquality,
+  Simplify*, ParameterAssignment, UnusedLocalVariable (Error Prone checks the main code only) and a TodoComment that bans TODO,
+  FIXME and XXX (what is left becomes a logbook issue, .claude/rules/workflow.md).
+-->
+<module name="Checker">
+  <property name="charset" value="UTF-8"/>
+  <property name="severity" value="error"/>
+  <property name="fileExtensions" value="java"/>
+
+  <module name="SuppressWarningsFilter"/>
+  <module name="SuppressionFilter">
+    <property name="file" value="${config_loc}/suppressions.xml"/>
+  </module>
+
+  <module name="TreeWalker">
+    <module name="OuterTypeFilename"/>
+    <module name="OneTopLevelClass"/>
+    <module name="PackageDeclaration"/>
+
+    <!-- Imports -->
+    <module name="AvoidStarImport"/>
+    <module name="UnusedImports"/>
+    <module name="RedundantImport"/>
+    <module name="IllegalImport"/>
+
+    <!-- Names -->
+    <module name="PackageName">
+      <property name="format" value="^[a-z]+(\.[a-z][a-z0-9]*)*$"/>
+    </module>
+    <module name="TypeName"/>
+    <module name="MethodName"/>
+    <module name="MemberName"/>
+    <module name="StaticVariableName"/>
+    <module name="ConstantName"/>
+    <module name="ParameterName"/>
+    <module name="LambdaParameterName"/>
+    <module name="CatchParameterName"/>
+    <module name="RecordComponentName"/>
+    <module name="LocalVariableName"/>
+    <module name="LocalFinalVariableName"/>
+    <module name="PatternVariableName"/>
+    <module name="ClassTypeParameterName"/>
+    <module name="RecordTypeParameterName"/>
+    <module name="MethodTypeParameterName"/>
+    <module name="InterfaceTypeParameterName"/>
+    <module name="AbbreviationAsWordInName">
+      <property name="ignoreFinal" value="false"/>
+      <property name="allowedAbbreviationLength" value="1"/>
+    </module>
+
+    <!-- Declarations -->
+    <module name="ModifierOrder"/>
+    <module name="RedundantModifier"/>
+    <module name="MultipleVariableDeclarations"/>
+    <module name="OneStatementPerLine"/>
+    <module name="ArrayTypeStyle"/>
+    <module name="UpperEll"/>
+    <module name="DeclarationOrder"/>
+    <module name="OverloadMethodsDeclarationOrder"/>
+    <module name="ConstructorsDeclarationGrouping"/>
+    <module name="MissingOverride"/>
+    <module name="MissingOverrideOnRecordAccessor"/>
+    <module name="HideUtilityClassConstructor"/>
+    <module name="FinalClass"/>
+    <module name="InterfaceIsType"/>
+
+    <!-- Bug-prone constructs -->
+    <module name="NeedBraces"/>
+    <module name="MissingSwitchDefault"/>
+    <module name="FallThrough"/>
+    <module name="EmptyBlock">
+      <property name="option" value="TEXT"/>
+    </module>
+    <module name="EmptyCatchBlock">
+      <property name="commentFormat" value="\w+"/>
+    </module>
+    <module name="EqualsHashCode"/>
+    <module name="StringLiteralEquality"/>
+    <module name="InnerAssignment"/>
+    <module name="SimplifyBooleanExpression"/>
+    <module name="SimplifyBooleanReturn"/>
+    <module name="NoFinalizer"/>
+    <module name="TodoComment">
+      <property name="format" value="(?i)\b(TODO|FIXME|XXX)\b"/>
+    </module>
+
+    <!-- Javadoc -->
+    <module name="InvalidJavadocPosition"/>
+    <module name="NonEmptyAtclauseDescription"/>
+    <module name="AtclauseOrder">
+      <property name="tagOrder" value="@param, @return, @throws, @deprecated"/>
+    </module>
+    <module name="JavadocParagraph">
+      <property name="allowNewlineParagraph" value="false"/>
+    </module>
+    <module name="SummaryJavadoc">
+      <property name="forbiddenSummaryFragments"
+                value="^@return the *|^This method returns |^A [{]@code [a-zA-Z0-9]+[}]( is a )"/>
+    </module>
+    <module name="SingleLineJavadoc"/>
+    <module name="JavadocMethod">
+      <property name="accessModifiers" value="public, protected"/>
+      <property name="allowMissingParamTags" value="true"/>
+      <property name="allowMissingReturnTag" value="true"/>
+      <property name="allowedAnnotations" value="Override, Test"/>
+    </module>
+
+    <module name="UnusedLocalVariable"/>
+    <module name="ParameterAssignment"/>
+    <module name="SuppressWarningsHolder"/>
+  </module>
+</module>

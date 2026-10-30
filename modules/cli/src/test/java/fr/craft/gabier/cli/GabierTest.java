@@ -29,6 +29,12 @@ class GabierTest {
     private static final String USAGE_DETAIL =
             "Unsupported arguments; usage: gabier [--json] (--version | status | stop)";
 
+    @TempDir
+    Path directory;
+
+    private final ByteArrayOutputStream out = new ByteArrayOutputStream();
+    private final ByteArrayOutputStream err = new ByteArrayOutputStream();
+
     private static String usageText(String arguments) {
         return "Usage error: " + USAGE_DETAIL + " (usage-error; arguments=" + arguments + ")" + System.lineSeparator();
     }
@@ -38,12 +44,6 @@ class GabierTest {
                 + "\",\"key\":\"usage-error\",\"parameters\":{\"arguments\":\"" + arguments + "\"}}"
                 + System.lineSeparator();
     }
-
-    @TempDir
-    Path directory;
-
-    private final ByteArrayOutputStream out = new ByteArrayOutputStream();
-    private final ByteArrayOutputStream err = new ByteArrayOutputStream();
 
     private int run(String... args) {
         return run(Map.of(), args);

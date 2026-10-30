@@ -1,13 +1,25 @@
 # Quality gates
 
 Every ticket leaves these gates green. The subagent that does the ticket checks them with `bin/ci` before it asks for
-the review (see the `ticket` skill). The formatting hook, the coverage gate and the architecture tests are in place.
+the review (see the `ticket` skill). The formatting hook, the coverage gate, the architecture tests and Checkstyle are in
+place.
 
 - **Formatting is automatic**: Java files are formatted by
   [open-java-format](https://github.com/openjavaformat/open-java-format) (one style, 120 columns)
   from a pre-commit hook managed with [hk](https://github.com/jdx/hk). Never format by hand and
   never bypass the hook (`--no-verify`).
 
+- **Checkstyle keeps the conventions the formatter cannot**: names, unused and star imports, modifier and declaration
+  order (fields, constructors, methods; overloads together), no `TODO`, Javadoc form (summary sentence, `@param` order),
+  and the bug-prone constructs. One configuration, `config/checkstyle/checkstyle.xml` (the Google style of Checkstyle,
+  trimmed: the file says, rule by rule, what is left out and why, the layout above all, which is the formatter's), and
+  `config/checkstyle/suppressions.xml` (the only suppressions: a file or a rule that is scoped out says why there). The
+  Gradle tasks `checkstyleMain`, `checkstyleTest`, `checkstyleIntegrationTest` and `checkstyleTestFixtures` are part of
+  `check` (so of the `test` stage of `bin/ci`), on the main and test code of every module and of `:architecture`, wired
+  once in `gabier.checkstyle-conventions`. Zero violation and zero warning. Checkstyle runs in the Gradle build, not on a
+  module path; its version is a plain entry of the catalog (`checkstyle`). Fix the code, never the rule: a rule is
+  dropped, or a file scoped out, only with the reason written in the configuration and challenged in the review. A
+  `@SuppressWarnings("checkstyle:...")` needs a reason too.
 - **Coverage is 100%**: no missed line and no missed branch, per class (JaCoCo, as in the
   `chatbot` project). Never lower the threshold to make a ticket pass.
 - **Exclusion from coverage is the exception**: only for code too complicated to test, or very

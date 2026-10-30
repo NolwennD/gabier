@@ -26,6 +26,8 @@ final class UnifiedDiff {
     private UnifiedDiff() {}
 
     /**
+     * Writes the unified diff that turns the old text into the new one.
+     *
      * @param fromLabel the name of the old text in the header, {@code /dev/null} for a file that did not exist
      * @param toLabel the name of the new text in the header, {@code /dev/null} for a file that is gone
      */

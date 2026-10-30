@@ -25,7 +25,15 @@ final class DaemonClient implements AutoCloseable {
     private final OutputStream output;
     private final Closeable connection;
 
+    DaemonClient(InputStream input, OutputStream output, Closeable connection) {
+        this.input = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
+        this.output = output;
+        this.connection = connection;
+    }
+
     /**
+     * Connects to the daemon listening on the socket.
+     *
      * @throws DaemonException when nothing answers on the socket (it does not wait: a connection to a socket that
      *     nobody listens on is refused at once)
      */
@@ -38,12 +46,6 @@ final class DaemonClient implements AutoCloseable {
         } catch (IOException e) {
             throw DaemonException.notRunning(socket);
         }
-    }
-
-    DaemonClient(InputStream input, OutputStream output, Closeable connection) {
-        this.input = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
-        this.output = output;
-        this.connection = connection;
     }
 
     /** Asks the daemon to run a method that takes no parameters, and reads its response. */

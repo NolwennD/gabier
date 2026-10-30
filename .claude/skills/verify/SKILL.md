@@ -81,6 +81,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 | `settings.gradle.kts`, `gradle/libs.versions.toml`                | `./gradlew projects` to see the modules, then `./gradlew build`                                                       |
 | packages created or moved                                         | the architecture tests: `./gradlew :architecture:cleanTest :architecture:test`                                        |
 | `modules/cli/**`, `modules/daemon/**`, `libs.versions.toml` (the native plugin) | `./gradlew :cli:nativeCompile :daemon:installDist`, then run the binary alone, in an empty directory with an empty environment: `--version`, a usage error as text and as JSON (`--json`), exit code 2, on the standard error, then `status` and `stop` against the installed daemon on a socket in a temporary directory (the `native` stage of `bin/ci` does it) |
+| a convention (name, Javadoc, declaration order, import)           | `./gradlew :<m>:checkstyleMain :<m>:checkstyleTest` (`:architecture:checkstyleTest`; also `checkstyleIntegrationTest`, `checkstyleTestFixtures`); the rules and what is left out: `config/checkstyle/checkstyle.xml` |
 | any `.java` file                                                  | formatting: `mise exec -- hk check --all`; `hk fix --all` fixes it. Never bypass the hook                             |
 
 `<package>` is the package of the class, which is not always the folder name: `protocol` for `:protocol`,
@@ -102,6 +103,9 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   dependency; never reach for `--add-exports` or `--add-opens`.
 - A JaCoCo failure reads `Rule violated for class …`: open the report under `modules/<m>/build/reports/jacoco/` or read
   the class to find the branch. An architecture test lists the classes that break the rule. Fix the code, never the rule.
+- Checkstyle: the failure prints `[ant:checkstyle] [ERROR] <file>:<line>:<col>: <message> [<RuleName>]`; the report is
+  `modules/<m>/build/reports/checkstyle/<main|test>.html`. The messages follow the language of the JVM. Fix the code;
+  a rule is dropped only with its reason written in `config/checkstyle/checkstyle.xml`.
 - hk: a file listed as changed or modified means the formatting is off: `hk fix --all`.
 
 ## 3. Widen before concluding

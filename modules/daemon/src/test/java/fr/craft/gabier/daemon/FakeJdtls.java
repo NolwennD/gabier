@@ -97,6 +97,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private volatile Path data;
     private volatile Future<Void> serving;
     private final List<AutoCloseable> channels = new ArrayList<>();
+    private volatile StatusClient client;
 
     /** The child that stands in for the jdtls process; the default one sleeps until it is killed. */
     FakeJdtls child(String... command) {
@@ -222,8 +223,6 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         return new JdtlsConnection(
                 process, Channels.newInputStream(fromServer.source()), Channels.newOutputStream(toServer.sink()));
     }
-
-    private volatile StatusClient client;
 
     /** Closes the pipes: from now on, writing to the fake fails as writing to a dead jdtls does. */
     void closePipes() throws Exception {

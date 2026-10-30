@@ -28,7 +28,11 @@ final class Diagnostics {
         this(System::nanoTime);
     }
 
-    /** @param nanoClock a monotonic clock in nanoseconds, replaced by a hand-made one in the tests */
+    /**
+     * Starts with no publication.
+     *
+     * @param nanoClock a monotonic clock in nanoseconds, replaced by a hand-made one in the tests
+     */
     Diagnostics(LongSupplier nanoClock) {
         this.nanoClock = nanoClock;
         this.lastPublication = nanoClock.getAsLong();

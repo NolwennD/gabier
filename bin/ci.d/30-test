@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Stage {@code test} of the local CI (see {@code bin/ci}): the tests and the gates (coverage, architecture), from a
+ * Stage {@code test} of the local CI (see {@code bin/ci}): the tests and the gates (coverage, architecture, Checkstyle), from a
  * clean test state so that a cached result never passes for a fresh one (the unit tests, which need no jdtls), then
  * the test counts per project and test task, read from the XML reports. A project that has test sources but reports
  * no test fails the stage: a green build that ran nothing is not a pass. Runs in the current directory, the checkout
@@ -23,7 +23,7 @@ public final class Test {
 
     public static void main(String[] args) throws Exception {
         if (args.length > 0 && args[0].equals("--describe")) {
-            System.out.println("tests and gates (coverage, architecture), from a clean test state");
+            System.out.println("tests and gates (coverage, architecture, Checkstyle), from a clean test state");
             return;
         }
         int status = run("./gradlew", "cleanTest", "check", "--console=plain");

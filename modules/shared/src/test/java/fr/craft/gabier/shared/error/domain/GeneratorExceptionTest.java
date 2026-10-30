@@ -1,6 +1,7 @@
 package fr.craft.gabier.shared.error.domain;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 
 import fr.craft.gabier.shared.error.infrastructure.primary.GeneratorExceptionFactory;
 import java.util.Map;

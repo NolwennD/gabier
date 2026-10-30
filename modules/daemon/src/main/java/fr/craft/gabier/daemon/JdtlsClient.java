@@ -33,6 +33,8 @@ final class JdtlsClient implements LanguageClient {
     private final Consumer<PublishDiagnosticsParams> diagnostics;
 
     /**
+     * Listens to what jdtls tells the client.
+     *
      * @param log receives a line for each status of jdtls worth telling
      * @param diagnostics receives every publication of diagnostics, from the first message of jdtls on
      */

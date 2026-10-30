@@ -16,7 +16,11 @@ final class StubbornProcess extends Process {
     private final Process real;
     private final ProcessHandle handle;
 
-    /** @param onExit what the handle of this process answers to {@code onExit()} */
+    /**
+     * Wraps a real process whose handle answers to {@code onExit()} as the test says.
+     *
+     * @param onExit what the handle of this process answers to {@code onExit()}
+     */
     StubbornProcess(Process real, CompletableFuture<ProcessHandle> onExit) {
         this.real = real;
         this.handle = new StubbornHandle(real.toHandle(), onExit);

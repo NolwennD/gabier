@@ -33,6 +33,8 @@ final class SocketGuard {
     private final String uid;
 
     /**
+     * Guards the socket of the user.
+     *
      * @param uid the numeric id of the user the daemon runs as, as text
      */
     SocketGuard(String uid) {

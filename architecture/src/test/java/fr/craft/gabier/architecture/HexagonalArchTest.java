@@ -80,7 +80,7 @@ class HexagonalArchTest {
     /** The JSpecify annotation that makes NullAway check a package; by name, as the module only needs it to compile. */
     private static final String NULL_MARKED = "org.jspecify.annotations.NullMarked";
 
-    private static final JavaClasses classes = new ClassFileImporter()
+    private static final JavaClasses CLASSES = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
             .importPackages(ROOT_PACKAGE);
 
@@ -89,7 +89,7 @@ class HexagonalArchTest {
      * fr.craft.gabier.protocol}, wherever their module is. They are read from the classes, so a new module needs no
      * line here.
      */
-    private static final List<String> contexts = classes.stream()
+    private static final List<String> CONTEXTS = CLASSES.stream()
             .map(JavaClass::getPackageName)
             .filter(name -> name.startsWith(ROOT_PACKAGE + "."))
             .map(name -> name.substring(ROOT_PACKAGE.length() + 1).split("\\.")[0])
@@ -128,7 +128,7 @@ class HexagonalArchTest {
     @Test
     void importsTheClassesOfTheModules() {
         // Without them every rule below would pass for nothing.
-        assertThat(classes).as("classes found under %s", ROOT_PACKAGE).isNotEmpty();
+        assertThat(CLASSES).as("classes found under %s", ROOT_PACKAGE).isNotEmpty();
     }
 
     @Test
@@ -138,7 +138,7 @@ class HexagonalArchTest {
                 .should()
                 .beFreeOfCycles()
                 .allowEmptyShould(true)
-                .check(classes);
+                .check(CLASSES);
     }
 
     @Nested
@@ -146,13 +146,13 @@ class HexagonalArchTest {
 
         @Test
         void shouldNotDependOnOtherBoundedContextDomains() {
-            contexts.forEach(
-                    context -> notDependOnOtherDomains(context, contexts).ifPresent(rule -> rule.check(classes)));
+            CONTEXTS.forEach(
+                    context -> notDependOnOtherDomains(context, CONTEXTS).ifPresent(rule -> rule.check(CLASSES)));
         }
 
         @Test
         void shouldApplyToTheDaemonForTheDomainsItDoesNotImplement() {
-            ArchRule rule = notDependOnOtherDomains(DAEMON_PACKAGE, contexts).orElseThrow();
+            ArchRule rule = notDependOnOtherDomains(DAEMON_PACKAGE, CONTEXTS).orElseThrow();
             JavaClasses daemonClass = new ClassFileImporter().importClasses(DependsOnAnotherContextDomain.class);
 
             assertThatThrownBy(() -> rule.check(daemonClass))
@@ -163,7 +163,7 @@ class HexagonalArchTest {
 
         @Test
         void shouldLetTheDaemonDependOnTheDomainItImplements() {
-            ArchRule rule = notDependOnOtherDomains(DAEMON_PACKAGE, contexts).orElseThrow();
+            ArchRule rule = notDependOnOtherDomains(DAEMON_PACKAGE, CONTEXTS).orElseThrow();
             JavaClasses daemonClass = new ClassFileImporter().importClasses(DependsOnTheEditingDomain.class);
 
             assertThatCode(() -> rule.check(daemonClass)).doesNotThrowAnyException();
@@ -171,7 +171,7 @@ class HexagonalArchTest {
 
         @Test
         void shouldBeAnHexagonalArchitecture() {
-            contexts.forEach(context -> layeredArchitecture()
+            CONTEXTS.forEach(context -> layeredArchitecture()
                     .consideringOnlyDependenciesInAnyPackage(context + "..")
                     .withOptionalLayers(true)
                     .layer("domain")
@@ -189,7 +189,7 @@ class HexagonalArchTest {
                     .whereLayer("secondary adapters")
                     .mayNotBeAccessedByAnyLayer()
                     .because("Each bounded context should implement a hexagonal architecture")
-                    .check(classes));
+                    .check(CLASSES));
         }
     }
 
@@ -207,7 +207,7 @@ class HexagonalArchTest {
                     .because("Domain model should only depend on domains and a very limited set of external"
                             + " dependencies")
                     .allowEmptyShould(true)
-                    .check(classes);
+                    .check(CLASSES);
         }
     }
 
@@ -224,7 +224,7 @@ class HexagonalArchTest {
                     .resideInAPackage("..infrastructure..")
                     .because("Application should only depend on domain, not on infrastructure")
                     .allowEmptyShould(true)
-                    .check(classes);
+                    .check(CLASSES);
         }
     }
 
@@ -241,7 +241,7 @@ class HexagonalArchTest {
                     .resideInAPackage("..secondary..")
                     .because("Primary should not interact with secondary")
                     .allowEmptyShould(true)
-                    .check(classes);
+                    .check(CLASSES);
         }
     }
 
@@ -258,12 +258,12 @@ class HexagonalArchTest {
                     .resideInAPackage("..application..")
                     .because("Secondary should not depend on application")
                     .allowEmptyShould(true)
-                    .check(classes);
+                    .check(CLASSES);
         }
 
         @Test
         void shouldNotDependOnSameContextPrimary() {
-            contexts.forEach(context -> noClasses()
+            CONTEXTS.forEach(context -> noClasses()
                     .that()
                     .resideInAPackage(context + ".infrastructure.secondary..")
                     .should()
@@ -271,7 +271,7 @@ class HexagonalArchTest {
                     .resideInAPackage(context + ".infrastructure.primary..")
                     .because("Secondary should not loop to its own context's primary")
                     .allowEmptyShould(true)
-                    .check(classes));
+                    .check(CLASSES));
         }
     }
 
@@ -288,7 +288,7 @@ class HexagonalArchTest {
                     .resideInAPackage(LSP4J_PACKAGE + "..")
                     .because("LSP4J lives in the daemon module and no other module sees one of its types")
                     .allowEmptyShould(true)
-                    .check(classes);
+                    .check(CLASSES);
         }
     }
 
@@ -304,7 +304,7 @@ class HexagonalArchTest {
                     .because("NullAway only checks what is @NullMarked: a package without a package-info.java carrying"
                             + " @NullMarked is silently left unchecked")
                     .allowEmptyShould(true)
-                    .check(classes);
+                    .check(CLASSES);
         }
 
         private static ArchCondition<JavaClass> resideInANullMarkedPackage() {
@@ -332,7 +332,7 @@ class HexagonalArchTest {
                     .areAnnotatedWith(ExcludeFromGeneratedCodeCoverage.class)
                     .should(giveAReason())
                     .allowEmptyShould(true)
-                    .check(classes);
+                    .check(CLASSES);
         }
 
         @Test
@@ -342,7 +342,7 @@ class HexagonalArchTest {
                     .areAnnotatedWith(ExcludeFromGeneratedCodeCoverage.class)
                     .should(giveAReason())
                     .allowEmptyShould(true)
-                    .check(classes);
+                    .check(CLASSES);
         }
 
         /**

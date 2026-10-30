@@ -17,10 +17,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 class NioFileStoreTest {
 
-    private final NioFileStore store = new NioFileStore();
-
     @TempDir
     Path directory;
+
+    private final NioFileStore store = new NioFileStore();
 
     private static List<String> names(Path folder) throws IOException {
         try (Stream<Path> children = Files.list(folder)) {

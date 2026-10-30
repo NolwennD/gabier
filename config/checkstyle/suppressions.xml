@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+    "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+    "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+<suppressions>
+  <!-- Assert.java is copied from seed4j (fr.craft.gabier.shared..), with about a hundred Javadocs whose first sentence has no
+       final period and whose <p> is followed by a space. Rewriting them would diverge from the upstream file for no gain:
+       the copy is kept as it is, and only these two Javadoc rules are lifted for it. -->
+  <suppress checks="SummaryJavadoc|JavadocParagraph" files="[\\/]shared[\\/]error[\\/]domain[\\/]Assert\.java"/>
+</suppressions>

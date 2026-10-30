@@ -124,14 +124,14 @@ class ScenarioReplayTest {
         }
     }
 
-    private static boolean needsJdtlsToImport(Scenario scenario) {
-        return scenario.answer() instanceof Answer.Refused refused && refused.key() == LanguageServerErrorKey.NOT_READY;
-    }
-
     private static void replay(Scenario scenario, Path root, JdtlsLanguageServer server, SoftAssertions differences)
             throws IOException {
         replayAnswer(scenario, root, server, differences);
         assertUntouched(scenario, root, differences);
+    }
+
+    private static boolean needsJdtlsToImport(Scenario scenario) {
+        return scenario.answer() instanceof Answer.Refused refused && refused.key() == LanguageServerErrorKey.NOT_READY;
     }
 
     private static void replayAnswer(

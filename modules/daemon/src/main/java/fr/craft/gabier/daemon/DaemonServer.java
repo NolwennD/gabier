@@ -32,6 +32,17 @@ final class DaemonServer implements AutoCloseable {
     private final CompletableFuture<Void> stopRequested = new CompletableFuture<>();
     private boolean closed;
 
+    private DaemonServer(Path socket, ServerSocketChannel listener, Clock clock, long pid) {
+        this.socket = socket;
+        this.listener = listener;
+        var startedAt = clock.instant();
+        // The method table: to add a method, add it here (.claude/skills/add-daemon-method/SKILL.md).
+        handler = new RequestHandler(List.of(
+                new StatusMethod(() -> new DaemonStatus(
+                        ProtocolVersion.CURRENT.toString(), pid, Duration.between(startedAt, clock.instant()))),
+                new StopMethod(this::requestStop)));
+    }
+
     /**
      * Starts listening on the socket.
      *
@@ -54,22 +65,16 @@ final class DaemonServer implements AutoCloseable {
         }
     }
 
-    private DaemonServer(Path socket, ServerSocketChannel listener, Clock clock, long pid) {
-        this.socket = socket;
-        this.listener = listener;
-        var startedAt = clock.instant();
-        // The method table: to add a method, add it here (.claude/skills/add-daemon-method/SKILL.md).
-        handler = new RequestHandler(List.of(
-                new StatusMethod(() -> new DaemonStatus(
-                        ProtocolVersion.CURRENT.toString(), pid, Duration.between(startedAt, clock.instant()))),
-                new StopMethod(this::requestStop)));
-    }
-
     /** Serves until a client asks the daemon to stop, or until it is closed, then closes it. */
     void serve() throws IOException {
         Thread.ofVirtual().name("gabier-accept").start(this::acceptClients);
         stopRequested.join();
         close();
+    }
+
+    private void serve(SocketChannel client) {
+        Connection.serve(Channels.newInputStream(client), Channels.newOutputStream(client), handler);
+        connections.remove(client);
     }
 
     /**
@@ -121,10 +126,5 @@ final class DaemonServer implements AutoCloseable {
             // The listener is closed when the daemon stops. If it failed instead, the daemon cannot go on either.
             requestStop();
         }
-    }
-
-    private void serve(SocketChannel client) {
-        Connection.serve(Channels.newInputStream(client), Channels.newOutputStream(client), handler);
-        connections.remove(client);
     }
 }
