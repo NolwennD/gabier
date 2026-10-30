@@ -10,13 +10,13 @@ place.
   never bypass the hook (`--no-verify`).
 
 - **Checkstyle keeps the conventions the formatter cannot**: names, unused and star imports, modifier and declaration
-  order (fields, constructors, methods; overloads together), no `TODO`, Javadoc form (summary sentence, `@param` order),
+  order (fields, constructors, methods; overloads together), no `TODO`, Javadoc form (summary sentence, order of the tags),
   and the bug-prone constructs. One configuration, `config/checkstyle/checkstyle.xml` (the Google style of Checkstyle,
   trimmed: the file says, rule by rule, what is left out and why, the layout above all, which is the formatter's), and
   `config/checkstyle/suppressions.xml` (the only suppressions: a file or a rule that is scoped out says why there). The
   Gradle tasks `checkstyleMain`, `checkstyleTest`, `checkstyleIntegrationTest` and `checkstyleTestFixtures` are part of
   `check` (so of the `test` stage of `bin/ci`), on the main and test code of every module and of `:architecture`, wired
-  once in `gabier.checkstyle-conventions`. Zero violation and zero warning. Checkstyle runs in the Gradle build, not on a
+  once in `gabier.checkstyle-conventions`; `build-logic` (Kotlin) and the Java scripts of `bin/ci.d` are not covered. Zero violation and zero warning. Checkstyle runs in the Gradle build, not on a
   module path; its version is a plain entry of the catalog (`checkstyle`). Fix the code, never the rule: a rule is
   dropped, or a file scoped out, only with the reason written in the configuration and challenged in the review. A
   `@SuppressWarnings("checkstyle:...")` needs a reason too.

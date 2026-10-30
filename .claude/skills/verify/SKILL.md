@@ -104,7 +104,8 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 - A JaCoCo failure reads `Rule violated for class …`: open the report under `modules/<m>/build/reports/jacoco/` or read
   the class to find the branch. An architecture test lists the classes that break the rule. Fix the code, never the rule.
 - Checkstyle: the failure prints `[ant:checkstyle] [ERROR] <file>:<line>:<col>: <message> [<RuleName>]`; the report is
-  `modules/<m>/build/reports/checkstyle/<main|test>.html`. The messages follow the language of the JVM. Fix the code;
+  `modules/<m>/build/reports/checkstyle/<main|test|integrationTest|testFixtures>.html` (`architecture/build/reports/checkstyle/`
+  for `:architecture`). The messages follow the language of the JVM. Fix the code;
   a rule is dropped only with its reason written in `config/checkstyle/checkstyle.xml`.
 - hk: a file listed as changed or modified means the formatting is off: `hk fix --all`.
 
