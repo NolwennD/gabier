@@ -62,11 +62,16 @@ worker; use a stronger model only when the ticket is hard or the user asks) and 
 none of this conversation:
 
 - the ticket: the path of the issue file, which it reads first, and the `Done when` points as the only scope;
-- the project rules: read `CLAUDE.md` if it exists and `.claude/rules/`; test first, then implement;
+- the project rules: read `CLAUDE.md` if it exists and `.claude/rules/`; test first, then implement; update the rules and
+  skills that its change makes outdated;
+- the quality: when it thinks the work is ready, run `bin/ci` on its worktree (`"$JAVA_HOME/bin/java" --source 25 bin/ci`
+  while mise does not trust the repository) and fix what it shows until every stage passes or is skipped for a stated
+  reason; it proves each `Done when` point itself, in its report;
 - the delivery: all the work in **one commit**, files added by explicit paths (never `git add -A`); it does not close the
   issue and does not merge;
 - the supervision (below);
-- the final report: what was done, the commit hash, how each `Done when` point was checked, and the unrelated bugs found.
+- the final report: what was done, the commit hash, the `bin/ci` summary, how each `Done when` point was proven, and the
+  unrelated bugs found.
 
 **Supervision**, in the spirit of the advisor: the subagent works alone, but it **stops and returns to the supervisor**
 instead of pushing on when:
@@ -74,7 +79,8 @@ instead of pushing on when:
 - it is stuck, or considers an approach other than the one the ticket implies;
 - it finds a bug unrelated to its ticket: it returns the description (what it saw, where, how to reproduce) and, if the
   bug does not block the ticket, it may carry on and put it in its final report instead;
-- it is done: it reports before anything is closed or merged.
+- it is ready: `bin/ci` passes and each `Done when` point is proven. It returns "ready for review" with its report,
+  before anything is closed or merged, then takes the reviewer's findings into account when they come back.
 
 The supervisor answers by continuing the same agent (`SendMessage` with its id), so its context is kept.
 
@@ -83,8 +89,9 @@ The supervisor answers by continuing the same agent (`SendMessage` with its id),
 - **An unrelated bug**: run this skill with `--issue-only` for it, on `main`, right away; never fix it inside the
   ticket's branch.
 - **A question**: answer it, or ask the user when the answer is theirs.
-- **Done**: run the skill `ship` on the branch the subagent reports. It checks the work, has it reviewed by a neutral
-  agent, merges it into `main`, closes the issue and cleans up the worktree.
+- **Ready for review**: run the skill `ship` on the branch the subagent reports. It does not run the checks again: it
+  has the work reviewed by a neutral agent, sends the findings back to the subagent, then merges, closes the issue,
+  cleans up the worktree and moves on to the next ticket.
 
 ### 4. Report to the user
 

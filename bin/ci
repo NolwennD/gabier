@@ -1,0 +1,233 @@
+#!/usr/bin/env -S java --source 25
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+
+/**
+ * Local CI for gabier, a JEP 330 single-file program: run it as {@code bin/ci}, no build tool involved.
+ *
+ * <p>Runs the verification stages in order and stops at the first failure, like a pipeline. A stage that does not apply
+ * yet (no {@code cli} module, no jdtls) is reported as skipped with its reason: a skipped stage is never a green one.
+ * The output of the tools is never muted.
+ *
+ * <p>Usage: {@code bin/ci [--list] [--stage <name>]... [<directory>]}. The directory is the checkout to verify (a ticket
+ * worktree, for instance); it defaults to the current one.
+ */
+public final class Ci {
+
+    @FunctionalInterface
+    private interface Action {
+        int run(Path root) throws IOException, InterruptedException;
+    }
+
+    private record Stage(String name, String description, String skipReason, Action action) {}
+
+    private record Outcome(String stage, String status, Duration duration) {}
+
+    private static final Pattern TEST_COUNTS =
+            Pattern.compile("tests=\"(\\d+)\" skipped=\"(\\d+)\" failures=\"(\\d+)\" errors=\"(\\d+)\"");
+
+    public static void main(String[] args) throws Exception {
+        List<String> wanted = new ArrayList<>();
+        boolean list = false;
+        Path root = Path.of(".");
+        for (int i = 0; i < args.length; i++) {
+            switch (args[i]) {
+                case "--list" -> list = true;
+                case "--stage" -> wanted.add(args[++i]);
+                default -> root = Path.of(args[i]);
+            }
+        }
+        root = root.toAbsolutePath().normalize();
+
+        List<Stage> stages = stages(root);
+        for (String name : wanted) {
+            if (stages.stream().noneMatch(stage -> stage.name().equals(name))) {
+                System.err.println("Unknown stage: " + name + ". Run bin/ci --list.");
+                System.exit(2);
+            }
+        }
+        if (list) {
+            stages.forEach(stage -> System.out.printf(
+                    "%-12s %s%s%n",
+                    stage.name(),
+                    stage.description(),
+                    stage.skipReason() == null ? "" : "  [skipped: " + stage.skipReason() + "]"));
+            return;
+        }
+
+        List<Outcome> outcomes = new ArrayList<>();
+        boolean failed = false;
+        int index = 0;
+        for (Stage stage : stages) {
+            index++;
+            if (!wanted.isEmpty() && !wanted.contains(stage.name())) {
+                continue;
+            }
+            if (failed) {
+                outcomes.add(new Outcome(stage.name(), "not run", Duration.ZERO));
+                continue;
+            }
+            if (stage.skipReason() != null) {
+                outcomes.add(new Outcome(stage.name(), "skipped: " + stage.skipReason(), Duration.ZERO));
+                continue;
+            }
+            System.out.printf("%n== [%d/%d] %s: %s ==%n", index, stages.size(), stage.name(), stage.description());
+            long start = System.nanoTime();
+            int status = stage.action().run(root);
+            Duration duration = Duration.ofNanos(System.nanoTime() - start);
+            failed = status != 0;
+            outcomes.add(new Outcome(stage.name(), failed ? "FAILED (exit " + status + ")" : "passed", duration));
+        }
+
+        System.out.printf("%n== Summary (%s) ==%n", root);
+        outcomes.forEach(outcome -> System.out.printf(
+                "%-12s %s%s%n",
+                outcome.stage(),
+                outcome.status(),
+                outcome.duration().isZero() ? "" : " in " + outcome.duration().toSeconds() + "s"));
+        System.exit(failed ? 1 : 0);
+    }
+
+    private static List<Stage> stages(Path root) {
+        boolean hasHk = Files.isRegularFile(root.resolve("hk.pkl"));
+        boolean hasCli = Files.isRegularFile(root.resolve("modules/cli/src/main/java/module-info.java"));
+        boolean hasProbe = buildFilesMention(root, "jdtlsProbe");
+        String jdtls = System.getenv("GABIER_JDTLS");
+
+        return List.of(
+                new Stage(
+                        "format",
+                        "open-java-format, through hk",
+                        hasHk ? null : "no hk.pkl",
+                        r -> run(r, "mise", "exec", "--", "hk", "check", "--all")),
+                new Stage("build", "compile and package every module, as modules", null, r -> gradle(r, "assemble")),
+                new Stage(
+                        "test",
+                        "tests and gates (coverage, architecture), from a clean test state",
+                        null,
+                        Ci::test),
+                new Stage(
+                        "native",
+                        "native cli, run alone in an empty directory",
+                        hasCli ? null : "no cli module yet",
+                        Ci::nativeCli),
+                new Stage(
+                        "jdtls",
+                        "integration probe against a real jdtls",
+                        !hasProbe ? "no jdtlsProbe task yet" : jdtls == null ? "GABIER_JDTLS is not set" : null,
+                        r -> gradle(r, "jdtlsProbe")));
+    }
+
+    private static int test(Path root) throws IOException, InterruptedException {
+        int status = gradle(root, "cleanTest", "check");
+        printTestCounts(root);
+        return status;
+    }
+
+    private static int nativeCli(Path root) throws IOException, InterruptedException {
+        int status = gradle(root, ":cli:nativeCompile");
+        if (status != 0) {
+            return status;
+        }
+        Path binary = root.resolve("modules/cli/build/native/nativeCompile/gabier");
+        if (!Files.isExecutable(binary)) {
+            System.err.println("Missing native binary: " + binary);
+            return 1;
+        }
+        Path empty = Files.createTempDirectory("gabier-ci");
+        Path copy = empty.resolve("gabier");
+        try {
+            Files.copy(binary, copy);
+            ProcessBuilder builder = new ProcessBuilder(copy.toString(), "--version")
+                    .directory(empty.toFile())
+                    .redirectErrorStream(true);
+            builder.environment().clear();
+            Process process = builder.start();
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+            int exit = process.waitFor();
+            System.out.println("gabier --version -> \"" + output + "\" (exit " + exit + ")");
+            return exit == 0 && output.startsWith("gabier ") ? 0 : 1;
+        } finally {
+            Files.deleteIfExists(copy);
+            Files.deleteIfExists(empty);
+        }
+    }
+
+    /** What the XML reports say, per module: the same numbers {@code verify} asks to read. */
+    private static void printTestCounts(Path root) throws IOException {
+        System.out.println("-- test counts (from modules/*/build/test-results) --");
+        Path modules = root.resolve("modules");
+        if (!Files.isDirectory(modules)) {
+            return;
+        }
+        try (Stream<Path> moduleDirs = Files.list(modules)) {
+            for (Path module : moduleDirs.sorted().toList()) {
+                Path results = module.resolve("build/test-results/test");
+                if (!Files.isDirectory(results)) {
+                    System.out.printf("%-12s no test results%n", module.getFileName());
+                    continue;
+                }
+                int tests = 0;
+                int skipped = 0;
+                int failures = 0;
+                try (Stream<Path> files = Files.list(results)) {
+                    for (Path xml : files.filter(p -> p.toString().endsWith(".xml")).toList()) {
+                        Matcher matcher = TEST_COUNTS.matcher(Files.readString(xml));
+                        if (matcher.find()) {
+                            tests += Integer.parseInt(matcher.group(1));
+                            skipped += Integer.parseInt(matcher.group(2));
+                            failures += Integer.parseInt(matcher.group(3)) + Integer.parseInt(matcher.group(4));
+                        }
+                    }
+                }
+                System.out.printf(
+                        "%-12s tests=%d skipped=%d failures=%d%n", module.getFileName(), tests, skipped, failures);
+            }
+        }
+    }
+
+    private static boolean buildFilesMention(Path root, String text) {
+        Path modules = root.resolve("modules");
+        if (!Files.isDirectory(modules)) {
+            return false;
+        }
+        try (Stream<Path> files = Files.walk(modules, 2)) {
+            return files.filter(p -> p.getFileName().toString().equals("build.gradle.kts"))
+                    .anyMatch(p -> {
+                        try {
+                            return Files.readString(p).contains(text);
+                        } catch (IOException e) {
+                            return false;
+                        }
+                    });
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static int gradle(Path root, String... tasks) throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>(List.of("./gradlew"));
+        command.addAll(List.of(tasks));
+        command.add("--console=plain");
+        return run(root, command.toArray(String[]::new));
+    }
+
+    private static int run(Path root, String... command) throws IOException, InterruptedException {
+        System.out.println("$ " + String.join(" ", command));
+        try {
+            return new ProcessBuilder(command).directory(root.toFile()).inheritIO().start().waitFor();
+        } catch (IOException e) {
+            System.err.println("Cannot run " + command[0] + ": " + e.getMessage());
+            return 127;
+        }
+    }
+}

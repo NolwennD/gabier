@@ -50,12 +50,18 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 
 ## 3. Widen before concluding
 
-The targeted test never closes a task: it misses what a changed class reaches without naming it. End of a task:
+The targeted test never closes a task: it misses what a changed class reaches without naming it. When you think the work
+is ready, run the local CI on your worktree:
 
 ```bash
-./gradlew check            # every module: tests, plus the gates of .claude/rules/quality.md that exist
-mise exec -- hk check --all
+bin/ci                      # formatting, build, tests and gates, native cli, jdtls probe: the stages that apply
+bin/ci --list               # the stages, and why one is skipped
+bin/ci --stage test         # one stage
 ```
+
+While mise does not trust the repository, a plain `java` fails (the shim of mise refuses `mise.toml`): run
+`"$JAVA_HOME/bin/java" --source 25 bin/ci` instead. A skipped stage is reported as skipped, never as green. The summary
+it prints goes in your report.
 
 ## 4. Report
 
