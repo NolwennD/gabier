@@ -64,7 +64,7 @@ say in the answer that the worktree is still standing, and where).
 
 ## Tickets
 
-Every change to the code is born as a ticket, a short fix included. The skill `ticket` opens the issue in the logbook,
+Every change to the code is born as a ticket, except the very small technical tasks (below). The skill `ticket` opens the issue in the logbook,
 then a subagent does the work in a worktree and a branch of its own, supervised by the session that ran the skill. What
 is found on the way and is too large to carry is reported to the supervisor, who opens it with `ticket --issue-only`: it
 becomes a ticket, not a `TODO` and not a silent omission (`.claude/rules/logbook.md`).
@@ -73,8 +73,14 @@ becomes a ticket, not a `TODO` and not a silent omission (`.claude/rules/logbook
 the same feature conflict when they are merged. They are done one after the other, and the order is declared with a
 `Depends on:` line in the later issue. Only independent tickets may run in parallel.
 
-One exception, only when the user says so ("no need for a ticket"): a small change to configuration, documentation or a
-rule is committed directly on `main`.
+**Very small technical tasks are the supervisor's own**, without a ticket and without a subagent, to keep things fluid:
+a few lines, one concern, no new behavior (tidying a build file, a typo, a version, a rule or a skill wording). The
+supervisor checks the change with `bin/ci` (a build file: the proofs that its change could break), and commits it
+directly on `main`. Not when a ticket being worked on touches the same files, since that is a coupled change and would
+conflict with it; not for a feature, a bug fix that needs a test of its own, or a new module: those are tickets.
+
+Another exception, when the user says so ("no need for a ticket"): the change is committed directly on `main`, whatever
+its size.
 
 A ticket that adopts, reverses, defers or rejects a choice that the code, a rule or a document carries says why in the
 `## Resolution` of its issue: the code says what the repository does, the issue says why, and what it replaced.

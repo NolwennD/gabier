@@ -12,8 +12,9 @@ autonomous: execute end-to-end without confirmation, and stop only on a refusal 
 An issue is a file of the logbook (`.claude/rules/logbook.md` holds its format, its name and its size). Every piece of
 work starts the same way: the issue is committed on `main`, then **a subagent** does the work in a worktree and a branch
 of its own. The session that ran this skill is the **supervisor**: it does not do the work itself, it follows the
-subagent, answers when the subagent stops to ask, and decides what to do with what comes back. A one-line fix gets a
-one-line issue.
+subagent, answers when the subagent stops to ask, and decides what to do with what comes back. A very small technical
+task (a few lines, one concern, no new behavior) is not a ticket: the supervisor does it itself, and does not run this
+skill (`.claude/rules/workflow.md`, "Tickets").
 
 `--issue-only`: only step 1. For work left for later (what would have been a `TODO`), and for a bug a subagent reports
 as unrelated to its ticket: the issue is opened and committed on `main`, nothing is started, the report gives its file
