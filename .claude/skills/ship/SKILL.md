@@ -100,7 +100,7 @@ summary of the subagent, the review (blocking findings fixed, suggestions left),
 subagent and the issue opened for it, and anything skipped.
 
 Then move on: take the next open issue in `logbook/issues/open/`, the one with the earliest `Opened:` line whose
-`Depends on:` issues are all closed, and run the skill `ticket` on it. Stop instead when the user said to stop after this
+`Depends on:` issues are all closed and that has no `On hold:` line, and run the skill `ticket` on it. Stop instead when the user said to stop after this
 ticket, or when no open issue is ready: say so.
 
 Never give two coupled tickets (same files, same module, same feature) to subagents at the same time: they conflict at
@@ -129,4 +129,4 @@ independent tickets may run in parallel.
 | Merge    | `git merge --ff-only <branch>` from the main checkout                |
 | Close    | `git mv` to `closed/`, `## Resolution`, commit that file only        |
 | Clean up | `git worktree remove <worktree> && git branch -d <branch>`           |
-| Next     | earliest open issue whose dependencies are closed, skill `ticket`    |
+| Next     | earliest open issue, dependencies closed, not on hold: skill `ticket` |
