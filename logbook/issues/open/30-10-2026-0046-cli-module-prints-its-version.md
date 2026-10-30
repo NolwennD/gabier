@@ -9,4 +9,5 @@ Done when:
 - the unit tests for `--version` and for an unknown argument pass;
 - the module's `module-info` requires nothing but `protocol`.
 
-Depends on: gradle-skeleton-and-protocol-module.
+Depends on: gradle-skeleton-and-protocol-module, architecture-tests-for-a-pure-java-core (the architecture tests
+cover this module too, and both edit the build files).
