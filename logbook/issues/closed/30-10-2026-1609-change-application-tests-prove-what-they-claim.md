@@ -17,3 +17,29 @@ Done when:
       then restored), or its name states what it proves.
 - [ ] The rollback tests no longer depend on the limit of the file system.
 - [ ] `bin/ci` green.
+
+## Resolution
+
+Merged as `9756116` (first commit of a batch of three issues of `core`, one worktree, one `bin/ci`).
+
+Checked by the worker's `bin/ci` (full, once, on the last commit before the rebase): format 7s, build 5s, test 100s, native
+209s, jdtls 181s; after the rebase on `main`, `bin/ci --stage test` on the head: 108s, core 259 tests, architecture 19, no
+failure. All four points are tests, no change to main code:
+- the rename test `reportsBothFilesAndOverwritesNeitherWhenTheFileCreatedUnderTheOldNameCannotBeRemoved` keeps
+  `ROLLBACK_INCOMPLETE` and `notRestored` and asserts the state of the three files;
+- the two rollback tests no longer use a 300-character name (NAME_MAX): they are
+  `restoresTheFileAlreadyWrittenWhenTheSecondOneCannotBeCreated` and `removesTheFilesAlreadyCreated`, with a CREATE failure
+  injected in `FaultyFileStore`, the cause asserted as `IOException`;
+- `NioFileStoreTest.Writing.leavesTheOriginalIntactWhenTheNewContentCannotBeWritten` (a 0444 file: old content, permissions,
+  no `.gabier-*.tmp`; skipped when run as root, where the file stays writable);
+- `ChangeApplierTest.SpellingsOfOnePath`: `refusesTheSameFileDeletedUnderAnAbsoluteAndARelativeSpelling` and
+  `reportsTheAbsolutePathOfAFileGivenAsARelativePath`.
+Mutations shown once and restored: `PlanBuilder.normalized` without `toAbsolutePath()` fails the two new tests; removing
+`Files.deleteIfExists(temporary)` in `NioFileStore.replace` fails the new test and `leavesNoTemporaryFileBehindWhenTheWriteFails`.
+
+Not reviewed: small ticket (tests only, no production code), by the rule of `ship` step 1.
+
+Tokens:
+- worker: 124154 (the whole batch of three issues; the sum of its completion notifications is the last one)
+- reviewer: none (not reviewed)
+- supervisor: 37159 output, 62829 input + cache write over 24 calls (cache read 8114437), supervisor session over the period of the batch (from the launch of the worker; three other workers and the rest of the session are included, so the figure is shared); exchanges with the user: 0 messages
