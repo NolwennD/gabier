@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -49,8 +50,8 @@ class AssertionExceptionTest {
 
     @Test
     void shouldDescribeNullElementInCollection() {
-        var exception = thrownBy(
-                () -> Assert.field("field", java.util.Arrays.asList("a", null)).noNullElement());
+        var exception =
+                thrownBy(() -> Assert.field("field", Arrays.asList("a", null)).noNullElement());
 
         assertThat(exception).isInstanceOf(NullElementInCollectionException.class);
         assertThat(exception.type()).isEqualTo(AssertionErrorType.NULL_ELEMENT_IN_COLLECTION);
