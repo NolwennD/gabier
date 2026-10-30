@@ -1,6 +1,6 @@
 # The diagnostics of a file can be followed as a stream
 
-Opened: 30-10-2026 19:43
+Opened: 30-10-2026 19:39
 
 An agent can follow the output of a command line by line, and react to each line as it comes. jdtls already pushes its
 diagnostics (`publishDiagnostics`, kept per file by `Diagnostics.publish`); the daemon relays them instead of waiting to
