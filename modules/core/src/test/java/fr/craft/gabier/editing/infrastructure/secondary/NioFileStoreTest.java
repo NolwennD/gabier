@@ -167,6 +167,47 @@ class NioFileStoreTest {
     }
 
     @Nested
+    class Creating {
+
+        @Test
+        void createsAFileWithItsBytes() throws IOException {
+            Path file = directory.resolve("new.txt");
+
+            store.create(file, new byte[] {1, 2});
+
+            assertThat(Files.readAllBytes(file)).containsExactly(1, 2);
+        }
+
+        @Test
+        void neverReplacesAFile() throws IOException {
+            Path file = Files.writeString(directory.resolve("a.txt"), "old");
+
+            assertThatExceptionOfType(FileAlreadyExistsException.class)
+                    .isThrownBy(() -> store.create(file, new byte[] {1}));
+            assertThat(file).hasContent("old");
+            assertThat(names(directory)).containsExactly("a.txt");
+        }
+
+        @Test
+        void neverWritesThroughALink() throws IOException {
+            Path target = directory.resolve("gone.txt");
+            Path link = Files.createSymbolicLink(directory.resolve("link.txt"), target);
+
+            assertThatExceptionOfType(FileAlreadyExistsException.class)
+                    .isThrownBy(() -> store.create(link, new byte[] {1}));
+            assertThat(target).doesNotExist();
+        }
+
+        @Test
+        void doesNotCreateTheDirectory() {
+            Path file = directory.resolve("missing").resolve("new.txt");
+
+            assertThatExceptionOfType(NoSuchFileException.class).isThrownBy(() -> store.create(file, new byte[0]));
+            assertThat(directory.resolve("missing")).doesNotExist();
+        }
+    }
+
+    @Nested
     class Moving {
 
         @Test

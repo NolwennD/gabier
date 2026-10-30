@@ -200,6 +200,39 @@ class ChangeApplierRollbackTest {
         }
 
         @Test
+        void leavesAloneAFileThatAppearedBeforeTheCreateAndReportsOnlyTheFailedWrite() throws IOException {
+            Path edited = file("A.txt", "a\n");
+            Path target = path("New.txt");
+            FaultyFileStore store =
+                    new FaultyFileStore(files).failing(Operation.CREATE, target, 1, Failure.FOREIGN_FILE_APPEARS);
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> new ChangeApplier(store).apply(set(append(edited, "x"), new CreateFile(target))))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(EditingErrorKey.WRITE_FAILED);
+                        assertThat(exception.parameters()).isEqualTo(Map.of("file", target.toString()));
+                        assertThat(exception.getSuppressed()).isEmpty();
+                    });
+
+            assertThat(edited).hasContent("a\n");
+            assertThat(target).hasContent("someone else's file");
+        }
+
+        @Test
+        void removesAFileItCreatedWhenItsWriteFailsHalfWay() throws IOException {
+            Path target = path("New.txt");
+            Map<String, String> before = snapshot();
+            FaultyFileStore store =
+                    new FaultyFileStore(files).failing(Operation.CREATE, target, 1, Failure.HALF_WRITTEN);
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> new ChangeApplier(store).apply(set(new CreateFile(target))))
+                    .satisfies(exception -> assertThat(exception.key()).isEqualTo(EditingErrorKey.WRITE_FAILED));
+
+            assertThat(snapshot()).isEqualTo(before);
+        }
+
+        @Test
         void putsBackAFileMovedAwayWhenTheFileCreatedUnderItsOldNameCannotBeRemoved() throws IOException {
             Path source = file("A.txt", "a\n");
             Path moved = path("Moved.txt");

@@ -26,6 +26,13 @@ public interface FileStore {
      */
     void write(Path file, byte[] content) throws IOException;
 
+    /**
+     * Creates a file at a path where nothing exists, a link included, and writes the bytes in it; its directory must
+     * exist. It never replaces what is there, even what appeared since the caller looked: it fails with a {@link
+     * java.nio.file.FileAlreadyExistsException} and leaves it as it was.
+     */
+    void create(Path file, byte[] content) throws IOException;
+
     /** The POSIX permissions of the file, which must exist. */
     Set<PosixFilePermission> permissions(Path file) throws IOException;
 

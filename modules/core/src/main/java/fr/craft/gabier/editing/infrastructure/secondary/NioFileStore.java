@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.Set;
 
@@ -50,6 +51,11 @@ public final class NioFileStore implements FileStore {
         } finally {
             Files.deleteIfExists(temporary);
         }
+    }
+
+    @Override
+    public void create(Path file, byte[] content) throws IOException {
+        Files.write(file, content, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
     }
 
     @Override

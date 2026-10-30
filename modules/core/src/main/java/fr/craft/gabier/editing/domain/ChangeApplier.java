@@ -7,7 +7,9 @@ import fr.craft.gabier.shared.error.domain.Assert;
  *
  * <p>The set is first run in memory, on a picture of the files: if any change is refused, nothing has been written. The
  * writes then run in the order of the set. If one fails, the ones already done are undone, in reverse order, so that
- * the files are back as they were. A file that someone else changes between the check and the writes is not detected.
+ * the files are back as they were. A file that someone else changes between the check and the writes is not detected,
+ * except for a created file: a file that appeared at its path meanwhile is never replaced, the write fails and the file
+ * stays.
  *
  * <p>A file is known by its path made absolute and normalized (no {@code .} nor {@code ..} segment), so two spellings of
  * one path are one file, and the reports give it in that form. The cleaning is on the text of the path: a link in it is

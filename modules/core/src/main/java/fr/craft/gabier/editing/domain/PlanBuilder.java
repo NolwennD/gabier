@@ -65,7 +65,7 @@ final class PlanBuilder {
             return;
         }
         byte[] edited = after.encode(file);
-        steps.add(new Step.Write(file, edited, Optional.of(bytes)));
+        steps.add(new Step.Write(file, edited, bytes));
         files.put(file, Optional.of(edited));
         modified.add(file);
         diff.append(UnifiedDiff.of(file.toString(), before.text(), file.toString(), after.text()));
@@ -77,7 +77,7 @@ final class PlanBuilder {
         }
         requireFolder(file);
         byte[] empty = new byte[0];
-        steps.add(new Step.Write(file, empty, Optional.empty()));
+        steps.add(new Step.Create(file, empty));
         files.put(file, Optional.of(empty));
         created.add(file);
         diff.append(UnifiedDiff.of(NOTHING, "", file.toString(), ""));

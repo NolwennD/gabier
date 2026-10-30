@@ -1,9 +1,9 @@
 package fr.craft.gabier.editing.domain;
 
 import java.io.IOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -20,8 +20,8 @@ sealed interface Step {
 
     void undo(FileStore store) throws IOException;
 
-    /** Writes a file: creates it when {@code previous} is empty, replaces its bytes otherwise. */
-    record Write(Path target, byte[] content, Optional<byte[]> previous) implements Step {
+    /** Replaces the bytes of a file, and gives them back as they were on undo. */
+    record Write(Path target, byte[] content, byte[] previous) implements Step {
 
         @Override
         public void apply(FileStore store) throws IOException {
@@ -30,9 +30,43 @@ sealed interface Step {
 
         @Override
         public void undo(FileStore store) throws IOException {
-            if (previous.isPresent()) {
-                store.write(target, previous.get());
-            } else if (store.exists(target)) {
+            store.write(target, previous);
+        }
+    }
+
+    /**
+     * Creates a file, which never replaces one. It is deleted on undo only if this step created it: a file that
+     * appeared at the target since the plan stays, and so does the target when the step did not even try.
+     */
+    final class Create implements Step {
+
+        private final Path target;
+        private final byte[] content;
+        private boolean foreign;
+
+        Create(Path target, byte[] content) {
+            this.target = target;
+            this.content = content;
+        }
+
+        @Override
+        public Path target() {
+            return target;
+        }
+
+        @Override
+        public void apply(FileStore store) throws IOException {
+            try {
+                store.create(target, content);
+            } catch (FileAlreadyExistsException alreadyThere) {
+                foreign = true;
+                throw alreadyThere;
+            }
+        }
+
+        @Override
+        public void undo(FileStore store) throws IOException {
+            if (!foreign && store.exists(target)) {
                 store.delete(target);
             }
         }
