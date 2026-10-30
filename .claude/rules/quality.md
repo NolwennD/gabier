@@ -1,8 +1,7 @@
 # Quality gates
 
 Every ticket leaves these gates green. The subagent that does the ticket checks them with `bin/ci` before it asks for
-the review (see the `ticket` skill). The formatting hook and the coverage gate are in place. The architecture tests are
-not yet (a logbook issue): until it is closed, the purity of the domain is checked by hand and in the review.
+the review (see the `ticket` skill). The formatting hook, the coverage gate and the architecture tests are in place.
 
 - **Formatting is automatic**: Java files are formatted by
   [open-java-format](https://github.com/openjavaformat/open-java-format) (one style, 120 columns)
@@ -13,13 +12,20 @@ not yet (a logbook issue): until it is closed, the purity of the domain is check
   `chatbot` project). Never lower the threshold to make a ticket pass.
 - **Exclusion from coverage is the exception**: only for code too complicated to test, or very
   unlikely to ever happen. Annotate it with `@ExcludeFromGeneratedCodeCoverage(reason = "...")`.
-  The reason is mandatory and says why; an empty one is a failure. Code that is merely tedious to
-  test is tested. The annotation's name must keep the word `Generated`: JaCoCo ignores what is
-  annotated with such an annotation. Every use is challenged in the review.
-- **The core stays almost pure Java**: the domain depends only on `java..` and a very short
-  allow-list. Widening that list is the user's decision, not an agent's. Architecture tests
-  (ArchUnit, inspired by `chatbot` and [seed4j](https://github.com/seed4j/seed4j)) enforce it,
-  next to the module boundaries that JPMS already enforces at compile time.
+  The reason is mandatory and says why: omitting it does not compile, and a blank one fails the architecture test.
+  Code that is merely tedious to test is tested. The annotation's name must keep the word `Generated`: JaCoCo ignores
+  what is annotated with such an annotation. Every use is challenged in the review.
+- **The core stays almost pure Java**: the domain depends on `java..` and on our own
+  `shared` code (`fr.craft.gabier.shared..`), never on a third-party library or framework. Adding a third-party
+  dependency to the domain is the user's decision, not an agent's: the allow-list is the constant
+  `DOMAIN_ALLOWED_PACKAGES` in
+  `architecture/src/test/java/fr/craft/gabier/architecture/HexagonalArchTest.java`. These architecture tests (ArchUnit,
+  adapted from the `HexagonalArchTest` that [seed4j](https://github.com/seed4j/seed4j) generates, without its Spring
+  parts; the project `:architecture` sees the classes of every module) also keep the packages free of cycles, the
+  contexts (the sub-packages of `fr.craft.gabier` other than `shared`) off each other's domain, each context a hexagon
+  (domain, application, primary and secondary adapters, pointing towards the domain), the application off the
+  infrastructure and the primary and secondary adapters apart, next to the module boundaries that JPMS already
+  enforces at compile time.
 - **Modern Java**: write idiomatic code for the release of the module (records, sealed types,
   pattern matching, sequenced collections, and what the release adds), not older idioms.
 - **Review before closing**: a neutral Java reviewer reads the change before the ticket is closed,

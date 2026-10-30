@@ -27,7 +27,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 | one method                                                        | `--tests 'fr.craft.gabier.<m>.<Class>.<method>'`; inside a `@Nested` class: `'…<Class>$<Nested>.<method>'`           |
 | `module-info.java`, `build.gradle.kts`, `build-logic/**`          | `./gradlew build`: the modules are compiled as modules, so a forbidden dependency fails here                          |
 | `settings.gradle.kts`, `gradle/libs.versions.toml`                | `./gradlew projects` to see the modules, then `./gradlew build`                                                       |
-| packages created or moved                                         | the architecture tests, once they exist: `./gradlew :<m>:test --tests '*ArchTest'`                                    |
+| packages created or moved                                         | the architecture tests: `./gradlew :architecture:cleanTest :architecture:test`                                        |
 | `modules/cli/**`, once it exists                                  | `./gradlew :cli:nativeCompile`, then run the binary alone, in an empty directory with an empty environment            |
 | any `.java` file                                                  | formatting: `mise exec -- hk check --all`; `hk fix --all` fixes it. Never bypass the hook                             |
 
@@ -41,6 +41,8 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   `at fr.craft.gabier…` line. The HTML report is `modules/<m>/build/reports/tests/test/index.html`.
 - The numbers, per test class:
   `grep -ho 'tests="[0-9]*" skipped="[0-9]*" failures="[0-9]*"' modules/<m>/build/test-results/test/*.xml`.
+  The architecture tests are not under `modules/`: `architecture/build/test-results/test/*.xml`, and the report
+  `architecture/build/reports/tests/test/index.html`.
 - `No tests found for given includes: [...]` is a wrong class or method name, not a green build.
 - JPMS: `package … is not visible` or `module not found` names the module to look at. Fix `module-info.java` or the
   dependency; never reach for `--add-exports` or `--add-opens`.

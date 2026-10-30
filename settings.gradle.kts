@@ -15,6 +15,9 @@ dependencyResolutionManagement {
 
 rootProject.name = "gabier"
 
+// Not a module: the architecture tests, which need the classes of every module on one classpath.
+include("architecture")
+
 javaModules {
   directory("modules") {
     group = "fr.craft.gabier"
