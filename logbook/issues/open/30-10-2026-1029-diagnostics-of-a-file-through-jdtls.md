@@ -16,6 +16,11 @@ Done when:
   jdtls in an integration test, and any difference between its answer and the scenario's fails the test;
 - the unit tests of the adapter need no jdtls (an in-process fake language server over piped streams) and the coverage
   stays at 100%; what the core already proves with the fake of the port is not proved again here;
-- no LSP4J outside `daemon`, the architecture tests green.
+- no LSP4J outside `daemon`, the architecture tests green;
+- the scenarios of the fixtures of the core are replayed through a harness that writes their project, starts the real
+  adapter on it and compares the answer; the refusals (outside the project, not ready) are mapped from what jdtls really
+  does, as the `Scenarios` Javadoc says; and since the catalogue now has its replay, the skill
+  `.claude/skills/add-scenario/SKILL.md` describes step by step how to add a scenario and its replay, and is applied once
+  to add one (the rule "a mechanism meant to grow ships its skill").
 
 Depends on: jdtls-adapter-starts-and-awaits-jdtls (same adapter and same probe code).

@@ -32,8 +32,15 @@ import java.util.Map;
  *   <li>the order of the changes and of the edits in a rename (here the file of the symbol first, edits before the move
  *       of a file that a rename of a public type causes), which a replay may compare as sets;
  *   <li>the refusal while the project is imported ({@link #DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS}), which no replay can
- *       provoke on demand without a race: the adapter's own test covers how it is detected.
+ *       provoke on demand without a race: the adapter's own test covers how it is detected;
+ *   <li>the refusals of a file outside the project, of an invalid name and of a position with no symbol: a real jdtls
+ *       may open a file outside the project as a non-project file, and answer a rename it cannot do with a null
+ *       {@code prepareRename}, a null edit or a response error depending on its version. The adapter maps what the
+ *       server does to these keys, it does not just replay them.
  * </ul>
+ *
+ * <p>The fake answers from the request alone: it does not check that the files a test wrote are the ones of the
+ * scenario, so a test that scripts a scenario writes the project with {@code Scenario#writeProject} when it matters.
  *
  * <p>To add a scenario: write it here, add its name to {@link #all()} and to the test of the catalogue, and add its
  * replay to the integration tests of the adapter.
