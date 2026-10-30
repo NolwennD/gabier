@@ -34,7 +34,9 @@ final class FaultyFileStore implements FileStore {
         /** A runtime exception that is not the store's to throw. */
         RUNTIME,
         /** Someone else's file appears at the target, and the call fails because it is there (a move or a create). */
-        FOREIGN_FILE_APPEARS
+        FOREIGN_FILE_APPEARS,
+        /** The call succeeds, then someone else's file appears at the path (a delete). */
+        FOREIGN_FILE_APPEARS_AFTER
     }
 
     private record Fault(Operation operation, Path path, int call, Failure failure) {}
@@ -132,8 +134,14 @@ final class FaultyFileStore implements FileStore {
 
     @Override
     public void delete(Path file) throws IOException {
-        fail(check(Operation.DELETE, file), file);
-        delegate.delete(file);
+        Failure failure = check(Operation.DELETE, file);
+        if (failure == Failure.FOREIGN_FILE_APPEARS_AFTER) {
+            delegate.delete(file);
+            delegate.create(file, "someone else's file".getBytes(StandardCharsets.UTF_8));
+        } else {
+            fail(failure, file);
+            delegate.delete(file);
+        }
     }
 
     private static void fail(Failure failure, Path path) throws IOException {

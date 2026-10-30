@@ -13,6 +13,7 @@ import fr.craft.gabier.editing.infrastructure.secondary.NioFileStore;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -260,6 +261,33 @@ class ChangeApplierRollbackTest {
             assertThat(deleted).hasContent("echo\n");
             assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(deleted)))
                     .isEqualTo("rwxr-x---");
+        }
+
+        @Test
+        void leavesAloneAFileThatAppearedWhereADeletedFileWasAndReportsTheRollbackIncomplete() throws IOException {
+            Path edited = file("A.txt", "a\n");
+            Path deleted = file("B.txt", "deleted\n");
+            Path failing = file("C.txt", "c\n");
+            FaultyFileStore store = new FaultyFileStore(files)
+                    .failing(Operation.DELETE, deleted, 1, Failure.FOREIGN_FILE_APPEARS_AFTER)
+                    .failing(Operation.WRITE, failing);
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> new ChangeApplier(store)
+                            .apply(set(append(edited, "x"), new DeleteFile(deleted), append(failing, "y"))))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(EditingErrorKey.ROLLBACK_INCOMPLETE);
+                        assertThat(exception.parameters())
+                                .isEqualTo(Map.of(
+                                        "file", failing.toString(),
+                                        "notRestored", deleted.toString()));
+                        assertThat(exception.getSuppressed()).hasSize(1);
+                        assertThat(exception.getSuppressed()[0]).isInstanceOf(FileAlreadyExistsException.class);
+                    });
+
+            assertThat(deleted).hasContent("someone else's file");
+            assertThat(edited).hasContent("a\n");
+            assertThat(failing).hasContent("c\n");
         }
 
         @Test

@@ -105,13 +105,16 @@ sealed interface Step {
 
     /**
      * Deletes a file, and gives it back with its content and its permissions as they were when it was deleted (not when
-     * the set was planned: an earlier change of the set may have created or moved the file).
+     * the set was planned: an earlier change of the set may have created or moved the file). The file is given back
+     * only if this step deleted it, and never over a file: one that appeared at the target since stays, and the undo
+     * fails; a step that did not delete anything gives nothing back.
      */
     final class Delete implements Step {
 
         private final Path target;
         private final byte[] previous;
         private Set<PosixFilePermission> permissions = Set.of();
+        private boolean deleted;
 
         Delete(Path target, byte[] previous) {
             this.target = target;
@@ -127,12 +130,13 @@ sealed interface Step {
         public void apply(FileStore store) throws IOException {
             permissions = store.permissions(target);
             store.delete(target);
+            deleted = true;
         }
 
         @Override
         public void undo(FileStore store) throws IOException {
-            if (!store.exists(target)) {
-                store.write(target, previous);
+            if (deleted) {
+                store.create(target, previous);
                 store.setPermissions(target, permissions);
             }
         }
