@@ -19,6 +19,3 @@ Done when:
   edited, and no assertion is weakened;
 - no site is rewritten by hand when jdtls offers the action;
 - `bin/ci` green, Checkstyle included.
-
-Depends on: 30-10-2026-1937-daemon-methods-take-parameters is not coupled to it by files only in part (the three
-diagnostics issues edit the same tests): this one is done first, then they follow.
