@@ -214,6 +214,71 @@ class DaemonServerTest {
         }
 
         @Test
+        void closesTheListenerAndRemovesTheSocketWhenTheSocketCannotBeRestricted() throws IOException {
+            var queued = new ArrayList<SocketChannel>();
+            var failing = new SocketGuard(uid) {
+                @Override
+                void restrict(Path socket) throws IOException {
+                    // Bound and listening: a client that connects now waits in the queue of the listener.
+                    var client = SocketChannel.open(StandardProtocolFamily.UNIX);
+                    client.connect(UnixDomainSocketAddress.of(socket));
+                    queued.add(client);
+
+                    throw new IOException("restrict failed");
+                }
+            };
+
+            var failure = catchThrowableOfType(
+                    DaemonSocketException.class, () -> DaemonServer.open(socket(), failing, clock, PID, project));
+
+            assertThat(failure.key()).isEqualTo(DaemonErrorKey.SOCKET_UNAVAILABLE);
+            assertThat(failure.getCause()).isInstanceOf(IOException.class).hasMessage("restrict failed");
+            assertThat(failure.getCause().getSuppressed()).isEmpty();
+            assertThat(socket()).doesNotExist();
+            // The listener is closed: the client that was queued on it is dropped.
+            assertThatThrownBy(() -> queued.getFirst().read(ByteBuffer.allocate(1)))
+                    .isInstanceOf(IOException.class);
+            queued.getFirst().close();
+        }
+
+        @Test
+        void reportsTheOriginalErrorAndWhatCouldNotBeCleanedUpWhenTheSocketCannotBeRestricted() throws IOException {
+            var failing = new SocketGuard(uid) {
+                @Override
+                void restrict(Path socket) throws IOException {
+                    Files.delete(socket);
+                    Files.createFile(Files.createDirectory(socket).resolve("inside"));
+
+                    throw new IOException("restrict failed");
+                }
+            };
+
+            var failure = catchThrowableOfType(
+                    DaemonSocketException.class, () -> DaemonServer.open(socket(), failing, clock, PID, project));
+
+            assertThat(failure.getCause()).hasMessage("restrict failed");
+            assertThat(failure.getCause().getSuppressed()).hasSize(1);
+        }
+
+        @Test
+        void aSuccessfulStartAfterAFailedOneTakesTheSocket() throws IOException {
+            var failing = new SocketGuard(uid) {
+                @Override
+                void restrict(Path socket) throws IOException {
+                    throw new IOException("restrict failed");
+                }
+            };
+            assertThatThrownBy(() -> DaemonServer.open(socket(), failing, clock, PID, project))
+                    .isInstanceOf(DaemonSocketException.class);
+
+            serving();
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
+            }
+        }
+
+        @Test
         void reportsAnInternalErrorWhenTheSocketCannotBeSetUp() throws IOException {
             var file = Files.writeString(directory.resolve("file"), "x");
 

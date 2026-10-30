@@ -64,17 +64,42 @@ final class DaemonServer implements AutoCloseable {
      * @throws DaemonSocketException when the socket is not the daemon's to take, or cannot be set up
      */
     static DaemonServer open(Path socket, String uid, LongSupplier nanoClock, long pid, ServedProject project) {
-        var guard = new SocketGuard(uid);
+        return open(socket, new SocketGuard(uid), nanoClock, pid, project);
+    }
+
+    /**
+     * Starts listening on the socket, with the guard that judges and restricts it. A daemon that does not start leaves
+     * no listener and no socket file behind: what it bound, it gives back.
+     */
+    static DaemonServer open(Path socket, SocketGuard guard, LongSupplier nanoClock, long pid, ServedProject project) {
         try {
             guard.prepareFolder(Objects.requireNonNull(socket.getParent(), "the socket is in a folder"));
             guard.clearStale(socket);
             var listener = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
             listener.bind(UnixDomainSocketAddress.of(socket));
-            guard.restrict(socket);
+            restrictOrGiveBack(guard, socket, listener);
 
             return new DaemonServer(socket, listener, nanoClock, pid, project);
         } catch (IOException e) {
             throw DaemonSocketException.unavailable(socket, e);
+        }
+    }
+
+    /**
+     * Makes the socket private, or, when that fails, closes the listener and removes the socket file it just bound and
+     * rethrows the failure, to which what could not be given back is added as suppressed.
+     */
+    private static void restrictOrGiveBack(SocketGuard guard, Path socket, ServerSocketChannel listener)
+            throws IOException {
+        try {
+            guard.restrict(socket);
+        } catch (IOException | RuntimeException failure) {
+            try (listener) {
+                Files.deleteIfExists(socket);
+            } catch (IOException cleanup) {
+                failure.addSuppressed(cleanup);
+            }
+            throw failure;
         }
     }
 

@@ -20,7 +20,7 @@ import java.util.Set;
  * <p>The numbers of the {@code unix:mode} attribute are those of {@code stat(2)}: the file type in the bits of {@code
  * S_IFMT}.
  */
-final class SocketGuard {
+class SocketGuard {
 
     private static final Set<PosixFilePermission> PRIVATE_FOLDER = PosixFilePermissions.fromString("rwx------");
     private static final Set<PosixFilePermission> PRIVATE_FILE = PosixFilePermissions.fromString("rw-------");
