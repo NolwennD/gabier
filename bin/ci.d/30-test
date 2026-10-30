@@ -12,7 +12,8 @@ import java.util.stream.Stream;
 /**
  * Stage {@code test} of the local CI (see {@code bin/ci}): the tests and the gates (coverage, architecture), from a
  * clean test state so that a cached result never passes for a fresh one (the unit tests and the daemon's quick probe
- * tests, which need no jdtls), then the test counts per project and test task, read from the XML reports. Runs in the
+ * tests, which need no jdtls), then the test counts per project and test task, read from the XML reports. A project that
+ * has test sources but reports no test fails the stage: a green build that ran nothing is not a pass. Runs in the
  * current directory, the checkout under verification.
  */
 public final class Test {
@@ -26,13 +27,21 @@ public final class Test {
             return;
         }
         int status = run("./gradlew", "cleanTest", "cleanQuickProbeTest", "check", "--console=plain");
-        printTestCounts(Path.of("."));
-        System.exit(status);
+        List<String> silent = printTestCounts(Path.of("."));
+        if (!silent.isEmpty()) {
+            System.err.println("These projects have test sources but ran no test: " + String.join(", ", silent));
+        }
+        System.exit(status != 0 ? status : silent.isEmpty() ? 0 : 1);
     }
 
-    /** What the XML reports say, per project (every module and the architecture tests). */
-    private static void printTestCounts(Path root) throws IOException {
+    /**
+     * What the XML reports say, per project (every module and the architecture tests).
+     *
+     * @return the projects that have unit test sources and ran no unit test
+     */
+    private static List<String> printTestCounts(Path root) throws IOException {
         System.out.println("-- test counts (from <project>/build/test-results) --");
+        List<String> silent = new ArrayList<>();
         List<Path> projects = new ArrayList<>();
         Path modules = root.resolve("modules");
         if (Files.isDirectory(modules)) {
@@ -55,8 +64,12 @@ public final class Test {
                             .sorted().toList());
                 }
             }
+            boolean hasTests = hasJavaFiles(project.resolve("src/test/java"));
             if (tasks.isEmpty()) {
                 System.out.printf("%-12s no test results%n", project.getFileName());
+                if (hasTests) {
+                    silent.add(project.getFileName().toString());
+                }
                 continue;
             }
             for (Path results : tasks) {
@@ -76,7 +89,20 @@ public final class Test {
                 String task = results.getFileName().toString();
                 String name = project.getFileName() + (task.equals("test") ? "" : " " + task);
                 System.out.printf("%-26s tests=%d skipped=%d failures=%d%n", name, tests, skipped, failures);
+                if (task.equals("test") && hasTests && tests == 0) {
+                    silent.add(project.getFileName().toString());
+                }
             }
+        }
+        return silent;
+    }
+
+    private static boolean hasJavaFiles(Path sources) throws IOException {
+        if (!Files.isDirectory(sources)) {
+            return false;
+        }
+        try (Stream<Path> files = Files.walk(sources)) {
+            return files.anyMatch(file -> file.toString().endsWith(".java"));
         }
     }
 
