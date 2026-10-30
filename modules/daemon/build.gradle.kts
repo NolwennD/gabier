@@ -32,15 +32,19 @@ tasks.check {
 }
 
 // The integration tests, in a source set of their own so that the unit tests and their coverage stay apart. It sees the
-// same dependencies as the unit tests (JUnit, LSP4J, Gson). Two Test tasks run it, split by class name: the quick tests,
-// which start no jdtls and run in `check`, and the real probe, which starts jdtls and runs only on demand.
+// same dependencies as the unit tests (JUnit, LSP4J, Gson) and the classes of the daemon (the jdtls adapter that the
+// probe starts jdtls through, on the class path like the tests). Two Test tasks run it, split by class name: the quick
+// tests, which start no jdtls and run in `check`, and the real probe, which starts jdtls and runs only on demand.
 val integrationTest = sourceSets.create("integrationTest")
+dependencies {
+  "integrationTestImplementation"(sourceSets.main.get().output)
+}
 configurations["integrationTestImplementation"].extendsFrom(configurations.testImplementation.get())
 configurations["integrationTestRuntimeOnly"].extendsFrom(configurations.testRuntimeOnly.get())
 
 // The one class that starts a real jdtls (it needs GABIER_JDTLS). Every other class of the source set is a quick test:
 // a class that starts jdtls must be this one, or this constant must name it too, otherwise `check` runs it and fails at
-// once for lack of GABIER_JDTLS.
+// once for lack of GABIER_JDTLS. The adapter itself (JdtlsSession) is tested without jdtls, in the unit tests.
 val realProbe = "fr.craft.gabier.daemon.JdtlsProbeTest"
 
 fun Test.runIntegrationTests() {
@@ -51,8 +55,9 @@ fun Test.runIntegrationTests() {
   extensions.configure<JacocoTaskExtension> { isEnabled = false }
 }
 
-// Cheap, and in `check`: what the probe waits for and how it reads jdtls, tested with child processes and hand-made
-// messages, so that these assertions cannot go stale unnoticed. Up to date when nothing changed, like the unit tests.
+// Cheap, and in `check`: what only the probe needs (the store of diagnostics, the wait for a quiet jdtls), tested with
+// child processes and hand-made messages, so that these assertions cannot go stale unnoticed. Up to date when nothing
+// changed, like the unit tests.
 val quickProbeTest = tasks.register<Test>("quickProbeTest") {
   description = "Runs the integration tests that start no jdtls (everything but JdtlsProbeTest)."
   runIntegrationTests()
