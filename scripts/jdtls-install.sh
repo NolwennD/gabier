@@ -1,15 +1,23 @@
 #!/bin/sh
-# Install a pinned jdtls milestone into $JDTLS_HOME, after checking the sha256 Eclipse publishes next to the archive.
-# Idempotent: an installed version is left alone. Usage: JDTLS_HOME=<dir> scripts/jdtls-install.sh <version>
+# Install a pinned jdtls milestone into $JDTLS_HOME, after checking the archive against the sha256 pinned in mise.toml.
+# The checksum comes from this repository, not from the server that serves the archive: a replaced archive is refused.
+# Idempotent: an installed version is left alone.
+# Usage: JDTLS_HOME=<dir> scripts/jdtls-install.sh <version> <sha256>
 set -eu
 
-version=${1:?usage: jdtls-install.sh <version>}
+version=${1:?usage: jdtls-install.sh <version> <sha256>}
+expected=$(printf '%s' "${2:?usage: jdtls-install.sh <version> <sha256>}" | tr 'A-F' 'a-f')
 home=${JDTLS_HOME:?JDTLS_HOME is not set}
 base=${JDTLS_DOWNLOAD_BASE:-https://download.eclipse.org/jdtls/milestones}
 
 if [ -x "$home/bin/jdtls" ]; then
   echo "jdtls $version is already installed in $home"
   exit 0
+fi
+
+if ! printf '%s' "$expected" | grep -Eq '^[0-9a-f]{64}$'; then
+  echo "jdtls $version: the pinned checksum is not a sha256 (got '$expected')" >&2
+  exit 1
 fi
 
 work=$(mktemp -d)
@@ -19,13 +27,6 @@ trap 'rm -rf "$work"' EXIT
 curl -fsSL -o "$work/latest.txt" "$base/$version/latest.txt"
 archive=$(tr -d '[:space:]' <"$work/latest.txt")
 curl -fsSL -o "$work/$archive" "$base/$version/$archive"
-curl -fsSL -o "$work/$archive.sha256" "$base/$version/$archive.sha256"
-
-expected=$(awk '{print $1}' "$work/$archive.sha256" | tr 'A-F' 'a-f')
-if ! printf '%s' "$expected" | grep -Eq '^[0-9a-f]{64}$'; then
-  echo "jdtls $version: $archive.sha256 does not hold a sha256 (got '$expected')" >&2
-  exit 1
-fi
 if command -v sha256sum >/dev/null 2>&1; then
   actual=$(sha256sum "$work/$archive" | awk '{print $1}')
 else
