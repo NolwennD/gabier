@@ -108,7 +108,8 @@ A ticket that adopts, reverses, defers or rejects a choice that the code, a rule
 
 ## Exchanges between agents
 
-Every message between agents (prompt, question, answer, report, review) is short, explicit and unambiguous. It states
+Every message between agents, in both directions and including the supervisor's own to the workers and the reviewer
+(prompt, answer to a question, instruction, report, review), is short, explicit and unambiguous. It states
 facts and decisions, not reasoning: what was done, what was proven and how (command, count, test name), what is asked.
 A finding names `file:line`, the problem and the case that shows it. No hedging ("maybe", "might"), no praise, no
 recap of what the reader already has. A question offers its options, with a recommendation. A report that is longer than
