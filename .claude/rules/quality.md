@@ -39,10 +39,11 @@ the review (see the `ticket` skill). The formatting hook, the coverage gate and 
   suppression (`@SuppressWarnings("NullAway")`) without a reason that says why, challenged in the review. A new
   third-party jar follows the same declaration as the others (catalog, `gradle/modules.properties`).
 - **Unused code fails the compilation**: Error Prone's `UnusedMethod` (private methods) and `UnusedVariable` (private
-  fields, local variables, parameters) are errors on the main code, next to NullAway in `gabier.java-module-conventions`.
-  Unused code is removed. A real exception is a `@SuppressWarnings("UnusedVariable")` or `("UnusedMethod")` with a
-  comment that says why, challenged in the review. Naming something `unused...` (which Error Prone exempts) to get past
-  the check is a suppression without a reason, so it is not done.
+  fields, local variables, and the parameters of private methods or of methods that nothing overrides) are errors on the
+  main code, next to NullAway in `gabier.java-module-conventions`. Unused code is removed. A real exception is a
+  `@SuppressWarnings` of one of these checks, under any of its names (`UnusedMethod`, `UnusedVariable`, and the aliases
+  `UnusedParameters` and `unused`), with a comment that says why, challenged in the review. Naming a variable `unused...`
+  (which Error Prone exempts) to get past the check is a suppression without a reason, so it is not done.
 - **LSP4J stays in the daemon**: Eclipse LSP4J (`org.eclipse.lsp4j..`) is used by `fr.craft.gabier.daemon..` only; an
   architecture test fails on any class outside it that depends on an LSP4J type. Its jars are automatic modules, given
   real descriptors by `extraJavaModuleInfo` in `gabier.java-module-conventions` (which fails the build on any other
