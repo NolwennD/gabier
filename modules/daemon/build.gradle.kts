@@ -22,6 +22,8 @@ val selfCheck by tasks.registering(Exec::class) {
   dependsOn(tasks.installDist)
   executable = layout.buildDirectory.file("install/${project.name}/bin/${project.name}").get().asFile.path
   args("--self-check")
+  // The start script runs the java of JAVA_HOME: the Java 25 of the build, not the JDK that happens to run Gradle.
+  environment("JAVA_HOME", javaToolchains.launcherFor(java.toolchain).get().metadata.installationPath.asFile.path)
 }
 
 tasks.check {

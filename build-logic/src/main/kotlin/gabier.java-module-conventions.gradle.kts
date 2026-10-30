@@ -29,6 +29,8 @@ extraJavaModuleInfo {
   module("org.eclipse.lsp4j:org.eclipse.lsp4j.jsonrpc", "org.eclipse.lsp4j.jsonrpc") {
     exportAllPackages()
     requires("com.google.gson")
+    // RemoteEndpoint and four other classes log with java.util.logging: without this the module does not read it.
+    requires("java.logging")
   }
 }
 
