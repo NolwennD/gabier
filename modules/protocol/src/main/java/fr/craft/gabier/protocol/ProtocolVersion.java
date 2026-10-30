@@ -1,13 +1,14 @@
 package fr.craft.gabier.protocol;
 
+import fr.craft.gabier.shared.error.domain.Assert;
+
 public record ProtocolVersion(int major, int minor) {
 
     public static final ProtocolVersion CURRENT = new ProtocolVersion(0, 1);
 
     public ProtocolVersion {
-        if (major < 0 || minor < 0) {
-            throw new IllegalArgumentException("A protocol version cannot be negative: " + major + "." + minor);
-        }
+        Assert.field("major", major).positive();
+        Assert.field("minor", minor).positive();
     }
 
     @Override

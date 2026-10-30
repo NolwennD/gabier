@@ -29,9 +29,9 @@ graalvmNative {
       // The baseline of the architecture instead of the host CPU: the binary runs on any machine of its architecture.
       // The cost is some vector intrinsics, which does not matter for a thin client.
       buildArgs.add("-march=compatibility")
-      // The image is built from the classpath, so module-info is ignored. It works because `shared` and
-      // `org.jspecify` are `requires static` (their annotations are not needed at run time) and absent from the
-      // runtime classpath.
+      // The image is built from the classpath, so module-info is ignored. `org.jspecify` and the NullAway annotations
+      // are `requires static` (not needed at run time) and absent from the runtime classpath. `shared` is there, as
+      // `protocol` requires it (ProtocolVersion validates with Assert): the cli reaches it at run time through protocol.
     }
   }
 }
