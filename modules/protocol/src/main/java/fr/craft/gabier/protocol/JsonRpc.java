@@ -11,11 +11,20 @@ import org.jspecify.annotations.Nullable;
  */
 public final class JsonRpc {
 
+    /** The member of a problem object that names the parameter a request is refused for. */
+    public static final String PARAMETER = "parameter";
+
     static final String VERSION = "2.0";
 
     static final int PARSE_ERROR = -32700;
     static final int INVALID_REQUEST = -32600;
     static final int METHOD_NOT_FOUND = -32601;
+    /**
+     * "Invalid params": the refusal of a request because of one of its parameters (not an object of strings, unknown,
+     * missing, or with a value that cannot be read). Such a problem object names the parameter in its {@value
+     * #PARAMETER} member, which is how the code is told, whatever the key of the problem.
+     */
+    static final int INVALID_PARAMS = -32602;
     /** The first of the codes the specification leaves to the server: the request is refused, for another reason. */
     static final int REFUSED = -32000;
 
@@ -48,13 +57,16 @@ public final class JsonRpc {
         if (problem.key().equals(ProtocolErrorKey.MALFORMED_JSON.get())) {
             return PARSE_ERROR;
         }
-        if (problem.key().equals(ProtocolErrorKey.INVALID_REQUEST.get())) {
-            return INVALID_REQUEST;
-        }
         if (problem.key().equals(ProtocolErrorKey.UNKNOWN_METHOD.get())) {
             return METHOD_NOT_FOUND;
         }
+        if (problem.category() == ErrorStatus.INTERNAL_SERVER_ERROR) {
+            return INTERNAL_ERROR;
+        }
+        if (problem.parameters().containsKey(PARAMETER)) {
+            return INVALID_PARAMS;
+        }
 
-        return problem.category() == ErrorStatus.INTERNAL_SERVER_ERROR ? INTERNAL_ERROR : REFUSED;
+        return problem.key().equals(ProtocolErrorKey.INVALID_REQUEST.get()) ? INVALID_REQUEST : REFUSED;
     }
 }

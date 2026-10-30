@@ -26,10 +26,14 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    (`RpcRequest.params()`). The method declares the names it needs by overriding `parameters()` (none by default, all
    required) and reads them in `call(Map<String, String> params)`, which receives exactly those names: `RequestHandler`
    refuses before the call a request with a parameter the method does not take (`unknown-parameter`) or without one it
-   needs (`missing-parameter`), as a `badRequest` whose `parameters` name it. The method never checks that they are
+   needs (`missing-parameter`), as a `badRequest` whose `parameters` name it (the unknown one first, the first by name).
+   The method never checks that they are
    there; it checks what they mean (a path that does not exist is its own refusal, like `fileMissing`; a value that
    cannot be read as what the method needs is `ParameterException.invalid`, key `invalid-parameter`). A value that is
-   not a string is refused by `RpcRequest.parse`; a number or a list is written as a string and read by the method.
+   not a string, and a key repeated in `params`, are refused by `RpcRequest.parse`; a number or a list is written as a
+   string and read by the method. Every refusal that names a `parameter` in its problem object is answered with the
+   JSON-RPC code `-32602` (`JsonRpc.PARAMETER`): a refusal of your own that is about one parameter does the same, with
+   `addParameter(JsonRpc.PARAMETER, name)`; one that is not keeps `-32000`.
    Test it with the scripted method of `RequestHandlerTest` (`Reading`): its parameters, what it read, and that a
    refused request never reaches `call`. The client writes them with `DaemonClient.call(method, params)`.
    A method of the catalogue is a record around the use case of the core (`DiagnosticsMethod(Diagnose)`), which maps

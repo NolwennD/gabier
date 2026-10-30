@@ -44,11 +44,13 @@ final class Json {
     }
 
     /**
-     * Reads one JSON value, RFC 8259 and nothing more. An object is a {@code Map} in the order of its members, an
-     * array a {@code List}, a string a {@code String}, a number a {@code BigDecimal} (no digit is lost), {@code true}
-     * and {@code false} a {@code Boolean}, and {@code null} is {@code null}.
+     * Reads one JSON value, RFC 8259 and nothing more but one refusal: an object whose member name is repeated (the
+     * same name once decoded, {@code "a"} and {@code "a"} for instance) is not read, at any depth, so that no
+     * member is silently dropped. An object is a {@code Map} in the order of its members, an array a {@code List}, a
+     * string a {@code String}, a number a {@code BigDecimal} (no digit is lost), {@code true} and {@code false} a
+     * {@code Boolean}, and {@code null} is {@code null}.
      *
-     * @throws MalformedJsonException when the text is not one JSON value
+     * @throws MalformedJsonException when the text is not one JSON value, or an object repeats a member
      */
     public static @Nullable Object parse(String text) {
         return new Parser(text).document();
@@ -121,7 +123,12 @@ final class Json {
                 if (atEnd() || text.charAt(position) != '"') {
                     throw fail("a string was expected");
                 }
+                var nameStart = position;
                 var name = string();
+                if (members.containsKey(name)) {
+                    // RFC 8259 leaves it open and I-JSON (RFC 7493) forbids it: the name is never quoted.
+                    throw MalformedJsonException.at(nameStart, "a member is repeated");
+                }
                 skipWhitespace();
                 if (!consume(':')) {
                     throw fail("a colon was expected");

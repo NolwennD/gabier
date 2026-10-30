@@ -18,6 +18,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class RequestHandlerTest {
 
@@ -33,6 +35,7 @@ class RequestHandlerTest {
             new Failing(
                     "refuses", GeneratorException.badRequest(RefusalKey.REFUSED).message("No, not this")),
             new Failing("breaks", null),
+            new ReadingTwo(),
             reading));
 
     private static String request(String id, String method) {
@@ -208,7 +211,7 @@ class RequestHandlerTest {
                 {"jsonrpc":"2.0","id":1,"method":"status","params":{}}\
                 """).line();
 
-            assertThat(line).contains("\"result\"");
+            assertThat(line).isEqualTo("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":" + STATUS.toJson() + "}");
         }
 
         @Test
@@ -216,7 +219,7 @@ class RequestHandlerTest {
             var line = handler.handle(reads("{\"file\":\"A.java\",\"extra\":\"x\"}"))
                     .line();
 
-            assertThat(line).contains("\"id\":6").contains("\"code\":-32000");
+            assertThat(line).contains("\"id\":6").contains("\"code\":-32602");
             assertThat(failure(line).problem().key()).isEqualTo("unknown-parameter");
             assertThat(failure(line).problem().category()).isEqualTo(ErrorStatus.BAD_REQUEST);
             assertThat(failure(line).problem().parameters()).containsOnly(entry("parameter", "extra"));
@@ -237,7 +240,7 @@ class RequestHandlerTest {
         void aParameterTheMethodNeedsAndTheRequestLacksIsABadRequestThatNamesIt() {
             var line = handler.handle(reads("{}")).line();
 
-            assertThat(line).contains("\"id\":6").contains("\"code\":-32000");
+            assertThat(line).contains("\"id\":6").contains("\"code\":-32602");
             assertThat(failure(line).problem().key()).isEqualTo("missing-parameter");
             assertThat(failure(line).problem().category()).isEqualTo(ErrorStatus.BAD_REQUEST);
             assertThat(failure(line).problem().parameters()).containsOnly(entry("parameter", "file"));
@@ -251,24 +254,117 @@ class RequestHandlerTest {
             assertThat(failure(line).problem().key()).isEqualTo("missing-parameter");
         }
 
-        @Test
-        void paramsThatAreNotAnObjectAreAnInvalidRequestThatNamesThem() {
-            var line = handler.handle(reads("[\"A.java\"]")).line();
+        @ParameterizedTest
+        @ValueSource(strings = {"[\"A.java\"]", "\"A.java\"", "3", "null", "true"})
+        void paramsThatAreNotAnObjectAreInvalidParamsThatNameThem(String params) {
+            var line = handler.handle(reads(params)).line();
 
-            assertThat(line).contains("\"id\":6").contains("\"code\":-32600");
+            assertThat(line).contains("\"id\":6").contains("\"code\":-32602");
             assertThat(failure(line).problem().key()).isEqualTo("invalid-request");
+            assertThat(failure(line).problem().category()).isEqualTo(ErrorStatus.BAD_REQUEST);
             assertThat(failure(line).problem().parameters()).containsOnly(entry("parameter", "params"));
             assertThat(reading.calls()).isEmpty();
         }
 
-        @Test
-        void aParameterThatIsNotAStringIsAnInvalidRequestThatNamesIt() {
-            var line = handler.handle(reads("{\"file\":\"A.java\",\"line\":3}")).line();
+        @ParameterizedTest
+        @ValueSource(strings = {"3", "true", "null", "[\"A.java\"]", "{\"a\":\"b\"}"})
+        void aParameterThatIsNotAStringIsInvalidParamsThatNamesIt(String value) {
+            var line = handler.handle(reads("{\"file\":\"A.java\",\"line\":" + value + "}"))
+                    .line();
 
-            assertThat(line).contains("\"id\":6").contains("\"code\":-32600");
+            assertThat(line).contains("\"id\":6").contains("\"code\":-32602");
             assertThat(failure(line).problem().key()).isEqualTo("invalid-request");
+            assertThat(failure(line).problem().category()).isEqualTo(ErrorStatus.BAD_REQUEST);
             assertThat(failure(line).problem().parameters()).containsOnly(entry("parameter", "line"));
             assertThat(reading.calls()).isEmpty();
+        }
+
+        @Test
+        void aRepeatedKeyInParamsIsRefusedAsAParseErrorAndTheMethodIsNotCalled() {
+            var line = handler.handle(reads("{\"file\":1,\"file\":\"A.java\"}")).line();
+
+            assertThat(line).contains("\"id\":null").contains("\"code\":-32700");
+            assertThat(failure(line).problem().key()).isEqualTo("malformed-json");
+            assertThat(failure(line).problem().detail()).endsWith("a member is repeated");
+            assertThat(reading.calls()).isEmpty();
+        }
+
+        @Test
+        void aRepeatedKeyElsewhereInTheRequestIsRefusedToo() {
+            var line = handler.handle("""
+                {"jsonrpc":"2.0","id":1,"id":2,"method":"status"}\
+                """).line();
+
+            assertThat(line).contains("\"code\":-32700");
+            assertThat(failure(line).problem().detail()).endsWith("a member is repeated");
+        }
+
+        @Test
+        void aRepeatedKeyInAnIgnoredMemberIsRefusedToo() {
+            var line = handler.handle("""
+                {"jsonrpc":"2.0","id":1,"method":"status","extra":{"a":1,"a":2}}\
+                """).line();
+
+            assertThat(line).contains("\"code\":-32700");
+        }
+
+        @Test
+        void aParameterNamedWithAControlCharacterIsAnsweredOnOneLineWithTheCharacterEscaped() {
+            var line = handler.handle(reads("{\"file\":\"A.java\",\"a\\u0001b\\n\\u009b\":\"x\"}"))
+                    .line();
+
+            assertThat(line).doesNotContain("\n").doesNotContain("\u0001").doesNotContain("\u009b");
+            assertThat(line).contains("takes no parameter a\\u0001b\\n\\u009b");
+            assertThat(line).contains("\"code\":-32602");
+            assertThat(failure(line).problem().parameters()).containsOnly(entry("parameter", "a\u0001b\n\u009b"));
+        }
+
+        @Test
+        void aVeryLongParameterNameIsRefusedOnOneLineAndTheDaemonGoesOn() {
+            var name = "n".repeat(1_000_000);
+
+            var line = handler.handle(reads("{\"file\":\"A.java\",\"" + name + "\":\"x\"}"))
+                    .line();
+
+            assertThat(failure(line).problem().key()).isEqualTo("unknown-parameter");
+            assertThat(failure(line).problem().parameters()).containsOnly(entry("parameter", name));
+            assertThat(handler.handle(reads("{\"file\":\"A.java\"}")).line()).contains("\"result\"");
+        }
+
+        @Test
+        void aVeryLongValueIsReadAsAnyOtherAndTheDaemonGoesOn() {
+            var value = "v".repeat(1_000_000);
+
+            var line = handler.handle(reads("{\"file\":\"" + value + "\"}")).line();
+
+            assertThat(line).isEqualTo("{\"jsonrpc\":\"2.0\",\"id\":6,\"result\":{\"file\":\"" + value + "\"}}");
+            assertThat(handler.handle(reads("{\"file\":\"A.java\"}")).line()).contains("\"result\"");
+        }
+
+        @Test
+        void anUnknownParameterIsNamedBeforeAMissingOne() {
+            var line = handler.handle(reads("{\"zzz\":\"x\"}")).line();
+
+            assertThat(failure(line).problem().key()).isEqualTo("unknown-parameter");
+            assertThat(failure(line).problem().parameters()).containsOnly(entry("parameter", "zzz"));
+        }
+
+        @Test
+        void ofSeveralUnknownParametersTheFirstByNameIsNamed() {
+            var line = handler.handle(reads("{\"file\":\"A.java\",\"zeta\":\"1\",\"alpha\":\"2\",\"mu\":\"3\"}"))
+                    .line();
+
+            assertThat(failure(line).problem().parameters()).containsOnly(entry("parameter", "alpha"));
+        }
+
+        @Test
+        void ofSeveralMissingParametersTheFirstByNameIsNamed() {
+            var line = handler.handle("""
+                {"jsonrpc":"2.0","id":6,"method":"reads-two","params":{}}\
+                """).line();
+
+            assertThat(failure(line).problem().key()).isEqualTo("missing-parameter");
+            assertThat(failure(line).problem().parameters()).containsOnly(entry("parameter", "alpha"));
         }
 
         @Test
@@ -302,6 +398,25 @@ class RequestHandlerTest {
             return Outcome.of("""
                 {"file":"%s"}\
                 """.formatted(params.get("file")));
+        }
+    }
+
+    /** A method that needs the parameters {@code beta} and {@code alpha}, and reads nothing. */
+    private record ReadingTwo() implements DaemonMethod {
+
+        @Override
+        public String name() {
+            return "reads-two";
+        }
+
+        @Override
+        public Set<String> parameters() {
+            return Set.of("beta", "alpha");
+        }
+
+        @Override
+        public Outcome call(Map<String, String> params) {
+            return Outcome.of("{}");
         }
     }
 

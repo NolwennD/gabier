@@ -71,6 +71,52 @@ class ConnectionTest {
     }
 
     @Test
+    void refusesAParameterNameOverTheLimitForTheLengthOfTheLineAndAnswersTheNextRequest() {
+        var output = new ByteArrayOutputStream();
+        var hostile = """
+            {"jsonrpc":"2.0","id":4,"method":"echo","params":{"%s":"x"}}
+            """.formatted("n".repeat(LineReader.MAX_LINE_BYTES));
+
+        Connection.serve(input(hostile + request(1, "echo")), output, handler);
+
+        assertThat(lines(output)).hasSize(2);
+        assertThat(lines(output).get(0))
+                .contains("\"id\":null")
+                .contains("\"code\":-32000")
+                .contains("\"key\":\"line-too-long\"");
+        assertThat(lines(output).get(1)).contains("\"id\":1").contains("\"result\"");
+    }
+
+    @Test
+    void refusesAParameterValueOverTheLimitForTheLengthOfTheLineAndAnswersTheNextRequest() {
+        var output = new ByteArrayOutputStream();
+        var hostile = """
+            {"jsonrpc":"2.0","id":4,"method":"echo","params":{"file":"%s"}}
+            """.formatted("v".repeat(LineReader.MAX_LINE_BYTES));
+
+        Connection.serve(input(hostile + request(1, "echo")), output, handler);
+
+        assertThat(lines(output)).hasSize(2);
+        assertThat(lines(output).get(0)).contains("\"key\":\"line-too-long\"");
+        assertThat(lines(output).get(1)).contains("\"id\":1").contains("\"result\"");
+    }
+
+    @Test
+    void readsAParameterNameThatFillsTheLineToTheLimitAndRefusesItAsUnknown() {
+        var output = new ByteArrayOutputStream();
+        var frame = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"echo\",\"params\":{\"\":\"x\"}}";
+        var name = "n".repeat(LineReader.MAX_LINE_BYTES - frame.length());
+
+        Connection.serve(
+                input(frame.replace("\"\":", "\"" + name + "\":") + "\n" + request(1, "echo")), output, handler);
+
+        assertThat(lines(output)).hasSize(2);
+        assertThat(lines(output).get(0)).contains("\"id\":4").contains("\"code\":-32602");
+        assertThat(lines(output).get(0)).contains("\"key\":\"unknown-parameter\"");
+        assertThat(lines(output).get(1)).contains("\"id\":1").contains("\"result\"");
+    }
+
+    @Test
     void readsALineOfExactlyTheLimit() {
         var output = new ByteArrayOutputStream();
         var request = request(1, "echo").stripTrailing();

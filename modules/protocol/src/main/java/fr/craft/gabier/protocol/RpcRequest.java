@@ -51,7 +51,8 @@ public record RpcRequest(String id, String method, Map<String, String> params) {
     /**
      * Reads a request.
      *
-     * @throws MalformedJsonException when the line is not JSON
+     * @throws MalformedJsonException when the line is not JSON, or repeats a member name in any object ({@link
+     *     Json#parse})
      * @throws InvalidRequestException when it is JSON but not a request, or when its {@code params} are not an object
      *     of strings
      */

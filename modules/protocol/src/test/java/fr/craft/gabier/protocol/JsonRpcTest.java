@@ -250,6 +250,33 @@ class JsonRpcTest {
         }
 
         @Test
+        void aRefusalThatNamesAParameterIsInvalidParams() {
+            assertThat(JsonRpc.failure(
+                            "1",
+                            GeneratorException.badRequest(CustomKey.OTHER)
+                                    .addParameter("parameter", "file")
+                                    .build()))
+                    .contains("\"code\":-32602");
+        }
+
+        @Test
+        void anInvalidRequestThatNamesAParameterIsInvalidParamsAndKeepsItsKey() {
+            var line = JsonRpc.failure("1", InvalidRequestException.of("1", "x", "params"));
+
+            assertThat(line).contains("\"code\":-32602").contains("\"key\":\"invalid-request\"");
+            assertThat(((RpcResponse.Failure) RpcResponse.parse(line)).problem().category())
+                    .isEqualTo(ErrorStatus.BAD_REQUEST);
+        }
+
+        @Test
+        void aFailureOfGabierThatNamesAParameterIsStillAnInternalError() {
+            var failure = new Problem(
+                    "urn:gabier:error:x", "X", "d", "x", Map.of("parameter", "p"), ErrorStatus.INTERNAL_SERVER_ERROR);
+
+            assertThat(JsonRpc.failure("1", failure)).contains("\"code\":-32603");
+        }
+
+        @Test
         void anUnknownMethodIsMethodNotFound() {
             assertThat(JsonRpc.failure("1", UnknownMethodException.of("m"))).contains("\"code\":-32601");
         }

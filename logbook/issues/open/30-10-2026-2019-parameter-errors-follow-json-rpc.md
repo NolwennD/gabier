@@ -15,7 +15,11 @@ Done when:
 - a repeated key in `params` (`{"file":1,"file":"A.java"}`) is refused, or "the last wins" is stated and pinned by a
   test; the same for a repeated key elsewhere in a request, whichever is chosen is said in the README;
 - a parameter name with a control character (`"a\u0001b"`) is answered on one line, the control character escaped; a
-  name or a value over the line limit is refused and the daemon goes on, shown by a test;
+  name or a value over the line limit is refused and the daemon goes on, shown by a test; what holds: the line limit
+  (1 MiB, `line-too-long`, id null, code -32000) is the only bound, applied to the whole request line before it is read,
+  and there is no second bound on names or values (`ConnectionTest`: a name or a value of 1 MiB is refused for the
+  length of the line and the next request is answered; a name that fills the line to the limit is read and refused as
+  an unknown parameter, `-32602`);
 - the order of refusals is fixed by a test (an unknown parameter and a missing one in the same request: which one is
   named);
 - `aMethodThatTakesNoneIsCalledWhenTheParamsAreEmpty` compares the whole answer line, as its neighbours do;

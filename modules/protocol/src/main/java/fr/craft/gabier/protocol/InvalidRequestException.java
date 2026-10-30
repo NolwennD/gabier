@@ -23,7 +23,7 @@ public final class InvalidRequestException extends GeneratorException {
         return new InvalidRequestException(
                 GeneratorException.badRequest(ProtocolErrorKey.INVALID_REQUEST)
                         .message(message)
-                        .addParameter("parameter", parameter),
+                        .addParameter(JsonRpc.PARAMETER, parameter),
                 id);
     }
 

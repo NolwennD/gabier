@@ -130,6 +130,7 @@ class DiagnosticsMethodTest {
             """).line();
 
         var failure = (RpcResponse.Failure) RpcResponse.parse(line);
+        assertThat(line).contains("\"code\":-32602");
         assertThat(failure.problem().key()).isEqualTo("invalid-parameter");
         assertThat(failure.problem().category()).isEqualTo(ErrorStatus.BAD_REQUEST);
         assertThat(failure.problem().parameters()).containsEntry("parameter", "file");

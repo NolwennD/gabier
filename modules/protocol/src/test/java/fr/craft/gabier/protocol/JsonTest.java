@@ -59,6 +59,34 @@ class JsonTest {
                     .containsExactly(entry("b", new BigDecimal("1")), entry("a", new BigDecimal("2")));
         }
 
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "{\"a\":1,\"a\":2}",
+                    "{\"a\":1,\"b\":2,\"a\":\"x\"}",
+                    "{\"a\":{\"b\":1,\"b\":2}}",
+                    "[{\"a\":1,\"a\":1}]",
+                    "{\"a\":1,\"\\u0061\":2}"
+                })
+        void refusesAnObjectWithARepeatedMember(String text) {
+            var failure = catchThrowableOfType(MalformedJsonException.class, () -> Json.parse(text));
+
+            assertThat(failure.getMessage()).contains("a member is repeated");
+        }
+
+        @Test
+        void saysWhereTheRepeatedMemberIsAndNeverQuotesItsName() {
+            var failure = catchThrowableOfType(
+                    MalformedJsonException.class, () -> Json.parse("{\"a\\u0001\":1, \"a\\u0001\":2}"));
+
+            assertThat(failure.getMessage()).isEqualTo("Malformed JSON at position 14: a member is repeated");
+        }
+
+        @Test
+        void acceptsTheSameNameInTwoObjects() {
+            assertThat(Json.parse("[{\"a\":1},{\"a\":2},{\"b\":{\"a\":3}}]")).isInstanceOf(List.class);
+        }
+
         @Test
         void readsAnArray() {
             assertThat(Json.parse("[1,\"a\",null,true,false,[],{}]"))
