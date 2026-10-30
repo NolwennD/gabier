@@ -24,3 +24,18 @@ Done when:
   exit code, the native binary shown to do so;
 - the choice of the shape (RFC 9457 inspired, no `status`) and of the `type` URI is explained in the resolution, with
   what was left out of the RFC and why.
+
+## Resolution
+
+Done in 7766ed9.
+
+- `bin/ci` (worker, full run on the final commit): format, build, test, native and jdtls passed. Tests: cli 24, core 219, daemon 131, protocol 45, shared 236, architecture 16, 0 failures. JaCoCo 100%. The `native` stage now runs the binary alone: `--help` gives the usage error on stderr with exit 2 and an empty stdout; with `--json`, a one-line JSON object with exit 2; `--version` unchanged.
+- Shape: the data model of RFC 9457 without its HTTP side: `type` (`urn:gabier:error:<key>`, stable and non-resolvable, since nothing serves documentation), `title` (derived from the key, no table of keys), `detail`, and the extensions `key` and `parameters`. Left out: `status` and `application/problem+json` (HTTP; on the CLI the exit code replaces `status`) and `instance` (no resource to point at). `Problem.category` (the `ErrorStatus`) is not written: it only gives the exit code (0 success, 1 internal error, 2 request refused; table in the README). The JSON is written by hand because the native image has no third-party library; a test-only strict Gson parser checks it. An unexpected exception gives the generic `internal-server-error`, with no message, cause or stack trace. `protocol` now `requires transitive shared`, `cli` `requires shared` (no longer `static`).
+- Process: the first worker was stopped by the user before its report; a second worker found its uncommitted work complete, verified it and delivered it unchanged.
+- Review (once): no blocking finding. Suggestions, opened as issues: `run` is not shown to report an unexpected exception (only `fail` is tested); control characters of a parameter reach the terminal raw in text mode; test names and the `40-native` JSON check say more than they prove.
+
+Tokens:
+- first worker (stopped by the user): not available
+- second worker: 67,214
+- reviewer: 69,643
+- supervisor: 34 calls, 25,604 output, 31,200 input + cache write, 5,543,068 cache read; exchanges with the user: 5 messages (a floor). The period runs from the launch of the first worker (15:04) to the closing, and includes talk with the user (unused code, the stop and the resume).
