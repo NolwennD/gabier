@@ -1,6 +1,6 @@
 package fr.craft.gabier.cli;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -38,19 +38,19 @@ class GabierTest {
         void printsTheNameAndTheProtocolVersionOnTheStandardOutput() {
             run("--version");
 
-            assertEquals("gabier 0.1" + System.lineSeparator(), out());
+            assertThat(out()).isEqualTo("gabier 0.1" + System.lineSeparator());
         }
 
         @Test
         void printsNothingOnTheStandardError() {
             run("--version");
 
-            assertEquals("", err());
+            assertThat(err()).isEmpty();
         }
 
         @Test
         void exitsWithStatusZero() {
-            assertEquals(0, run("--version"));
+            assertThat(run("--version")).isZero();
         }
     }
 
@@ -61,40 +61,40 @@ class GabierTest {
         void unknownArgumentPrintsTheUsageOnTheStandardError() {
             run("--help");
 
-            assertEquals(USAGE, err());
+            assertThat(err()).isEqualTo(USAGE);
         }
 
         @Test
         void unknownArgumentPrintsNothingOnTheStandardOutput() {
             run("--help");
 
-            assertEquals("", out());
+            assertThat(out()).isEmpty();
         }
 
         @Test
         void unknownArgumentExitsWithStatusTwo() {
-            assertEquals(2, run("--help"));
+            assertThat(run("--help")).isEqualTo(2);
         }
 
         @Test
         void noArgumentIsAnUnknownUsage() {
-            assertEquals(2, run());
-            assertEquals("", out());
-            assertEquals(USAGE, err());
+            assertThat(run()).isEqualTo(2);
+            assertThat(out()).isEmpty();
+            assertThat(err()).isEqualTo(USAGE);
         }
 
         @Test
         void versionFollowedByAnotherArgumentIsAnUnknownUsage() {
-            assertEquals(2, run("--version", "--help"));
-            assertEquals("", out());
-            assertEquals(USAGE, err());
+            assertThat(run("--version", "--help")).isEqualTo(2);
+            assertThat(out()).isEmpty();
+            assertThat(err()).isEqualTo(USAGE);
         }
 
         @Test
         void unknownArgumentFollowedByVersionIsAnUnknownUsage() {
-            assertEquals(2, run("--help", "--version"));
-            assertEquals("", out());
-            assertEquals(USAGE, err());
+            assertThat(run("--help", "--version")).isEqualTo(2);
+            assertThat(out()).isEmpty();
+            assertThat(err()).isEqualTo(USAGE);
         }
     }
 }

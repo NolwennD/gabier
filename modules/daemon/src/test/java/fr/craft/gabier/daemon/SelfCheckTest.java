@@ -1,6 +1,6 @@
 package fr.craft.gabier.daemon;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.InaccessibleObjectException;
 import java.util.List;
@@ -18,37 +18,37 @@ class SelfCheckTest {
 
         @Test
         void passesWhenTheDaemonAndLsp4jAreNamedModules() {
-            assertEquals(List.of(), new SelfCheck(DAEMON_MODULE, LSP4J_MODULE).problems());
+            assertThat(new SelfCheck(DAEMON_MODULE, LSP4J_MODULE).problems()).isEmpty();
         }
 
         @Test
         void failsWhenTheDaemonIsOnTheClassPath() {
             SelfCheck check = new SelfCheck(null, LSP4J_MODULE);
 
-            assertEquals(List.of("the daemon is not in a named module: it runs on the class path"), check.problems());
+            assertThat(check.problems())
+                    .containsExactly("the daemon is not in a named module: it runs on the class path");
         }
 
         @Test
         void failsWhenLsp4jIsOnTheClassPath() {
             SelfCheck check = new SelfCheck(DAEMON_MODULE, null);
 
-            assertEquals(
-                    List.of("Position is not in the named module org.eclipse.lsp4j: it is on the class path"),
-                    check.problems());
+            assertThat(check.problems())
+                    .containsExactly("Position is not in the named module org.eclipse.lsp4j: it is on the class path");
         }
 
         @Test
         void failsWhenPositionIsInAnotherNamedModule() {
             SelfCheck check = new SelfCheck(DAEMON_MODULE, "other.lsp4j");
 
-            assertEquals(
-                    List.of("Position is in the module other.lsp4j, not in the named module org.eclipse.lsp4j"),
-                    check.problems());
+            assertThat(check.problems())
+                    .containsExactly(
+                            "Position is in the module other.lsp4j, not in the named module org.eclipse.lsp4j");
         }
 
         @Test
         void reportsEveryProblem() {
-            assertEquals(2, new SelfCheck(null, null).problems().size());
+            assertThat(new SelfCheck(null, null).problems()).hasSize(2);
         }
     }
 
@@ -59,14 +59,14 @@ class SelfCheckTest {
 
         @Test
         void gsonWritesAPositionAsLineAndCharacter() {
-            assertEquals("{\"line\":1,\"character\":2}", SelfCheck.positionAsJson());
+            assertThat(SelfCheck.positionAsJson()).isEqualTo("{\"line\":1,\"character\":2}");
         }
 
         @Test
         void failsWhenTheJsonIsNotTheExpectedOne() {
             List<String> problems = onNamedModules.problems(position -> "{\"line\":1}");
 
-            assertEquals(List.of("Gson wrote {\"line\":1} instead of {\"line\":1,\"character\":2}"), problems);
+            assertThat(problems).containsExactly("Gson wrote {\"line\":1} instead of {\"line\":1,\"character\":2}");
         }
 
         @Test
@@ -75,15 +75,14 @@ class SelfCheckTest {
                 throw new InaccessibleObjectException("module org.eclipse.lsp4j does not open its packages");
             });
 
-            assertEquals(
-                    List.of("Gson cannot serialize a Position: java.lang.reflect.InaccessibleObjectException:"
-                            + " module org.eclipse.lsp4j does not open its packages"),
-                    problems);
+            assertThat(problems)
+                    .containsExactly("Gson cannot serialize a Position: java.lang.reflect.InaccessibleObjectException:"
+                            + " module org.eclipse.lsp4j does not open its packages");
         }
 
         @Test
         void passesWithTheRealGson() {
-            assertEquals(List.of(), onNamedModules.problems());
+            assertThat(onNamedModules.problems()).isEmpty();
         }
     }
 
@@ -94,20 +93,18 @@ class SelfCheckTest {
         void namesTheModulesAndTheJson() {
             SelfCheck check = new SelfCheck(DAEMON_MODULE, LSP4J_MODULE);
 
-            assertEquals(
-                    "the daemon is in the module fr.craft.gabier.daemon, Position in the module org.eclipse.lsp4j,"
-                            + " Gson wrote {\"line\":1,\"character\":2}",
-                    check.summary());
+            assertThat(check.summary())
+                    .isEqualTo("the daemon is in the module fr.craft.gabier.daemon, Position in the module"
+                            + " org.eclipse.lsp4j, Gson wrote {\"line\":1,\"character\":2}");
         }
 
         @Test
         void callsAClassPathClassUnnamed() {
             SelfCheck check = new SelfCheck(null, null);
 
-            assertEquals(
-                    "the daemon is in no named module, Position in no named module,"
-                            + " Gson wrote {\"line\":1,\"character\":2}",
-                    check.summary());
+            assertThat(check.summary())
+                    .isEqualTo("the daemon is in no named module, Position in no named module,"
+                            + " Gson wrote {\"line\":1,\"character\":2}");
         }
     }
 
@@ -120,7 +117,7 @@ class SelfCheckTest {
                     SelfCheck.class.getModule().getName(),
                     Position.class.getModule().getName());
 
-            assertEquals(expected, SelfCheck.ofThisRuntime());
+            assertThat(SelfCheck.ofThisRuntime()).isEqualTo(expected);
         }
     }
 }

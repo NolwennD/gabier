@@ -1,7 +1,6 @@
 package fr.craft.gabier.daemon;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -40,36 +39,36 @@ class MainTest {
         void printsTheNameAndTheProtocolVersion() {
             run(PASSING);
 
-            assertEquals("gabier-daemon 0.1" + System.lineSeparator(), out());
+            assertThat(out()).isEqualTo("gabier-daemon 0.1" + System.lineSeparator());
         }
 
         @Test
         void printsNothingOnTheStandardError() {
             run(PASSING);
 
-            assertEquals("", err());
+            assertThat(err()).isEmpty();
         }
 
         @Test
         void exitsWithStatusZero() {
-            assertEquals(0, run(PASSING));
+            assertThat(run(PASSING)).isZero();
         }
 
         @Test
         void doesNotRunTheSelfCheck() {
-            assertEquals(0, run(FAILING));
+            assertThat(run(FAILING)).isZero();
         }
 
         @Test
         void anotherArgumentIsNotTheSelfCheck() {
-            assertEquals(0, run(FAILING, "--other"));
-            assertEquals("gabier-daemon 0.1" + System.lineSeparator(), out());
+            assertThat(run(FAILING, "--other")).isZero();
+            assertThat(out()).isEqualTo("gabier-daemon 0.1" + System.lineSeparator());
         }
 
         @Test
         void theSelfCheckFollowedByAnotherArgumentIsNotTheSelfCheck() {
-            assertEquals(0, run(FAILING, "--self-check", "--other"));
-            assertEquals("gabier-daemon 0.1" + System.lineSeparator(), out());
+            assertThat(run(FAILING, "--self-check", "--other")).isZero();
+            assertThat(out()).isEqualTo("gabier-daemon 0.1" + System.lineSeparator());
         }
     }
 
@@ -78,29 +77,28 @@ class MainTest {
 
         @Test
         void exitsWithStatusZeroWhenTheCheckPasses() {
-            assertEquals(0, run(PASSING, "--self-check"));
+            assertThat(run(PASSING, "--self-check")).isZero();
         }
 
         @Test
         void printsTheSummaryOnTheStandardOutputWhenTheCheckPasses() {
             run(PASSING, "--self-check");
 
-            assertEquals("self-check ok: " + PASSING.summary() + System.lineSeparator(), out());
-            assertEquals("", err());
+            assertThat(out()).isEqualTo("self-check ok: " + PASSING.summary() + System.lineSeparator());
+            assertThat(err()).isEmpty();
         }
 
         @Test
         void exitsWithStatusOneWhenTheCheckFails() {
-            assertEquals(1, run(FAILING, "--self-check"));
+            assertThat(run(FAILING, "--self-check")).isEqualTo(1);
         }
 
         @Test
         void printsEveryProblemOnTheStandardErrorWhenTheCheckFails() {
             run(FAILING, "--self-check");
 
-            assertEquals("", out());
-            assertTrue(err().startsWith("self-check failed: "));
-            FAILING.problems().forEach(problem -> assertTrue(err().contains(problem)));
+            assertThat(out()).isEmpty();
+            assertThat(err()).startsWith("self-check failed: ").contains(FAILING.problems());
         }
     }
 }

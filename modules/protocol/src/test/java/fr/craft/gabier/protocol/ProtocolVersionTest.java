@@ -1,7 +1,7 @@
 package fr.craft.gabier.protocol;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -13,12 +13,12 @@ class ProtocolVersionTest {
 
         @Test
         void rejectsNegativeMajor() {
-            assertThrows(IllegalArgumentException.class, () -> new ProtocolVersion(-1, 0));
+            assertThatIllegalArgumentException().isThrownBy(() -> new ProtocolVersion(-1, 0));
         }
 
         @Test
         void rejectsNegativeMinor() {
-            assertThrows(IllegalArgumentException.class, () -> new ProtocolVersion(0, -1));
+            assertThatIllegalArgumentException().isThrownBy(() -> new ProtocolVersion(0, -1));
         }
     }
 
@@ -27,12 +27,12 @@ class ProtocolVersionTest {
 
         @Test
         void rendersAsMajorDotMinor() {
-            assertEquals("2.7", new ProtocolVersion(2, 7).toString());
+            assertThat(new ProtocolVersion(2, 7)).hasToString("2.7");
         }
 
         @Test
         void currentIsZeroPointOne() {
-            assertEquals("0.1", ProtocolVersion.CURRENT.toString());
+            assertThat(ProtocolVersion.CURRENT).hasToString("0.1");
         }
     }
 }

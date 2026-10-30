@@ -6,7 +6,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.codeUnits;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.base.HasDescription;
 import com.tngtech.archunit.core.domain.JavaAnnotation;
@@ -80,7 +80,7 @@ class HexagonalArchTest {
     @Test
     void importsTheClassesOfTheModules() {
         // Without them every rule below would pass for nothing.
-        assertFalse(classes.isEmpty(), "no class found under " + ROOT_PACKAGE);
+        assertThat(classes).as("classes found under " + ROOT_PACKAGE).isNotEmpty();
     }
 
     @Test

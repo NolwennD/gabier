@@ -32,6 +32,9 @@ the review (see the `ticket` skill). The formatting hook, the coverage gate and 
   automatic module): a new third-party jar that is not a module is declared there, with its Maven coordinates in
   `gradle/modules.properties` and its version in the catalog under the name of its Java module. The task
   `:daemon:selfCheck` (part of `check`) runs the installed daemon on the module path.
+- **Assertions are AssertJ's**: tests assert with `org.assertj.core.api.Assertions` (`assertThat(...)`,
+  `assertThatThrownBy(...)`, ...), in idiomatic form. `org.junit.jupiter.api.Assertions` is not used, in the unit
+  tests, the architecture tests and the `integrationTest` source set. JUnit stays the engine (`@Test`, `@Nested`).
 - **Modern Java**: write idiomatic code for the release of the module (records, sealed types,
   pattern matching, sequenced collections, and what the release adds), not older idioms.
 - **Review before closing**: a neutral Java reviewer reads the change once before the ticket is closed. A finding that

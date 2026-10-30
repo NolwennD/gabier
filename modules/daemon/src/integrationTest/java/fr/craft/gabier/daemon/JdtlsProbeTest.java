@@ -1,6 +1,6 @@
 package fr.craft.gabier.daemon;
 
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.fail;
 
 import java.io.IOException;
 import java.net.URI;
