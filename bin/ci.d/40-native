@@ -1,0 +1,74 @@
+#!/usr/bin/env -S java --source 25
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+/**
+ * Stage {@code native} of the local CI (see {@code bin/ci}): builds the native cli and runs the binary alone, in an
+ * empty directory with an empty environment, so that it cannot lean on anything of the checkout. Runs in the current
+ * directory, the checkout under verification.
+ */
+public final class Native {
+
+    public static void main(String[] args) throws Exception {
+        String skip = appliesGraalvm(Path.of("modules/cli/build.gradle.kts")) ? null : "no native build yet";
+        if (args.length > 0 && args[0].equals("--describe")) {
+            System.out.println("native cli, run alone in an empty directory");
+            if (skip != null) {
+                System.out.println("skip: " + skip);
+            }
+            return;
+        }
+        if (skip != null) {
+            System.out.println("skip: " + skip);
+            System.exit(77);
+        }
+        System.exit(nativeCli(Path.of(".").toAbsolutePath().normalize()));
+    }
+
+    /** The native build exists once the build file of the cli applies the GraalVM plugin. */
+    private static boolean appliesGraalvm(Path buildFile) throws IOException {
+        return Files.isRegularFile(buildFile) && Files.readString(buildFile).contains("graalvm");
+    }
+
+    private static int nativeCli(Path root) throws IOException, InterruptedException {
+        int status = run("./gradlew", ":cli:nativeCompile", "--console=plain");
+        if (status != 0) {
+            return status;
+        }
+        Path binary = root.resolve("modules/cli/build/native/nativeCompile/gabier");
+        if (!Files.isExecutable(binary)) {
+            System.err.println("Missing native binary: " + binary);
+            return 1;
+        }
+        Path empty = Files.createTempDirectory("gabier-ci");
+        Path copy = empty.resolve("gabier");
+        try {
+            Files.copy(binary, copy);
+            ProcessBuilder builder = new ProcessBuilder(copy.toString(), "--version")
+                    .directory(empty.toFile())
+                    .redirectErrorStream(true);
+            builder.environment().clear();
+            Process process = builder.start();
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+            int exit = process.waitFor();
+            System.out.println("gabier --version -> \"" + output + "\" (exit " + exit + ")");
+            return exit == 0 && output.startsWith("gabier ") ? 0 : 1;
+        } finally {
+            Files.deleteIfExists(copy);
+            Files.deleteIfExists(empty);
+        }
+    }
+
+    private static int run(String... command) throws InterruptedException {
+        System.out.println("$ " + String.join(" ", command));
+        try {
+            return new ProcessBuilder(command).inheritIO().start().waitFor();
+        } catch (IOException e) {
+            System.err.println("Cannot run " + command[0] + ": " + e.getMessage());
+            return 127;
+        }
+    }
+}

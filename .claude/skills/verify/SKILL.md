@@ -65,6 +65,11 @@ While mise does not trust the repository, a plain `java` fails (the shim of mise
 `"$JAVA_HOME/bin/java" --source 25 bin/ci` instead. A skipped stage is reported as skipped, never as green. The summary
 it prints goes in your report.
 
+The stages are the executable files of `bin/ci.d/`, named `NN-name` and run in that order: `10-format`, `20-build`,
+`30-test`, `40-native`, `50-jdtls`. Each one is its own JEP 330 program, like the dev scripts of the sibling projects.
+Adding a stage is adding a file; the contract (run in the current directory, exit 77 and a `skip: <reason>` line to say
+it does not apply yet, `--describe` for its description) is in the header of `bin/ci`.
+
 ## 4. Report
 
 Give the exact command that was run, the count (`tests="N" … failures="0"`), the worktree it ran in, and what was

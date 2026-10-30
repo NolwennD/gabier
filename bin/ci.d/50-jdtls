@@ -1,0 +1,59 @@
+#!/usr/bin/env -S java --source 25
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.stream.Stream;
+
+/**
+ * Stage {@code jdtls} of the local CI (see {@code bin/ci}): the integration probe against a real jdtls. It needs the
+ * {@code jdtlsProbe} Gradle task and the {@code GABIER_JDTLS} variable (the path of the jdtls launcher). Runs in the
+ * current directory, the checkout under verification.
+ */
+public final class Jdtls {
+
+    public static void main(String[] args) throws Exception {
+        String skip = !probeExists()
+                ? "no jdtlsProbe task yet"
+                : System.getenv("GABIER_JDTLS") == null ? "GABIER_JDTLS is not set" : null;
+        if (args.length > 0 && args[0].equals("--describe")) {
+            System.out.println("integration probe against a real jdtls");
+            if (skip != null) {
+                System.out.println("skip: " + skip);
+            }
+            return;
+        }
+        if (skip != null) {
+            System.out.println("skip: " + skip);
+            System.exit(77);
+        }
+        System.exit(run("./gradlew", "jdtlsProbe", "--console=plain"));
+    }
+
+    private static boolean probeExists() throws IOException {
+        Path modules = Path.of("modules");
+        if (!Files.isDirectory(modules)) {
+            return false;
+        }
+        try (Stream<Path> files = Files.walk(modules, 2)) {
+            return files.filter(p -> p.getFileName().toString().equals("build.gradle.kts"))
+                    .anyMatch(p -> {
+                        try {
+                            return Files.readString(p).contains("jdtlsProbe");
+                        } catch (IOException e) {
+                            return false;
+                        }
+                    });
+        }
+    }
+
+    private static int run(String... command) throws InterruptedException {
+        System.out.println("$ " + String.join(" ", command));
+        try {
+            return new ProcessBuilder(command).inheritIO().start().waitFor();
+        } catch (IOException e) {
+            System.err.println("Cannot run " + command[0] + ": " + e.getMessage());
+            return 127;
+        }
+    }
+}

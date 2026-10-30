@@ -1,0 +1,28 @@
+#!/usr/bin/env -S java --source 25
+
+import java.io.IOException;
+
+/**
+ * Stage {@code build} of the local CI (see {@code bin/ci}): compile and package every module, as modules, so that a
+ * forbidden dependency between modules fails here. Runs in the current directory, the checkout under verification.
+ */
+public final class Build {
+
+    public static void main(String[] args) throws Exception {
+        if (args.length > 0 && args[0].equals("--describe")) {
+            System.out.println("compile and package every module, as modules");
+            return;
+        }
+        System.exit(run("./gradlew", "assemble", "--console=plain"));
+    }
+
+    private static int run(String... command) throws InterruptedException {
+        System.out.println("$ " + String.join(" ", command));
+        try {
+            return new ProcessBuilder(command).inheritIO().start().waitFor();
+        } catch (IOException e) {
+            System.err.println("Cannot run " + command[0] + ": " + e.getMessage());
+            return 127;
+        }
+    }
+}
