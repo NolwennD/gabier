@@ -97,7 +97,8 @@ the same feature conflict when they are merged. They are done one after the othe
 
 **At most two tickets run at the same time** (decision of the user, 30-10-2026; a batch counts for one): the machine is
 shared, Gradle, the native image and jdtls are heavy, and a third worker makes the stages crawl and the tests that depend
-on timing fail. Before launching a worker, count the ones in flight; a third waits for one of them to be merged.
+on timing fail. Before launching a worker, count the ones in flight; a third waits for one of them to be merged. The
+supervisor does not count: its own tasks (a small change, a `bin/ci` now and then) are rarely heavy on the CPU.
 
 **Coupled and ready issues are run as one batch** (decision of the user, 30-10-2026, to save time): the open issues of
 the same module that are ready are given to one subagent, in one worktree, with one `bin/ci` and one review. **One commit
