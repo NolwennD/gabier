@@ -5,6 +5,24 @@ hk = "2.9.0"
 [tools."github:openjavaformat/open-java-format"]
 version = "2.98.0.6"
 
+[vars]
+# jdtls (the Eclipse JDT language server) has no mise registry entry and no GitHub release: Eclipse publishes tarballs.
+# scripts/jdtls-install.sh installs this milestone after checking the sha256 that Eclipse publishes next to the archive,
+# so no checksum is written here. This is the only place where the version is written: to bump jdtls, change it to
+# another milestone of https://download.eclipse.org/jdtls/milestones/. Never use the unpinned snapshots.
+jdtls_version = "1.63.0"
+
+[env]
+# Outside the repository: every worktree shares one install.
+JDTLS_HOME = "{{ env.HOME }}/.local/share/jdtls/{{ vars.jdtls_version }}"
+# The path of the jdtls launcher, read by the probe tests.
+GABIER_JDTLS = "{{ env.JDTLS_HOME }}/bin/jdtls"
+_.path = ["{{ env.JDTLS_HOME }}/bin"]
+
+[tasks."jdtls:install"]
+description = "Install the pinned jdtls (checksum verified) outside the repository, shared by all worktrees"
+run = "sh scripts/jdtls-install.sh {{ vars.jdtls_version }}"
+
 [hooks]
-# Installs the Git pre-commit hook (see hk.pkl) as part of `mise install`.
-postinstall = "hk install --mise"
+# Installs the Git pre-commit hook (see hk.pkl) and jdtls as part of `mise install`.
+postinstall = ["hk install --mise", { task = "jdtls:install" }]

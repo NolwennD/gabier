@@ -14,8 +14,9 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 - JDK 27 (`.sdkmanrc`) and the wrapper `./gradlew` (Gradle 9.8.2). Run it from the worktree of the ticket when you are in
   one. The module Gradle projects are named after their folder under `modules/`: `:protocol`, `:cli`, `:daemon`.
 - The tools of the pre-commit hook are installed with `mise install` (hk, open-java-format); in a new worktree run
-  `mise trust` first.
-- The native CLI (`:cli:nativeCompile`, several minutes) needs a GraalVM 25 with `native-image`, which Gradle finds among
+  `mise trust` first. The same command installs the pinned jdtls in `~/.local/share/jdtls/<version>` (shared by all
+  worktrees, version in `mise.toml`); inside mise, `GABIER_JDTLS` already points to its launcher.
+- The native CLI (`:cli:nativeCompile`, about a minute) needs a GraalVM 25 with `native-image`, which Gradle finds among
   the toolchains (the SDKMAN! candidates included); it is not part of `check`. The binary lands in
   `modules/cli/build/native/nativeCompile/gabier`.
 - Integration tests against a real jdtls, once they exist, are not part of `check`: they need `GABIER_JDTLS`, the path of
