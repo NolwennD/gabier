@@ -35,6 +35,44 @@ tasks.check {
   dependsOn(selfCheck)
 }
 
+// The daemon served by the fake language server of the core, for the `native` stage of `bin/ci` (jdtls stays out of it).
+// It is a distribution of its own, `installFakeServed`, on the class path: the fake is test code and must not ship in the
+// daemon a user installs, nor be reachable by a request or an option of that one. Its main class is in the source set
+// `fakeServed`, which is not under the coverage gate (it only wires the fake the way the unit tests do).
+val fakeServed = sourceSets.create("fakeServed")
+dependencies {
+  "fakeServedCompileOnly"(sourceSets.main.get().output)
+  "fakeServedImplementation"(testFixtures(project(":core")))
+}
+configurations["fakeServedImplementation"].extendsFrom(configurations.implementation.get())
+configurations["fakeServedRuntimeOnly"].extendsFrom(configurations.runtimeOnly.get())
+
+val fakeServedJar = tasks.register<Jar>("fakeServedJar") {
+  archiveClassifier = "fake-served"
+  from(fakeServed.output)
+}
+
+val fakeServedLibraries = files(tasks.jar, fakeServedJar, configurations["fakeServedRuntimeClasspath"])
+
+val fakeServedScripts = tasks.register<CreateStartScripts>("fakeServedScripts") {
+  applicationName = "gabier-daemon-fake"
+  mainClass = "fr.craft.gabier.daemon.FakeServedMain"
+  outputDir = layout.buildDirectory.dir("fake-served-scripts").get().asFile
+  classpath = fakeServedLibraries
+}
+
+tasks.register<Sync>("installFakeServed") {
+  group = "distribution"
+  description = "Installs the daemon served by the fake language server (bin/gabier-daemon-fake <project folder>)."
+  into(layout.buildDirectory.dir("install/gabier-daemon-fake"))
+  from(fakeServedScripts) { into("bin") }
+  from(fakeServedLibraries) { into("lib") }
+}
+
+tasks.check {
+  dependsOn(tasks.named(fakeServed.classesTaskName))
+}
+
 // The integration tests, in a source set of their own so that the unit tests and their coverage stay apart. Every one
 // of them starts a real jdtls (it needs GABIER_JDTLS): `check` only compiles them, so that they cannot rot, and
 // `jdtlsProbe` runs them on demand. It sees the same dependencies as the unit tests (JUnit, LSP4J, Gson, the test

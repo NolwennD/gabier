@@ -37,9 +37,9 @@ can come anywhere on the command line).
 
 ```text
 $ gabier --help
-Usage error: Unsupported arguments; usage: gabier [--json] (--version | status | stop) (usage-error; arguments=--help)
+Usage error: Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file>) (usage-error; arguments=--help)
 $ gabier --json --help
-{"type":"urn:gabier:error:usage-error","title":"Usage error","detail":"Unsupported arguments; usage: gabier [--json] (--version | status | stop)","key":"usage-error","parameters":{"arguments":"--help"}}
+{"type":"urn:gabier:error:usage-error","title":"Usage error","detail":"Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file>)","key":"usage-error","parameters":{"arguments":"--help"}}
 ```
 
 The JSON object follows the data model of [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) (problem details)
@@ -52,8 +52,8 @@ know is reported as the generic `internal-server-error`, without its message, it
 
 One daemon runs per user. It is started by hand, with `gabier-daemon` from the installed distribution
 (`./gradlew :daemon:installDist`, then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until
-`gabier stop` or a SIGTERM; it answers `status` and `stop`, and nothing else yet. The cli starting it on demand comes
-later.
+`gabier stop` or a SIGTERM; it answers `status`, `stop` and `diagnostics`, and nothing else yet. The cli starting it on
+demand comes later.
 
 ```text
 $ gabier status
@@ -64,6 +64,23 @@ $ gabier stop
 gabier-daemon stopped
 $ gabier status
 Daemon not running: No daemon answers on /run/user/1000/gabier/gabier.sock: start it with gabier-daemon (daemon-not-running; socket=/run/user/1000/gabier/gabier.sock)
+```
+
+`gabier diagnostics <file>` asks what the Java language server reports in a file, instead of building: one line per
+problem, `file:line:column: severity: message`, the file as typed and the line and column **from 1**, as an editor and a
+compiler show them (severity: `error`, `warning`, `information` or `hint`), and nothing when the file is clean. The exit
+code is 0 whenever the daemon answered, whatever the problems: the reader reads the list. With `--json`, the result is
+`{"diagnostics":[{"severity":"error","line":4,"column":15,"message":"..."}]}`, an empty list for a clean file, with the
+positions **from 0** as the protocol and the domain count them. A refusal (the file is outside the project, the server
+is not ready) is the problem object, exit code 2. The cli sends the absolute path of the file to the daemon. A daemon
+started by hand serves no project yet, so it refuses every file as `language-server-not-ready` until jdtls is started
+for a project (a ticket of its own).
+
+```text
+$ gabier diagnostics src/main/java/demo/Broken.java
+src/main/java/demo/Broken.java:5:16: error: Type mismatch: cannot convert from String to int
+$ gabier --json diagnostics src/main/java/demo/Main.java
+{"diagnostics":[]}
 ```
 
 `gabier stop` returns once the daemon has removed its socket and hung up. With no daemon, or with a socket file that

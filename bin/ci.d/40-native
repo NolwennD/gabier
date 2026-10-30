@@ -17,7 +17,9 @@ import java.util.stream.Stream;
  * usage error reported as a problem object (text, then JSON with {@code --json}) with its exit code, the two output
  * streams kept apart, and then the cli against a real daemon: the installed {@code gabier-daemon} is started on a socket
  * in a temporary directory ({@code GABIER_SOCKET}, never the default path of the user), and {@code status} and {@code
- * stop} are run against it, with no daemon, with a stale socket and with a second daemon. Runs in the current
+ * stop} are run against it, with no daemon, with a stale socket and with a second daemon; {@code diagnostics} is run
+ * against it (refused: it serves no project) and against the daemon served by the fake language server, {@code
+ * :daemon:installFakeServed}, so that no jdtls runs in this stage. Runs in the current
  * directory, the checkout under verification. It starts and signals only the processes it started, by their handle.
  */
 public final class Native {
@@ -45,7 +47,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no project and with the fake language server)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -73,12 +75,14 @@ public final class Native {
     }
 
     private static int nativeCli(Path root) throws IOException, InterruptedException {
-        int status = run("./gradlew", ":cli:nativeCompile", ":daemon:installDist", "--console=plain");
+        int status = run(
+                "./gradlew", ":cli:nativeCompile", ":daemon:installDist", ":daemon:installFakeServed", "--console=plain");
         if (status != 0) {
             return status;
         }
         Path binary = root.resolve("modules/cli/build/native/nativeCompile/gabier");
         Path daemon = root.resolve("modules/daemon/build/install/gabier-daemon/bin/gabier-daemon");
+        Path fakeDaemon = root.resolve("modules/daemon/build/install/gabier-daemon-fake/bin/gabier-daemon-fake");
         if (!Files.isExecutable(binary)) {
             System.err.println("Missing native binary: " + binary);
             return 1;
@@ -87,12 +91,16 @@ public final class Native {
             System.err.println("Missing installed daemon: " + daemon);
             return 1;
         }
+        if (!Files.isExecutable(fakeDaemon)) {
+            System.err.println("Missing installed daemon served by the fake language server: " + fakeDaemon);
+            return 1;
+        }
         Path empty = Files.createTempDirectory("gabier-ci");
         Path copy = empty.resolve("gabier");
         try {
             Files.copy(binary, copy);
             int failures = version(copy, empty) + usageError(copy, empty, false) + usageError(copy, empty, true);
-            failures += new Daemon(copy, daemon, empty).check();
+            failures += new Daemon(copy, daemon, fakeDaemon, empty).check();
             return failures == 0 ? 0 : 1;
         } finally {
             Files.deleteIfExists(copy);
@@ -172,14 +180,16 @@ public final class Native {
 
         private final Path cli;
         private final Path daemon;
+        private final Path fakeDaemon;
         private final Path directory;
         private final Path socket;
         private final List<Process> started = new ArrayList<>();
         private int failures;
 
-        private Daemon(Path cli, Path daemon, Path directory) {
+        private Daemon(Path cli, Path daemon, Path fakeDaemon, Path directory) {
             this.cli = cli;
             this.daemon = daemon;
+            this.fakeDaemon = fakeDaemon;
             this.directory = directory;
             // The directory is private to the user (a temporary directory is created with mode 700) and short: the
             // path of a socket is limited to 107 bytes.
@@ -194,6 +204,8 @@ public final class Native {
                 statusAndStop();
                 sigterm();
                 secondDaemonAndStaleSocket();
+                diagnosticsWithNoProject();
+                diagnosticsWithTheFakeServer();
             } finally {
                 for (Process process : started) {
                     if (process.isAlive()) {
@@ -223,7 +235,15 @@ public final class Native {
          * there, so the file does not tell). Null when it did not start.
          */
         private Process startDaemon() throws IOException, InterruptedException {
-            ProcessBuilder builder = new ProcessBuilder(daemon.toString()).directory(directory.toFile());
+            return startDaemon(daemon);
+        }
+
+        /** Starts a daemon of the build (the installed one or the one served by the fake), as above. */
+        private Process startDaemon(Path executable, String... args) throws IOException, InterruptedException {
+            var command = new ArrayList<String>();
+            command.add(executable.toString());
+            command.addAll(List.of(args));
+            ProcessBuilder builder = new ProcessBuilder(command).directory(directory.toFile());
             builder.environment().put("GABIER_SOCKET", socket.toString());
             // The start script runs the java of JAVA_HOME: the JDK that runs this stage.
             builder.environment().put("JAVA_HOME", System.getProperty("java.home"));
@@ -352,6 +372,69 @@ public final class Native {
                     "a daemon removes a stale socket and serves on it");
             gabier("stop");
             expect(ends(third), "the third daemon stops");
+        }
+
+        /** The daemon a user starts serves no project yet: it declines the diagnostics as not ready. */
+        private void diagnosticsWithNoProject() throws IOException, InterruptedException {
+            Process process = startDaemon();
+            if (process == null) {
+                failures++;
+                return;
+            }
+            Run run = gabier("diagnostics", "Main.java");
+            expect(
+                    run.exit() == 2
+                            && run.out().isEmpty()
+                            && run.err().startsWith("Language server not ready: ")
+                            && run.err().contains("(language-server-not-ready"),
+                    "gabier diagnostics against the installed daemon, which serves no project, is refused as not ready,"
+                            + " exit 2");
+            gabier("stop");
+            expect(ends(process), "the daemon stops");
+        }
+
+        /**
+         * The commands of the catalogue against the installed daemon served by the fake language server, which answers
+         * what the contract scenarios say jdtls answers: no jdtls in this stage. The file is given relative to the
+         * directory the cli runs in, as a user types it.
+         */
+        private void diagnosticsWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            String broken = "project/src/main/java/demo/Broken.java";
+            String message = "Type mismatch: cannot convert from String to int";
+            Run error = gabier("diagnostics", broken);
+            expect(
+                    error.exit() == 0 && error.err().isEmpty() && error.out().equals(broken + ":5:16: error: " + message),
+                    "gabier diagnostics of a file with an error prints it, positions from 1, and exits 0");
+            Run warning = gabier("diagnostics", "project/src/main/java/demo/Sloppy.java");
+            expect(
+                    warning.exit() == 0
+                            && warning.out()
+                                    .equals("project/src/main/java/demo/Sloppy.java:5:13: warning:"
+                                            + " The value of the local variable unused is not used"),
+                    "gabier diagnostics of a file with a warning prints it and exits 0");
+            Run clean = gabier("diagnostics", "project/src/main/java/demo/Main.java");
+            expect(clean.exit() == 0 && clean.out().isEmpty() && clean.err().isEmpty(), "a clean file prints nothing");
+            Run json = gabier("--json", "diagnostics", broken);
+            expect(
+                    json.exit() == 0
+                            && json.out()
+                                    .equals("{\"diagnostics\":[{\"severity\":\"error\",\"line\":4,\"column\":15,"
+                                            + "\"message\":\"" + message + "\"}]}"),
+                    "gabier --json diagnostics gives the result with the positions from 0");
+            Run outside = gabier("diagnostics", "outside/Elsewhere.java");
+            expect(
+                    outside.exit() == 2
+                            && outside.out().isEmpty()
+                            && outside.err().contains("(language-server-file-outside-project; "),
+                    "a file outside the project is refused as a problem object, exit 2");
+            gabier("stop");
+            expect(ends(process), "the daemon served by the fake stops");
         }
 
         private static String posix(Path path) throws IOException {

@@ -4,7 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import fr.craft.gabier.editing.domain.JavaLanguageServer;
+import fr.craft.gabier.editing.fixtures.FakeJavaLanguageServer;
+import fr.craft.gabier.editing.fixtures.Scenarios;
 import fr.craft.gabier.protocol.DaemonStatus;
+import fr.craft.gabier.protocol.FileDiagnostics;
+import fr.craft.gabier.protocol.FileDiagnostics.Diagnosis;
+import fr.craft.gabier.protocol.FileDiagnostics.Severity;
 import fr.craft.gabier.protocol.RpcResponse;
 import fr.craft.gabier.protocol.UserId;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
@@ -69,8 +75,15 @@ class DaemonServerTest {
         return directory.resolve("gabier/gabier.sock");
     }
 
+    /** The fake language server of the project the scenario plays on, which is the temporary directory. */
+    private JavaLanguageServer languageServer() {
+        return new FakeJavaLanguageServer(directory)
+                .scripted(Scenarios.FILE_WITH_AN_ERROR)
+                .scripted(Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT);
+    }
+
     private DaemonServer open() {
-        var server = DaemonServer.open(socket(), uid, clock, PID);
+        var server = DaemonServer.open(socket(), uid, clock, PID, languageServer());
         servers.add(server);
 
         return server;
@@ -149,7 +162,7 @@ class DaemonServerTest {
             serving();
 
             var refusal = catchThrowableOfType(
-                    DaemonSocketException.class, () -> DaemonServer.open(socket(), uid, clock, PID));
+                    DaemonSocketException.class, () -> DaemonServer.open(socket(), uid, clock, PID, languageServer()));
 
             assertThat(refusal.key()).isEqualTo(DaemonErrorKey.ALREADY_RUNNING);
             try (var client = connect(socket())) {
@@ -179,7 +192,7 @@ class DaemonServerTest {
             Files.setPosixFilePermissions(folder, PosixFilePermissions.fromString("rwxrwxr-x"));
 
             var refusal = catchThrowableOfType(
-                    DaemonSocketException.class, () -> DaemonServer.open(socket(), uid, clock, PID));
+                    DaemonSocketException.class, () -> DaemonServer.open(socket(), uid, clock, PID, languageServer()));
 
             assertThat(refusal.key()).isEqualTo(DaemonErrorKey.SOCKET_NOT_PRIVATE);
             assertThat(socket()).doesNotExist();
@@ -192,7 +205,7 @@ class DaemonServerTest {
                     PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
             Files.writeString(socket(), "precious");
 
-            assertThatThrownBy(() -> DaemonServer.open(socket(), uid, clock, PID))
+            assertThatThrownBy(() -> DaemonServer.open(socket(), uid, clock, PID, languageServer()))
                     .isInstanceOf(DaemonSocketException.class);
             assertThat(socket()).hasContent("precious");
         }
@@ -203,7 +216,7 @@ class DaemonServerTest {
 
             var failure = catchThrowableOfType(
                     DaemonSocketException.class,
-                    () -> DaemonServer.open(file.resolve("gabier/gabier.sock"), uid, clock, PID));
+                    () -> DaemonServer.open(file.resolve("gabier/gabier.sock"), uid, clock, PID, languageServer()));
 
             assertThat(failure.key()).isEqualTo(DaemonErrorKey.SOCKET_UNAVAILABLE);
             assertThat(failure.status()).isEqualTo(ErrorStatus.INTERNAL_SERVER_ERROR);
@@ -225,6 +238,32 @@ class DaemonServerTest {
                 assertThat(DaemonStatus.of(((RpcResponse.Success) answer).result()))
                         .isEqualTo(new DaemonStatus("0.1", PID, Duration.ofSeconds(90)));
             }
+        }
+
+        @Test
+        void diagnosticsAnswersTheProblemsOfTheFileAndRefusesTheOneOutsideTheProject() throws IOException {
+            serving();
+            var broken =
+                    directory.resolve(Scenarios.FILE_WITH_AN_ERROR.request().file());
+            var outside = directory.resolve(
+                    Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT.request().file());
+
+            try (var client = connect(socket())) {
+                var answer = RpcResponse.parse(client.ask(diagnosticsRequest(broken)));
+
+                assertThat(FileDiagnostics.of(((RpcResponse.Success) answer).result()))
+                        .isEqualTo(new FileDiagnostics(List.of(new Diagnosis(
+                                Severity.ERROR, 4, 15, "Type mismatch: cannot convert from String to int"))));
+                assertThat(client.ask(diagnosticsRequest(outside)))
+                        .contains("\"key\":\"language-server-file-outside-project\"");
+                assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
+            }
+        }
+
+        private static String diagnosticsRequest(Path file) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"%s"}}
+                """.formatted(file);
         }
 
         @Test

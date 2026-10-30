@@ -1,5 +1,6 @@
 package fr.craft.gabier.daemon;
 
+import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.protocol.ExitCode;
 import fr.craft.gabier.protocol.ProblemMapper;
 import fr.craft.gabier.protocol.ProtocolVersion;
@@ -52,7 +53,7 @@ public final class Main {
             PrintStream err)
             throws IOException {
         if (arguments.isEmpty()) {
-            return serve(environment, out);
+            return serve(environment, out, new NoProjectServer());
         }
         if (arguments.equals(List.of(VERSION_OPTION))) {
             out.println("gabier-daemon " + ProtocolVersion.CURRENT);
@@ -66,11 +67,18 @@ public final class Main {
         throw UsageException.unsupportedArguments(arguments);
     }
 
-    private static int serve(Map<String, String> environment, PrintStream out) throws IOException {
+    /**
+     * Serves on the socket, with this language server behind the methods of the catalogue, until the daemon is stopped.
+     * Apart from {@link #execute}, only the distribution that the {@code native} stage of {@code bin/ci} runs calls it
+     * (source set {@code fakeServed}, with the fake language server): the way the daemon picks its server is not in
+     * its command line nor in its requests.
+     */
+    static int serve(Map<String, String> environment, PrintStream out, JavaLanguageServer languageServer)
+            throws IOException {
         var uid = UserId.current();
         var socket = SocketLocation.resolve(environment, uid);
         var server = DaemonServer.open(
-                socket, uid, Clock.systemUTC(), ProcessHandle.current().pid());
+                socket, uid, Clock.systemUTC(), ProcessHandle.current().pid(), languageServer);
         // A signal (SIGTERM) ends the JVM without serve() returning: the hook removes the socket.
         Runtime.getRuntime().addShutdownHook(server.shutdownHook());
         out.println("gabier-daemon " + ProtocolVersion.CURRENT + " listening on " + socket);

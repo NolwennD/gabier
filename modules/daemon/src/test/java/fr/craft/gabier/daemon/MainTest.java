@@ -187,6 +187,18 @@ class MainTest {
         }
 
         @Test
+        void serveNoProjectYetSoItRefusesTheDiagnosticsOfAFileAsNotReady() throws Exception {
+            var daemon = start();
+
+            assertThat(ask("""
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"/some/File.java"}}
+                """)).contains("\"key\":\"language-server-not-ready\"");
+            ask(STOP);
+
+            assertThat(daemon.orTimeout(10, TimeUnit.SECONDS).join()).isZero();
+        }
+
+        @Test
         void usesTheRuntimeDirectoryOfTheUserWhenTheEnvironmentHasNoOverride() throws Exception {
             var runtimeDirectory = Files.createDirectory(directory.resolve("run"));
             var daemon = start(

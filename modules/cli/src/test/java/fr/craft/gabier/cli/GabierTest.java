@@ -27,7 +27,7 @@ import org.junit.jupiter.api.io.TempDir;
 class GabierTest {
 
     private static final String USAGE_DETAIL =
-            "Unsupported arguments; usage: gabier [--json] (--version | status | stop)";
+            "Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file>)";
 
     @TempDir
     Path directory;
@@ -136,6 +136,26 @@ class GabierTest {
             assertThat(run("status", "stop")).isEqualTo(2);
             assertThat(out()).isEmpty();
             assertThat(err()).isEqualTo(usageText("status stop"));
+        }
+
+        @Test
+        void diagnosticsWithoutAFileIsAnUnknownUsage() {
+            assertThat(run("diagnostics")).isEqualTo(2);
+            assertThat(out()).isEmpty();
+            assertThat(err()).isEqualTo(usageText("diagnostics"));
+        }
+
+        @Test
+        void diagnosticsOfTwoFilesIsAnUnknownUsage() {
+            assertThat(run("diagnostics", "A.java", "B.java")).isEqualTo(2);
+            assertThat(out()).isEmpty();
+            assertThat(err()).isEqualTo(usageText("diagnostics A.java B.java"));
+        }
+
+        @Test
+        void aFileWithoutTheDiagnosticsCommandIsAnUnknownUsage() {
+            assertThat(run("A.java", "diagnostics")).isEqualTo(2);
+            assertThat(err()).isEqualTo(usageText("A.java diagnostics"));
         }
     }
 
@@ -385,6 +405,139 @@ class GabierTest {
                     assertThat(daemon.requests()).hasSize(1);
                 }
             }
+        }
+    }
+
+    @Nested
+    class Diagnostics {
+
+        private static final String ERRORS = """
+            {"diagnostics":[\
+            {"severity":"error","line":4,"column":15,"message":"Type mismatch: cannot convert from String to int"},\
+            {"severity":"warning","line":0,"column":0,"message":"A warning"}]}\
+            """;
+        private static final String CLEAN = "{\"diagnostics\":[]}";
+        private static final Problem OUTSIDE = new Problem(
+                "urn:gabier:error:language-server-file-outside-project",
+                "File outside project",
+                "The file /elsewhere/A.java is not in the project of the language server",
+                "language-server-file-outside-project",
+                Map.of("file", "/elsewhere/A.java"),
+                ErrorStatus.BAD_REQUEST);
+
+        private Path socket() {
+            return directory.resolve("gabier.sock");
+        }
+
+        private int runWithSocket(String... args) {
+            return run(Map.of("GABIER_SOCKET", socket().toString()), args);
+        }
+
+        private static String request(Path file) {
+            return """
+                {"jsonrpc":"2.0","id":1,"method":"diagnostics","params":{"file":"%s"}}\
+                """.formatted(file);
+        }
+
+        @Test
+        void printsOneLineForEachProblemWithPositionsFromOne() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", ERRORS))) {
+                assertThat(runWithSocket("diagnostics", "/project/Broken.java")).isZero();
+
+                assertThat(out().lines())
+                        .containsExactly(
+                                "/project/Broken.java:5:16: error: Type mismatch: cannot convert from String to int",
+                                "/project/Broken.java:1:1: warning: A warning");
+                assertThat(err()).isEmpty();
+                assertThat(daemon.requests()).containsExactly(request(Path.of("/project/Broken.java")));
+            }
+        }
+
+        @Test
+        void printsNothingForACleanFile() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", CLEAN))) {
+                assertThat(runWithSocket("diagnostics", "/project/Main.java")).isZero();
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEmpty();
+                assertThat(daemon.requests()).hasSize(1);
+            }
+        }
+
+        @Test
+        void asksTheDaemonForTheAbsolutePathOfARelativeFileAndShowsTheFileAsTyped() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", ERRORS))) {
+                assertThat(runWithSocket("diagnostics", "src/../Broken.java")).isZero();
+
+                assertThat(out()).startsWith("src/../Broken.java:5:16: error: ");
+                assertThat(daemon.requests())
+                        .containsExactly(request(Path.of("Broken.java").toAbsolutePath()));
+            }
+        }
+
+        @Test
+        void givesTheResultAsJsonWithTheZeroBasedPositionsWithTheJsonOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", ERRORS))) {
+                assertThat(runWithSocket("--json", "diagnostics", "/project/Broken.java"))
+                        .isZero();
+
+                assertThat(out()).isEqualTo(ERRORS + System.lineSeparator());
+                assertThat(daemon.requests()).hasSize(1);
+            }
+        }
+
+        @Test
+        void givesAnEmptyListAsJsonForACleanFile() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", CLEAN))) {
+                assertThat(runWithSocket("diagnostics", "/project/Main.java", "--json"))
+                        .isZero();
+
+                assertThat(out()).isEqualTo(CLEAN + System.lineSeparator());
+                assertThat(daemon.requests()).hasSize(1);
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsItsProblemObjectWithTheExitCodeOfItsCategory() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", OUTSIDE))) {
+                assertThat(runWithSocket("diagnostics", "/elsewhere/A.java")).isEqualTo(2);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(OUTSIDE.toText() + System.lineSeparator());
+                assertThat(daemon.requests()).hasSize(1);
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsJsonWithTheJsonOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", OUTSIDE))) {
+                assertThat(runWithSocket("--json", "diagnostics", "/elsewhere/A.java"))
+                        .isEqualTo(2);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(OUTSIDE.toJson() + System.lineSeparator());
+                assertThat(daemon.requests()).hasSize(1);
+            }
+        }
+
+        @Test
+        void reportsAResultThatIsNotAListOfProblemsAsAnInternalError() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", "{}"))) {
+                assertThat(runWithSocket("diagnostics", "/project/Main.java")).isEqualTo(1);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).contains("(invalid-response)");
+                assertThat(daemon.requests()).hasSize(1);
+            }
+        }
+
+        @Test
+        void saysNoDaemonIsRunningWithoutHanging() throws Exception {
+            var code = CompletableFuture.supplyAsync(() -> runWithSocket("diagnostics", "/project/Main.java"))
+                    .get(10, TimeUnit.SECONDS);
+
+            assertThat(code).isEqualTo(2);
+            assertThat(err()).contains("(daemon-not-running; ");
         }
     }
 

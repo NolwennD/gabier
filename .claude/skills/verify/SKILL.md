@@ -42,7 +42,12 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   (`SocketLocation`, in `protocol`: `GABIER_SOCKET`, else `$XDG_RUNTIME_DIR/gabier/gabier.sock`, else
   `/tmp/gabier-<uid>/gabier.sock`, at most 107 bytes), `DaemonServer` takes the socket (`SocketGuard`: private folder,
   stale socket removed, another daemon refused) and serves the clients with `Connection` (lines in, lines out) and
-  `RequestHandler` (the method table: `StatusMethod`, `StopMethod`; adding one is `.claude/skills/add-daemon-method`).
+  `RequestHandler` (the method table: `StatusMethod`, `StopMethod`, `DiagnosticsMethod`; adding one is
+  `.claude/skills/add-daemon-method`). The daemon a user starts has `NoProjectServer` behind its methods (every request
+  not ready) until jdtls is started for a project; the `native` stage runs the cli against the installed daemon served by
+  the fake language server instead (`./gradlew :daemon:installFakeServed`, `bin/gabier-daemon-fake <project folder>`,
+  main class `FakeServedMain` in the source set `fakeServed`: a distribution of its own, on the class path, not under
+  the coverage gate).
   Its unit tests need no jdtls: the lines are tested over streams (`RequestHandlerTest`, `ConnectionTest`), the socket
   on a real Unix socket in a temporary directory (`DaemonServerTest`, `SocketGuardTest`, `MainTest`), always through
   `@TempDir` and an explicit path: never the default path of the user, and keep the path short (107 bytes). The cli is
@@ -80,7 +85,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 | `module-info.java`, `build.gradle.kts`, `build-logic/**`          | `./gradlew build`: the modules are compiled as modules, so a forbidden dependency fails here                          |
 | `settings.gradle.kts`, `gradle/libs.versions.toml`                | `./gradlew projects` to see the modules, then `./gradlew build`                                                       |
 | packages created or moved                                         | the architecture tests: `./gradlew :architecture:cleanTest :architecture:test`                                        |
-| `modules/cli/**`, `modules/daemon/**`, `libs.versions.toml` (the native plugin) | `./gradlew :cli:nativeCompile :daemon:installDist`, then run the binary alone, in an empty directory with an empty environment: `--version`, a usage error as text and as JSON (`--json`), exit code 2, on the standard error, then `status` and `stop` against the installed daemon on a socket in a temporary directory (the `native` stage of `bin/ci` does it) |
+| `modules/cli/**`, `modules/daemon/**`, `libs.versions.toml` (the native plugin) | `./gradlew :cli:nativeCompile :daemon:installDist :daemon:installFakeServed`, then run the binary alone, in an empty directory with an empty environment: `--version`, a usage error as text and as JSON (`--json`), exit code 2, on the standard error, then `status` and `stop` against the installed daemon on a socket in a temporary directory, and `diagnostics` against the installed daemon (refused) and against `:daemon:installFakeServed` (the `native` stage of `bin/ci` does it) |
 | a convention (name, Javadoc, declaration order, import)           | `./gradlew :<m>:checkstyleMain :<m>:checkstyleTest` (`:architecture:checkstyleTest`; also `checkstyleIntegrationTest`, `checkstyleTestFixtures`); the rules and what is left out: `config/checkstyle/checkstyle.xml` |
 | any `.java` file                                                  | formatting: `mise exec -- hk check --all`; `hk fix --all` fixes it. Never bypass the hook                             |
 

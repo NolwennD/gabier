@@ -1,5 +1,7 @@
 package fr.craft.gabier.daemon;
 
+import fr.craft.gabier.editing.application.Diagnose;
+import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.protocol.DaemonStatus;
 import fr.craft.gabier.protocol.ProtocolVersion;
 import java.io.IOException;
@@ -32,7 +34,8 @@ final class DaemonServer implements AutoCloseable {
     private final CompletableFuture<Void> stopRequested = new CompletableFuture<>();
     private boolean closed;
 
-    private DaemonServer(Path socket, ServerSocketChannel listener, Clock clock, long pid) {
+    private DaemonServer(
+            Path socket, ServerSocketChannel listener, Clock clock, long pid, JavaLanguageServer languageServer) {
         this.socket = socket;
         this.listener = listener;
         var startedAt = clock.instant();
@@ -40,7 +43,8 @@ final class DaemonServer implements AutoCloseable {
         handler = new RequestHandler(List.of(
                 new StatusMethod(() -> new DaemonStatus(
                         ProtocolVersion.CURRENT.toString(), pid, Duration.between(startedAt, clock.instant()))),
-                new StopMethod(this::requestStop)));
+                new StopMethod(this::requestStop),
+                new DiagnosticsMethod(new Diagnose(languageServer))));
     }
 
     /**
@@ -48,9 +52,10 @@ final class DaemonServer implements AutoCloseable {
      *
      * @param socket the path of the socket, already measured by {@code SocketLocation}
      * @param uid the numeric id of the user, as text
+     * @param languageServer the language server that the methods of the catalogue ask
      * @throws DaemonSocketException when the socket is not the daemon's to take, or cannot be set up
      */
-    static DaemonServer open(Path socket, String uid, Clock clock, long pid) {
+    static DaemonServer open(Path socket, String uid, Clock clock, long pid, JavaLanguageServer languageServer) {
         var guard = new SocketGuard(uid);
         try {
             guard.prepareFolder(Objects.requireNonNull(socket.getParent(), "the socket is in a folder"));
@@ -59,7 +64,7 @@ final class DaemonServer implements AutoCloseable {
             listener.bind(UnixDomainSocketAddress.of(socket));
             guard.restrict(socket);
 
-            return new DaemonServer(socket, listener, clock, pid);
+            return new DaemonServer(socket, listener, clock, pid, languageServer);
         } catch (IOException e) {
             throw DaemonSocketException.unavailable(socket, e);
         }

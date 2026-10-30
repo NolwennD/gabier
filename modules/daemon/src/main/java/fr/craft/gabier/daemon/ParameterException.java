@@ -16,6 +16,13 @@ final class ParameterException extends GeneratorException {
                 .addParameter("parameter", parameter));
     }
 
+    /** The request carries a parameter whose value cannot mean what the method needs (a path that is not one). */
+    static ParameterException invalid(String method, String parameter) {
+        return new ParameterException(GeneratorException.badRequest(DaemonErrorKey.INVALID_PARAMETER)
+                .message("The parameter " + parameter + " of the method " + method + " has an invalid value")
+                .addParameter("parameter", parameter));
+    }
+
     /** The request lacks a parameter the method needs. */
     static ParameterException missing(String method, String parameter) {
         return new ParameterException(GeneratorException.badRequest(DaemonErrorKey.MISSING_PARAMETER)

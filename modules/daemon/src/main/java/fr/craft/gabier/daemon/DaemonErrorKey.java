@@ -5,6 +5,7 @@ import fr.craft.gabier.shared.error.domain.ErrorKey;
 /** The keys of the refusals of the daemon itself: its command line, its socket and the parameters of a request. */
 enum DaemonErrorKey implements ErrorKey {
     ALREADY_RUNNING("daemon-already-running"),
+    INVALID_PARAMETER("invalid-parameter"),
     MISSING_PARAMETER("missing-parameter"),
     SOCKET_NOT_PRIVATE("socket-not-private"),
     SOCKET_UNAVAILABLE("socket-unavailable"),
