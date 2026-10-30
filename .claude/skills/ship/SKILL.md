@@ -55,8 +55,10 @@ tests**, not from a full read of the diff, to keep its context small. Give it on
 > settle a case, and skip code the issue says is copied from elsewhere or generated. Also check: idiomatic modern Java
 > for the module's release; each `@ExcludeFromGeneratedCodeCoverage` and `@SuppressWarnings` use (`git diff main..<branch>
 > | grep`) has a real reason; the core's purity (the domain depends only on `java..` and the allowed packages); nothing
-> beyond the issue. Report blocking findings first, then suggestions, each with file and line, in under 300 words, or say
-> "nothing to report".
+> beyond the issue. Answer short, explicit and unambiguous, in under 300 words. Either "nothing to report", or two lists,
+> BLOCKING (a `Done when` point is not met) then SUGGESTIONS, one finding per line in this form: `file:line — the
+> problem — the input or case that shows it`. No hedging ("maybe", "might"): a finding you cannot show with a case is
+> left out. No praise, no summary of the change.
 
 ### 2. What becomes of the findings
 
