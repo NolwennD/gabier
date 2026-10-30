@@ -115,6 +115,9 @@ notification) and a batch are refused as invalid requests. An error is a JSON-RP
 the problem and whose `data` is the problem object: its `code` tells who is at fault (`-32603` a failure of gabier, any
 other code a refusal of the request, `-32700` a line that is not JSON, `-32600` not a request, `-32601` unknown method).
 A malformed line, an unknown method or a client that disconnects in the middle of a request leaves the daemon running.
+A line is read up to 1 MiB (1,048,576 bytes, its line break not counted); a longer one is refused at once as a bad
+request (`line-too-long`, the limit in the `limit` of the problem, `id` null), the rest of it is dropped, and the
+connection goes on with the next line.
 
 **The socket** is per user, in a short place, because a Unix socket path holds at most 107 bytes (`sun_path` is 108,
 one of them for the terminating zero) and a path under a checkout or a worktree easily exceeds it:

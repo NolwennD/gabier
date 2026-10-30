@@ -56,6 +56,33 @@ class ConnectionTest {
     }
 
     @Test
+    void refusesALineOverTheLimitWithAProblemObjectAndAnswersTheNextRequest() {
+        var output = new ByteArrayOutputStream();
+        var tooLong = "x".repeat(LineReader.MAX_LINE_BYTES + 1) + "\n";
+
+        Connection.serve(input(tooLong + request(1, "echo")), output, handler);
+
+        assertThat(lines(output)).hasSize(2);
+        assertThat(lines(output).get(0))
+                .contains("\"id\":null")
+                .contains("\"key\":\"line-too-long\"")
+                .contains("\"limit\":\"" + LineReader.MAX_LINE_BYTES + "\"");
+        assertThat(lines(output).get(1)).contains("\"id\":1").contains("\"result\"");
+    }
+
+    @Test
+    void readsALineOfExactlyTheLimit() {
+        var output = new ByteArrayOutputStream();
+        var request = request(1, "echo").stripTrailing();
+        var padded = " ".repeat(LineReader.MAX_LINE_BYTES - request.length()) + request + "\n";
+
+        Connection.serve(input(padded), output, handler);
+
+        assertThat(lines(output)).hasSize(1);
+        assertThat(lines(output).get(0)).contains("\"result\"");
+    }
+
+    @Test
     void doesNotAnswerARequestThatWasCutShort() {
         var output = new ByteArrayOutputStream();
 

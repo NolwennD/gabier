@@ -333,6 +333,34 @@ class DaemonServerTest {
         }
 
         @Test
+        void aLineOneByteOverTheLimitIsRefusedAndTheDaemonAnswersTheNextConnection() throws IOException {
+            serving();
+            var status = STATUS_REQUEST.stripTrailing();
+
+            try (var greedy = connect(socket())) {
+                var answer = greedy.ask(" ".repeat(LineReader.MAX_LINE_BYTES + 1 - status.length()) + status + "\n");
+
+                assertThat(answer).contains("\"code\":-32000").contains("\"key\":\"line-too-long\"");
+                assertThat(greedy.ask(STATUS_REQUEST)).contains("\"result\"");
+            }
+            try (var client = connect(socket())) {
+                assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
+            }
+        }
+
+        @Test
+        void aLineOfExactlyTheLimitIsRead() throws IOException {
+            serving();
+            var status = STATUS_REQUEST.stripTrailing();
+
+            try (var client = connect(socket())) {
+                var answer = client.ask(" ".repeat(LineReader.MAX_LINE_BYTES - status.length()) + status + "\n");
+
+                assertThat(answer).contains("\"result\"");
+            }
+        }
+
+        @Test
         void aClientThatDisconnectsInTheMiddleOfARequestLeavesTheDaemonAlive() throws IOException {
             serving();
 

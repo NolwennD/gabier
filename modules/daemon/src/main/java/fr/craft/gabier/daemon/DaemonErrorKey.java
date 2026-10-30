@@ -7,6 +7,7 @@ enum DaemonErrorKey implements ErrorKey {
     ALREADY_RUNNING("daemon-already-running"),
     INVALID_PARAMETER("invalid-parameter"),
     JDTLS_START_FAILED("jdtls-start-failed"),
+    LINE_TOO_LONG("line-too-long"),
     MISSING_PARAMETER("missing-parameter"),
     SOCKET_NOT_PRIVATE("socket-not-private"),
     SOCKET_UNAVAILABLE("socket-unavailable"),
