@@ -19,8 +19,12 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 - The native CLI (`:cli:nativeCompile`, about a minute) needs a GraalVM 25 with `native-image`, which Gradle finds among
   the toolchains (the SDKMAN! candidates included); it is not part of `check`. The binary lands in
   `modules/cli/build/native/nativeCompile/gabier`.
-- Integration tests against a real jdtls, once they exist, are not part of `check`: they need `GABIER_JDTLS`, the path of
-  the `jdtls` launcher, and fail loudly without it.
+- The jdtls probe, `./gradlew jdtlsProbe` (the integration test in `modules/daemon/src/integrationTest`), is not part of
+  `check`: it starts a real jdtls on the checkout in a fresh temporary `-data` directory and waits, up to ten minutes
+  (about a minute and a half here), until it has imported every module. It needs `GABIER_JDTLS`, the path of the
+  `jdtls` launcher (`mise exec -- ./gradlew jdtlsProbe` outside an activated mise), and fails at once, never skips,
+  without it. It stops jdtls and deletes the data directory in every case. jdtls leaves its Eclipse files (`.project`,
+  `.classpath`, `.settings/`, `bin/`) in the checkout: they are git-ignored.
 
 ## 1. Choose the scope
 

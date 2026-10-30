@@ -16,7 +16,7 @@ If the hook is missing (for example `MISE_NO_HOOKS` is set), install it by hand:
 
 `mise install` also installs the pinned jdtls into `~/.local/share/jdtls/<version>`, shared by all worktrees
 (`mise run jdtls:install` does it by hand); mise exports the path of its launcher as `GABIER_JDTLS`, which the probe
-tests read. In a shell where mise is not activated, run commands through `mise exec --` to get `GABIER_JDTLS` and
+(`./gradlew jdtlsProbe`) reads. In a shell where mise is not activated, run commands through `mise exec --` to get `GABIER_JDTLS` and
 `jdtls` on the `PATH`.
 
 The launcher needs Python 3 and a JDK 21 or later: it runs `$JAVA_HOME/bin/java` if that file exists, otherwise the
