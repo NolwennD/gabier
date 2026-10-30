@@ -2,12 +2,16 @@ package fr.craft.gabier.editing.domain;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * A {@link FileStore} on the real files of a delegate that fails where the test says so: not a mock of the file system,
@@ -27,7 +31,9 @@ final class FaultyFileStore implements FileStore {
         /** The first half of the bytes is written, then an {@link IOException}: a disk that fills up. */
         HALF_WRITTEN,
         /** A runtime exception that is not the store's to throw. */
-        RUNTIME
+        RUNTIME,
+        /** Someone else's file appears at the target, and the call fails because it is there (a move). */
+        FOREIGN_FILE_APPEARS
     }
 
     private record Fault(Operation operation, Path path, int call, Failure failure) {}
@@ -68,6 +74,11 @@ final class FaultyFileStore implements FileStore {
     }
 
     @Override
+    public boolean isFolder(Path path) {
+        return delegate.isFolder(path);
+    }
+
+    @Override
     public byte[] read(Path file) throws IOException {
         return delegate.read(file);
     }
@@ -84,8 +95,23 @@ final class FaultyFileStore implements FileStore {
 
     @Override
     public void move(Path from, Path to) throws IOException {
-        fail(check(Operation.MOVE, to), to);
+        Failure failure = check(Operation.MOVE, to);
+        if (failure == Failure.FOREIGN_FILE_APPEARS) {
+            delegate.write(to, "someone else's file".getBytes(StandardCharsets.UTF_8));
+            throw new FileAlreadyExistsException(to.toString());
+        }
+        fail(failure, to);
         delegate.move(from, to);
+    }
+
+    @Override
+    public Set<PosixFilePermission> permissions(Path file) throws IOException {
+        return delegate.permissions(file);
+    }
+
+    @Override
+    public void setPermissions(Path file, Set<PosixFilePermission> permissions) throws IOException {
+        delegate.setPermissions(file, permissions);
     }
 
     @Override

@@ -64,6 +64,13 @@ public final class EditingException extends GeneratorException {
                 .addParameter("file", file.toString()));
     }
 
+    static EditingException folderMissing(Path file, Path folder) {
+        return new EditingException(GeneratorException.badRequest(EditingErrorKey.FOLDER_MISSING)
+                .message("There is no folder " + folder + ": " + file + " cannot go there")
+                .addParameter("file", file.toString())
+                .addParameter("folder", folder.toString()));
+    }
+
     static EditingException readFailed(Path file, IOException cause) {
         return new EditingException(GeneratorException.internalServerError(EditingErrorKey.READ_FAILED)
                 .message("The file " + file + " could not be read")

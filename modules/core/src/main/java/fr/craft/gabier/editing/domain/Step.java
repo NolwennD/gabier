@@ -2,7 +2,9 @@ package fr.craft.gabier.editing.domain;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * One operation on the {@link FileStore}, with what it takes to undo it. A step is undone in the state it may have
@@ -36,25 +38,60 @@ sealed interface Step {
         }
     }
 
-    record Move(Path from, Path target) implements Step {
+    /** Moves a file. It is moved back only if this step moved it: a target that is not its work stays. */
+    final class Move implements Step {
+
+        private final Path from;
+        private final Path target;
+        private boolean moved;
+
+        Move(Path from, Path target) {
+            this.from = from;
+            this.target = target;
+        }
+
+        @Override
+        public Path target() {
+            return target;
+        }
 
         @Override
         public void apply(FileStore store) throws IOException {
             store.move(from, target);
+            moved = true;
         }
 
         @Override
         public void undo(FileStore store) throws IOException {
-            if (store.exists(target)) {
+            if (moved) {
                 store.move(target, from);
             }
         }
     }
 
-    record Delete(Path target, byte[] previous) implements Step {
+    /**
+     * Deletes a file, and gives it back with its content and its permissions as they were when it was deleted (not when
+     * the set was planned: an earlier change of the set may have created or moved the file).
+     */
+    final class Delete implements Step {
+
+        private final Path target;
+        private final byte[] previous;
+        private Set<PosixFilePermission> permissions = Set.of();
+
+        Delete(Path target, byte[] previous) {
+            this.target = target;
+            this.previous = previous;
+        }
+
+        @Override
+        public Path target() {
+            return target;
+        }
 
         @Override
         public void apply(FileStore store) throws IOException {
+            permissions = store.permissions(target);
             store.delete(target);
         }
 
@@ -62,6 +99,7 @@ sealed interface Step {
         public void undo(FileStore store) throws IOException {
             if (!store.exists(target)) {
                 store.write(target, previous);
+                store.setPermissions(target, permissions);
             }
         }
     }

@@ -5,8 +5,8 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * One change of a {@link ChangeSet}, to a file or to the existence of a file. Paths are used as they are given: they
- * are the paths of regular files.
+ * One change of a {@link ChangeSet}, to a file or to the existence of a file. Paths are the paths of regular files,
+ * in any spelling: {@code x}, {@code ./x} and {@code a/../x} are one file (see {@link ChangeApplier}).
  */
 public sealed interface FileChange {
 

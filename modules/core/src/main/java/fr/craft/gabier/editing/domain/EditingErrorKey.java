@@ -6,6 +6,7 @@ import fr.craft.gabier.shared.error.domain.ErrorKey;
 public enum EditingErrorKey implements ErrorKey {
     FILE_EXISTS("editing-file-exists"),
     FILE_MISSING("editing-file-missing"),
+    FOLDER_MISSING("editing-folder-missing"),
     INVALID_RANGE("editing-invalid-range"),
     OVERLAPPING_EDITS("editing-overlapping-edits"),
     READ_FAILED("editing-read-failed"),

@@ -13,6 +13,7 @@ class EditingErrorKeyTest {
                 .containsExactly(
                         "editing-file-exists",
                         "editing-file-missing",
+                        "editing-folder-missing",
                         "editing-invalid-range",
                         "editing-overlapping-edits",
                         "editing-read-failed",

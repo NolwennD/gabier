@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -49,14 +50,14 @@ final class PlanBuilder {
     private void plan(FileChange change) {
         switch (change) {
             case EditFile edit -> edit(edit);
-            case CreateFile create -> create(create.file());
-            case RenameFile rename -> rename(rename.from(), rename.to());
-            case DeleteFile delete -> delete(delete.file());
+            case CreateFile create -> create(normalized(create.file()));
+            case RenameFile rename -> rename(normalized(rename.from()), normalized(rename.to()));
+            case DeleteFile delete -> delete(normalized(delete.file()));
         }
     }
 
     private void edit(EditFile change) {
-        Path file = change.file();
+        Path file = normalized(change.file());
         byte[] bytes = content(file);
         TextFile before = TextFile.decode(file, bytes);
         TextFile after = before.edit(file, change.edits());
@@ -74,6 +75,7 @@ final class PlanBuilder {
         if (exists(file)) {
             throw EditingException.fileExists(file);
         }
+        requireFolder(file);
         byte[] empty = new byte[0];
         steps.add(new Step.Write(file, empty, Optional.empty()));
         files.put(file, Optional.of(empty));
@@ -86,6 +88,7 @@ final class PlanBuilder {
         if (exists(to)) {
             throw EditingException.fileExists(to);
         }
+        requireFolder(to);
         steps.add(new Step.Move(from, to));
         files.put(from, Optional.empty());
         files.put(to, Optional.of(bytes));
@@ -101,6 +104,25 @@ final class PlanBuilder {
         // The lines of a file that is not text cannot be shown: its headers will do.
         String text = TextFile.tryDecode(bytes).map(TextFile::text).orElse("");
         diff.append(UnifiedDiff.of(file.toString(), text, NOTHING, ""));
+    }
+
+    /**
+     * A path as the one name of its file: absolute, without {@code .} nor {@code ..} segments, so that {@code ./x},
+     * {@code x} and {@code a/../x} are one entry of the picture. The cleaning is on the text of the path: a link in it is
+     * not followed.
+     */
+    private static Path normalized(Path file) {
+        return file.toAbsolutePath().normalize();
+    }
+
+    /** The set creates files, never folders: the folder of a new file must be there already,
+     * and be a folder. */
+    private void requireFolder(Path file) {
+        // A file that is to be created is not the root, which exists: it has a folder.
+        Path folder = Objects.requireNonNull(file.getParent());
+        if (!store.isFolder(folder)) {
+            throw EditingException.folderMissing(file, folder);
+        }
     }
 
     private boolean exists(Path file) {

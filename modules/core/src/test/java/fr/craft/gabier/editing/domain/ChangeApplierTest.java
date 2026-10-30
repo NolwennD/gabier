@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -389,6 +390,205 @@ class ChangeApplierTest {
             applier.apply(set(new DeleteFile(file), new CreateFile(file)));
 
             assertThat(file).exists().isEmptyFile();
+        }
+    }
+
+    @Nested
+    class SpellingsOfOnePath {
+
+        @Test
+        void refusesAnEditUnderAnotherSpellingOfTheOldNameAfterTheRename() throws IOException {
+            Path from = file("A.java", "class A {}");
+
+            assertRefusedAndUntouched(
+                    set(
+                            new RenameFile(path("./A.java"), path("B.java")),
+                            new EditFile(from, List.of(edit(0, 0, 0, 0, "x")))),
+                    EditingErrorKey.FILE_MISSING);
+        }
+
+        @Test
+        void refusesTheSameFileDeletedUnderTwoSpellings() throws IOException {
+            Files.createDirectory(path("sub"));
+            Path file = file("A.java", "a");
+
+            assertRefusedAndUntouched(
+                    set(new DeleteFile(file), new DeleteFile(path("sub/../A.java"))), EditingErrorKey.FILE_MISSING);
+        }
+
+        @Test
+        void refusesAFileCreatedUnderTwoSpellings() throws IOException {
+            assertRefusedAndUntouched(
+                    set(new CreateFile(path("New.java")), new CreateFile(path("./New.java"))),
+                    EditingErrorKey.FILE_EXISTS);
+        }
+
+        @Test
+        void editsTheFileUnderItsNewNameWhateverTheSpellingOfTheEdit() throws IOException {
+            Path from = file("A.java", "class A {}");
+
+            applier.apply(set(
+                    new RenameFile(from, path("B.java")),
+                    new EditFile(path("sub/../B.java"), List.of(edit(0, 6, 0, 7, "B")))));
+
+            assertThat(path("B.java")).hasContent("class B {}");
+            assertThat(from).doesNotExist();
+        }
+
+        @Test
+        void listsAFileEditedUnderTwoSpellingsOnce() throws IOException {
+            Path file = file("A.java", "class A {}");
+
+            ChangeReport report = applier.dryRun(set(
+                    new EditFile(file, List.of(edit(0, 6, 0, 7, "B"))),
+                    new EditFile(path("./A.java"), List.of(edit(0, 6, 0, 7, "C")))));
+
+            assertThat(report.modified()).containsExactly(file);
+        }
+
+        @Test
+        void givesTheSameVerdictInTheDryRun() throws IOException {
+            Path from = file("A.java", "class A {}");
+            ChangeSet changes = set(
+                    new RenameFile(path("./A.java"), path("B.java")),
+                    new EditFile(from, List.of(edit(0, 0, 0, 0, "x"))));
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> applier.dryRun(changes))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(EditingErrorKey.FILE_MISSING);
+                        assertThat(exception.parameters()).isEqualTo(Map.of("file", from.toString()));
+                    });
+        }
+
+        @Test
+        void reportsTheNormalizedPathOfAFile() throws IOException {
+            file("A.java", "a");
+
+            ChangeReport report = applier.dryRun(set(new DeleteFile(path("./sub/../A.java"))));
+
+            assertThat(report.deleted()).containsExactly(path("A.java"));
+        }
+    }
+
+    @Nested
+    class MissingFolders {
+
+        @Test
+        void refusesACreateInAFolderThatDoesNotExistAndSaysWhich() throws IOException {
+            Map<String, String> before = snapshot();
+            Path file = path("missing/New.java");
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> applier.apply(set(new CreateFile(file))))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(EditingErrorKey.FOLDER_MISSING);
+                        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+                        assertThat(exception.parameters())
+                                .isEqualTo(Map.of(
+                                        "file",
+                                        file.toString(),
+                                        "folder",
+                                        path("missing").toString()));
+                    });
+            assertThat(snapshot()).isEqualTo(before);
+        }
+
+        @Test
+        void refusesARenameIntoAFolderThatDoesNotExist() throws IOException {
+            Path from = file("A.java", "a");
+
+            assertRefusedAndUntouched(
+                    set(new RenameFile(from, path("missing/B.java"))), EditingErrorKey.FOLDER_MISSING);
+        }
+
+        @Test
+        void refusesBeforeWritingTheChangesThatComeFirst() throws IOException {
+            Path edited = file("A.java", "a");
+
+            assertRefusedAndUntouched(
+                    set(new EditFile(edited, List.of(edit(0, 0, 0, 0, "x"))), new CreateFile(path("missing/B.java"))),
+                    EditingErrorKey.FOLDER_MISSING);
+        }
+
+        @Test
+        void givesTheSameVerdictInTheDryRun() throws IOException {
+            Path file = path("missing/New.java");
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> applier.dryRun(set(new CreateFile(file))))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(EditingErrorKey.FOLDER_MISSING);
+                        assertThat(exception.parameters())
+                                .containsEntry("folder", path("missing").toString());
+                    });
+        }
+
+        @Test
+        void refusesACreateUnderAFileThatIsNotAFolder() throws IOException {
+            Path file = file("A.java", "a");
+
+            assertRefusedAndUntouched(set(new CreateFile(file.resolve("New.java"))), EditingErrorKey.FOLDER_MISSING);
+        }
+
+        @Test
+        void refusesARenameUnderAFileThatIsNotAFolderAndSaysWhichInTheDryRunToo() throws IOException {
+            Path from = file("A.java", "a");
+            Path notAFolder = file("B.java", "b");
+            ChangeSet changes = set(new RenameFile(from, notAFolder.resolve("C.java")));
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> applier.dryRun(changes))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(EditingErrorKey.FOLDER_MISSING);
+                        assertThat(exception.parameters()).containsEntry("folder", notAFolder.toString());
+                    });
+        }
+
+        @Test
+        void createsAFileInALinkToAFolder() throws IOException {
+            Files.createDirectory(path("real"));
+            Files.createSymbolicLink(path("link"), Path.of("real"));
+
+            applier.apply(set(new CreateFile(path("link/New.java"))));
+
+            assertThat(path("real/New.java")).exists();
+        }
+
+        @Test
+        void createsAFileInAFolderThatExists() throws IOException {
+            Files.createDirectory(path("sub"));
+
+            applier.apply(set(new CreateFile(path("sub/New.java"))));
+
+            assertThat(path("sub/New.java")).exists();
+        }
+    }
+
+    @Nested
+    class Permissions {
+
+        @Test
+        void keepsThePermissionsOfAnEditedFile() throws IOException {
+            Path file = file("run.sh", "echo a\n");
+            Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rwxr-x---"));
+
+            applier.apply(set(new EditFile(file, List.of(edit(0, 5, 0, 6, "b")))));
+
+            assertThat(file).hasContent("echo b\n");
+            assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(file)))
+                    .isEqualTo("rwxr-x---");
+        }
+
+        @Test
+        void editsTheTargetOfALinkAndLeavesTheLink() throws IOException {
+            Path target = file("Target.java", "class A {}");
+            Path link = Files.createSymbolicLink(path("Link.java"), Path.of("Target.java"));
+
+            applier.apply(set(new EditFile(link, List.of(edit(0, 6, 0, 7, "B")))));
+
+            assertThat(link).isSymbolicLink();
+            assertThat(target).hasContent("class B {}");
         }
     }
 
