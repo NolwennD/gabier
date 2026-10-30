@@ -13,8 +13,10 @@ rule say so (`org.jspecify..` and `com.uber.nullaway.annotations..`). If Error P
 compiles the modules, stop and report.
 
 Done when:
-- every package of the existing modules is `@NullMarked` (or the module is, if JPMS allows it), and `./gradlew check`
-  fails on a deliberate null passed where none is allowed in a main class (try it, then undo);
+- every package of the existing modules has a `package-info.java` annotated `@NullMarked` (the user's decision: a
+  package-info per package, not the module-level annotation), an architecture test fails on any package of the code that
+  lacks it, and `./gradlew check` fails on a deliberate null passed where none is allowed in a main class (try it,
+  then undo);
 - the check is configured once, in the convention plugin, not module by module;
 - the jdtls probe stays green: jdtls reports no error on the annotated code (otherwise report what it says and stop);
 - `.claude/rules/quality.md` describes the rule (nullness by default, `@Nullable` as the exception) and the
