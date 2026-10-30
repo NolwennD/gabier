@@ -26,6 +26,14 @@ public final class Native {
 
     private static final long TIMEOUT_SECONDS = 60;
 
+    /** The whole problem object of {@code gabier --json --help}, member by member, on one line. */
+    private static final String USAGE_ERROR_JSON =
+            """
+            {"type":"urn:gabier:error:usage-error","title":"Usage error",\
+            "detail":"Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file>)",\
+            "key":"usage-error","parameters":{"arguments":"--help"}}\
+            """;
+
     public static void main(String[] args) throws Exception {
         String skip = appliesGraalvm(Path.of("modules/cli/build.gradle.kts")) ? null : "no native build yet";
         // The native cli is built from the cli and what it requires at run time (protocol, shared) and from the build;
@@ -165,7 +173,7 @@ public final class Native {
         System.out.println("gabier " + (json ? "--json " : "") + "--help -> stdout \"" + run.out() + "\", stderr \""
                 + run.err() + "\" (exit " + run.exit() + ")");
         boolean problem = json
-                ? run.err().startsWith("{\"type\":\"urn:gabier:error:usage-error\",") && run.err().endsWith("}")
+                ? run.err().equals(USAGE_ERROR_JSON)
                 : run.err().startsWith("Usage error: ") && run.err().endsWith(")");
 
         return run.exit() == 2 && run.out().isEmpty() && problem && run.err().lines().count() == 1 ? 0 : 1;

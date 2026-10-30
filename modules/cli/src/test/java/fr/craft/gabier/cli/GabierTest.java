@@ -15,6 +15,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -210,6 +211,24 @@ class GabierTest {
     class Failure {
 
         private final RuntimeException bug = new IllegalStateException("secret /home/someone/file");
+
+        @Test
+        void runReportsAnExceptionThatNobodyExpectedAsAnInternalErrorInsteadOfLettingItEscape() {
+            Map<String, String> environment = new HashMap<>() {
+                @Override
+                public String get(Object key) {
+                    throw bug;
+                }
+            };
+
+            var exit = Gabier.run(new String[] {"status"}, environment, printStream(out), printStream(err));
+
+            assertThat(exit).isEqualTo(1);
+            assertThat(out()).isEmpty();
+            assertThat(err())
+                    .isEqualTo("Internal server error: An internal error occurred, and it is not described here "
+                            + "(internal-server-error)" + System.lineSeparator());
+        }
 
         @Test
         void anUnexpectedExceptionIsAnInternalErrorWithItsOwnExitCode() {

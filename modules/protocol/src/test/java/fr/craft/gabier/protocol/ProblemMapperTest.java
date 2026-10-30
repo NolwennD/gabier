@@ -106,7 +106,9 @@ class ProblemMapperTest {
         }
 
         @Test
-        void aTechnicalErrorIsTheGenericInternalError() {
+        void aTechnicalErrorHasTheInternalErrorKeyAndKeepsItsOwnMessageAsTheDetail() {
+            // The message of a GeneratorException is gabier's own, written to be shown: unlike the message of any
+            // other exception, it is not replaced by the generic text.
             var problem = ProblemMapper.toProblem(GeneratorException.technicalError("it broke", null));
 
             assertThat(problem.key()).isEqualTo("internal-server-error");

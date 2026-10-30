@@ -230,6 +230,11 @@ class ProblemTest {
 
     @Test
     void keepsItsCategoryOutOfTheJson() {
-        assertThat(problem("d", Map.of()).category()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        var problem = problem("d", Map.of());
+
+        assertThat(problem.category()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(StrictJson.parse(problem.toJson()).getAsJsonObject().keySet())
+                .doesNotContain("category", "status");
+        assertThat(problem.toJson()).doesNotContain("BAD_REQUEST");
     }
 }
