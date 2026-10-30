@@ -4,6 +4,8 @@ import fr.craft.gabier.shared.error.domain.ErrorKey;
 
 /** The keys of the refusals of the command line itself. */
 enum CliErrorKey implements ErrorKey {
+    DAEMON_CONNECTION_FAILED("daemon-connection-failed"),
+    DAEMON_NOT_RUNNING("daemon-not-running"),
     USAGE("usage-error");
 
     private final String key;

@@ -4,33 +4,48 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * Stage {@code native} of the local CI (see {@code bin/ci}): builds the native cli and runs the binary alone, in an
- * empty directory with an empty environment, so that it cannot lean on anything of the checkout: {@code --version}, and
- * a usage error reported as a problem object (text, then JSON with {@code --json}) with its exit code, the two output
- * streams kept apart. Runs in the current directory, the checkout under verification.
+ * empty directory with an empty environment, so that it cannot lean on anything of the checkout: {@code --version}, a
+ * usage error reported as a problem object (text, then JSON with {@code --json}) with its exit code, the two output
+ * streams kept apart, and then the cli against a real daemon: the installed {@code gabier-daemon} is started on a socket
+ * in a temporary directory ({@code GABIER_SOCKET}, never the default path of the user), and {@code status} and {@code
+ * stop} are run against it, with no daemon, with a stale socket and with a second daemon. Runs in the current
+ * directory, the checkout under verification. It starts and signals only the processes it started, by their handle.
  */
 public final class Native {
 
+    private static final long TIMEOUT_SECONDS = 60;
+
     public static void main(String[] args) throws Exception {
         String skip = appliesGraalvm(Path.of("modules/cli/build.gradle.kts")) ? null : "no native build yet";
-        // The native cli is built from the cli and what it requires at run time (protocol, shared) and from the build.
+        // The native cli is built from the cli and what it requires at run time (protocol, shared) and from the build;
+        // the daemon it talks to is built from the daemon and what it requires (core, protocol, shared).
         if (skip == null
                 && !reachedBy(
                         "modules/cli/",
                         "modules/protocol/",
                         "modules/shared/",
+                        "modules/daemon/",
+                        "modules/core/",
                         "build-logic/",
                         "gradle/",
                         "settings.gradle.kts",
                         "build.gradle.kts",
                         "gradle.properties",
                         "bin/ci.d/40-native")) {
-            skip = "no changed file reaches the native cli (bin/ci --all forces it)";
+            skip = "no changed file reaches the native cli or the daemon (bin/ci --all forces it)";
         }
         if (args.length > 0 && args[0].equals("--describe")) {
-            System.out.println("native cli, run alone in an empty directory (version, usage error as text and JSON)");
+            System.out.println("native cli, run alone in an empty directory (version, usage error as text and JSON),"
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -49,7 +64,7 @@ public final class Native {
         if (changed == null) {
             return true;
         }
-        return changed.lines().anyMatch(path -> java.util.Arrays.stream(prefixes).anyMatch(path::startsWith));
+        return changed.lines().anyMatch(path -> Arrays.stream(prefixes).anyMatch(path::startsWith));
     }
 
     /** The native build exists once the build file of the cli applies the GraalVM plugin. */
@@ -58,13 +73,18 @@ public final class Native {
     }
 
     private static int nativeCli(Path root) throws IOException, InterruptedException {
-        int status = run("./gradlew", ":cli:nativeCompile", "--console=plain");
+        int status = run("./gradlew", ":cli:nativeCompile", ":daemon:installDist", "--console=plain");
         if (status != 0) {
             return status;
         }
         Path binary = root.resolve("modules/cli/build/native/nativeCompile/gabier");
+        Path daemon = root.resolve("modules/daemon/build/install/gabier-daemon/bin/gabier-daemon");
         if (!Files.isExecutable(binary)) {
             System.err.println("Missing native binary: " + binary);
+            return 1;
+        }
+        if (!Files.isExecutable(daemon)) {
+            System.err.println("Missing installed daemon: " + daemon);
             return 1;
         }
         Path empty = Files.createTempDirectory("gabier-ci");
@@ -72,28 +92,52 @@ public final class Native {
         try {
             Files.copy(binary, copy);
             int failures = version(copy, empty) + usageError(copy, empty, false) + usageError(copy, empty, true);
+            failures += new Daemon(copy, daemon, empty).check();
             return failures == 0 ? 0 : 1;
         } finally {
             Files.deleteIfExists(copy);
-            Files.deleteIfExists(empty);
+            deleteTree(empty);
         }
     }
 
     /** What a run of the binary printed on each stream, and its exit code. */
     private record Run(String out, String err, int exit) {}
 
-    /** Runs the binary alone: in the empty directory, with an empty environment, the two streams kept apart. */
-    private static Run runBinary(Path binary, Path directory, String... args) throws IOException, InterruptedException {
-        var command = new java.util.ArrayList<String>();
+    /**
+     * Runs the binary alone: in the empty directory, with an empty environment but the given variables, the two
+     * streams kept apart. It must come back in a minute: a client that hangs is a failure, not a stuck stage.
+     */
+    private static Run runBinary(Path binary, Path directory, List<String> environment, String... args)
+            throws IOException, InterruptedException {
+        var command = new ArrayList<String>();
         command.add(binary.toString());
-        command.addAll(java.util.List.of(args));
+        command.addAll(List.of(args));
         ProcessBuilder builder = new ProcessBuilder(command).directory(directory.toFile());
         builder.environment().clear();
+        for (int i = 0; i < environment.size(); i += 2) {
+            builder.environment().put(environment.get(i), environment.get(i + 1));
+        }
+        Path out = Files.createTempFile(directory, "out", ".txt");
+        Path err = Files.createTempFile(directory, "err", ".txt");
+        builder.redirectOutput(out.toFile()).redirectError(err.toFile());
         Process process = builder.start();
-        String out = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
-        String err = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+        if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+            return new Run("", "timed out after " + TIMEOUT_SECONDS + "s: " + String.join(" ", command), -1);
+        }
+        try {
+            return new Run(
+                    Files.readString(out, StandardCharsets.UTF_8).strip(),
+                    Files.readString(err, StandardCharsets.UTF_8).strip(),
+                    process.exitValue());
+        } finally {
+            Files.delete(out);
+            Files.delete(err);
+        }
+    }
 
-        return new Run(out, err, process.waitFor());
+    private static Run runBinary(Path binary, Path directory, String... args) throws IOException, InterruptedException {
+        return runBinary(binary, directory, List.of(), args);
     }
 
     /** 0 when {@code gabier --version} prints the version on the standard output, nothing on the other, and exits 0. */
@@ -117,6 +161,210 @@ public final class Native {
                 : run.err().startsWith("Usage error: ") && run.err().endsWith(")");
 
         return run.exit() == 2 && run.out().isEmpty() && problem && run.err().lines().count() == 1 ? 0 : 1;
+    }
+
+    /** The native cli against the installed daemon, on a socket of its own. */
+    private static final class Daemon {
+
+        private static final Pattern STATUS = Pattern.compile("gabier-daemon 0\\.1, pid (\\d+), up \\d+s");
+        private static final Pattern STATUS_JSON =
+                Pattern.compile("\\{\"version\":\"0\\.1\",\"pid\":(\\d+),\"uptimeMillis\":\\d+\\}");
+
+        private final Path cli;
+        private final Path daemon;
+        private final Path directory;
+        private final Path socket;
+        private final List<Process> started = new ArrayList<>();
+        private int failures;
+
+        private Daemon(Path cli, Path daemon, Path directory) {
+            this.cli = cli;
+            this.daemon = daemon;
+            this.directory = directory;
+            // The directory is private to the user (a temporary directory is created with mode 700) and short: the
+            // path of a socket is limited to 107 bytes.
+            this.socket = directory.resolve("gabier.sock");
+        }
+
+        /** The number of checks that failed. */
+        int check() throws IOException, InterruptedException {
+            try {
+                noDaemon();
+                longPath();
+                statusAndStop();
+                sigterm();
+                secondDaemonAndStaleSocket();
+            } finally {
+                for (Process process : started) {
+                    if (process.isAlive()) {
+                        process.destroyForcibly();
+                    }
+                }
+            }
+            return failures;
+        }
+
+        private void expect(boolean condition, String what) {
+            System.out.println((condition ? "ok: " : "FAILED: ") + what);
+            if (!condition) {
+                failures++;
+            }
+        }
+
+        private Run gabier(String... args) throws IOException, InterruptedException {
+            Run run = runBinary(cli, directory, List.of("GABIER_SOCKET", socket.toString()), args);
+            System.out.println("gabier " + String.join(" ", args) + " -> stdout \"" + run.out() + "\", stderr \""
+                    + run.err() + "\" (exit " + run.exit() + ")");
+            return run;
+        }
+
+        /**
+         * Starts the installed daemon, and waits until it says it is listening (a stale socket file may already be
+         * there, so the file does not tell). Null when it did not start.
+         */
+        private Process startDaemon() throws IOException, InterruptedException {
+            ProcessBuilder builder = new ProcessBuilder(daemon.toString()).directory(directory.toFile());
+            builder.environment().put("GABIER_SOCKET", socket.toString());
+            // The start script runs the java of JAVA_HOME: the JDK that runs this stage.
+            builder.environment().put("JAVA_HOME", System.getProperty("java.home"));
+            Path log = Files.createTempFile(directory, "daemon", ".log");
+            builder.redirectErrorStream(true).redirectOutput(log.toFile());
+            Process process = builder.start();
+            started.add(process);
+            for (int attempt = 0; attempt < TIMEOUT_SECONDS * 20; attempt++) {
+                if (Files.readString(log).contains(" listening on ")) {
+                    return process;
+                }
+                if (!process.isAlive()) {
+                    break;
+                }
+                Thread.sleep(50);
+            }
+            System.out.println("the daemon did not start: " + Files.readString(log));
+            process.destroyForcibly();
+            return null;
+        }
+
+        /** The daemon ends by itself, in a minute at most. */
+        private boolean ends(Process process) throws InterruptedException {
+            return process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        }
+
+        private void noDaemon() throws IOException, InterruptedException {
+            for (String command : List.of("status", "stop")) {
+                Run run = gabier(command);
+                expect(
+                        run.exit() == 2
+                                && run.out().isEmpty()
+                                && run.err().startsWith("Daemon not running: ")
+                                && run.err().contains("(daemon-not-running; "),
+                        "gabier " + command + " with no daemon says so, exit 2, and does not hang");
+            }
+        }
+
+        private void longPath() throws IOException, InterruptedException {
+            String tooLong = "/" + "a".repeat(119);
+            Run run = runBinary(cli, directory, List.of("GABIER_SOCKET", tooLong), "status");
+            System.out.println("gabier status (path of 120 bytes) -> stderr \"" + run.err() + "\" (exit " + run.exit() + ")");
+            expect(
+                    run.exit() == 2 && run.err().contains("(socket-path-too-long; "),
+                    "a socket path over 107 bytes is refused before any connection, exit 2");
+        }
+
+        private void statusAndStop() throws IOException, InterruptedException {
+            Process process = startDaemon();
+            if (process == null) {
+                failures++;
+                return;
+            }
+            Run status = gabier("status");
+            var text = STATUS.matcher(status.out());
+            expect(
+                    status.exit() == 0 && text.matches() && text.group(1).equals(String.valueOf(process.pid())),
+                    "gabier status reports the pid of the process that was started (the script execs the JVM)");
+            Run json = gabier("--json", "status");
+            var jsonMatch = STATUS_JSON.matcher(json.out());
+            expect(
+                    json.exit() == 0 && jsonMatch.matches() && jsonMatch.group(1).equals(String.valueOf(process.pid())),
+                    "gabier --json status gives the result as JSON");
+            expect(
+                    posix(socket).equals("rw-------") && posix(directory).equals("rwx------"),
+                    "the socket and its folder are private to the user");
+
+            Run stop = gabier("stop");
+            expect(
+                    stop.exit() == 0 && stop.out().equals("gabier-daemon stopped"),
+                    "gabier stop exits 0 and says the daemon stopped");
+            expect(
+                    ends(process) && process.exitValue() == 0,
+                    "the daemon process has exited with status 0 once gabier stop returned");
+            expect(ProcessHandle.of(process.pid()).isEmpty(), "no process of the daemon is left");
+            expect(!Files.exists(socket), "the socket is removed by stop");
+            Run after = gabier("status");
+            expect(after.exit() == 2 && after.err().contains("(daemon-not-running; "), "no daemon after stop");
+        }
+
+        private void sigterm() throws IOException, InterruptedException {
+            Process process = startDaemon();
+            if (process == null) {
+                failures++;
+                return;
+            }
+            process.destroy(); // SIGTERM, to the process we started and to nothing else
+            expect(ends(process), "the daemon ends on SIGTERM");
+            expect(!Files.exists(socket), "the socket is removed on SIGTERM");
+            expect(ProcessHandle.of(process.pid()).isEmpty(), "no process of the daemon is left after SIGTERM");
+        }
+
+        private void secondDaemonAndStaleSocket() throws IOException, InterruptedException {
+            Process first = startDaemon();
+            if (first == null) {
+                failures++;
+                return;
+            }
+            // A second daemon on the same socket refuses to start, and the first one is not disturbed.
+            Path log = Files.createTempFile(directory, "second", ".log");
+            ProcessBuilder builder = new ProcessBuilder(daemon.toString()).directory(directory.toFile());
+            builder.environment().put("GABIER_SOCKET", socket.toString());
+            builder.environment().put("JAVA_HOME", System.getProperty("java.home"));
+            Process second = builder.redirectErrorStream(true).redirectOutput(log.toFile()).start();
+            started.add(second);
+            boolean ended = ends(second);
+            String output = Files.readString(log);
+            System.out.println("second daemon -> " + output.strip() + " (exit " + (ended ? second.exitValue() : -1) + ")");
+            expect(
+                    ended && second.exitValue() == 2 && output.contains("(daemon-already-running; "),
+                    "a second daemon refuses to start while one answers, exit 2");
+            expect(gabier("status").exit() == 0, "the first daemon still answers");
+
+            // A daemon that was killed leaves its socket file: the next one removes it.
+            first.destroyForcibly();
+            ends(first);
+            expect(Files.exists(socket), "a killed daemon leaves its socket file behind");
+            Process third = startDaemon();
+            if (third == null) {
+                failures++;
+                return;
+            }
+            Run status = gabier("status");
+            expect(
+                    status.exit() == 0 && status.out().contains("pid " + third.pid()),
+                    "a daemon removes a stale socket and serves on it");
+            gabier("stop");
+            expect(ends(third), "the third daemon stops");
+        }
+
+        private static String posix(Path path) throws IOException {
+            return java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(path));
+        }
+    }
+
+    private static void deleteTree(Path directory) throws IOException {
+        try (Stream<Path> paths = Files.walk(directory)) {
+            for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
+        }
     }
 
     private static int run(String... command) throws InterruptedException {

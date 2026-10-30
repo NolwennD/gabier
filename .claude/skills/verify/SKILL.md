@@ -18,7 +18,9 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   worktrees, version in `mise.toml`); inside mise, `GABIER_JDTLS` already points to its launcher.
 - The native CLI (`:cli:nativeCompile`, about a minute) needs a GraalVM 25 with `native-image`, which Gradle finds among
   the toolchains (the SDKMAN! candidates included); it is not part of `check`. The binary lands in
-  `modules/cli/build/native/nativeCompile/gabier`.
+  `modules/cli/build/native/nativeCompile/gabier`. The `native` stage of `bin/ci` also installs the daemon
+  (`:daemon:installDist`, `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`) and runs the native `gabier`
+  against it.
 - The test fixtures of `core` (`modules/core/src/testFixtures`: the fake language server and the contract scenarios, in
   the package `fr.craft.gabier.editing.fixtures`) are shared by the tests of every module: another module uses them with
   `testImplementation(testFixtures(project(":core")))` in its `build.gradle.kts`. They are test code (no coverage gate,
@@ -35,6 +37,16 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   use `FakeJdtls`: a language server in the test process over pipes, with a `sleep` or `sh` child process standing in
   for the jdtls process. No jdtls is started. The daemon depends on the domain of the core (`requires
   fr.craft.gabier.core`): it is the composition root, the one exemption of the architecture rule on the contexts.
+- The daemon listens on a Unix socket (`gabier-daemon`, no argument): `Main` resolves the path
+  (`SocketLocation`, in `protocol`: `GABIER_SOCKET`, else `$XDG_RUNTIME_DIR/gabier/gabier.sock`, else
+  `/tmp/gabier-<uid>/gabier.sock`, at most 107 bytes), `DaemonServer` takes the socket (`SocketGuard`: private folder,
+  stale socket removed, another daemon refused) and serves the clients with `Connection` (lines in, lines out) and
+  `RequestHandler` (the method table: `StatusMethod`, `StopMethod`; adding one is `.claude/skills/add-daemon-method`).
+  Its unit tests need no jdtls: the lines are tested over streams (`RequestHandlerTest`, `ConnectionTest`), the socket
+  on a real Unix socket in a temporary directory (`DaemonServerTest`, `SocketGuardTest`, `MainTest`), always through
+  `@TempDir` and an explicit path: never the default path of the user, and keep the path short (107 bytes). The cli is
+  tested the same way against `ScriptedDaemon` (`modules/cli/src/test`). Only the `native` stage runs the real cli
+  against the real daemon.
 - The integration tests of the daemon (`modules/daemon/src/integrationTest`) all start a real jdtls and need
   `GABIER_JDTLS`, the path of the `jdtls` launcher (`mise exec -- ./gradlew jdtlsProbe` outside an activated mise); they
   fail at once, never skip, without it. `check` only compiles them. `./gradlew jdtlsProbe` runs them (`--tests` picks a
@@ -67,7 +79,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 | `module-info.java`, `build.gradle.kts`, `build-logic/**`          | `./gradlew build`: the modules are compiled as modules, so a forbidden dependency fails here                          |
 | `settings.gradle.kts`, `gradle/libs.versions.toml`                | `./gradlew projects` to see the modules, then `./gradlew build`                                                       |
 | packages created or moved                                         | the architecture tests: `./gradlew :architecture:cleanTest :architecture:test`                                        |
-| `modules/cli/**`, `libs.versions.toml` (the native plugin)        | `./gradlew :cli:nativeCompile`, then run the binary alone, in an empty directory with an empty environment: `--version`, and a usage error as text and as JSON (`--json`), exit code 2, on the standard error (the `native` stage of `bin/ci` does it) |
+| `modules/cli/**`, `modules/daemon/**`, `libs.versions.toml` (the native plugin) | `./gradlew :cli:nativeCompile :daemon:installDist`, then run the binary alone, in an empty directory with an empty environment: `--version`, a usage error as text and as JSON (`--json`), exit code 2, on the standard error, then `status` and `stop` against the installed daemon on a socket in a temporary directory (the `native` stage of `bin/ci` does it) |
 | any `.java` file                                                  | formatting: `mise exec -- hk check --all`; `hk fix --all` fixes it. Never bypass the hook                             |
 
 `<package>` is the package of the class, which is not always the folder name: `protocol` for `:protocol`,

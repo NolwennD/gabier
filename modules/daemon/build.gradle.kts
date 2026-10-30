@@ -12,6 +12,8 @@ dependencies {
 }
 
 application {
+  // The name of the start script and of the distribution: what a user types (bin/gabier-daemon), not the project name.
+  applicationName = "gabier-daemon"
   // The start script of `installDist` puts the jars on the module path and runs this module: what the self-check proves.
   mainModule = "fr.craft.gabier.daemon"
   mainClass = "fr.craft.gabier.daemon.Main"
@@ -23,7 +25,7 @@ val selfCheck = tasks.register<Exec>("selfCheck") {
   group = "verification"
   description = "Runs the installed daemon with --self-check, on the module path."
   dependsOn(tasks.installDist)
-  executable = layout.buildDirectory.file("install/${project.name}/bin/${project.name}").get().asFile.path
+  executable = layout.buildDirectory.file("install/${application.applicationName}/bin/${application.applicationName}").get().asFile.path
   args("--self-check")
   // The start script runs the java of JAVA_HOME: the Java 25 of the build, not the JDK that happens to run Gradle.
   environment("JAVA_HOME", javaToolchains.launcherFor(java.toolchain).get().metadata.installationPath.asFile.path)

@@ -1,8 +1,7 @@
-package fr.craft.gabier.cli;
+package fr.craft.gabier.protocol;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import fr.craft.gabier.protocol.Problem;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
 import java.util.Arrays;
 import java.util.Map;

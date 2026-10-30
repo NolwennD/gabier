@@ -51,7 +51,7 @@ public record Problem(
         member(json, "key", key).append(',');
         json.append("\"parameters\":{");
         json.append(parameters.entrySet().stream()
-                .map(parameter -> quoted(parameter.getKey()) + ":" + quoted(parameter.getValue()))
+                .map(parameter -> Json.quote(parameter.getKey()) + ":" + Json.quote(parameter.getValue()))
                 .collect(Collectors.joining(",")));
 
         return json.append("}}").toString();
@@ -75,32 +75,6 @@ public record Problem(
     }
 
     private static StringBuilder member(StringBuilder json, String name, String value) {
-        return json.append(quoted(name)).append(':').append(quoted(value));
-    }
-
-    private static String quoted(String value) {
-        var quoted = new StringBuilder("\"");
-        value.chars().forEach(character -> escape(quoted, (char) character));
-
-        return quoted.append('"').toString();
-    }
-
-    // RFC 8259: the quotation mark, the reverse solidus and the control characters below U+0020 must be escaped, and
-    // nothing else has to be.
-    private static void escape(StringBuilder quoted, char character) {
-        switch (character) {
-            case '"' -> quoted.append("\\\"");
-            case '\\' -> quoted.append("\\\\");
-            case '\n' -> quoted.append("\\n");
-            case '\r' -> quoted.append("\\r");
-            case '\t' -> quoted.append("\\t");
-            default -> {
-                if (character < ' ') {
-                    quoted.append(String.format("\\u%04x", (int) character));
-                } else {
-                    quoted.append(character);
-                }
-            }
-        }
+        return json.append(Json.quote(name)).append(':').append(Json.quote(value));
     }
 }
