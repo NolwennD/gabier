@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Take the branch of a ticket to main once the subagent says it is ready — have it reviewed by a neutral Java reviewer, send the findings back to the subagent, then merge it fast-forward, close the issue, clean up the worktree and move on to the next ticket. Use when the subagent reports it is ready for review, or when the user says "ship", "livre" or "merge".
+description: Take the branch of a ticket to main once the subagent says it is ready — have it reviewed once by a neutral Java reviewer, turn the findings into tickets, then merge it fast-forward, close the issue, clean up the worktree and move on to the next ticket. Use when the subagent reports it is ready for review, or when the user says "ship", "livre" or "merge".
 argument-hint: '<branch of the ticket>'
 ---
 
@@ -12,9 +12,10 @@ below, a conflict, a review that stays blocking.
 
 The cycle of a ticket: the **subagent** does the work; when it thinks the work is ready it runs the quality script
 `bin/ci` on its worktree and fixes what it shows; then it asks for a review. The **supervisor**, which runs this skill,
-has the work reviewed by a neutral reviewer and sends the findings back to the subagent, which takes them into account
-and runs `bin/ci` again. Once the reviewer has nothing blocking left, the supervisor merges, closes the ticket and moves
-on to the next one. **The supervisor does not run the checks again**: the subagent's `bin/ci` summary is the evidence.
+has the work reviewed **once** by a neutral reviewer. Reviews do not loop, at the risk of going in circles: what the
+reviewer finds becomes a ticket opened on the fly and fixed later, and the ticket under review is merged as it is. Then
+the supervisor closes it and moves on to the next one. **The supervisor does not run the checks again**: the subagent's
+`bin/ci` summary is the evidence.
 
 A branch is **shipped** when its commit is on `main` and its issue is in `logbook/issues/closed/`. Report "done" only
 then. `main` moves by fast-forward only, one commit per ticket. There is no remote, no merge request and no pipeline yet:
@@ -52,11 +53,18 @@ Give it only: the issue file, the range `main..<branch>`, `.claude/rules/`, and 
 > depends only on `java..`); simplicity (nothing beyond the issue). Report blocking findings first, then suggestions, each
 > with file and line, in under 300 words, or say "nothing to report".
 
-### 2. The findings go back to the subagent
+### 2. What becomes of the findings
 
-- **Blocking findings**: send them to the subagent (`SendMessage`). It fixes them, runs `bin/ci` again, keeps one commit,
-  and asks again. Then send the new commit to the **same reviewer** and repeat from here, until it has nothing blocking.
-- **Suggestions**: they are not applied. They go to the user, and into the issue's resolution.
+No second review, whatever the findings.
+
+- **A finding that shows a `Done when` point is not met**: send it to the subagent (`SendMessage`), once. It fixes it,
+  runs `bin/ci` again and keeps one commit. Its fix is checked by `bin/ci`, not reviewed again.
+- **Any other problem** (a bug, a weakness, a latent risk): open an issue on the fly with the skill `ticket --issue-only`,
+  saying what the reviewer saw, where (file and line) and how to reproduce. It is fixed later by its own ticket, not in
+  this one. Group findings that are the same problem into one issue, and open none for a pure matter of taste.
+- **A choice that is the user's** (a decision they took earlier, a rule to change): do not decide it, report it to the
+  user.
+- Every finding, and what became of it, is listed in the issue's resolution.
 
 ### 3. Merge
 
@@ -66,7 +74,8 @@ From the main checkout:
 git merge --ff-only <branch>
 ```
 
-- Not a fast-forward (`main` moved meanwhile): send the subagent back to rebase and run `bin/ci` again, then review again.
+- Not a fast-forward (`main` moved meanwhile): send the subagent back to rebase and run `bin/ci` again, then merge,
+  without a new review.
 
 ### 4. Close the issue
 
@@ -94,14 +103,19 @@ Then move on: take the next open issue in `logbook/issues/open/`, the one with t
 `Depends on:` issues are all closed, and run the skill `ticket` on it. Stop instead when the user said to stop after this
 ticket, or when no open issue is ready: say so.
 
+Never give two coupled tickets (same files, same module, same feature) to subagents at the same time: they conflict at
+merge. Run them one after the other; a later issue that is coupled to an open one declares it with `Depends on:`. Only
+independent tickets may run in parallel.
+
 ## Forbidden
 
 - Running the subagent's checks again, or `bin/ci` in its place: it is the subagent's job, and its summary the evidence.
 - `git push` of any kind while no remote is defined for it; any push to `main`.
 - `git rebase -i`, `git commit --amend`, `--no-verify`, `--force` by the supervisor.
 - A merge that is not a fast-forward.
-- Merging before the subagent's `bin/ci` summary is green and the review has nothing blocking.
-- Fixing a finding yourself: it goes back to the subagent, or to the user when it is a suggestion.
+- Merging before the subagent's `bin/ci` summary is green and the review has been done.
+- A second review of the same ticket, or any loop between the reviewer and the subagent.
+- Fixing a finding yourself: it becomes a ticket, or goes to the user.
 - Deleting a branch, a worktree or an issue that is not this ticket's.
 - Saying "done" before step 5 ended.
 
@@ -111,7 +125,7 @@ ticket, or when no open issue is ready: say so.
 | -------- | -------------------------------------------------------------------- |
 | Evidence | the subagent's report: `bin/ci` summary and one proof per `Done when` |
 | Review   | fresh `general-purpose` agent, brief of step 1                       |
-| Findings | `SendMessage` to the subagent, then the same reviewer again          |
+| Findings | unmet `Done when`: back to the subagent once; the rest: `ticket --issue-only` |
 | Merge    | `git merge --ff-only <branch>` from the main checkout                |
 | Close    | `git mv` to `closed/`, `## Resolution`, commit that file only        |
 | Clean up | `git worktree remove <worktree> && git branch -d <branch>`           |

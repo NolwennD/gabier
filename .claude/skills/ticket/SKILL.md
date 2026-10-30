@@ -80,7 +80,8 @@ instead of pushing on when:
 - it finds a bug unrelated to its ticket: it returns the description (what it saw, where, how to reproduce) and, if the
   bug does not block the ticket, it may carry on and put it in its final report instead;
 - it is ready: `bin/ci` passes and each `Done when` point is proven. It returns "ready for review" with its report,
-  before anything is closed or merged, then takes the reviewer's findings into account when they come back.
+  before anything is closed or merged. It is reviewed once: only a finding showing that a `Done when` point is not met
+  comes back to it, and its fix is checked by `bin/ci`, not reviewed again.
 
 The supervisor answers by continuing the same agent (`SendMessage` with its id), so its context is kept.
 
@@ -90,8 +91,8 @@ The supervisor answers by continuing the same agent (`SendMessage` with its id),
   ticket's branch.
 - **A question**: answer it, or ask the user when the answer is theirs.
 - **Ready for review**: run the skill `ship` on the branch the subagent reports. It does not run the checks again: it
-  has the work reviewed by a neutral agent, sends the findings back to the subagent, then merges, closes the issue,
-  cleans up the worktree and moves on to the next ticket.
+  has the work reviewed once by a neutral agent, turns what it finds into tickets opened on the fly, then merges, closes
+  the issue, cleans up the worktree and moves on to the next ticket.
 
 ### 4. Report to the user
 

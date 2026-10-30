@@ -9,7 +9,8 @@ closing one. To open an issue and start its work, use the `ticket` skill.
   `date +%d-%m-%Y-%H%M`; never invent it. The day comes first, so file names do not sort
   chronologically from one month to the next: use the `Opened:` line when the order matters.
 - **Content**: a title, an `Opened: DD-MM-YYYY HH:MM` line, a short paragraph on the goal, a
-  `Done when:` list of checkable points, and a `Depends on:` line only if needed. About ten lines.
+  `Done when:` list of checkable points, and a `Depends on:` line only if needed: when another issue must be closed first, in particular when the two are
+  coupled (same files, same module, same feature) and so must not run at the same time. About ten lines.
 - **Size**: small, concrete, doable in a short time. State the goal and how to check it, not the
   code to write. Give exact lines only for a typo or a trap that would otherwise bite.
 - **Pace**: open one or two issues at a time, when their turn comes. No backlog in advance.

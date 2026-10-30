@@ -43,8 +43,8 @@ Let the compiler drive: a type or a method is **used** before it is created. Nev
   shows (skill `verify`). The gates it runs (coverage at 100%, architecture tests) and the formatting are described in
   `.claude/rules/quality.md`. The supervisor does not run these checks again: the `bin/ci` summary in the subagent's
   report is the evidence.
-- The neutral review has come back with nothing blocking (skill `ship`, step 1), the subagent having taken its findings
-  into account.
+- The neutral review has been done once (skill `ship`, step 1). Reviews do not loop: a problem it finds becomes a ticket
+  opened on the fly, fixed later; only a finding showing that a `Done when` point is not met comes back to the subagent.
 - Report faithfully: a red test is said to be red, a skipped step is said to be skipped.
 - The work is committed **and merged** into `main`, the issue is closed. A branch left standing in a worktree is not
   done.
@@ -68,6 +68,10 @@ Every change to the code is born as a ticket, a short fix included. The skill `t
 then a subagent does the work in a worktree and a branch of its own, supervised by the session that ran the skill. What
 is found on the way and is too large to carry is reported to the supervisor, who opens it with `ticket --issue-only`: it
 becomes a ticket, not a `TODO` and not a silent omission (`.claude/rules/logbook.md`).
+
+**Coupled tickets are never given to subagents at the same time.** Tickets that touch the same files, the same module or
+the same feature conflict when they are merged. They are done one after the other, and the order is declared with a
+`Depends on:` line in the later issue. Only independent tickets may run in parallel.
 
 One exception, only when the user says so ("no need for a ticket"): a small change to configuration, documentation or a
 rule is committed directly on `main`.

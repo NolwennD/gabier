@@ -1,8 +1,8 @@
 # Quality gates
 
-Every ticket leaves these gates green. The supervisor checks them before closing a ticket (see the
-`ticket` skill). The gates are put in place by the logbook issues on coverage, on architecture
-tests and on formatting; until those are closed, the same properties are checked by hand.
+Every ticket leaves these gates green. The subagent that does the ticket checks them with `bin/ci` before it asks for
+the review (see the `ticket` skill). The formatting hook and the coverage gate are in place. The architecture tests are
+not yet (a logbook issue): until it is closed, the purity of the domain is checked by hand and in the review.
 
 - **Formatting is automatic**: Java files are formatted by
   [open-java-format](https://github.com/openjavaformat/open-java-format) (one style, 120 columns)
