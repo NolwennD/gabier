@@ -5,7 +5,6 @@ import fr.craft.gabier.shared.error.domain.ErrorStatus;
 import java.util.Collections;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -28,8 +27,6 @@ import java.util.stream.Collectors;
  */
 public record Problem(
         String type, String title, String detail, String key, Map<String, String> parameters, ErrorStatus category) {
-
-    private static final Pattern LINE_BREAKS = Pattern.compile("\\R+");
 
     public Problem {
         Assert.field("type", type).notBlank();
@@ -57,7 +54,10 @@ public record Problem(
         return json.append("}}").toString();
     }
 
-    /** The problem as one line for a human: {@code title: detail (key; name=value, ...)}. */
+    /**
+     * The problem as one line for a human: {@code title: detail (key; name=value, ...)}. Control characters and line
+     * breaks are shown as Unicode escapes, so that no argument can drive the terminal.
+     */
     public String toText() {
         var text = new StringBuilder(title)
                 .append(": ")
@@ -71,7 +71,22 @@ public record Problem(
                             .collect(Collectors.joining(", ")));
         }
 
-        return LINE_BREAKS.matcher(text.append(')')).replaceAll(" ");
+        return visible(text.append(')'));
+    }
+
+    // A control character (C0, DEL, C1) or a line or paragraph separator sent to a terminal is read as a command or a
+    // line break: it is shown as its four-digit Unicode escape, so that the text stays on one line and inert.
+    private static String visible(CharSequence text) {
+        var visible = new StringBuilder(text.length());
+        text.chars().forEach(character -> {
+            if (Character.isISOControl(character) || character == '\u2028' || character == '\u2029') {
+                visible.append(String.format("\\u%04x", character));
+            } else {
+                visible.append((char) character);
+            }
+        });
+
+        return visible.toString();
     }
 
     private static StringBuilder member(StringBuilder json, String name, String value) {

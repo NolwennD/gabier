@@ -171,11 +171,60 @@ class ProblemTest {
         }
 
         @Test
-        void staysOnOneLine() {
-            var text = problem("two\nlines\r\nand more", Map.of("a", "x\ny")).toText();
+        void showsLineBreaksAsEscapesAndStaysOnOneLine() {
+            var text = problem("two\nlines\r\nand more", Map.of("a", "x\ny")).toText();
 
-            assertThat(text).isEqualTo("Some key: two lines and more (some-key; a=x y)");
+            assertThat(text).isEqualTo("Some key: two\\u000alines\\u000d\\u000aand more (some-key; a=x\\u000ay)");
             assertThat(List.of(text.split("\\R"))).hasSize(1);
+        }
+
+        @Test
+        void showsUnicodeLineAndParagraphSeparatorsAsEscapes() {
+            var text = problem("a\u2028b\u2029c", Map.of()).toText();
+
+            assertThat(text).isEqualTo("Some key: a\\u2028b\\u2029c (some-key)");
+        }
+
+        @Test
+        void showsTheC0ControlCharactersOfADetailAsEscapes() {
+            assertThat(problem("\u001b[2J\u0000\t\u001f", Map.of()).toText())
+                    .isEqualTo("Some key: \\u001b[2J\\u0000\\u0009\\u001f (some-key)");
+        }
+
+        @Test
+        void showsDelAsAnEscape() {
+            assertThat(problem("a\u007fb", Map.of()).toText()).isEqualTo("Some key: a\\u007fb (some-key)");
+        }
+
+        @Test
+        void showsTheC1ControlCharactersAsEscapes() {
+            assertThat(problem("\u0080\u009b2J\u009f", Map.of()).toText())
+                    .isEqualTo("Some key: \\u0080\\u009b2J\\u009f (some-key)");
+        }
+
+        @Test
+        void showsTheControlCharactersOfAParameterNameAndValueAsEscapes() {
+            assertThat(problem("d", Map.of("k\u001b", "\u001b[2J")).toText())
+                    .isEqualTo("Some key: d (some-key; k\\u001b=\\u001b[2J)");
+        }
+
+        @Test
+        void leavesPrintableAndNonAsciiCharactersAsTheyAre() {
+            assertThat(problem("é日 ~ \u00a0 \ud83d\ude00", Map.of()).toText())
+                    .isEqualTo("Some key: é日 ~ \u00a0 \ud83d\ude00 (some-key)");
+        }
+
+        @Test
+        void containsNoControlCharacterWhateverTheInput() {
+            var everyChar = new StringBuilder();
+            for (char character = 0; character < 0x100; character++) {
+                everyChar.append(character);
+            }
+
+            var text = problem(everyChar.toString(), Map.of("p", everyChar.toString()))
+                    .toText();
+
+            assertThat(text.chars().filter(Character::isISOControl)).isEmpty();
         }
     }
 
