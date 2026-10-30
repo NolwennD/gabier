@@ -38,6 +38,10 @@ git rev-parse --abbrev-ref HEAD; git worktree list --porcelain; git remote
 - The worktree holds uncommitted files (`git -C <worktree> status --porcelain`), the branch has more than one commit per issue (a batch has one commit per issue, no more), or
   `main` moved since the branch started (`git merge-base main <branch>` is not `main`). Send the subagent back:
   "Commit or drop the files / squash into one commit / rebase on `main`, run `bin/ci` again, and ask again."
+  **Exception, so that a text change never blocks** (decision of the user, 30-10-2026): when `main` moved only by files
+  that are not code (`git diff --name-only <merge-base> main` lists only `.md` files, issues, rules and skills), the
+  supervisor rebases the branch itself (`git -C <worktree> rebase main`), does not ask for `bin/ci` again and does not
+  send the worker back. A rebase that stops on a conflict goes back to the worker.
 - Uncommitted files in the main checkout that the branch also changes. Refuse: "The main checkout would be overwritten."
 
 ### 1. Neutral review

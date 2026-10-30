@@ -128,6 +128,10 @@ the work it reports is cut.
 Several sessions may write in this repository at once. The local `main` is the reference, and a ticket's worktree
 branches from it, which is why the skill `ticket` commits the issue first. What the request says wins.
 
+**A commit of `.md` files only never blocks** (issues of the logbook, rules, skills, documents): the supervisor commits it
+on `main` at any time, without `bin/ci`, and the branches in flight are rebased over it by the supervisor at merge time,
+with no new `bin/ci` (`.claude/skills/ship/SKILL.md`, step 0).
+
 **Whoever works in a worktree delivers, and the supervisor merges.** The subagent hands back one commit and does not
 merge; the supervisor merges it fast-forward, then removes the worktree and the branch before it reports to the user.
 A new worktree needs `mise trust` once; the pre-commit hook lives in the shared `.git/hooks`, so it covers every
