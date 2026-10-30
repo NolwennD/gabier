@@ -71,22 +71,7 @@ public record Problem(
                             .collect(Collectors.joining(", ")));
         }
 
-        return visible(text.append(')'));
-    }
-
-    // A control character (C0, DEL, C1) or a line or paragraph separator sent to a terminal is read as a command or a
-    // line break: it is shown as its four-digit Unicode escape, so that the text stays on one line and inert.
-    private static String visible(CharSequence text) {
-        var visible = new StringBuilder(text.length());
-        text.chars().forEach(character -> {
-            if (Character.isISOControl(character) || character == '\u2028' || character == '\u2029') {
-                visible.append(String.format("\\u%04x", character));
-            } else {
-                visible.append((char) character);
-            }
-        });
-
-        return visible.toString();
+        return TerminalText.neutralise(text.append(')'));
     }
 
     private static StringBuilder member(StringBuilder json, String name, String value) {

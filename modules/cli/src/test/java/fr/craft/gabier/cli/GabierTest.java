@@ -3,6 +3,7 @@ package fr.craft.gabier.cli;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import fr.craft.gabier.protocol.FileDiagnostics;
 import fr.craft.gabier.protocol.JsonRpc;
 import fr.craft.gabier.protocol.Problem;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
@@ -16,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -469,6 +471,58 @@ class GabierTest {
                                 "/project/Broken.java:1:1: warning: A warning");
                 assertThat(err()).isEmpty();
                 assertThat(daemon.requests()).containsExactly(request(Path.of("/project/Broken.java")));
+            }
+        }
+
+        private static String resultOf(String message) {
+            return new FileDiagnostics(
+                            List.of(new FileDiagnostics.Diagnosis(FileDiagnostics.Severity.ERROR, 0, 0, message)))
+                    .toJson();
+        }
+
+        @Test
+        void showsAnEscapeSequenceOfAMessageAsItsEscapeSoThatItCannotClearTheTerminal() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", resultOf("bad \u001b[2J token")))) {
+                assertThat(runWithSocket("diagnostics", "/project/A.java")).isZero();
+
+                assertThat(out())
+                        .isEqualTo("/project/A.java:1:1: error: bad \\u001b[2J token" + System.lineSeparator());
+                assertThat(daemon.requests()).hasSize(1);
+            }
+        }
+
+        @Test
+        void keepsOneLinePerProblemWhenAMessageHoldsALineBreakAndAForgedLine() throws IOException {
+            var message = "first\n/project/B.java:1:1: error: forged";
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", resultOf(message)))) {
+                assertThat(runWithSocket("diagnostics", "/project/A.java")).isZero();
+
+                assertThat(out().lines())
+                        .containsExactly("/project/A.java:1:1: error: first\\u000a/project/B.java:1:1: error: forged");
+                assertThat(daemon.requests()).hasSize(1);
+            }
+        }
+
+        @Test
+        void showsAnEscapeSequenceOfTheFileNameAsItsEscape() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", resultOf("m")))) {
+                assertThat(runWithSocket("diagnostics", "/project/a\u001b[2Jb.java"))
+                        .isZero();
+
+                assertThat(out()).isEqualTo("/project/a\\u001b[2Jb.java:1:1: error: m" + System.lineSeparator());
+                assertThat(daemon.requests()).hasSize(1);
+            }
+        }
+
+        @Test
+        void leavesTheMessageAsItIsInJson() throws IOException {
+            var result = resultOf("bad \u001b[2J\nline");
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", result))) {
+                assertThat(runWithSocket("--json", "diagnostics", "/project/A.java"))
+                        .isZero();
+
+                assertThat(out()).isEqualTo(result + System.lineSeparator());
+                assertThat(out()).contains("bad \\u001b[2J\\nline");
             }
         }
 
