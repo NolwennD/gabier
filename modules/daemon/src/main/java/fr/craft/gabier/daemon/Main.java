@@ -4,6 +4,7 @@ import fr.craft.gabier.protocol.ExitCode;
 import fr.craft.gabier.protocol.ProblemMapper;
 import fr.craft.gabier.protocol.ProtocolVersion;
 import fr.craft.gabier.protocol.SocketLocation;
+import fr.craft.gabier.protocol.TerminalText;
 import fr.craft.gabier.protocol.UserId;
 import fr.craft.gabier.shared.generation.ExcludeFromGeneratedCodeCoverage;
 import java.io.IOException;
@@ -73,8 +74,12 @@ public final class Main {
                 || arguments.size() == 1 && !arguments.getFirst().startsWith("-")) {
             var root = projectRoot(arguments, environment, workingDirectory);
 
+            // What jdtls says is shown as text: a terminal that tails the log must not obey it.
             return serve(
-                    environment, out, ProjectServer.jdtls(root, environment, line -> err.println("jdtls: " + line)));
+                    environment,
+                    out,
+                    ProjectServer.jdtls(
+                            root, environment, line -> err.println("jdtls: " + TerminalText.neutralise(line))));
         }
         if (arguments.equals(List.of(VERSION_OPTION))) {
             out.println("gabier-daemon " + ProtocolVersion.CURRENT);

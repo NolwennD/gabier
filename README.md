@@ -67,13 +67,21 @@ missing or that exits is not a hang: the request gets the problem object `jdtls-
 message says why, and the next request tries again. A launcher that exits at once is reported with its exit code. A
 request that waits while the daemon stops is told that the daemon is stopping: its answer is written before its
 connection ends (the daemon gives the clients 5 seconds to end, then cuts them). What jdtls says of itself goes to the
-standard error of the daemon, prefixed with `jdtls:`.
+standard error of the daemon, prefixed with `jdtls:`, with control characters written as escapes like in the text of
+`gabier diagnostics`.
 
 jdtls is ready when it says so itself: its `ServiceReady` status comes once its import is over, and the daemon then asks
 the list of projects it imported, once. A folder with nothing jdtls can import (no Gradle, Maven or Eclipse build) is
 refused at once, not after five minutes, with the problem object `no-build-to-import` (exit code 2). A jdtls that dies
 while it is ready (killed, crashed) is seen as dead: `status` says `failed`, its exit code is on the standard error of
 the daemon, and the next request ends what is left of it and starts another.
+
+Two things to know before pointing the daemon at a folder. The project is **the directory the daemon is started in**
+when no folder and no `GABIER_PROJECT` is given, so a daemon started in the wrong place serves the wrong project. And
+jdtls importing a checkout **runs its build** (the Gradle wrapper or script, Maven, their plugins) at the first request:
+do not serve a checkout you do not trust. Also, `gabier stop` usually returns at once, but it can last **about a
+minute** when jdtls ignores the shutdown: the daemon gives it 10 s to answer the shutdown and 10 s to exit, then 10 s
+for each process of its tree that it has to kill.
 
 `gabier status` says the project and where jdtls is: `not-started`, `starting`, `ready` or `failed` (the last start
 failed or jdtls died, until a request starts it again). When jdtls is `failed` and the reason is known, the text adds it

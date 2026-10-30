@@ -47,6 +47,7 @@ class InstalledDaemonTest {
         private final Process process;
         private final Path socket = directory.resolve("gabier.sock");
         private final Set<ProcessHandle> processes = new LinkedHashSet<>();
+        private final Set<ProcessHandle> java = new LinkedHashSet<>();
 
         Daemon(Path project) throws IOException, InterruptedException {
             var launcher = RealJdtls.launcher();
@@ -100,7 +101,31 @@ class InstalledDaemonTest {
 
         /** What runs under the daemon now (jdtls and its children), added to what was seen before. */
         void remember() {
-            process.descendants().forEach(processes::add);
+            process.descendants().forEach(handle -> {
+                processes.add(handle);
+                if (isJava(handle)) {
+                    java.add(handle);
+                }
+            });
+        }
+
+        /** The java process of jdtls, which the launcher script may have started after it: it is not the launcher. */
+        private static boolean isJava(ProcessHandle handle) {
+            return handle.info()
+                    .command()
+                    .map(command -> Path.of(command).getFileName().toString().equals("java"))
+                    .orElse(false);
+        }
+
+        /** Waits until the java process of jdtls runs: seeing the launcher script alone proves nothing about the rest. */
+        void awaitJava() throws IOException, InterruptedException {
+            for (var attempt = 0; attempt < 600 && java.isEmpty(); attempt++) {
+                remember();
+                TimeUnit.MILLISECONDS.sleep(100);
+            }
+            assertThat(java)
+                    .as("the java process of jdtls, among %s", processes)
+                    .isNotEmpty();
         }
 
         void stop() throws IOException, InterruptedException {
@@ -115,9 +140,7 @@ class InstalledDaemonTest {
         void assertNothingIsLeft() throws Exception {
             assertThat(process.exitValue()).isZero();
             assertThat(socket).doesNotExist();
-            assertThat(processes)
-                    .as("the processes jdtls started, seen while it ran")
-                    .isNotEmpty();
+            assertThat(java).as("the java process of jdtls, seen while it ran").isNotEmpty();
             for (var handle : processes) {
                 handle.onExit().get(30, TimeUnit.SECONDS);
                 assertThat(handle.isAlive())
@@ -127,8 +150,15 @@ class InstalledDaemonTest {
             System.out.println("no process left: " + processes.size() + " processes of jdtls ended with the daemon");
         }
 
+        /**
+         * Whatever failed, nothing of jdtls is left running: what runs under the daemon is remembered first, the
+         * daemon is asked to end (SIGTERM, which ends jdtls on its way out), and everything seen is killed after it.
+         */
         @Override
-        public void close() {
+        public void close() throws InterruptedException {
+            remember();
+            process.destroy();
+            process.waitFor(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
             processes.forEach(ProcessHandle::destroyForcibly);
             process.destroyForcibly();
         }
@@ -254,7 +284,7 @@ class InstalledDaemonTest {
             });
             List<JdtlsState> seen = new ArrayList<>();
             for (var attempt = 0;
-                    attempt < 600 && !(seen.contains(JdtlsState.STARTING) && !daemon.processes.isEmpty());
+                    attempt < 600 && !(seen.contains(JdtlsState.STARTING) && !daemon.java.isEmpty());
                     attempt++) {
                 seen.add(daemon.status().jdtls());
                 TimeUnit.MILLISECONDS.sleep(100);

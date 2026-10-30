@@ -310,6 +310,31 @@ class MainTest {
         }
 
         @Test
+        void neutralisesWhatJdtlsSaysBeforeItReachesTheStandardError() throws Exception {
+            // A launcher that sends a status whose message holds an escape sequence (clear the screen), then leaves.
+            var launcher = Files.writeString(directory.resolve("jdtls"), """
+                #!/bin/sh
+                body='{"jsonrpc":"2.0","method":"language/status","params":{"type":"Message","message":"red\\u001b[2Jgone"}}'
+                printf 'Content-Length: %s\\r\\n\\r\\n%s' "${#body}" "$body"
+                sleep 1
+                exit 3
+                """);
+            Files.setPosixFilePermissions(launcher, PosixFilePermissions.fromString("rwx------"));
+            var environment = Map.of("GABIER_SOCKET", socketPath().toString(), "GABIER_JDTLS", launcher.toString());
+            var daemon = start(() -> run(environment, PASSING), socketPath());
+
+            ask("""
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"%s"}}
+                """.formatted(directory.resolve("File.java")));
+            ask(STOP);
+
+            daemon.orTimeout(10, TimeUnit.SECONDS).join();
+            assertThat(err())
+                    .contains("jdtls: jdtls status Message: red\\u001b[2Jgone")
+                    .doesNotContain("\u001b");
+        }
+
+        @Test
         void usesTheRuntimeDirectoryOfTheUserWhenTheEnvironmentHasNoOverride() throws Exception {
             var runtimeDirectory = Files.createDirectory(directory.resolve("run"));
             var daemon = start(

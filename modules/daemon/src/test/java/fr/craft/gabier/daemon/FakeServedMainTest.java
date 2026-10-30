@@ -1,7 +1,6 @@
 package fr.craft.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -34,13 +33,18 @@ class FakeServedMainTest {
     }
 
     @Test
+    void acceptsAFolderThatDoesNotExistYetAndAnEmptyOne() throws IOException {
+        assertThat(FakeServedMain.refusal(directory.resolve("project"))).isEmpty();
+        assertThat(FakeServedMain.refusal(directory)).isEmpty();
+    }
+
+    @Test
     void refusesAFolderThatIsNotEmptyAndLeavesItsFilesAlone() throws IOException {
         var mine = Files.writeString(directory.resolve("Main.java"), "class Main {}");
 
-        assertThatThrownBy(() -> FakeServedMain.serving(directory))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining(directory.toString())
-                .hasMessageContaining("not empty");
+        assertThat(FakeServedMain.refusal(directory))
+                .hasValueSatisfying(reason ->
+                        assertThat(reason).contains(directory.toString()).contains("not empty"));
 
         assertThat(mine).hasContent("class Main {}");
         assertThat(directory.resolve(BROKEN)).doesNotExist();
@@ -50,9 +54,19 @@ class FakeServedMainTest {
     void refusesAPathThatIsAFile() throws IOException {
         var file = Files.writeString(directory.resolve("file"), "x");
 
-        assertThatThrownBy(() -> FakeServedMain.serving(file))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining(file.toString())
-                .hasMessageContaining("not a folder");
+        assertThat(FakeServedMain.refusal(file))
+                .hasValueSatisfying(
+                        reason -> assertThat(reason).contains(file.toString()).contains("not a folder"));
+    }
+
+    @Test
+    void refusesALinkThatLeadsNowhereAsSomethingThatIsThere() throws IOException {
+        // The link does not exist for a check that follows it, but writing the project through it would fail.
+        var link = Files.createSymbolicLink(directory.resolve("link"), directory.resolve("nowhere"));
+
+        assertThat(FakeServedMain.refusal(link))
+                .hasValueSatisfying(
+                        reason -> assertThat(reason).contains(link.toString()).contains("not a folder"));
+        assertThat(directory.resolve("nowhere")).doesNotExist();
     }
 }

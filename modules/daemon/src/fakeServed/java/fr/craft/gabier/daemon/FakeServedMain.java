@@ -9,8 +9,10 @@ import fr.craft.gabier.editing.fixtures.Scenarios;
 import fr.craft.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
@@ -32,26 +34,22 @@ public final class FakeServedMain {
             System.exit(2);
         }
         var root = Path.of(args[0]).toAbsolutePath().normalize();
-        FakeJavaLanguageServer server;
-        try {
-            server = serving(root);
-        } catch (IllegalArgumentException refusal) {
-            System.err.println(refusal.getMessage());
+        var refusal = refusal(root);
+        if (refusal.isPresent()) {
+            System.err.println(refusal.get());
             System.exit(2);
             return;
         }
 
-        System.exit(Main.serve(System.getenv(), System.out, new Served(root, server)));
+        System.exit(Main.serve(System.getenv(), System.out, new Served(root, serving(root))));
     }
 
     /**
-     * Writes the project of the scenarios in the folder and gives the fake that plays them.
-     *
-     * @throws IllegalArgumentException when the folder exists and is not an empty folder
+     * Writes the project of the scenarios in the folder, which {@link #refusal} accepted, and gives the fake that plays
+     * them.
      */
     static FakeJavaLanguageServer serving(Path folder) throws IOException {
         var root = folder.toAbsolutePath().normalize();
-        requireNewOrEmpty(root);
         var server = new FakeJavaLanguageServer(root);
         List<Scenario> scenarios = List.of(
                 Scenarios.CLEAN_FILE,
@@ -66,18 +64,23 @@ public final class FakeServedMain {
         return server;
     }
 
-    private static void requireNewOrEmpty(Path root) throws IOException {
-        if (Files.notExists(root)) {
-            return;
+    /**
+     * Why the folder cannot take the project of the scenarios, or nothing when it is new or an empty folder. A link that
+     * leads nowhere is there: it is looked at as itself, not through what it points to, and is not a folder.
+     */
+    static Optional<String> refusal(Path folder) throws IOException {
+        var root = folder.toAbsolutePath().normalize();
+        if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) {
+            return Optional.empty();
         }
         if (!Files.isDirectory(root)) {
-            throw new IllegalArgumentException("The project folder " + root + " is not a folder");
+            return Optional.of("The project folder " + root + " is not a folder");
         }
         try (Stream<Path> entries = Files.list(root)) {
-            if (entries.findAny().isPresent()) {
-                throw new IllegalArgumentException(
-                        "The project folder " + root + " is not empty: the scenarios would overwrite its files");
-            }
+            return entries.findAny().isPresent()
+                    ? Optional.of(
+                            "The project folder " + root + " is not empty: the scenarios would overwrite its files")
+                    : Optional.empty();
         }
     }
 

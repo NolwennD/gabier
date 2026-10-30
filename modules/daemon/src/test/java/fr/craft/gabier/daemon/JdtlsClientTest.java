@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.eclipse.lsp4j.MessageParams;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
 import org.eclipse.lsp4j.ShowMessageRequestParams;
+import org.eclipse.lsp4j.jsonrpc.services.ServiceEndpoints;
 import org.junit.jupiter.api.Test;
 
 /** The statuses and the publications jdtls sends, which tell the adapter to go on or to stop. No jdtls is started. */
@@ -57,6 +59,19 @@ class JdtlsClientTest {
         client.publishDiagnostics(publication);
 
         assertThat(published).containsExactly(publication);
+    }
+
+    @Test
+    void theEventsOfJdtlsAreKnownToLsp4jAndIgnored() {
+        // Without the method, LSP4J logs a warning for every event jdtls sends: ProjectsImported, ClasspathUpdated...
+        assertThat(ServiceEndpoints.getSupportedMethods(JdtlsClient.class))
+                .containsKeys("language/status", "language/eventNotification");
+
+        client.eventNotification(Map.of("eventType", 200.0, "data", List.of("file:///project/")));
+
+        assertThat(log).isEmpty();
+        assertThat(client.serviceReady()).isNotDone();
+        assertThat(client.error()).isNotDone();
     }
 
     @Test

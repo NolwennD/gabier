@@ -65,6 +65,14 @@ final class JdtlsClient implements LanguageClient {
         }
     }
 
+    /**
+     * The events of jdtls ({@code ProjectsImported}, {@code ClasspathUpdated}, ...). Nothing here needs them, since
+     * {@code ServiceReady} says the import is over, but a method that LSP4J does not know is logged by LSP4J as a
+     * warning on the standard error for every event: declaring it is what keeps that warning out.
+     */
+    @JsonNotification("language/eventNotification")
+    public void eventNotification(Object event) {}
+
     @Override
     public void publishDiagnostics(PublishDiagnosticsParams publication) {
         diagnostics.accept(publication);
