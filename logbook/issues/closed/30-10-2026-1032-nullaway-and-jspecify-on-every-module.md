@@ -56,3 +56,11 @@ checked by Error Prone (two `FutureReturnValueIgnored` warnings would appear in 
 scope).
 Unrelated and left: `val selfCheck by tasks.registering(Exec::class)` is deprecated in Gradle 9.6+ (breaks on Gradle
 10); Kotlin in `build-logic` has no JDK 27 target (warning only).
+
+**Correction (found by the next ticket's subagent).** The `bin/ci` summary above was not a proof of the tests: in
+`options.errorprone { isEnabled = name == "compileJava" }` the name `isEnabled` resolved to the `JavaCompile` task, not
+to the Error Prone option, so every `compileTestJava` was disabled from 1798356 to ff1c4af and no unit test ran in
+that window. The supervisor's merge relied on that summary. Fixed in ff1c4af (`enabled = ...`); with the fix every
+module's tests compile and run green (protocol 4, cli 9, daemon 22, architecture 13, daemon quick probe tests 43), so
+nothing had regressed. 367b773 makes the `test` stage of `bin/ci` fail when a project with test sources runs no test,
+so a green build that ran nothing cannot pass again.
