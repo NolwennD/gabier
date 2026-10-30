@@ -145,7 +145,8 @@ class JdtlsProbeTest {
         }
         List<ProcessHandle> tree =
                 Stream.concat(jdtls.descendants(), Stream.of(jdtls.toHandle())).toList();
-        if (server != null) {
+        // A dead jdtls never answers: asking it to shut down would only wait for the timeout.
+        if (server != null && jdtls.isAlive()) {
             try {
                 server.shutdown().get(SHUTDOWN_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
                 server.exit();

@@ -27,8 +27,8 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   source set also holds quick tests of that watching (`ProbeWatchTest`, `JdtlsClientTest`, with a `sleep` or `sh` child
   process standing in for jdtls); `./gradlew jdtlsProbe` runs them too, and `--tests` picks one class. It needs
   `GABIER_JDTLS`, the path of the `jdtls` launcher (`mise exec -- ./gradlew jdtlsProbe` outside an activated mise), and
-  fails at once, never skips, without it. It stops jdtls and deletes the data directory in every case. jdtls leaves its Eclipse files (`.project`,
-  `.classpath`, `.settings/`, `bin/`) in the checkout: they are git-ignored.
+  fails at once, never skips, without it. It stops jdtls and deletes the data directory in every case. jdtls leaves
+  its Eclipse files (`.project`, `.classpath`, `.settings/`, `bin/`) in the checkout: they are git-ignored.
 
 ## 1. Choose the scope
 

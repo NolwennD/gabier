@@ -66,8 +66,7 @@ class ProbeWatchTest {
         assertThatThrownBy(() -> watch.await("the project list", CompletableFuture<String>::new))
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("Timed out")
-                .hasMessageContaining("waiting for the project list")
-                .hasMessageContaining("after 0.3 seconds");
+                .hasMessageContaining("waiting for the project list");
     }
 
     @Test

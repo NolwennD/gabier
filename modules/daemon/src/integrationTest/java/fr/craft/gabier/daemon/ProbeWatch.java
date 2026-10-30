@@ -19,6 +19,7 @@ final class ProbeWatch {
     private static final Duration EXIT_GRACE = Duration.ofSeconds(2);
 
     private final Process jdtls;
+    private final CompletableFuture<Process> exited;
     private final CompletableFuture<String> failure;
     private final Duration timeout;
     private final long start = System.nanoTime();
@@ -30,6 +31,7 @@ final class ProbeWatch {
      */
     ProbeWatch(Process jdtls, CompletableFuture<String> failure, Duration timeout) {
         this.jdtls = jdtls;
+        this.exited = jdtls.onExit();
         this.failure = failure;
         this.timeout = timeout;
     }
@@ -49,8 +51,7 @@ final class ProbeWatch {
             throw stopped(what, e);
         }
         try {
-            CompletableFuture.anyOf(answer, jdtls.onExit(), failure)
-                    .get(remaining().toNanos(), TimeUnit.NANOSECONDS);
+            CompletableFuture.anyOf(answer, exited, failure).get(remaining().toNanos(), TimeUnit.NANOSECONDS);
         } catch (TimeoutException e) {
             throw timedOut(what);
         } catch (ExecutionException e) {
@@ -71,7 +72,7 @@ final class ProbeWatch {
     void pause(String what, Duration interval) throws InterruptedException {
         Duration wait = interval.compareTo(remaining()) < 0 ? interval : remaining();
         try {
-            CompletableFuture.anyOf(jdtls.onExit(), failure).get(wait.toNanos(), TimeUnit.NANOSECONDS);
+            CompletableFuture.anyOf(exited, failure).get(wait.toNanos(), TimeUnit.NANOSECONDS);
         } catch (TimeoutException e) {
             if (remaining().isZero()) {
                 throw timedOut(what);
@@ -89,7 +90,7 @@ final class ProbeWatch {
             return new AssertionError(failure.join() + ", after " + seconds(elapsed()) + ", while waiting for " + what);
         }
         try {
-            jdtls.onExit().get(EXIT_GRACE.toMillis(), TimeUnit.MILLISECONDS);
+            exited.get(EXIT_GRACE.toMillis(), TimeUnit.MILLISECONDS);
             return new AssertionError("jdtls exited with code " + jdtls.exitValue() + " after " + seconds(elapsed())
                     + ", while waiting for " + what);
         } catch (TimeoutException | ExecutionException e) {
