@@ -28,5 +28,5 @@ the review (see the `ticket` skill). The formatting hook, the coverage gate and 
   enforces at compile time.
 - **Modern Java**: write idiomatic code for the release of the module (records, sealed types,
   pattern matching, sequenced collections, and what the release adds), not older idioms.
-- **Review before closing**: a neutral Java reviewer reads the change before the ticket is closed,
-  and its blocking findings are fixed first.
+- **Review before closing**: a neutral Java reviewer reads the change once before the ticket is closed. A finding that
+  shows a `Done when` point is not met is fixed in the ticket; any other problem becomes a ticket opened on the fly.

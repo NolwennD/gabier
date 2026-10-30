@@ -162,36 +162,43 @@ public final class Ci {
         }
     }
 
-    /** What the XML reports say, per module: the same numbers {@code verify} asks to read. */
+    /**
+     * What the XML reports say, per project (every module and the {@code architecture} tests): the same numbers
+     * {@code verify} asks to read.
+     */
     private static void printTestCounts(Path root) throws IOException {
-        System.out.println("-- test counts (from modules/*/build/test-results) --");
+        System.out.println("-- test counts (from <project>/build/test-results) --");
+        List<Path> projects = new ArrayList<>();
         Path modules = root.resolve("modules");
-        if (!Files.isDirectory(modules)) {
-            return;
+        if (Files.isDirectory(modules)) {
+            try (Stream<Path> moduleDirs = Files.list(modules)) {
+                projects.addAll(moduleDirs.sorted().toList());
+            }
         }
-        try (Stream<Path> moduleDirs = Files.list(modules)) {
-            for (Path module : moduleDirs.sorted().toList()) {
-                Path results = module.resolve("build/test-results/test");
-                if (!Files.isDirectory(results)) {
-                    System.out.printf("%-12s no test results%n", module.getFileName());
-                    continue;
-                }
-                int tests = 0;
-                int skipped = 0;
-                int failures = 0;
-                try (Stream<Path> files = Files.list(results)) {
-                    for (Path xml : files.filter(p -> p.toString().endsWith(".xml")).toList()) {
-                        Matcher matcher = TEST_COUNTS.matcher(Files.readString(xml));
-                        if (matcher.find()) {
-                            tests += Integer.parseInt(matcher.group(1));
-                            skipped += Integer.parseInt(matcher.group(2));
-                            failures += Integer.parseInt(matcher.group(3)) + Integer.parseInt(matcher.group(4));
-                        }
+        Path architecture = root.resolve("architecture");
+        if (Files.isDirectory(architecture)) {
+            projects.add(architecture);
+        }
+        for (Path project : projects) {
+            Path results = project.resolve("build/test-results/test");
+            if (!Files.isDirectory(results)) {
+                System.out.printf("%-12s no test results%n", project.getFileName());
+                continue;
+            }
+            int tests = 0;
+            int skipped = 0;
+            int failures = 0;
+            try (Stream<Path> files = Files.list(results)) {
+                for (Path xml : files.filter(p -> p.toString().endsWith(".xml")).toList()) {
+                    Matcher matcher = TEST_COUNTS.matcher(Files.readString(xml));
+                    if (matcher.find()) {
+                        tests += Integer.parseInt(matcher.group(1));
+                        skipped += Integer.parseInt(matcher.group(2));
+                        failures += Integer.parseInt(matcher.group(3)) + Integer.parseInt(matcher.group(4));
                     }
                 }
-                System.out.printf(
-                        "%-12s tests=%d skipped=%d failures=%d%n", module.getFileName(), tests, skipped, failures);
             }
+            System.out.printf("%-12s tests=%d skipped=%d failures=%d%n", project.getFileName(), tests, skipped, failures);
         }
     }
 

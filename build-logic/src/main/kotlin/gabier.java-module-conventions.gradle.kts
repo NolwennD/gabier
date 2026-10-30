@@ -4,8 +4,7 @@ plugins {
   id("org.gradlex.extra-java-module-info")
 }
 
-// Java 25 by default, the level of the native image. A module that needs another release sets both lines in its own
-// build file.
+// Every module is built for Java 25, the daemon included: the level of the native image, and the one the user chose.
 java {
   toolchain {
     languageVersion = JavaLanguageVersion.of(25)
