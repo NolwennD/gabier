@@ -57,6 +57,9 @@ With `--issue-only`: report the file name and stop.
 
 ### 2. The subagent
 
+Count the workers in flight first: **two at most** (`.claude/rules/workflow.md`, "Tickets"; a batch counts for one). With
+two running, the issue stays open and waits for a merge.
+
 Launch it with the Agent tool, `subagent_type: "general-purpose"`, `model: "sonnet"` (the user prefers a Sonnet for the
 worker; use a stronger model only when the ticket is hard or the user asks) and `isolation: "worktree"`: the worktree starts from
 `main`, which must hold the issue, which is why the commit comes first. The prompt is self-contained, the subagent has

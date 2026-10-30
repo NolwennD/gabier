@@ -95,6 +95,10 @@ becomes a ticket, not a `TODO` and not a silent omission (`.claude/rules/logbook
 the same feature conflict when they are merged. They are done one after the other, and the order is declared with a
 `Depends on:` line in the later issue. Only independent tickets may run in parallel.
 
+**At most two tickets run at the same time** (decision of the user, 30-10-2026; a batch counts for one): the machine is
+shared, Gradle, the native image and jdtls are heavy, and a third worker makes the stages crawl and the tests that depend
+on timing fail. Before launching a worker, count the ones in flight; a third waits for one of them to be merged.
+
 **Coupled and ready issues are run as one batch** (decision of the user, 30-10-2026, to save time): the open issues of
 the same module that are ready are given to one subagent, in one worktree, with one `bin/ci` and one review. **One commit
 per issue, always**: a ticket is one commit, batch or not, so each issue keeps its own commit, its own `## Resolution`
