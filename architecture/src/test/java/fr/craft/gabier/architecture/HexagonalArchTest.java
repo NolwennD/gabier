@@ -125,6 +125,14 @@ class HexagonalArchTest {
                 .allowEmptyShould(true));
     }
 
+    /** The rule of every context, with no exemption: the one loop that the real classes and the tests both run. */
+    private static List<ArchRule> notDependOnOtherDomainsOfEveryContext(List<String> contexts) {
+        return contexts.stream()
+                .map(context -> notDependOnOtherDomains(context, contexts))
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
     @Test
     void importsTheClassesOfTheModules() {
         // Without them every rule below would pass for nothing.
@@ -146,8 +154,17 @@ class HexagonalArchTest {
 
         @Test
         void shouldNotDependOnOtherBoundedContextDomains() {
-            CONTEXTS.forEach(
-                    context -> notDependOnOtherDomains(context, CONTEXTS).ifPresent(rule -> rule.check(CLASSES)));
+            notDependOnOtherDomainsOfEveryContext(CONTEXTS).forEach(rule -> rule.check(CLASSES));
+        }
+
+        @Test
+        void shouldRunTheRuleOverTheDaemonAmongTheContexts() {
+            List<ArchRule> rules = notDependOnOtherDomainsOfEveryContext(CONTEXTS);
+            JavaClasses daemonClass = new ClassFileImporter().importClasses(DependsOnAnotherContextDomain.class);
+
+            assertThatThrownBy(() -> rules.forEach(rule -> rule.check(daemonClass)))
+                    .isInstanceOf(AssertionError.class)
+                    .hasMessageContaining(DependsOnAnotherContextDomain.class.getName());
         }
 
         @Test
