@@ -25,4 +25,9 @@ closing one. To open an issue and start its work, use the `ticket` skill.
   of working around it silently.
 - **Closing**: only once every `Done when` point is verified. `git mv` the file to `closed/`, add a
   `## Resolution` section saying what was done and the short hash of the fixing commit, and commit.
+- **Tokens**: the `## Resolution` of a ticket closed from 30-10-2026 on ends with a `Tokens:` list, one line per agent
+  that worked on it: the worker, the reviewer, and the supervisor. Closed tickets are not filled in afterwards. A
+  subagent's figure is the `subagent_tokens` of its completion notification (the sum of its notifications when it was
+  resumed). The supervisor's figure is measured, not estimated (`.claude/skills/ship/SKILL.md`, step 4), and says that
+  it covers the supervisor session over the period of the ticket, other work included.
 - **Language**: English, like the rest of the repository.

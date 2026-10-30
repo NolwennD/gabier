@@ -90,7 +90,21 @@ git merge --ff-only <branch>
 
 As `.claude/rules/logbook.md` says: `mkdir -p logbook/issues/closed`, `git mv` the file, add a `## Resolution` with the
 short hash of the commit, what was checked (quote the subagent's `bin/ci` summary), what is worth remembering, and the
-open suggestions. Commit **only the issue file**, on `main` (never `git add -A`).
+open suggestions, then the `Tokens:` list (`.claude/rules/logbook.md`): one line for the worker, one for the reviewer
+(each the sum of the `subagent_tokens` of its completion notifications) and one for the supervisor, measured on the
+transcript of the session over the period of the ticket (from the commit that opened the issue to now):
+
+```bash
+J=$(ls -t ~/.claude/projects/-home-nolwenn-dev-projects-gabier/*.jsonl | head -1)
+A=$(date -u -d "$(git log -1 --format=%cI <commit that opened the issue>)" +%Y-%m-%dT%H:%M:%S); B=$(date -u +%Y-%m-%dT%H:%M:%S)
+jq -s --arg a "$A" --arg b "$B" '[.[] | select(.message.usage != null and .timestamp >= $a and .timestamp <= $b)]
+  | {calls: length, input: (map(.message.usage.input_tokens) | add), cache_write: (map(.message.usage.cache_creation_input_tokens) | add),
+     cache_read: (map(.message.usage.cache_read_input_tokens) | add), output: (map(.message.usage.output_tokens) | add)}' "$J"
+```
+
+The supervisor line gives `calls`, `output` and `input + cache_write` (the cache reads are named apart: they dominate
+and cost little). It includes talk with the user and other tickets of the same period; say so. Commit **only the issue
+file**, on `main` (never `git add -A`).
 
 ### 5. Clean up
 
