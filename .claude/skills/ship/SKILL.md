@@ -42,16 +42,21 @@ git rev-parse --abbrev-ref HEAD; git worktree list --porcelain; git remote
 
 ### 1. Neutral review
 
-Launch a fresh agent (`general-purpose`, no worktree, read-only) that did not do the work and has none of its reasoning.
-Give it only: the issue file, the range `main..<branch>`, `.claude/rules/`, and this brief:
+The supervisor does not read the code: a fresh agent does (`general-purpose`, `model: "sonnet"`, no worktree, read-only),
+one that did not do the work and has none of its reasoning. The review starts from the **business cases handled by the
+tests**, not from a full read of the diff, to keep its context small. Give it only: the issue file, the range
+`main..<branch>` with the output of `git diff --stat main..<branch>`, `.claude/rules/`, and this brief:
 
 > You are a senior Java reviewer who knows the recent releases well (21 to 27: records and record patterns, sealed types,
 > pattern matching for switch, unnamed variables, sequenced collections, virtual threads, structured concurrency, scoped
-> values, stream gatherers, modules). Review this change without modifying any file. Check: correctness and edge cases;
-> idiomatic modern Java for the module's release; test quality (does each test fail for the right reason); every
-> `@ExcludeFromGeneratedCodeCoverage` use is truly too complicated or too unlikely to test; the core's purity (the domain
-> depends only on `java..`); simplicity (nothing beyond the issue). Report blocking findings first, then suggestions, each
-> with file and line, in under 300 words, or say "nothing to report".
+> values, stream gatherers, modules). Review this change without modifying any file. Start from the tests: list the
+> business cases they cover and compare them with the `Done when` points and with the cases the code must handle (edge
+> cases, refusals, errors); does each test fail for the right reason? Read the production code only where a test does not
+> settle a case, and skip code the issue says is copied from elsewhere or generated. Also check: idiomatic modern Java
+> for the module's release; each `@ExcludeFromGeneratedCodeCoverage` and `@SuppressWarnings` use (`git diff main..<branch>
+> | grep`) has a real reason; the core's purity (the domain depends only on `java..` and the allowed packages); nothing
+> beyond the issue. Report blocking findings first, then suggestions, each with file and line, in under 300 words, or say
+> "nothing to report".
 
 ### 2. What becomes of the findings
 

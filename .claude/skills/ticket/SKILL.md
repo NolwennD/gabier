@@ -74,8 +74,12 @@ none of this conversation:
 - the delivery: all the work in **one commit**, files added by explicit paths (never `git add -A`); it does not close the
   issue and does not merge;
 - the supervision (below);
-- the final report: what was done, the commit hash, the `bin/ci` summary, how each `Done when` point was proven, and the
-  unrelated bugs found.
+- the final report: what was done, the commit hash, the `bin/ci` summary, how each `Done when` point was proven, the
+  business cases handled with the test that covers each one (the reviewer starts from them), and the unrelated bugs
+  found.
+
+Keep the prompt short, because the subagent reads the rules and the skills itself: the path of the issue, the scope, the
+points above in a line each, and only what the rules do not already say. Do not copy the rules into it.
 
 **Supervision**, in the spirit of the advisor: the subagent works alone, but it **stops and returns to the supervisor**
 instead of pushing on when:

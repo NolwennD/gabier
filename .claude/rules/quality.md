@@ -47,5 +47,6 @@ the review (see the `ticket` skill). The formatting hook, the coverage gate and 
   tests, the architecture tests and the `integrationTest` source set. JUnit stays the engine (`@Test`, `@Nested`).
 - **Modern Java**: write idiomatic code for the release of the module (records, sealed types,
   pattern matching, sequenced collections, and what the release adds), not older idioms.
-- **Review before closing**: a neutral Java reviewer reads the change once before the ticket is closed. A finding that
+- **Review before closing**: a neutral Java reviewer (a subagent; the supervisor does not read the code) reviews the change once
+  before the ticket is closed, starting from the business cases the tests cover. A finding that
   shows a `Done when` point is not met is fixed in the ticket; any other problem becomes a ticket opened on the fly.
