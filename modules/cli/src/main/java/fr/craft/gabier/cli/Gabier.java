@@ -100,13 +100,14 @@ public final class Gabier {
     private static void status(Path socket, boolean json, PrintStream out) {
         var result = ask(socket, STATUS_COMMAND, false);
         var status = DaemonStatus.of(result.result());
-        out.println(
-                json
-                        ? status.toJson()
-                        : "gabier-daemon " + status.version() + ", pid " + status.pid() + ", up "
-                                + status.uptime().toSeconds() + "s, project "
-                                + TerminalText.neutralise(status.project().toString()) + ", jdtls "
-                                + TerminalText.neutralise(status.jdtls().text()));
+        out.println(json ? status.toJson() : statusText(status));
+    }
+
+    /** The version and the project come from the daemon: the line is neutralised ({@link TerminalText}). */
+    private static String statusText(DaemonStatus status) {
+        return TerminalText.neutralise("gabier-daemon " + status.version() + ", pid " + status.pid() + ", up "
+                + status.uptime().toSeconds() + "s, project " + status.project() + ", jdtls "
+                + status.jdtls().text());
     }
 
     private static void stop(Path socket, boolean json, PrintStream out) {

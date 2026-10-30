@@ -92,9 +92,18 @@ is not ready) is the problem object, exit code 2. The cli sends the absolute pat
 `gabier diagnostics src/../Foo.java` asks for `./Foo.java`, where a shell would open `/other/Foo.java`; type the path
 you mean. This is chosen: the folders of the projects are matched as paths, not as files, so resolving the links in the
 cli would make a file of a project reached through a link (a `~/work` that links to another disk) look outside it. In
-text, the file and the message are shown with control, format and separator characters written as `\uXXXX` escapes and
-each backslash doubled, so that a message quoting source text cannot drive the terminal or fake a line. The daemon
-serves the project it was started for (see above).
+text, the file and the message are shown with the characters a terminal obeys or does not show written as `\uXXXX`
+escapes (`\u{XXXXX}` beyond the basic plane) and each backslash doubled, so that a message quoting source text cannot
+drive the terminal, fake a line or hide behind a blank. Escaped: the control characters (C0, DEL, C1), the line and
+paragraph separators (U+2028, U+2029), the format characters (bidirectional controls, zero-width characters, tag
+characters), every space separator but the space (the no-break space U+00A0, U+1680, U+2000 to U+200A, U+202F, U+205F,
+U+3000), the Hangul fillers (U+115F, U+1160, U+3164, U+FFA0), the braille blank U+2800, the combining grapheme joiner
+U+034F, the variation selectors (U+FE00 to U+FE0F, U+E0100 to U+E01EF) and an unpaired surrogate. Kept as they are: the
+space (U+0020), and every other character, such as an accent, an ideograph or an emoji. The same goes for every text
+the cli prints from what the daemon or the user gave: the problem of a refusal, and the whole line of `gabier status`.
+With `--json` the text is the exact one, and JSON escapes only what it must plus DEL and U+0080 to U+009F (written
+`\u007f`, `\u009b`...), so that the JSON does not drive a terminal either. The daemon serves the project it was started
+for (see above).
 
 ```text
 $ gabier diagnostics src/main/java/demo/Broken.java

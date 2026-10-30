@@ -32,6 +32,16 @@ class JsonTest {
         }
 
         @Test
+        void escapesDelAndTheC1ControlCharactersSoThatNoTerminalObeysThem() {
+            assertThat(Json.quote("a\u007fb\u0080c\u009bd\u009fe")).isEqualTo("\"a\\u007fb\\u0080c\\u009bd\\u009fe\"");
+        }
+
+        @Test
+        void leavesTheCharactersAroundTheC1RangeAsTheyAre() {
+            assertThat(Json.quote("~ ")).isEqualTo("\"~ \"");
+        }
+
+        @Test
         void leavesTheOtherCharactersAsTheyAre() {
             assertThat(Json.quote("é/\u2028")).isEqualTo("\"é/\u2028\"");
         }

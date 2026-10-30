@@ -323,6 +323,21 @@ class GabierTest {
             }
 
             @Test
+            void showsAHostileVersionWithItsControlCharactersEscaped() throws IOException {
+                var status = """
+                    {"version":"\\u001b[2J\\u3164","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"ready"}\
+                    """;
+                try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", status))) {
+                    assertThat(runWithSocket("status")).isZero();
+
+                    assertThat(out())
+                            .isEqualTo(
+                                    "gabier-daemon \\u001b[2J\\u3164, pid 4242, up 65s, project /work/demo, jdtls ready"
+                                            + System.lineSeparator());
+                }
+            }
+
+            @Test
             void givesTheResultAsJsonWithTheJsonOption() throws IOException {
                 try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", STATUS_JSON))) {
                     assertThat(runWithSocket("--json", "status")).isZero();

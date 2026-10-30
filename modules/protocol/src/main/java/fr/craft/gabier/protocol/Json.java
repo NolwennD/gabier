@@ -24,7 +24,8 @@ final class Json {
     }
 
     // RFC 8259: the quotation mark, the reverse solidus and the control characters below U+0020 must be escaped, and
-    // nothing else has to be.
+    // nothing else has to be. DEL and the C1 controls (U+0080 to U+009F, U+009B is a CSI) are escaped too: it is valid,
+    // and a terminal that is shown the JSON as it is does not obey them.
     private static void escape(StringBuilder quoted, char character) {
         switch (character) {
             case '"' -> quoted.append("\\\"");
@@ -33,7 +34,7 @@ final class Json {
             case '\r' -> quoted.append("\\r");
             case '\t' -> quoted.append("\\t");
             default -> {
-                if (character < ' ') {
+                if (Character.isISOControl(character)) {
                     quoted.append(String.format("\\u%04x", (int) character));
                 } else {
                     quoted.append(character);

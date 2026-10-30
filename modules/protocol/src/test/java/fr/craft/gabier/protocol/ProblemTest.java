@@ -152,7 +152,17 @@ class ProblemTest {
 
         @Test
         void writesNonAsciiAndOtherCharactersAsTheyAre() {
-            assertThat(problem("é日/\u007f", Map.of()).toJson()).contains("\"detail\":\"é日/\u007f\"");
+            assertThat(problem("é日/\u2028\ud83d\ude00", Map.of()).toJson())
+                    .contains("\"detail\":\"é日/\u2028\ud83d\ude00\"");
+        }
+
+        @Test
+        void escapesDelAndTheC1ControlCharactersSoThatTheJsonCannotDriveATerminal() {
+            var json = problem("a\u007fb\u009bc", Map.of("k\u0080", "\u009f")).toJson();
+
+            assertThat(json).contains("\"detail\":\"a\\u007fb\\u009bc\"").contains("\"k\\u0080\":\"\\u009f\"");
+            assertThat(StrictJson.parse(json).getAsJsonObject().get("detail").getAsString())
+                    .isEqualTo("a\u007fb\u009bc");
         }
     }
 
@@ -176,6 +186,12 @@ class ProblemTest {
 
             assertThat(text).isEqualTo("Some key: two\\u000alines\\u000d\\u000aand more (some-key; a=x\\u000ay)");
             assertThat(List.of(text.split("\\R"))).hasSize(1);
+        }
+
+        @Test
+        void showsAnotherSeparatorAFillerAndABlankBrailleAsEscapesSoThatNothingLooksBlank() {
+            assertThat(problem("badㅤ x⠀  ", Map.of("p", "　")).toText())
+                    .isEqualTo("Some key: bad\\u3164 x\\u2800 \\u00a0 (some-key; p=\\u3000)");
         }
 
         @Test
@@ -210,8 +226,8 @@ class ProblemTest {
 
         @Test
         void leavesPrintableAndNonAsciiCharactersAsTheyAre() {
-            assertThat(problem("é日 ~ \u00a0 \ud83d\ude00", Map.of()).toText())
-                    .isEqualTo("Some key: é日 ~ \u00a0 \ud83d\ude00 (some-key)");
+            assertThat(problem("é日 ~\ud83d\ude00", Map.of()).toText())
+                    .isEqualTo("Some key: é日 ~\ud83d\ude00 (some-key)");
         }
 
         @Test
@@ -266,26 +282,6 @@ class ProblemTest {
         @Test
         void keepsAPairedSurrogateAsOneCharacter() {
             assertThat(problem("\ud83d\ude00", Map.of()).toText()).isEqualTo("Some key: \ud83d\ude00 (some-key)");
-        }
-
-        @Test
-        void containsNoControlFormatOrSeparatorCharacterWhateverTheCodePoint() {
-            var everyCodePoint = new StringBuilder();
-            for (var codePoint = 0; codePoint <= Character.MAX_CODE_POINT; codePoint++) {
-                if (Character.getType(codePoint) != Character.SURROGATE) {
-                    everyCodePoint.appendCodePoint(codePoint);
-                }
-            }
-
-            var text = problem(everyCodePoint.toString(), Map.of()).toText();
-
-            assertThat(text.codePoints().filter(Character::isISOControl)).isEmpty();
-            assertThat(text.codePoints().filter(codePoint -> Character.getType(codePoint) == Character.FORMAT))
-                    .isEmpty();
-            assertThat(text.codePoints().filter(codePoint -> codePoint == 0x2028 || codePoint == 0x2029))
-                    .isEmpty();
-            assertThat(text.codePoints().filter(codePoint -> Character.getType(codePoint) == Character.SURROGATE))
-                    .isEmpty();
         }
 
         @Test

@@ -55,9 +55,10 @@ public record Problem(
     }
 
     /**
-     * The problem as one line for a human: {@code title: detail (key; name=value, ...)}. Control, format and
-     * separator characters are shown as Unicode escapes and a backslash is doubled, so that no argument can drive the
-     * terminal or look like what it is not ({@link TerminalText#neutralise}). The JSON form is the exact one.
+     * The problem as one line for a human: {@code title: detail (key; name=value, ...)}. What a terminal obeys or
+     * does not show is shown as a Unicode escape and a backslash is doubled, so that no argument can drive the
+     * terminal or look like what it is not ({@link TerminalText#neutralise} lists them). The JSON form is the exact
+     * one.
      */
     public String toText() {
         var text = new StringBuilder(title)
