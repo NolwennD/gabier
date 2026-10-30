@@ -28,10 +28,10 @@ final class JdtlsClient implements LanguageClient {
     @JsonNotification("language/status")
     public void status(Status status) {
         // The progress of the start is a hundred lines of Starting: the other statuses tell where it got to.
-        if (!status.type().equals("Starting")) {
+        if (!"Starting".equals(status.type())) {
             System.out.println("jdtls status " + status.type() + ": " + status.message());
         }
-        if (status.type().equals("ServiceReady")) {
+        if ("ServiceReady".equals(status.type())) {
             serviceReady.complete(null);
         }
     }

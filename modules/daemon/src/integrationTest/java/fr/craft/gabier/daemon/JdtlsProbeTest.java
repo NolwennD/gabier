@@ -3,6 +3,7 @@ package fr.craft.gabier.daemon;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -37,7 +38,10 @@ class JdtlsProbeTest {
     void importsEveryModuleOfTheProject() throws Exception {
         Path launcher = launcher();
         Path projectRoot = Path.of(System.getProperty("gabier.projectRoot"));
-        List<String> modules = modulesOf(projectRoot);
+        List<Path> modules = modulesOf(projectRoot);
+        if (modules.isEmpty()) {
+            fail("No module under " + projectRoot.resolve("modules") + ": the probe would wait for nothing.");
+        }
 
         Path data = Files.createTempDirectory("gabier-jdtls-data-");
         Process jdtls = null;
@@ -90,21 +94,21 @@ class JdtlsProbeTest {
     }
 
     /** The folders under {@code modules/} that hold a {@code module-info.java}, which are the Gradle projects. */
-    private static List<String> modulesOf(Path projectRoot) throws IOException {
+    private static List<Path> modulesOf(Path projectRoot) throws IOException {
         try (Stream<Path> folders = Files.list(projectRoot.resolve("modules"))) {
             return folders.filter(folder -> Files.exists(folder.resolve("src/main/java/module-info.java")))
-                    .map(folder -> folder.getFileName().toString())
+                    .map(folder -> folder.toAbsolutePath().normalize())
                     .sorted()
                     .toList();
         }
     }
 
     /** Polls {@code java.project.getAll} until jdtls lists every module, and returns what it listed. */
-    private static List<String> awaitProjects(LanguageServer server, List<String> modules)
+    private static List<String> awaitProjects(LanguageServer server, List<Path> modules)
             throws ExecutionException, InterruptedException, TimeoutException {
         Instant deadline = Instant.now().plus(TIMEOUT);
         List<String> projects = List.of();
-        List<String> missing = modules;
+        List<Path> missing = modules;
         while (Instant.now().isBefore(deadline)) {
             var command = new ExecuteCommandParams("java.project.getAll", List.of());
             Object answer = server.getWorkspaceService().executeCommand(command).get(1, TimeUnit.MINUTES);
@@ -119,15 +123,15 @@ class JdtlsProbeTest {
                 + modules + " with java.project.getAll. Still missing " + missing + ", it listed " + projects);
     }
 
-    private static List<String> missingFrom(List<String> projects, List<String> modules) {
+    private static List<Path> missingFrom(List<String> projects, List<Path> modules) {
         return modules.stream()
                 .filter(module -> projects.stream().noneMatch(project -> isProjectOf(project, module)))
                 .toList();
     }
 
-    /** jdtls reports a project by its URI, which ends with the folder of the module. */
-    private static boolean isProjectOf(String project, String module) {
-        return project.endsWith("/" + module) || project.endsWith("/" + module + "/");
+    /** jdtls reports a project by the URI of its folder, which must be the folder of the module itself. */
+    private static boolean isProjectOf(String project, Path module) {
+        return Path.of(URI.create(project)).toAbsolutePath().normalize().equals(module);
     }
 
     private static <T> T await(String what, CompletableFuture<T> future) throws Exception {
@@ -149,7 +153,8 @@ class JdtlsProbeTest {
             try {
                 server.shutdown().get(SHUTDOWN_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
                 server.exit();
-            } catch (ExecutionException | TimeoutException e) {
+            } catch (ExecutionException | TimeoutException | RuntimeException e) {
+                // A dead server makes the proxy throw an unchecked JsonRpcException: the kill below must still happen.
                 System.out.println("jdtls did not shut down cleanly: " + e);
             }
         }
