@@ -80,7 +80,7 @@ class HexagonalArchTest {
     @Test
     void importsTheClassesOfTheModules() {
         // Without them every rule below would pass for nothing.
-        assertThat(classes).as("classes found under " + ROOT_PACKAGE).isNotEmpty();
+        assertThat(classes).as("classes found under %s", ROOT_PACKAGE).isNotEmpty();
     }
 
     @Test

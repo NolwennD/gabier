@@ -1,5 +1,6 @@
 package fr.craft.gabier.daemon;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
 import java.io.IOException;
@@ -39,9 +40,9 @@ class JdtlsProbeTest {
         Path launcher = launcher();
         Path projectRoot = Path.of(System.getProperty("gabier.projectRoot"));
         List<Path> modules = modulesOf(projectRoot);
-        if (modules.isEmpty()) {
-            fail("No module under " + projectRoot.resolve("modules") + ": the probe would wait for nothing.");
-        }
+        assertThat(modules)
+                .as("modules under %s: the probe would wait for nothing", projectRoot.resolve("modules"))
+                .isNotEmpty();
 
         Path data = Files.createTempDirectory("gabier-jdtls-data-");
         Process jdtls = null;
