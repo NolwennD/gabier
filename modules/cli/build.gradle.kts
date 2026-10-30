@@ -30,8 +30,8 @@ graalvmNative {
       // The cost is some vector intrinsics, which does not matter for a thin client.
       buildArgs.add("-march=compatibility")
       // The image is built from the classpath, so module-info is ignored. It works because `shared` and
-      // `org.jspecify` are `requires static` (their annotations are only read at compile time) and absent from the runtime
-      // classpath.
+      // `org.jspecify` are `requires static` (their annotations are not needed at run time) and absent from the
+      // runtime classpath.
     }
   }
 }
