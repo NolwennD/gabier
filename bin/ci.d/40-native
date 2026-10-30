@@ -7,8 +7,9 @@ import java.nio.file.Path;
 
 /**
  * Stage {@code native} of the local CI (see {@code bin/ci}): builds the native cli and runs the binary alone, in an
- * empty directory with an empty environment, so that it cannot lean on anything of the checkout. Runs in the current
- * directory, the checkout under verification.
+ * empty directory with an empty environment, so that it cannot lean on anything of the checkout: {@code --version}, and
+ * a usage error reported as a problem object (text, then JSON with {@code --json}) with its exit code, the two output
+ * streams kept apart. Runs in the current directory, the checkout under verification.
  */
 public final class Native {
 
@@ -29,7 +30,7 @@ public final class Native {
             skip = "no changed file reaches the native cli (bin/ci --all forces it)";
         }
         if (args.length > 0 && args[0].equals("--describe")) {
-            System.out.println("native cli, run alone in an empty directory");
+            System.out.println("native cli, run alone in an empty directory (version, usage error as text and JSON)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -70,19 +71,52 @@ public final class Native {
         Path copy = empty.resolve("gabier");
         try {
             Files.copy(binary, copy);
-            ProcessBuilder builder = new ProcessBuilder(copy.toString(), "--version")
-                    .directory(empty.toFile())
-                    .redirectErrorStream(true);
-            builder.environment().clear();
-            Process process = builder.start();
-            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
-            int exit = process.waitFor();
-            System.out.println("gabier --version -> \"" + output + "\" (exit " + exit + ")");
-            return exit == 0 && output.startsWith("gabier ") ? 0 : 1;
+            int failures = version(copy, empty) + usageError(copy, empty, false) + usageError(copy, empty, true);
+            return failures == 0 ? 0 : 1;
         } finally {
             Files.deleteIfExists(copy);
             Files.deleteIfExists(empty);
         }
+    }
+
+    /** What a run of the binary printed on each stream, and its exit code. */
+    private record Run(String out, String err, int exit) {}
+
+    /** Runs the binary alone: in the empty directory, with an empty environment, the two streams kept apart. */
+    private static Run runBinary(Path binary, Path directory, String... args) throws IOException, InterruptedException {
+        var command = new java.util.ArrayList<String>();
+        command.add(binary.toString());
+        command.addAll(java.util.List.of(args));
+        ProcessBuilder builder = new ProcessBuilder(command).directory(directory.toFile());
+        builder.environment().clear();
+        Process process = builder.start();
+        String out = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+        String err = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+
+        return new Run(out, err, process.waitFor());
+    }
+
+    /** 0 when {@code gabier --version} prints the version on the standard output, nothing on the other, and exits 0. */
+    private static int version(Path binary, Path directory) throws IOException, InterruptedException {
+        Run run = runBinary(binary, directory, "--version");
+        System.out.println("gabier --version -> \"" + run.out() + "\" (exit " + run.exit() + ")");
+
+        return run.exit() == 0 && run.out().startsWith("gabier ") && run.err().isEmpty() ? 0 : 1;
+    }
+
+    /**
+     * 0 when an unknown argument is refused as a problem object on the standard error (one line of text, or a JSON
+     * object with {@code --json}) with exit code 2 and nothing on the standard output.
+     */
+    private static int usageError(Path binary, Path directory, boolean json) throws IOException, InterruptedException {
+        Run run = json ? runBinary(binary, directory, "--json", "--help") : runBinary(binary, directory, "--help");
+        System.out.println("gabier " + (json ? "--json " : "") + "--help -> stdout \"" + run.out() + "\", stderr \""
+                + run.err() + "\" (exit " + run.exit() + ")");
+        boolean problem = json
+                ? run.err().startsWith("{\"type\":\"urn:gabier:error:usage-error\",") && run.err().endsWith("}")
+                : run.err().startsWith("Usage error: ") && run.err().endsWith(")");
+
+        return run.exit() == 2 && run.out().isEmpty() && problem && run.err().lines().count() == 1 ? 0 : 1;
     }
 
     private static int run(String... command) throws InterruptedException {

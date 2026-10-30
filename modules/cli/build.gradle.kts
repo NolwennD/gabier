@@ -30,8 +30,8 @@ graalvmNative {
       // The cost is some vector intrinsics, which does not matter for a thin client.
       buildArgs.add("-march=compatibility")
       // The image is built from the classpath, so module-info is ignored. `org.jspecify` and the NullAway annotations
-      // are `requires static` (not needed at run time) and absent from the runtime classpath. `shared` is there, as
-      // `protocol` requires it (ProtocolVersion validates with Assert): the cli reaches it at run time through protocol.
+      // are `requires static` (not needed at run time) and absent from the runtime classpath. `shared` is there: the cli
+      // uses its exceptions and error keys (the usage error), and `protocol` requires it (Problem, ProtocolVersion).
     }
   }
 }

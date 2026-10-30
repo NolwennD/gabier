@@ -1,14 +1,16 @@
 package fr.craft.gabier.cli;
 
+import fr.craft.gabier.protocol.Problem;
+import fr.craft.gabier.protocol.ProblemMapper;
 import fr.craft.gabier.protocol.ProtocolVersion;
 import fr.craft.gabier.shared.generation.ExcludeFromGeneratedCodeCoverage;
 import java.io.PrintStream;
+import java.util.List;
 
 public final class Gabier {
 
     private static final String VERSION_OPTION = "--version";
-    private static final int OK = 0;
-    private static final int USAGE_ERROR = 2;
+    private static final String JSON_OPTION = "--json";
 
     private Gabier() {}
 
@@ -20,11 +22,33 @@ public final class Gabier {
     }
 
     static int run(String[] args, PrintStream out, PrintStream err) {
-        if (args.length == 1 && args[0].equals(VERSION_OPTION)) {
-            out.println("gabier " + ProtocolVersion.CURRENT);
-            return OK;
+        var arguments = List.of(args);
+        var json = arguments.contains(JSON_OPTION);
+        try {
+            execute(
+                    arguments.stream()
+                            .filter(argument -> !argument.equals(JSON_OPTION))
+                            .toList(),
+                    out);
+
+            return ExitCode.SUCCESS.value();
+        } catch (RuntimeException e) {
+            return fail(e, json, err);
         }
-        err.println("usage: gabier " + VERSION_OPTION);
-        return USAGE_ERROR;
+    }
+
+    private static void execute(List<String> arguments, PrintStream out) {
+        if (!arguments.equals(List.of(VERSION_OPTION))) {
+            throw UsageException.unsupportedArguments(arguments);
+        }
+        out.println("gabier " + ProtocolVersion.CURRENT);
+    }
+
+    /** Reports the failure as a problem object on the standard error, as JSON or as text, and gives the exit code. */
+    static int fail(RuntimeException failure, boolean json, PrintStream err) {
+        Problem problem = ProblemMapper.toProblem(failure);
+        err.println(json ? problem.toJson() : problem.toText());
+
+        return ExitCode.of(problem).value();
     }
 }

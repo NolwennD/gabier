@@ -64,7 +64,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 | `module-info.java`, `build.gradle.kts`, `build-logic/**`          | `./gradlew build`: the modules are compiled as modules, so a forbidden dependency fails here                          |
 | `settings.gradle.kts`, `gradle/libs.versions.toml`                | `./gradlew projects` to see the modules, then `./gradlew build`                                                       |
 | packages created or moved                                         | the architecture tests: `./gradlew :architecture:cleanTest :architecture:test`                                        |
-| `modules/cli/**`, `libs.versions.toml` (the native plugin)        | `./gradlew :cli:nativeCompile`, then run the binary alone, in an empty directory with an empty environment            |
+| `modules/cli/**`, `libs.versions.toml` (the native plugin)        | `./gradlew :cli:nativeCompile`, then run the binary alone, in an empty directory with an empty environment: `--version`, and a usage error as text and as JSON (`--json`), exit code 2, on the standard error (the `native` stage of `bin/ci` does it) |
 | any `.java` file                                                  | formatting: `mise exec -- hk check --all`; `hk fix --all` fixes it. Never bypass the hook                             |
 
 `<package>` is the package of the class, which is not always the folder name: `protocol` for `:protocol`,
