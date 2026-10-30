@@ -540,11 +540,30 @@ class GabierTest {
         @Test
         void asksTheDaemonForTheAbsolutePathOfARelativeFileAndShowsTheFileAsTyped() throws IOException {
             try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", ERRORS))) {
-                assertThat(runWithSocket("diagnostics", "src/../Broken.java")).isZero();
+                assertThat(runWithSocket("diagnostics", "src/Broken.java")).isZero();
 
-                assertThat(out()).startsWith("src/../Broken.java:5:16: error: ");
+                assertThat(out()).startsWith("src/Broken.java:5:16: error: ");
                 assertThat(daemon.requests())
-                        .containsExactly(request(Path.of("Broken.java").toAbsolutePath()));
+                        .containsExactly(request(Path.of("src/Broken.java").toAbsolutePath()));
+            }
+        }
+
+        @Test
+        void doesNotCollapseTheDotDotOfAPathThroughALinkBecauseOnlyTheDaemonCleansPaths() throws IOException {
+            var target = Files.createDirectories(directory.resolve("targets/real"));
+            Files.createFile(directory.resolve("targets/Foo.java"));
+            var link = Files.createSymbolicLink(
+                    Files.createDirectories(directory.resolve("links")).resolve("src"), target);
+            var typed = link.resolve("..").resolve("Foo.java");
+            // The shell means the folder that holds the target of the link; the lexical collapse would mean the one
+            // that
+            // holds the link, where there is no such file.
+            assertThat(typed).exists();
+            assertThat(directory.resolve("links/Foo.java")).doesNotExist();
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", CLEAN))) {
+                assertThat(runWithSocket("diagnostics", typed.toString())).isZero();
+
+                assertThat(daemon.requests()).containsExactly(request(typed));
             }
         }
 

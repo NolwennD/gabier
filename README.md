@@ -72,7 +72,13 @@ compiler show them (severity: `error`, `warning`, `information` or `hint`), and 
 code is 0 whenever the daemon answered, whatever the problems: the reader reads the list. With `--json`, the result is
 `{"diagnostics":[{"severity":"error","line":4,"column":15,"message":"..."}]}`, an empty list for a clean file, with the
 positions **from 0** as the protocol and the domain count them. A refusal (the file is outside the project, the server
-is not ready) is the problem object, exit code 2. The cli sends the absolute path of the file to the daemon. A daemon
+is not ready) is the problem object, exit code 2. The cli sends the absolute path of the file to the daemon, as typed otherwise, and the daemon alone cleans it: `.` and
+`..` are collapsed **lexically** and no symbolic link is followed. So with `src` a link to `/other/src`,
+`gabier diagnostics src/../Foo.java` asks for `./Foo.java`, where a shell would open `/other/Foo.java`; type the path
+you mean. This is chosen: the folders of the projects are matched as paths, not as files, so resolving the links in the
+cli would make a file of a project reached through a link (a `~/work` that links to another disk) look outside it. In
+text, the file and the message are shown with control, format and separator characters written as `\uXXXX` escapes and
+each backslash doubled, so that a message quoting source text cannot drive the terminal or fake a line. A daemon
 started by hand serves no project yet, so it refuses every file as `language-server-not-ready` until jdtls is started
 for a project (a ticket of its own).
 

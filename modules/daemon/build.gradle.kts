@@ -44,6 +44,11 @@ dependencies {
   "fakeServedCompileOnly"(sourceSets.main.get().output)
   "fakeServedImplementation"(testFixtures(project(":core")))
 }
+// Its one piece of logic, what it refuses to write over, is a unit test of the daemon (the coverage gate looks at the
+// classes of the main source set only).
+dependencies {
+  testImplementation(fakeServed.output)
+}
 configurations["fakeServedImplementation"].extendsFrom(configurations.implementation.get())
 configurations["fakeServedRuntimeOnly"].extendsFrom(configurations.runtimeOnly.get())
 

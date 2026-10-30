@@ -76,12 +76,13 @@ public final class Gabier {
     /**
      * One line per problem, {@code file:line:column: severity: message}, the file as the user typed it and the position
      * from 1 as an editor shows it (the daemon counts from 0); with {@code --json}, the result as the daemon gave it.
-     * The daemon gets the absolute path: its working directory is not the one of this command. The line is neutralised
+     * The daemon gets the absolute path, not cleaned: its working directory is not the one of this command, and only the
+     * daemon cleans paths (it collapses {@code .} and {@code ..}, it follows no link). The line is neutralised
      * as the text of a problem is ({@link TerminalText}): the message quotes source text and the file is typed, and
      * neither may drive the terminal or split the line.
      */
     private static void diagnostics(Path socket, String file, boolean json, PrintStream out) {
-        var absolute = Path.of(file).toAbsolutePath().normalize();
+        var absolute = Path.of(file).toAbsolutePath();
         var result = ask(socket, DIAGNOSTICS_COMMAND, Map.of("file", absolute.toString()), false);
         var diagnostics = FileDiagnostics.of(result.result());
         if (json) {

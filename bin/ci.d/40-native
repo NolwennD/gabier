@@ -214,6 +214,7 @@ public final class Native {
                 secondDaemonAndStaleSocket();
                 diagnosticsWithNoProject();
                 diagnosticsWithTheFakeServer();
+                fakeServedRefusesAFolderThatIsNotEmpty();
             } finally {
                 for (Process process : started) {
                     if (process.isAlive()) {
@@ -443,6 +444,30 @@ public final class Native {
                     "a file outside the project is refused as a problem object, exit 2");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops");
+        }
+
+        /** The daemon served by the fake writes the scenarios in its folder: it refuses one that holds anything. */
+        private void fakeServedRefusesAFolderThatIsNotEmpty() throws IOException, InterruptedException {
+            Path occupied = Files.createDirectory(directory.resolve("occupied"));
+            Path mine = Files.writeString(occupied.resolve("Main.java"), "class Main {}");
+            Path log = Files.createTempFile(directory, "occupied", ".log");
+            ProcessBuilder builder = new ProcessBuilder(fakeDaemon.toString(), occupied.toString())
+                    .directory(directory.toFile());
+            builder.environment().put("GABIER_SOCKET", socket.toString());
+            builder.environment().put("JAVA_HOME", System.getProperty("java.home"));
+            Process process = builder.redirectErrorStream(true).redirectOutput(log.toFile()).start();
+            started.add(process);
+            boolean ended = ends(process);
+            String output = Files.readString(log);
+            System.out.println("daemon served by the fake on a folder that is not empty -> " + output.strip() + " (exit "
+                    + (ended ? process.exitValue() : -1) + ")");
+            expect(
+                    ended
+                            && process.exitValue() == 2
+                            && output.contains("is not empty")
+                            && Files.readString(mine).equals("class Main {}")
+                            && !Files.exists(occupied.resolve("src")),
+                    "the daemon served by the fake refuses a folder that is not empty, exit 2, and leaves its files alone");
         }
 
         private static String posix(Path path) throws IOException {
