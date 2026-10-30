@@ -17,6 +17,8 @@ import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
 import org.eclipse.lsp4j.Range;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /** What jdtls publishes about the files the probe opened, kept and judged. No jdtls is started. */
 class DiagnosticsTest {
@@ -204,6 +206,18 @@ class DiagnosticsTest {
         diagnostics.publish(publicationOf(FILE));
         assertThat(publication).isCompletedWithValue(List.of());
         assertThat(diagnostics.publications(FILE)).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"not a uri at all", "file://some-host/share/File.java"})
+    void aPublicationForAMalformedOrRemoteUriIsIgnored(String uri) {
+        var publication = diagnostics.expect(FILE);
+
+        assertThatCode(() -> diagnostics.publish(new PublishDiagnosticsParams(uri, List.of(error(0, "Not ours")))))
+                .doesNotThrowAnyException();
+
+        assertThat(publication).isNotDone();
+        assertThat(diagnostics.errors(List.of(FILE), ROOT)).isEmpty();
     }
 
     @Test

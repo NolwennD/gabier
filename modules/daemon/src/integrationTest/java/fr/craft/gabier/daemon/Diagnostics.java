@@ -81,12 +81,10 @@ final class Diagnostics {
 
     /** Records what the reader thread of LSP4J delivers; a publication for a URI that is not a file is ignored. */
     synchronized void publish(PublishDiagnosticsParams publication) {
-        Optional<Path> path = pathOf(publication.getUri());
-        if (path.isEmpty()) {
-            return;
-        }
-        Path file = path.get();
-        List<Diagnostic> diagnostics = publication.getDiagnostics();
+        pathOf(publication.getUri()).ifPresent(file -> record(file, publication.getDiagnostics()));
+    }
+
+    private void record(Path file, List<Diagnostic> diagnostics) {
         latest.put(file, diagnostics);
         publications.merge(file, 1, Integer::sum);
         lastPublication = nanoClock.getAsLong();
@@ -162,13 +160,18 @@ final class Diagnostics {
      * jdtls may spell the URI of a file differently from {@link Path#toUri()}: the path is the identity.
      *
      * @return empty for a URI that is not a {@code file:} one (jdtls publishes for {@code jdt://} classes of the
-     *     JDK too): {@link Path#of(URI)} would throw in the reader thread of LSP4J
+     *     JDK too) or is malformed: {@link Path#of(URI)} would throw in the reader thread of LSP4J
      */
     private static Optional<Path> pathOf(String uri) {
-        URI parsed = URI.create(uri);
-        if (!"file".equalsIgnoreCase(parsed.getScheme())) {
+        try {
+            URI parsed = URI.create(uri);
+            if (!"file".equalsIgnoreCase(parsed.getScheme())) {
+                return Optional.empty();
+            }
+            return Optional.of(Path.of(parsed).toAbsolutePath().normalize());
+        } catch (IllegalArgumentException e) {
+            // Malformed, or a file URI with a host: not a file of this checkout either.
             return Optional.empty();
         }
-        return Optional.of(Path.of(parsed).toAbsolutePath().normalize());
     }
 }
