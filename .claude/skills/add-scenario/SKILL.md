@@ -22,7 +22,9 @@ request the adapter already implements adds its replay for free.
    relative to the root of the project; `FILE_WITH_A_WARNING` is a model). Reuse the project of the neighbouring
    scenarios (`PROJECT`, `withProblems()`): the replay starts one jdtls per distinct set of files, about ten seconds
    each, so a scenario that adds a file to a project shares that project with the ones that already have it. Write the
-   answer you expect from the protocol and from Java, not from a run of the adapter.
+   answer you expect from the protocol and from Java, not from a run of the adapter. The edits of a rename are the
+   exception: jdtls merges the edits of a file, so write the expected ones as a first guess and replace them in step 7
+   with the answer of the replay, copied byte for byte.
 3. **Add its name to the catalogue**: in `Scenarios.all()` and in the list of `ScenariosTest`
    (`holdsTheClean...`), plus a test in `ScenariosTest` if it shows something the others do not (a position that holds
    the identifier it claims, for instance). Run the catalogue:
