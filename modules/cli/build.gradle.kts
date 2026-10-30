@@ -29,8 +29,9 @@ graalvmNative {
       // The baseline of the architecture instead of the host CPU: the binary runs on any machine of its architecture.
       // The cost is some vector intrinsics, which does not matter for a thin client.
       buildArgs.add("-march=compatibility")
-      // The image is built from the classpath, so module-info is ignored. It works because `shared` is `requires
-      // static` (the exclusion annotation is only read at compile time) and absent from the runtime classpath.
+      // The image is built from the classpath, so module-info is ignored. It works because `shared` and
+      // `org.jspecify` are `requires static` (their annotations are only read at compile time) and absent from the runtime
+      // classpath.
     }
   }
 }

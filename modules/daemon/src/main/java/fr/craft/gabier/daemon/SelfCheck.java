@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 import org.eclipse.lsp4j.Position;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Proves that the daemon runs on the module path, with LSP4J as a real module and Gson able to reach into it. Gson
@@ -14,7 +15,7 @@ import org.eclipse.lsp4j.Position;
  * @param daemonModule the name of the module of the daemon, {@code null} when it is on the class path
  * @param position the name of the module of {@link Position}, {@code null} when it is on the class path
  */
-record SelfCheck(String daemonModule, String position) {
+record SelfCheck(@Nullable String daemonModule, @Nullable String position) {
 
     private static final String LSP4J_MODULE = "org.eclipse.lsp4j";
     private static final String POSITION_JSON = "{\"line\":1,\"character\":2}";
@@ -59,7 +60,7 @@ record SelfCheck(String daemonModule, String position) {
                 + positionAsJson();
     }
 
-    private static String describe(String module) {
+    private static String describe(@Nullable String module) {
         return module == null ? "no named module" : "the module " + module;
     }
 }

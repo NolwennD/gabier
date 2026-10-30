@@ -15,9 +15,11 @@ the review (see the `ticket` skill). The formatting hook, the coverage gate and 
   The reason is mandatory and says why: omitting it does not compile, and a blank one fails the architecture test.
   Code that is merely tedious to test is tested. The annotation's name must keep the word `Generated`: JaCoCo ignores
   what is annotated with such an annotation. Every use is challenged in the review.
-- **The core stays almost pure Java**: the domain depends on `java..` and on our own
-  `shared` code (`fr.craft.gabier.shared..`), never on a third-party library or framework. Adding a third-party
-  dependency to the domain is the user's decision, not an agent's: the allow-list is the constant
+- **The core stays almost pure Java**: the domain depends on `java..`, on our own
+  `shared` code (`fr.craft.gabier.shared..`) and on the null-safety annotations (`org.jspecify..`,
+  `com.uber.nullaway.annotations..`, the user's decision of 30-10-2026), never on another third-party library or
+  framework. Adding a third-party dependency to the domain is the user's decision, not an agent's: the allow-list is the
+  constant
   `DOMAIN_ALLOWED_PACKAGES` in
   `architecture/src/test/java/fr/craft/gabier/architecture/HexagonalArchTest.java`. These architecture tests (ArchUnit,
   adapted from the `HexagonalArchTest` that [seed4j](https://github.com/seed4j/seed4j) generates, without its Spring
@@ -26,6 +28,15 @@ the review (see the `ticket` skill). The formatting hook, the coverage gate and 
   (domain, application, primary and secondary adapters, pointing towards the domain), the application off the
   infrastructure and the primary and secondary adapters apart, next to the module boundaries that JPMS already
   enforces at compile time.
+- **Null safety is checked at compile time**: JSpecify annotations, checked by NullAway through Error Prone (configured
+  once, in `gabier.java-module-conventions`, on the main code; `NullAway:ERROR`, `JSpecifyMode`, `OnlyNullMarked`).
+  Everything is non-null by default: every package has a `package-info.java` annotated
+  `@org.jspecify.annotations.NullMarked` (an architecture test fails on a package that has classes and none, since
+  NullAway silently skips what is not marked), and the module-info requires `org.jspecify` with `requires static`.
+  Whatever accepts or may return null says so with `@org.jspecify.annotations.Nullable`, on the type usage (a
+  parameter, a return type, a field, a type argument): JSpecify does not annotate a method or a class as such. No
+  suppression (`@SuppressWarnings("NullAway")`) without a reason that says why, challenged in the review. A new third-party
+  jar follows the same declaration as the others (catalog, `gradle/modules.properties`).
 - **LSP4J stays in the daemon**: Eclipse LSP4J (`org.eclipse.lsp4j..`) is used by `fr.craft.gabier.daemon..` only; an
   architecture test fails on any class outside it that depends on an LSP4J type. Its jars are automatic modules, given
   real descriptors by `extraJavaModuleInfo` in `gabier.java-module-conventions` (which fails the build on any other

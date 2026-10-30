@@ -1,7 +1,10 @@
+import net.ltgt.gradle.errorprone.errorprone
+
 plugins {
   `java-library`
   jacoco
   id("org.gradlex.extra-java-module-info")
+  id("net.ltgt.errorprone")
 }
 
 // Every module is built for Java 25, the daemon included: the level of the native image, and the one the user chose.
@@ -34,8 +37,26 @@ extraJavaModuleInfo {
   }
 }
 
+// The compiler plugins (Error Prone, NullAway) are loaded from the annotation processor path, which is a class path and
+// not a module path: their jars need no module descriptor, and demanding one would fail the build on every one of them.
+sourceSets.configureEach {
+  extraJavaModuleInfo.deactivate(configurations.getByName(annotationProcessorConfigurationName))
+}
+
 tasks.compileJava {
   options.release = 25
+}
+
+// Null safety, checked at compile time: NullAway (through Error Prone) refuses a null where none is allowed. It checks
+// what is @NullMarked only (the package-info.java of each package). Tests are not @NullMarked, so NullAway would check
+// nothing there: Error Prone runs on the main code only (compileJava), and the test source sets are compiled as before.
+tasks.withType<JavaCompile>().configureEach {
+  options.errorprone {
+    isEnabled = name == "compileJava"
+    error("NullAway")
+    option("NullAway:JSpecifyMode", "true")
+    option("NullAway:OnlyNullMarked", "true")
+  }
 }
 
 tasks.withType<Test>().configureEach {
@@ -49,6 +70,12 @@ tasks.test {
 
 // The version catalog is registered on the project after this plugin is applied.
 afterEvaluate {
+  val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
+  dependencies {
+    // Error Prone runs in the compiler, NullAway is one of its checks: both are on the annotation processor path.
+    "errorprone"(libs.findLibrary("errorprone-core").get())
+    "errorprone"(libs.findLibrary("nullaway").get())
+  }
   jacoco {
     toolVersion = extensions.getByType<VersionCatalogsExtension>().named("libs").findVersion("jacoco").get().requiredVersion
   }

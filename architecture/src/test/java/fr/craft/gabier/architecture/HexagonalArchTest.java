@@ -41,7 +41,8 @@ class HexagonalArchTest {
 
     /**
      * The only packages a domain class may depend on: the JDK, our own shared code (the {@code shared} module, which
-     * holds the exclusion annotation), and the domain itself. The list exists to keep third-party code (libraries and
+     * holds the exclusion annotation), the null-safety annotations (JSpecify, and the NullAway ones; the user's decision
+     * of 30-10-2026), and the domain itself. The list exists to keep third-party code (libraries and
      * frameworks) out of the domain. Adding a third-party dependency is the user's decision, never an agent's: it is
      * one line here, and nowhere else.
      *
@@ -50,13 +51,20 @@ class HexagonalArchTest {
      * primitives and arrays pass without it (checked with a domain record holding an {@code int} and a {@code long[]}).
      */
     private static final String[] DOMAIN_ALLOWED_PACKAGES = {
-        "java..", ROOT_PACKAGE + "." + SHARED + "..", ROOT_PACKAGE + "..domain.."
+        "java..",
+        ROOT_PACKAGE + "." + SHARED + "..",
+        ROOT_PACKAGE + "..domain..",
+        "org.jspecify..",
+        "com.uber.nullaway.annotations.."
     };
 
     /** The only place where LSP4J lives: the daemon module (the {@code daemon} context). */
     private static final String DAEMON_PACKAGE = ROOT_PACKAGE + ".daemon";
 
     private static final String LSP4J_PACKAGE = "org.eclipse.lsp4j";
+
+    /** The JSpecify annotation that makes NullAway check a package; by name, as the module only needs it to compile. */
+    private static final String NULL_MARKED = "org.jspecify.annotations.NullMarked";
 
     private static final JavaClasses classes = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
@@ -242,6 +250,36 @@ class HexagonalArchTest {
                     .because("LSP4J lives in the daemon module and no other module sees one of its types")
                     .allowEmptyShould(true)
                     .check(classes);
+        }
+    }
+
+    @Nested
+    class NullSafety {
+
+        @Test
+        void packagesShouldBeNullMarked() {
+            classes()
+                    .that()
+                    .doNotHaveSimpleName("package-info")
+                    .should(resideInANullMarkedPackage())
+                    .because("NullAway only checks what is @NullMarked: a package without a package-info.java carrying"
+                            + " @NullMarked is silently left unchecked")
+                    .allowEmptyShould(true)
+                    .check(classes);
+        }
+
+        private static ArchCondition<JavaClass> resideInANullMarkedPackage() {
+            return new ArchCondition<>("reside in a package annotated with @NullMarked") {
+                @Override
+                public void check(JavaClass javaClass, ConditionEvents events) {
+                    if (!javaClass.getPackage().isAnnotatedWith(NULL_MARKED)) {
+                        events.add(violated(
+                                javaClass,
+                                javaClass.getDescription() + " is in the package " + javaClass.getPackageName()
+                                        + ", which has no package-info.java annotated with @NullMarked"));
+                    }
+                }
+            };
         }
     }
 
