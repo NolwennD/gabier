@@ -92,11 +92,11 @@ As `.claude/rules/logbook.md` says: `mkdir -p logbook/issues/closed`, `git mv` t
 short hash of the commit, what was checked (quote the subagent's `bin/ci` summary), what is worth remembering, and the
 open suggestions, then the `Tokens:` list (`.claude/rules/logbook.md`): one line for the worker, one for the reviewer
 (each the sum of the `subagent_tokens` of its completion notifications) and one for the supervisor, measured on the
-transcript of the session over the period of the ticket (from the commit that opened the issue to now):
+transcript of the session over the period of the ticket (from the launch of the worker, not from the opening of the issue which may have waited in the queue, to now):
 
 ```bash
 J=$(ls -t ~/.claude/projects/-home-nolwenn-dev-projects-gabier/*.jsonl | head -1)
-A=$(date -u -d "$(git log -1 --format=%cI <commit that opened the issue>)" +%Y-%m-%dT%H:%M:%S); B=$(date -u +%Y-%m-%dT%H:%M:%S)
+A=$(date -u -d "<ISO time of the launch of the worker>" +%Y-%m-%dT%H:%M:%S); B=$(date -u +%Y-%m-%dT%H:%M:%S)
 jq -s --arg a "$A" --arg b "$B" '[.[] | select(.message.usage != null and .timestamp >= $a and .timestamp <= $b)]
   | {calls: length, input: (map(.message.usage.input_tokens) | add), cache_write: (map(.message.usage.cache_creation_input_tokens) | add),
      cache_read: (map(.message.usage.cache_read_input_tokens) | add), output: (map(.message.usage.output_tokens) | add)}' "$J"

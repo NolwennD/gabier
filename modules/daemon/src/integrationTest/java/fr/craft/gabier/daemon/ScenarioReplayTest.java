@@ -2,6 +2,7 @@ package fr.craft.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.fixtures.Scenario;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
@@ -12,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,8 +112,7 @@ class ScenarioReplayTest {
     }
 
     private static boolean needsJdtlsToImport(Scenario scenario) {
-        return scenario.answer() instanceof Answer.Refused refused
-                && refused.key() == fr.craft.gabier.editing.domain.LanguageServerErrorKey.NOT_READY;
+        return scenario.answer() instanceof Answer.Refused refused && refused.key() == LanguageServerErrorKey.NOT_READY;
     }
 
     private static void replay(Scenario scenario, JdtlsLanguageServer server, SoftAssertions differences) {
@@ -153,7 +154,7 @@ class ScenarioReplayTest {
 
     private static void delete(Path folder) throws IOException {
         try (var files = Files.walk(folder)) {
-            for (Path file : files.sorted(java.util.Comparator.reverseOrder()).toList()) {
+            for (Path file : files.sorted(Comparator.reverseOrder()).toList()) {
                 Files.delete(file);
             }
         }
