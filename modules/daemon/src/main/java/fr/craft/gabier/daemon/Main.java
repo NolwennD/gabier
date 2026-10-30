@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 
@@ -111,7 +110,7 @@ public final class Main {
         var uid = UserId.current();
         var socket = SocketLocation.resolve(environment, uid);
         var server = DaemonServer.open(
-                socket, uid, Clock.systemUTC(), ProcessHandle.current().pid(), project);
+                socket, uid, System::nanoTime, ProcessHandle.current().pid(), project);
         // A signal (SIGTERM) ends the JVM without serve() returning: the hook removes the socket.
         Runtime.getRuntime().addShutdownHook(server.shutdownHook());
         out.println("gabier-daemon " + ProtocolVersion.CURRENT + " listening on " + socket);

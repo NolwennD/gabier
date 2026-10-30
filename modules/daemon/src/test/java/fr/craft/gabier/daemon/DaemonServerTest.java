@@ -28,15 +28,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -54,7 +51,7 @@ class DaemonServerTest {
     Path directory;
 
     private final String uid = UserId.current();
-    private final MutableClock clock = new MutableClock();
+    private final NanoClock clock = new NanoClock();
     private final List<DaemonServer> servers = new ArrayList<>();
     private final List<CompletableFuture<Void>> serving = new ArrayList<>();
 
@@ -244,6 +241,27 @@ class DaemonServerTest {
                 assertThat(DaemonStatus.of(((RpcResponse.Success) answer).result()))
                         .isEqualTo(new DaemonStatus("0.1", PID, Duration.ofSeconds(90), directory, JdtlsState.READY));
             }
+        }
+
+        @Test
+        void theUptimeIsMeasuredOnTheMonotonicSourceAndNeverOnTheWallClock() throws IOException {
+            // The daemon reads no wall clock at all: a system clock set back after the start cannot make the uptime
+            // negative. Here the only source is the scripted monotonic one, which starts at an arbitrary origin.
+            serving();
+
+            try (var client = connect(socket())) {
+                assertThat(uptime(client)).isZero();
+                clock.advance(Duration.ofSeconds(1));
+                assertThat(uptime(client)).isEqualTo(Duration.ofSeconds(1));
+                clock.advance(Duration.ofMillis(1500));
+                assertThat(uptime(client)).isEqualTo(Duration.ofMillis(2500));
+            }
+        }
+
+        private static Duration uptime(Client client) throws IOException {
+            var answer = RpcResponse.parse(client.ask(STATUS_REQUEST));
+
+            return DaemonStatus.of(((RpcResponse.Success) answer).result()).uptime();
         }
 
         @Test
@@ -520,27 +538,20 @@ class DaemonServerTest {
         }
     }
 
-    /** A clock that only moves when the test says so. */
-    private static final class MutableClock extends Clock {
+    /**
+     * A monotonic source (the seam of {@code System.nanoTime}) that only moves when the test says so. Its origin is
+     * arbitrary, as the one of {@code System.nanoTime}: here close enough to the end of the range to wrap around.
+     */
+    private static final class NanoClock implements LongSupplier {
 
-        private Instant now = Instant.parse("2026-10-30T10:00:00Z");
+        private long now = Long.MAX_VALUE - Duration.ofSeconds(30).toNanos();
 
         void advance(Duration duration) {
-            now = now.plus(duration);
+            now += duration.toNanos();
         }
 
         @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
+        public long getAsLong() {
             return now;
         }
     }

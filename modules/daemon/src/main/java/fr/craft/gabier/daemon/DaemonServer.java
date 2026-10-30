@@ -11,13 +11,13 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.LongSupplier;
 
 /**
  * The daemon on its Unix socket: accepts the clients, one virtual thread each, and answers their requests with its
@@ -34,17 +34,18 @@ final class DaemonServer implements AutoCloseable {
     private final CompletableFuture<Void> stopRequested = new CompletableFuture<>();
     private boolean closed;
 
-    private DaemonServer(Path socket, ServerSocketChannel listener, Clock clock, long pid, ServedProject project) {
+    private DaemonServer(
+            Path socket, ServerSocketChannel listener, LongSupplier nanoClock, long pid, ServedProject project) {
         this.socket = socket;
         this.listener = listener;
         this.project = project;
-        var startedAt = clock.instant();
+        var startedAt = nanoClock.getAsLong();
         // The method table: to add a method, add it here (.claude/skills/add-daemon-method/SKILL.md).
         handler = new RequestHandler(List.of(
                 new StatusMethod(() -> new DaemonStatus(
                         ProtocolVersion.CURRENT.toString(),
                         pid,
-                        Duration.between(startedAt, clock.instant()),
+                        Duration.ofNanos(nanoClock.getAsLong() - startedAt),
                         project.root(),
                         project.state())),
                 new StopMethod(this::requestStop),
@@ -56,11 +57,13 @@ final class DaemonServer implements AutoCloseable {
      *
      * @param socket the path of the socket, already measured by {@code SocketLocation}
      * @param uid the numeric id of the user, as text
+     * @param nanoClock a monotonic clock in nanoseconds ({@code System::nanoTime}) that the uptime is measured on, never
+     *     the wall clock, which a user can set back; replaced by a hand-made one in the tests
      * @param project the project served: its language server is the one the methods of the catalogue ask, and it is
      *     closed when the daemon stops
      * @throws DaemonSocketException when the socket is not the daemon's to take, or cannot be set up
      */
-    static DaemonServer open(Path socket, String uid, Clock clock, long pid, ServedProject project) {
+    static DaemonServer open(Path socket, String uid, LongSupplier nanoClock, long pid, ServedProject project) {
         var guard = new SocketGuard(uid);
         try {
             guard.prepareFolder(Objects.requireNonNull(socket.getParent(), "the socket is in a folder"));
@@ -69,7 +72,7 @@ final class DaemonServer implements AutoCloseable {
             listener.bind(UnixDomainSocketAddress.of(socket));
             guard.restrict(socket);
 
-            return new DaemonServer(socket, listener, clock, pid, project);
+            return new DaemonServer(socket, listener, nanoClock, pid, project);
         } catch (IOException e) {
             throw DaemonSocketException.unavailable(socket, e);
         }
