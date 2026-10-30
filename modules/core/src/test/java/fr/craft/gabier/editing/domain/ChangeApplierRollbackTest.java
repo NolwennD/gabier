@@ -13,7 +13,6 @@ import fr.craft.gabier.editing.infrastructure.secondary.NioFileStore;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -28,9 +27,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 /** A write that fails in the middle of a set: the files are given back as they were. */
 class ChangeApplierRollbackTest {
-
-    /** A name that the plan cannot foresee is refused: the file system says so when it is written. */
-    private static final String TOO_LONG_FOR_A_FILE_SYSTEM = "x".repeat(300) + ".txt";
 
     @TempDir
     Path directory;
@@ -69,15 +65,14 @@ class ChangeApplierRollbackTest {
     }
 
     @Nested
-    class OnTheRealFileSystem {
-
-        private final ChangeApplier applier = new ChangeApplier(files);
+    class WithAFailureInjected {
 
         @Test
-        void restoresTheFileAlreadyWrittenWhenTheSecondOneCannotBeWritten() throws IOException {
+        void restoresTheFileAlreadyWrittenWhenTheSecondOneCannotBeCreated() throws IOException {
             Path edited = file("A.txt", "original\n");
-            Path impossible = path(TOO_LONG_FOR_A_FILE_SYSTEM);
+            Path impossible = path("New.txt");
             Map<String, String> before = snapshot();
+            ChangeApplier applier = new ChangeApplier(new FaultyFileStore(files).failing(Operation.CREATE, impossible));
 
             assertThatExceptionOfType(EditingException.class)
                     .isThrownBy(() -> applier.apply(set(append(edited, "changed "), new CreateFile(impossible))))
@@ -85,7 +80,7 @@ class ChangeApplierRollbackTest {
                         assertThat(exception.key()).isEqualTo(EditingErrorKey.WRITE_FAILED);
                         assertThat(exception.status()).isEqualTo(ErrorStatus.INTERNAL_SERVER_ERROR);
                         assertThat(exception.parameters()).isEqualTo(Map.of("file", impossible.toString()));
-                        assertThat(exception).hasCauseInstanceOf(FileSystemException.class);
+                        assertThat(exception).hasCauseInstanceOf(IOException.class);
                     });
 
             assertThat(edited).hasContent("original\n");
@@ -95,18 +90,15 @@ class ChangeApplierRollbackTest {
         @Test
         void removesTheFilesAlreadyCreated() throws IOException {
             Map<String, String> before = snapshot();
+            Path impossible = path("Two.txt");
+            ChangeApplier applier = new ChangeApplier(new FaultyFileStore(files).failing(Operation.CREATE, impossible));
 
             assertThatExceptionOfType(EditingException.class)
-                    .isThrownBy(() -> applier.apply(
-                            set(new CreateFile(path("One.txt")), new CreateFile(path(TOO_LONG_FOR_A_FILE_SYSTEM)))))
+                    .isThrownBy(() -> applier.apply(set(new CreateFile(path("One.txt")), new CreateFile(impossible))))
                     .satisfies(exception -> assertThat(exception.key()).isEqualTo(EditingErrorKey.WRITE_FAILED));
 
             assertThat(snapshot()).isEqualTo(before);
         }
-    }
-
-    @Nested
-    class WithAFailureInjected {
 
         @Test
         void restoresTheFirstFileWhenTheSecondEditFails() throws IOException {
@@ -233,7 +225,7 @@ class ChangeApplierRollbackTest {
         }
 
         @Test
-        void putsBackAFileMovedAwayWhenTheFileCreatedUnderItsOldNameCannotBeRemoved() throws IOException {
+        void reportsBothFilesAndOverwritesNeitherWhenTheFileCreatedUnderTheOldNameCannotBeRemoved() throws IOException {
             Path source = file("A.txt", "a\n");
             Path moved = path("Moved.txt");
             Path edited = file("C.txt", "c\n");
@@ -247,6 +239,11 @@ class ChangeApplierRollbackTest {
                         assertThat(exception.key()).isEqualTo(EditingErrorKey.ROLLBACK_INCOMPLETE);
                         assertThat(exception.parameters()).containsEntry("notRestored", source + ", " + moved);
                     });
+
+            // The created file stays under the old name, and the moved one is not put back over it.
+            assertThat(source).hasContent("");
+            assertThat(moved).hasContent("a\n");
+            assertThat(edited).hasContent("c\n");
         }
 
         @Test

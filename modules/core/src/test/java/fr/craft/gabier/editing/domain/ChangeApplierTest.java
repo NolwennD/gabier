@@ -461,6 +461,28 @@ class ChangeApplierTest {
                     });
         }
 
+        /** The same file as a path relative to the working directory of the process, which has no root of its own. */
+        private Path relative(Path file) {
+            return Path.of("").toAbsolutePath().relativize(file);
+        }
+
+        @Test
+        void refusesTheSameFileDeletedUnderAnAbsoluteAndARelativeSpelling() throws IOException {
+            Path file = file("A.java", "a");
+
+            assertRefusedAndUntouched(
+                    set(new DeleteFile(file), new DeleteFile(relative(file))), EditingErrorKey.FILE_MISSING);
+        }
+
+        @Test
+        void reportsTheAbsolutePathOfAFileGivenAsARelativePath() throws IOException {
+            Path file = file("A.java", "a");
+
+            ChangeReport report = applier.dryRun(set(new DeleteFile(relative(file))));
+
+            assertThat(report.deleted()).containsExactly(file);
+        }
+
         @Test
         void reportsTheNormalizedPathOfAFile() throws IOException {
             file("A.java", "a");

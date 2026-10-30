@@ -2,6 +2,7 @@ package fr.craft.gabier.editing.infrastructure.secondary;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assumptions.assumeThat;
 
 import java.io.IOException;
 import java.nio.file.FileAlreadyExistsException;
@@ -142,6 +143,24 @@ class NioFileStoreTest {
             assertThatExceptionOfType(IOException.class).isThrownBy(() -> store.write(folder, new byte[] {1}));
 
             assertThat(names(directory)).containsExactly("folder");
+        }
+
+        @Test
+        void leavesTheOriginalIntactWhenTheNewContentCannotBeWritten() throws IOException {
+            Path file = Files.writeString(directory.resolve("read-only.txt"), "old");
+            // The copy of the attributes makes the temporary file read-only too, so writing the new content throws.
+            Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("r--r--r--"));
+            // The super-user writes a read-only file: there is nothing to fail then.
+            assumeThat(Files.isWritable(file))
+                    .as("a read-only file is not writable for this user")
+                    .isFalse();
+
+            assertThatExceptionOfType(IOException.class).isThrownBy(() -> store.write(file, new byte[] {1}));
+
+            assertThat(file).hasContent("old");
+            assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(file)))
+                    .isEqualTo("r--r--r--");
+            assertThat(names(directory)).containsExactly("read-only.txt");
         }
 
         @Test
