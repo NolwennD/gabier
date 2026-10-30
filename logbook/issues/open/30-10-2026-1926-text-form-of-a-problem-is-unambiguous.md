@@ -17,4 +17,5 @@ Done when:
 - the behaviour on an unpaired surrogate is tested and stated;
 - `gabier $'‮'` shown once on the native binary; `bin/ci` green.
 
-Depends on: 30-10-2026-1548-problem-tests-prove-what-they-claim (same files: `Problem`, `ProblemTest`).
+Depends on: 30-10-2026-1548-problem-tests-prove-what-they-claim (same files: `Problem`, `ProblemTest`),
+30-10-2026-2036-diagnostics-text-neutralises-control-characters (the neutralisation becomes one shared function).
