@@ -65,9 +65,12 @@ none of this conversation:
 - the ticket: the path of the issue file, which it reads first, and the `Done when` points as the only scope;
 - the project rules: read `CLAUDE.md` if it exists and `.claude/rules/`; test first, then implement; update the rules and
   skills that its change makes outdated;
-- the quality: when it thinks the work is ready, run `bin/ci` on its worktree (`"$JAVA_HOME/bin/java" --source 25 bin/ci`
-  while mise does not trust the repository) and fix what it shows until every stage passes or is skipped for a stated
-  reason; it proves each `Done when` point itself, in its report;
+- the quality: while working it runs targeted tests, and at most `bin/ci --fast` (no native image, no real jdtls: the
+  slow checks stay off the working path); when it thinks the work is ready it runs the full `bin/ci` on its worktree
+  **once** (`"$JAVA_HOME/bin/java" --source 25 bin/ci` while mise does not trust the repository) and fixes what it shows
+  until every stage passes or is skipped for a stated reason (the `native` and `jdtls` stages skip themselves when no
+  changed file reaches them); a failed stage is run again alone with `--stage <name>`; it proves each `Done when` point
+  itself, in its report;
 - the delivery: all the work in **one commit**, files added by explicit paths (never `git add -A`); it does not close the
   issue and does not merge;
 - the supervision (below);
