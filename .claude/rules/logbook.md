@@ -1,7 +1,7 @@
 # Logbook issues
 
 The project's issues are plain files in `logbook/issues/`. Follow this when opening, editing or
-closing one.
+closing one. To open an issue and start its work, use the `ticket` skill.
 
 - **Where**: open issues in `logbook/issues/open/`, closed ones in `logbook/issues/closed/`. The
   `closed/` folder does not exist until the first closing: run `mkdir -p logbook/issues/closed`.
