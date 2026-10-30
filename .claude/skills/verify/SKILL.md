@@ -12,7 +12,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 ## Prerequisites
 
 - JDK 27 (`.sdkmanrc`) and the wrapper `./gradlew` (Gradle 9.8.2). Run it from the worktree of the ticket when you are in
-  one. The module Gradle projects are named after their folder under `modules/`: `:protocol`, `:cli`, `:daemon`.
+  one. The module Gradle projects are named after their folder under `modules/`: `:shared`, `:protocol`, `:core`, `:cli`, `:daemon`.
 - The tools of the pre-commit hook are installed with `mise install` (hk, open-java-format); in a new worktree run
   `mise trust` first. The same command installs the pinned jdtls in `~/.local/share/jdtls/<version>` (shared by all
   worktrees, version in `mise.toml`); inside mise, `GABIER_JDTLS` already points to its launcher.
@@ -43,16 +43,18 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 
 | Modified files                                                    | Command                                                                                                               |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `modules/<m>/src/**` (main or `*Test.java`)                       | `./gradlew :<m>:cleanTest :<m>:test --tests 'fr.craft.gabier.<m>.<Class>*'`                                           |
+| `modules/<m>/src/**` (main or `*Test.java`)                       | `./gradlew :<m>:cleanTest :<m>:test --tests 'fr.craft.gabier.<package>.<Class>*'`                                       |
 | `modules/daemon/src/integrationTest/**` (not `JdtlsProbeTest`)    | `./gradlew :daemon:cleanQuickProbeTest :daemon:quickProbeTest --tests 'fr.craft.gabier.daemon.<Class>*'`              |
-| one method                                                        | `--tests 'fr.craft.gabier.<m>.<Class>.<method>'`; inside a `@Nested` class: `'…<Class>$<Nested>.<method>'`           |
+| one method                                                        | `--tests 'fr.craft.gabier.<package>.<Class>.<method>'`; inside a `@Nested` class: `'…<Class>$<Nested>.<method>'`           |
 | `module-info.java`, `build.gradle.kts`, `build-logic/**`          | `./gradlew build`: the modules are compiled as modules, so a forbidden dependency fails here                          |
 | `settings.gradle.kts`, `gradle/libs.versions.toml`                | `./gradlew projects` to see the modules, then `./gradlew build`                                                       |
 | packages created or moved                                         | the architecture tests: `./gradlew :architecture:cleanTest :architecture:test`                                        |
 | `modules/cli/**`, `libs.versions.toml` (the native plugin)        | `./gradlew :cli:nativeCompile`, then run the binary alone, in an empty directory with an empty environment            |
 | any `.java` file                                                  | formatting: `mise exec -- hk check --all`; `hk fix --all` fixes it. Never bypass the hook                             |
 
-`*` after the class name also selects its `@Nested` classes. Always write `cleanTest` before `test`: see below.
+`<package>` is the package of the class, which is not always the folder name: `protocol` for `:protocol`,
+`editing.domain` for the classes of `:core`. `*` after the class name also selects its `@Nested` classes. Always write
+`cleanTest` before `test`: see below.
 
 ## 2. Read the output
 
