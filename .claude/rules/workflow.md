@@ -95,6 +95,11 @@ becomes a ticket, not a `TODO` and not a silent omission (`.claude/rules/logbook
 the same feature conflict when they are merged. They are done one after the other, and the order is declared with a
 `Depends on:` line in the later issue. Only independent tickets may run in parallel.
 
+**Coupled and ready issues are run as one batch** (decision of the user, 30-10-2026, to save time): the open issues of
+the same module that are ready are given to one subagent as one ticket, in one worktree, with one commit, one `bin/ci`
+and one review. The commit names the issues and each one gets its own `## Resolution`, every `Done when` point proven
+separately. Batches of different modules, which do not touch the same files, run in parallel.
+
 **Very small technical tasks are the supervisor's own**, without a ticket and without a subagent, to keep things fluid:
 a few lines, one concern, no new behavior (tidying a build file, a typo, a version, a rule or a skill wording). The
 supervisor checks the change with `bin/ci` (a build file: the proofs that its change could break), and commits it

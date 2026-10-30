@@ -60,7 +60,9 @@ With `--issue-only`: report the file name and stop.
 Launch it with the Agent tool, `subagent_type: "general-purpose"`, `model: "sonnet"` (the user prefers a Sonnet for the
 worker; use a stronger model only when the ticket is hard or the user asks) and `isolation: "worktree"`: the worktree starts from
 `main`, which must hold the issue, which is why the commit comes first. The prompt is self-contained, the subagent has
-none of this conversation:
+none of this conversation. **Take the other ready issues of the same module with it** (`.claude/rules/workflow.md`,
+"Tickets": a batch): the prompt lists every issue file, each one's `Done when` points are the scope, and the subagent
+delivers one commit that proves them all, one by one, in its report:
 
 - the ticket: the path of the issue file, which it reads first, and the `Done when` points as the only scope;
 - the project rules: read `CLAUDE.md` if it exists and `.claude/rules/`; test first, then implement; update the rules and

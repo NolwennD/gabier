@@ -46,6 +46,12 @@ A review is made on code that can go to `main` without breaking anything: the wo
 commit (the pre-flight checks it, and sends the worker back after a rebase that touched code). What a tool proves is not
 re-read by a person: the reviewer's job starts where the tools stop.
 
+**A small ticket is not reviewed** (decision of the user, 30-10-2026, to save time): when the diff changes at most 30
+lines of production code (tests, docs, rules, skills and build files do not count) and none of them parses an input
+that comes from outside, does I/O, concurrency or a process, or handles anything security-relevant (a path, a
+terminal, a socket, a permission), or when the change is a rename or a move with the behaviour untouched. Say so in the
+`## Resolution` ("not reviewed: small ticket, <reason>") and skip the rest of this step. A doubt means a review.
+
 The supervisor does not read the code: a fresh agent does (`general-purpose`, `model: "sonnet"`, no worktree, read-only),
 one that did not do the work and has none of its reasoning. The review starts from the **business cases handled by the
 tests**, not from a full read of the diff, to keep its context small. Give it only: the issue file, the range
@@ -78,7 +84,9 @@ No second review, whatever the findings.
   ticket, once the ticket is merged (`.claude/rules/workflow.md`, "Tickets").
 - **Any other problem** (a bug, a weakness, a latent risk): open an issue on the fly with the skill `ticket --issue-only`,
   saying what the reviewer saw, where (file and line) and how to reproduce. It is fixed later by its own ticket, not in
-  this one. Group findings that are the same problem into one issue, and open none for a pure matter of taste.
+  this one. Group findings that are the same problem into one issue, and the findings of one review that fall in the
+  same module into one issue too (a `Done when` point per finding): one ticket, one `bin/ci`, one review. Open none for a
+  pure matter of taste.
 - **A choice that is the user's** (a decision they took earlier, a rule to change): do not decide it, report it to the
   user.
 - Every finding, and what became of it, is listed in the issue's resolution.
