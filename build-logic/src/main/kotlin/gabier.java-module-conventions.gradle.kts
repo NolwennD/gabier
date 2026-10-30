@@ -11,6 +11,27 @@ java {
   }
 }
 
+// Third-party jars that are not real modules, given a descriptor here and not in the module that uses them: the
+// descriptor is the same for any later module that needs the same jar, and the build fails on any other jar that is not
+// a module (no module-info) or only an automatic one, instead of putting it on the module path as a guess.
+extraJavaModuleInfo {
+  failOnMissingModuleInfo = true
+  failOnAutomaticModules = true
+
+  // The LSP4J 1.0.0 jars have no module-info and no Automatic-Module-Name: their automatic names come from the file
+  // names. Their descriptors are not closed (no closeModule()): Gson reads and writes their fields by reflection, which
+  // needs the packages open at run time.
+  module("org.eclipse.lsp4j:org.eclipse.lsp4j", "org.eclipse.lsp4j") {
+    exportAllPackages()
+    requiresTransitive("org.eclipse.lsp4j.jsonrpc")
+    requires("com.google.gson")
+  }
+  module("org.eclipse.lsp4j:org.eclipse.lsp4j.jsonrpc", "org.eclipse.lsp4j.jsonrpc") {
+    exportAllPackages()
+    requires("com.google.gson")
+  }
+}
+
 tasks.compileJava {
   options.release = 25
 }

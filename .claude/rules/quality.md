@@ -26,6 +26,12 @@ the review (see the `ticket` skill). The formatting hook, the coverage gate and 
   (domain, application, primary and secondary adapters, pointing towards the domain), the application off the
   infrastructure and the primary and secondary adapters apart, next to the module boundaries that JPMS already
   enforces at compile time.
+- **LSP4J stays in the daemon**: Eclipse LSP4J (`org.eclipse.lsp4j..`) is used by `fr.craft.gabier.daemon..` only; an
+  architecture test fails on any class outside it that depends on an LSP4J type. Its jars are automatic modules, given
+  real descriptors by `extraJavaModuleInfo` in `gabier.java-module-conventions` (which fails the build on any other
+  automatic module): a new third-party jar that is not a module is declared there, with its Maven coordinates in
+  `gradle/modules.properties` and its version in the catalog under the name of its Java module. The task
+  `:daemon:selfCheck` (part of `check`) runs the installed daemon on the module path.
 - **Modern Java**: write idiomatic code for the release of the module (records, sealed types,
   pattern matching, sequenced collections, and what the release adds), not older idioms.
 - **Review before closing**: a neutral Java reviewer reads the change once before the ticket is closed. A finding that

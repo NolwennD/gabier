@@ -53,6 +53,11 @@ class HexagonalArchTest {
         "java..", ROOT_PACKAGE + "." + SHARED + "..", ROOT_PACKAGE + "..domain.."
     };
 
+    /** The only place where LSP4J lives: the daemon module (the {@code daemon} context). */
+    private static final String DAEMON_PACKAGE = ROOT_PACKAGE + ".daemon";
+
+    private static final String LSP4J_PACKAGE = "org.eclipse.lsp4j";
+
     private static final JavaClasses classes = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
             .importPackages(ROOT_PACKAGE);
@@ -220,6 +225,23 @@ class HexagonalArchTest {
                     .because("Secondary should not loop to its own context's primary")
                     .allowEmptyShould(true)
                     .check(classes));
+        }
+    }
+
+    @Nested
+    class Lsp4j {
+
+        @Test
+        void shouldOnlyBeUsedByTheDaemon() {
+            noClasses()
+                    .that()
+                    .resideOutsideOfPackage(DAEMON_PACKAGE + "..")
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAPackage(LSP4J_PACKAGE + "..")
+                    .because("LSP4J lives in the daemon module and no other module sees one of its types")
+                    .allowEmptyShould(true)
+                    .check(classes);
         }
     }
 
