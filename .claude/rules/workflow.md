@@ -76,7 +76,9 @@ the same feature conflict when they are merged. They are done one after the othe
 **Very small technical tasks are the supervisor's own**, without a ticket and without a subagent, to keep things fluid:
 a few lines, one concern, no new behavior (tidying a build file, a typo, a version, a rule or a skill wording). The
 supervisor checks the change with `bin/ci` (a build file: the proofs that its change could break), and commits it
-directly on `main`. Not when a ticket being worked on touches the same files, since that is a coupled change and would
+directly on `main`. The same goes for the small findings of a review and for the friction met along the way, by a
+subagent or by the supervisor (a script that fails, a rule that no longer matches the practice): when they are that
+small, the supervisor fixes them itself; a bigger one becomes a ticket opened on the fly. Not when a ticket being worked on touches the same files, since that is a coupled change and would
 conflict with it; not for a feature, a bug fix that needs a test of its own, or a new module: those are tickets.
 
 Another exception, when the user says so ("no need for a ticket"): the change is committed directly on `main`, whatever

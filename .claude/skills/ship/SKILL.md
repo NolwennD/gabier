@@ -59,6 +59,8 @@ No second review, whatever the findings.
 
 - **A finding that shows a `Done when` point is not met**: send it to the subagent (`SendMessage`), once. It fixes it,
   runs `bin/ci` again and keeps one commit. Its fix is checked by `bin/ci`, not reviewed again.
+- **A very small problem** (a few lines, one concern, no new behavior): the supervisor fixes it itself, without a
+  ticket, once the ticket is merged (`.claude/rules/workflow.md`, "Tickets").
 - **Any other problem** (a bug, a weakness, a latent risk): open an issue on the fly with the skill `ticket --issue-only`,
   saying what the reviewer saw, where (file and line) and how to reproduce. It is fixed later by its own ticket, not in
   this one. Group findings that are the same problem into one issue, and open none for a pure matter of taste.
