@@ -18,3 +18,7 @@ The pre-commit hook formats the staged `.java` files with
 configured in `hk.pkl`. Never bypass it with `--no-verify`.
 
 To format or check every Java file by hand: `hk fix --all` and `hk check --all`.
+
+## License
+
+gabier is released under the [Apache License 2.0](LICENSE).
