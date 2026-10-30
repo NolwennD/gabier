@@ -83,22 +83,8 @@ The supervisor answers by continuing the same agent (`SendMessage` with its id),
 - **An unrelated bug**: run this skill with `--issue-only` for it, on `main`, right away; never fix it inside the
   ticket's branch.
 - **A question**: answer it, or ask the user when the answer is theirs.
-- **Done**: in this order.
-  1. Check the `Done when` points yourself by running the checks, not by trusting the report.
-  2. Run the quality gates of `.claude/rules/quality.md` (`./gradlew check` once they exist): coverage at 100%, the
-     architecture tests.
-  3. **Neutral review.** Launch a fresh agent (`general-purpose`, no worktree, read-only) that did not do the work and
-     has none of its reasoning. Give it only: the issue file, the range `main..<branch>`, `.claude/rules/`, and this
-     brief: "You are a senior Java reviewer who knows the recent releases well (21 to 27: records and record patterns,
-     sealed types, pattern matching for switch, unnamed variables, sequenced collections, virtual threads, structured
-     concurrency, scoped values, stream gatherers, modules). Review this change without modifying any file. Check:
-     correctness and edge cases; idiomatic modern Java for the module's release; test quality (does each test fail for
-     the right reason); every `@ExcludeFromGeneratedCodeCoverage` use is truly too complicated or too unlikely to test;
-     the core's purity (the domain depends only on `java..`); simplicity (nothing beyond the issue). Report blocking
-     findings first, then suggestions, each with file and line, in under 300 words, or say 'nothing to report'."
-     Send each blocking finding back to the worker (`SendMessage`), then review again. Suggestions go to the user.
-  4. Once the review is clean: close the issue as the logbook rule says, merge the branch into `main`, then remove the
-     worktree and the branch. If an `origin` remote exists, `git push -u origin HEAD` publishes the branch first.
+- **Done**: run the skill `ship` on the branch the subagent reports. It checks the work, has it reviewed by a neutral
+  agent, merges it into `main`, closes the issue and cleans up the worktree.
 
 ### 4. Report to the user
 
@@ -110,8 +96,7 @@ The issue (file name), the branch, the commit, and every unrelated bug with the 
 - Writing a time that did not come from `date`.
 - A second issue for a subject that has one open.
 - `git add -A`, `git add .`, or committing anything but the issue file on `main` when opening a ticket.
-- Closing or merging before the supervisor has checked the `Done when` points itself, run the quality gates and had the
-  neutral review come back clean.
+- Closing or merging a ticket other than through the skill `ship`.
 - Pushing to `main`.
 - French in the issue, the commit or the branch name: translate.
 
