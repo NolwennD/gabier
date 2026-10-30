@@ -1,4 +1,4 @@
 module fr.craft.gabier.cli {
     requires fr.craft.gabier.protocol;
-    requires fr.craft.gabier.shared;
+    requires static fr.craft.gabier.shared;
 }
