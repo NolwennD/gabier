@@ -10,5 +10,4 @@ Done when:
 - the module's `module-info` requires nothing but `protocol`.
 
 Depends on: gradle-skeleton-and-protocol-module, architecture-tests-for-a-pure-java-core (the architecture tests
-cover this module too, and both edit the build files), rename-the-base-package (so that the new module is born under
-the new name).
+cover this module too, and both edit the build files).
