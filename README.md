@@ -102,7 +102,7 @@ U+034F, the variation selectors (U+FE00 to U+FE0F, U+E0100 to U+E01EF) and an un
 space (U+0020), and every other character, such as an accent, an ideograph or an emoji. The same goes for every text
 the cli prints from what the daemon or the user gave: the problem of a refusal, and the whole line of `gabier status`.
 With `--json` the text is the exact one, and JSON escapes only what it must plus DEL and U+0080 to U+009F (written
-`\u007f`, `\u009b`...), so that the JSON does not drive a terminal either. The daemon serves the project it was started
+`\u007f`, `\u009b`...), so that the C0, DEL and C1 controls of the JSON do not drive a terminal (the other characters above are written as they are in `--json`). The daemon serves the project it was started
 for (see above).
 
 ```text
