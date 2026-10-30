@@ -215,6 +215,80 @@ class ProblemTest {
         }
 
         @Test
+        void showsABidirectionalControlAsAnEscapeSoThatAnExtensionIsNotReversed() {
+            var text = problem("evil\u202egpj.txt", Map.of("name", "\u2066x\u2069"))
+                    .toText();
+
+            assertThat(text).isEqualTo("Some key: evil\\u202egpj.txt (some-key; name=\\u2066x\\u2069)");
+        }
+
+        @Test
+        void showsAZeroWidthCharacterAsAnEscapeSoThatItHidesNothing() {
+            var text = problem("a\u200bb\u200d\ufeff", Map.of()).toText();
+
+            assertThat(text).isEqualTo("Some key: a\\u200bb\\u200d\\ufeff (some-key)");
+        }
+
+        @Test
+        void showsATagCharacterOutsideTheBasicPlaneAsAnEscapeOfItsCodePoint() {
+            var tag = new String(Character.toChars(0xE0041));
+
+            assertThat(problem("a" + tag + "b", Map.of()).toText()).isEqualTo("Some key: a\\u{e0041}b (some-key)");
+        }
+
+        @Test
+        void tellsAnEscapeFromTheSixCharactersOfAnEscapeWrittenByHand() {
+            var real = problem("\u001b[2J", Map.of()).toText();
+            var written = problem("\\u001b[2J", Map.of()).toText();
+
+            assertThat(real).isEqualTo("Some key: \\u001b[2J (some-key)");
+            assertThat(written).isEqualTo("Some key: \\\\u001b[2J (some-key)").isNotEqualTo(real);
+        }
+
+        @Test
+        void doublesEveryBackslashWhereverItIs() {
+            assertThat(problem("a\\b\\\\", Map.of("p\\", "c:\\dir")).toText())
+                    .isEqualTo("Some key: a\\\\b\\\\\\\\ (some-key; p\\\\=c:\\\\dir)");
+        }
+
+        @Test
+        void showsAnUnpairedSurrogateAsAnEscapeOfItsCodeUnit() {
+            var text = problem("a\ud800b\udc00c", Map.of("p", "\udbff")).toText();
+
+            assertThat(text).isEqualTo("Some key: a\\ud800b\\udc00c (some-key; p=\\udbff)");
+        }
+
+        @Test
+        void showsAnUnpairedHighSurrogateAtTheEndOfTheTextAsAnEscape() {
+            assertThat(problem("end\ud83d", Map.of()).toText()).isEqualTo("Some key: end\\ud83d (some-key)");
+        }
+
+        @Test
+        void keepsAPairedSurrogateAsOneCharacter() {
+            assertThat(problem("\ud83d\ude00", Map.of()).toText()).isEqualTo("Some key: \ud83d\ude00 (some-key)");
+        }
+
+        @Test
+        void containsNoControlFormatOrSeparatorCharacterWhateverTheCodePoint() {
+            var everyCodePoint = new StringBuilder();
+            for (var codePoint = 0; codePoint <= Character.MAX_CODE_POINT; codePoint++) {
+                if (Character.getType(codePoint) != Character.SURROGATE) {
+                    everyCodePoint.appendCodePoint(codePoint);
+                }
+            }
+
+            var text = problem(everyCodePoint.toString(), Map.of()).toText();
+
+            assertThat(text.codePoints().filter(Character::isISOControl)).isEmpty();
+            assertThat(text.codePoints().filter(codePoint -> Character.getType(codePoint) == Character.FORMAT))
+                    .isEmpty();
+            assertThat(text.codePoints().filter(codePoint -> codePoint == 0x2028 || codePoint == 0x2029))
+                    .isEmpty();
+            assertThat(text.codePoints().filter(codePoint -> Character.getType(codePoint) == Character.SURROGATE))
+                    .isEmpty();
+        }
+
+        @Test
         void containsNoControlCharacterWhateverTheInput() {
             var everyChar = new StringBuilder();
             for (char character = 0; character < 0x100; character++) {
