@@ -59,11 +59,12 @@ class ScenariosTest {
     }
 
     @Test
-    void holdsTheCleanFileTheErrorTheFourRenamesAndTheRefusals() {
+    void holdsTheCleanFileTheErrorTheWarningTheFourRenamesAndTheRefusals() {
         assertThat(ALL.stream().map(Scenario::name))
                 .containsExactly(
                         "diagnostics-of-a-clean-file",
                         "diagnostics-of-a-file-with-an-error",
+                        "diagnostics-of-a-file-with-a-warning",
                         "diagnostics-while-the-server-imports",
                         "diagnostics-of-a-file-outside-the-project",
                         "rename-a-local-variable",
@@ -139,6 +140,17 @@ class ScenariosTest {
         assertThat(((Answer.Diagnosed) broken.answer()).diagnostics())
                 .extracting(Diagnostic::severity)
                 .containsExactly(Diagnostic.Severity.ERROR);
+    }
+
+    @Test
+    void showsAFileWithOnlyAWarningAtTheNameOfTheVariable() {
+        Scenario sloppy = ALL.get(2);
+        Diagnostic warning = ((Answer.Diagnosed) sloppy.answer()).diagnostics().getFirst();
+
+        assertThat(((Answer.Diagnosed) sloppy.answer()).diagnostics()).hasSize(1);
+        assertThat(warning.severity()).isEqualTo(Diagnostic.Severity.WARNING);
+        assertThat(identifierAt(sloppy, sloppy.request().file(), warning.position()))
+                .isEqualTo("unused");
     }
 
     @Test

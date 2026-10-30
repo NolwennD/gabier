@@ -10,7 +10,7 @@ import java.util.List;
  * @param projectRoot the folder jdtls is initialized on
  * @param expectedProjects the folders of the projects jdtls must have imported before the session is ready (absolute
  *     and normalized, whatever they were given as)
- * @param timeout how long the whole start may take, all its waits together
+ * @param timeout how long the whole start may take, all its waits together, and then each request to the started jdtls
  * @param pollInterval how long to wait between two questions to jdtls about its projects
  * @param shutdownTimeout how long jdtls is given to answer the shutdown and to exit, and then each process of its tree
  *     to end once killed

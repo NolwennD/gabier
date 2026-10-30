@@ -106,9 +106,14 @@ class HexagonalArchTest {
     @Nested
     class BoundedContexts {
 
+        /**
+         * The daemon is not a business context: it is the composition root and the home of the adapters of the real
+         * servers, so it depends on the domain of the contexts whose ports it implements (as the issue that started
+         * the jdtls adapter said). It is the only exemption, and it only exempts what the daemon depends on.
+         */
         @Test
         void shouldNotDependOnOtherBoundedContextDomains() {
-            contexts.forEach(context -> {
+            contexts.stream().filter(context -> !context.equals(DAEMON_PACKAGE)).forEach(context -> {
                 String[] otherDomains = otherBusinessContextsDomains(context);
                 if (otherDomains.length == 0) {
                     return;

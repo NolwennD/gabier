@@ -11,6 +11,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import org.eclipse.lsp4j.ExecuteCommandParams;
@@ -32,6 +33,8 @@ class JdtlsSessionTest {
     private static final String URI_B = "file:///work/project/modules/b/";
     private static final Duration LONG = Duration.ofSeconds(30);
     private static final Duration SHORT = Duration.ofMillis(500);
+    /** Long enough for the whole start of the fake, short enough to let it pass in a test. */
+    private static final Duration MEDIUM = Duration.ofSeconds(2);
 
     private final FakeJdtls fake = new FakeJdtls();
     private final List<String> log = new CopyOnWriteArrayList<>();
@@ -155,16 +158,30 @@ class JdtlsSessionTest {
         }
 
         @Test
-        void givesTheServerAndTheWatchToWhoKeepsTalkingToJdtls() throws Exception {
+        void givesTheServerAndAWatchToWhoKeepsTalkingToJdtls() throws Exception {
             fake.listsProjects(URI_A);
 
             try (JdtlsSession session = start()) {
                 var answer =
                         session.server().getWorkspaceService().executeCommand(new ExecuteCommandParams("x", List.of()));
 
-                assertThat(session.watch().await("the project list", () -> answer))
+                assertThat(session.newWatch().await("the project list", () -> answer))
                         .isEqualTo(List.of(URI_A));
-                session.watch().pause("a short pause", Duration.ofMillis(1));
+                session.newWatch().pause("a short pause", Duration.ofMillis(1));
+            }
+        }
+
+        @Test
+        void everyWatchHasADeadlineOfItsOwnStartedWhenItIsCreated() throws Exception {
+            fake.listsProjects(URI_A);
+
+            try (JdtlsSession session = start(fake, MEDIUM)) {
+                Thread.sleep(MEDIUM.plusMillis(200));
+                var answer =
+                        session.server().getWorkspaceService().executeCommand(new ExecuteCommandParams("x", List.of()));
+
+                assertThat(session.newWatch().await("the project list", () -> answer))
+                        .isEqualTo(List.of(URI_A));
             }
         }
     }
@@ -457,7 +474,8 @@ class JdtlsSessionTest {
 
             assertThatThrownBy(session::close).isInstanceOf(InterruptedException.class);
 
-            assertThat(fake.process().isAlive()).isFalse();
+            // The kill was sent before the interruption was noticed; the process is reaped a moment later.
+            assertThat(fake.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
             assertThat(session.dataDirectory()).doesNotExist();
         }
     }

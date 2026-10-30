@@ -4,14 +4,18 @@ import java.io.IOException;
 import java.nio.channels.Channels;
 import java.nio.channels.Pipe;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.eclipse.lsp4j.Diagnostic;
 import org.eclipse.lsp4j.DidChangeConfigurationParams;
 import org.eclipse.lsp4j.DidChangeTextDocumentParams;
 import org.eclipse.lsp4j.DidChangeWatchedFilesParams;
@@ -73,6 +77,10 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private final List<String> commands = new CopyOnWriteArrayList<>();
     private boolean answersNothingToProjects;
     private String publishesOnInitialized = "";
+    private final Map<String, List<List<Diagnostic>>> publicationsOnOpen = new ConcurrentHashMap<>();
+    private Duration pauseBetweenPublications = Duration.ZERO;
+    private final List<Opened> opened = new CopyOnWriteArrayList<>();
+    private final List<String> closed = new CopyOnWriteArrayList<>();
 
     private volatile Process process;
     private volatile Path data;
@@ -129,6 +137,25 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         return this;
     }
 
+    /** What jdtls was sent with a {@code didOpen}. */
+    record Opened(String uri, String text) {}
+
+    /**
+     * Publishes these diagnostics for the file when it is opened, in the stages given (one publication per list), as
+     * jdtls does for a file it opens: a quick one, then the one after the build.
+     */
+    @SafeVarargs
+    final FakeJdtls publishesOnOpen(Path file, List<Diagnostic>... stages) {
+        publicationsOnOpen.put(file.toUri().toString(), List.of(stages));
+        return this;
+    }
+
+    /** The time the fake lets pass between two stages of the publication of a file. */
+    FakeJdtls pausesBetweenPublications(Duration pause) {
+        this.pauseBetweenPublications = pause;
+        return this;
+    }
+
     /** What {@code java.project.getAll} answers, in turn; the last answer is repeated. */
     FakeJdtls listsProjects(String... projectUris) {
         projectAnswers.add(List.of(projectUris));
@@ -164,6 +191,14 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         }
     }
 
+    private void pause() {
+        try {
+            Thread.sleep(pauseBetweenPublications);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     Process process() {
         return process;
     }
@@ -191,6 +226,19 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
 
     int exitNotifications() {
         return exitNotifications.get();
+    }
+
+    List<Opened> opened() {
+        return opened;
+    }
+
+    /** The documents closed, once there are as many as expected: the notifications travel on their own thread. */
+    List<String> closed(int expected) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+        while (closed.size() < expected && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        return List.copyOf(closed);
     }
 
     List<String> commands() {
@@ -260,13 +308,25 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         public TextDocumentService getTextDocumentService() {
             return new TextDocumentService() {
                 @Override
-                public void didOpen(DidOpenTextDocumentParams params) {}
+                public void didOpen(DidOpenTextDocumentParams params) {
+                    String uri = params.getTextDocument().getUri();
+                    opened.add(new Opened(uri, params.getTextDocument().getText()));
+                    var stages = publicationsOnOpen.getOrDefault(uri, List.of());
+                    for (int stage = 0; stage < stages.size(); stage++) {
+                        if (stage > 0) {
+                            pause();
+                        }
+                        client.publishDiagnostics(new PublishDiagnosticsParams(uri, stages.get(stage)));
+                    }
+                }
 
                 @Override
                 public void didChange(DidChangeTextDocumentParams params) {}
 
                 @Override
-                public void didClose(DidCloseTextDocumentParams params) {}
+                public void didClose(DidCloseTextDocumentParams params) {
+                    closed.add(params.getTextDocument().getUri());
+                }
 
                 @Override
                 public void didSave(DidSaveTextDocumentParams params) {}

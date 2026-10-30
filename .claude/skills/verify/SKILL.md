@@ -26,36 +26,40 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   in the same project): their jar gets a descriptor from a `module(...)` rule in `gabier.java-module-conventions`, which
   the build needs for any jar on the test runtime path, so the fixtures of another module need a rule of their own. The
   tests of the fixtures themselves are in `modules/core/src/test`.
-- The jdtls adapter is in the main code of the daemon (`fr.craft.gabier.daemon`: `JdtlsSession` starts jdtls, waits
-  until it is ready and ends its process tree on close; `JdtlsWatch`, `JdtlsClient`, `JdtlsLauncher`). Its unit tests
-  (`modules/daemon/src/test`, run by `:daemon:test`) use `FakeJdtls`: a language server in the test process over pipes,
-  with a `sleep` or `sh` child process standing in for the jdtls process. No jdtls is started.
-- The integration tests of the daemon (`modules/daemon/src/integrationTest`) are split by class name into two Gradle
-  tasks. `./gradlew :daemon:quickProbeTest` runs the ones that start no jdtls (`DiagnosticsTest`, `QuietWaitTest`:
-  what only the probe needs, with a `sleep` or `sh` child process standing in for jdtls): `check` runs it, its results are
-  shown and counted by `bin/ci`, and it needs no `GABIER_JDTLS`. `--tests` picks one class, and `cleanQuickProbeTest`
-  comes before it, like `cleanTest`. A test that starts a real jdtls must be the class named by `realProbe` in
-  `modules/daemon/build.gradle.kts` (change the constant if it is renamed), otherwise `check` runs it.
-- The jdtls probe, `./gradlew jdtlsProbe` (`JdtlsProbeTest` alone), is not run by `check` (which only compiles it, so
-  that it cannot rot): it starts a real jdtls on the checkout through `JdtlsSession`, in a
-  fresh temporary `-data` directory, which waits, up to ten minutes in all for its waits together (about a minute
-  and a half here), until jdtls has imported every module. It then opens the `module-info.java` and the classes of each
-  module (and the sources of `architecture`), requires a `publishDiagnostics` for each, sent after the `didOpen` of that
-  file (an empty one counts, silence fails naming the file; a publication that arrived earlier, or for a URI that is
-  not `file:`, is not an answer), after an in-memory control file with a type error that jdtls must report. It then
-  waits until jdtls has published nothing for five seconds (it publishes in stages), inside the same deadline, and only
-  then judges the latest publication of each file: no error in them. It fails at once, with the exit code in the message, when jdtls
-  exits, and at once on a `language/status` of type `Error`; a timeout says what was awaited and for how long. It needs
-  `GABIER_JDTLS`, the path of the `jdtls` launcher (`mise exec -- ./gradlew jdtlsProbe` outside an activated mise), and
-  fails at once, never skips, without it. `JdtlsSession` stops jdtls (the whole process tree) and deletes the data directory in every case. jdtls leaves
-  its Eclipse files (`.project`, `.classpath`, `.settings/`, `bin/`) in the checkout: they are git-ignored.
+- The jdtls adapter is in the main code of the daemon (`fr.craft.gabier.daemon`). `JdtlsSession` starts jdtls, waits
+  until it is ready and ends its process tree on close (`JdtlsWatch`, `JdtlsClient`, `JdtlsLauncher`).
+  `JdtlsLanguageServer` implements the port `JavaLanguageServer` on top of it (with `Diagnostics`, the store of what
+  jdtls publishes, and `QuietWait`): it starts jdtls in the background and answers "not ready" until the start is over;
+  it implements `diagnostics` and not yet `rename`. Its unit tests (`modules/daemon/src/test`, run by `:daemon:test`)
+  use `FakeJdtls`: a language server in the test process over pipes, with a `sleep` or `sh` child process standing in
+  for the jdtls process. No jdtls is started. The daemon depends on the domain of the core (`requires
+  fr.craft.gabier.core`): it is the composition root, the one exemption of the architecture rule on the contexts.
+- The integration tests of the daemon (`modules/daemon/src/integrationTest`) all start a real jdtls and need
+  `GABIER_JDTLS`, the path of the `jdtls` launcher (`mise exec -- ./gradlew jdtlsProbe` outside an activated mise); they
+  fail at once, never skip, without it. `check` only compiles them. `./gradlew jdtlsProbe` runs them (`--tests` picks a
+  class), and shows their output, which is the evidence:
+  - `JdtlsProbeTest` starts jdtls on the checkout through `JdtlsLanguageServer`, in a fresh temporary `-data` directory,
+    which waits, up to ten minutes in all for its waits together (about a minute and a half here), until jdtls has
+    imported every module. Asked at once, it must refuse as not ready. It then asks the diagnostics of the
+    `module-info.java` and the classes of each module (and the sources of `architecture`) in one request: jdtls
+    publishes in stages, so the adapter answers the latest publication of each file once jdtls has published nothing
+    for five seconds. No file may have an error; a file without any diagnostic, asked for alone, gets an empty list. A
+    temporary broken source (`GabierProbeBroken.java`, deleted whatever happens) next to it must get its error, and a
+    file outside the checkout is refused. It fails at once, with the exit code in the message, when jdtls exits, and at
+    once on a `language/status` of type `Error`; a timeout says what was awaited and for how long.
+  - `ScenarioReplayTest` replays the contract scenarios of the core (`Scenarios.all()`) that the adapter implements
+    against a real jdtls started on each scenario's project (written in a temporary folder, with an Eclipse `.project`
+    and `.classpath` that jdtls imports without network), and fails on any difference. How to add one:
+    `.claude/skills/add-scenario/SKILL.md`.
+  `JdtlsSession` stops jdtls (the whole process tree) and deletes the data directory in every case. jdtls leaves its
+  Eclipse files (`.project`, `.classpath`, `.settings/`, `bin/`) in the checkout: they are git-ignored.
 
 ## 1. Choose the scope
 
 | Modified files                                                    | Command                                                                                                               |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `modules/<m>/src/**` (main, `*Test.java`, `testFixtures`)         | `./gradlew :<m>:cleanTest :<m>:test --tests 'fr.craft.gabier.<package>.<Class>*'`                                       |
-| `modules/daemon/src/integrationTest/**` (not `JdtlsProbeTest`)    | `./gradlew :daemon:cleanQuickProbeTest :daemon:quickProbeTest --tests 'fr.craft.gabier.daemon.<Class>*'`              |
+| `modules/daemon/src/integrationTest/**`, a scenario of the core   | `./gradlew :daemon:jdtlsProbe --tests 'fr.craft.gabier.daemon.<Class>'` (real jdtls, `GABIER_JDTLS`)                  |
 | one method                                                        | `--tests 'fr.craft.gabier.<package>.<Class>.<method>'`; inside a `@Nested` class: `'…<Class>$<Nested>.<method>'`           |
 | `module-info.java`, `build.gradle.kts`, `build-logic/**`          | `./gradlew build`: the modules are compiled as modules, so a forbidden dependency fails here                          |
 | `settings.gradle.kts`, `gradle/libs.versions.toml`                | `./gradlew projects` to see the modules, then `./gradlew build`                                                       |
@@ -90,7 +94,7 @@ The targeted test never closes a task: it misses what a changed class reaches wi
 is ready, run the local CI on your worktree:
 
 ```bash
-bin/ci                      # formatting, build, tests (quick probe tests included) and gates, native cli, jdtls probe
+bin/ci                      # formatting, build, tests and gates, native cli, jdtls probe and scenario replay
 bin/ci --list               # the stages, and why one is skipped
 bin/ci --stage test         # one stage
 ```

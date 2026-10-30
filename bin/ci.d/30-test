@@ -11,10 +11,10 @@ import java.util.stream.Stream;
 
 /**
  * Stage {@code test} of the local CI (see {@code bin/ci}): the tests and the gates (coverage, architecture), from a
- * clean test state so that a cached result never passes for a fresh one (the unit tests and the daemon's quick probe
- * tests, which need no jdtls), then the test counts per project and test task, read from the XML reports. A project that
- * has test sources but reports no test fails the stage: a green build that ran nothing is not a pass. Runs in the
- * current directory, the checkout under verification.
+ * clean test state so that a cached result never passes for a fresh one (the unit tests, which need no jdtls), then
+ * the test counts per project and test task, read from the XML reports. A project that has test sources but reports
+ * no test fails the stage: a green build that ran nothing is not a pass. Runs in the current directory, the checkout
+ * under verification.
  */
 public final class Test {
 
@@ -26,7 +26,7 @@ public final class Test {
             System.out.println("tests and gates (coverage, architecture), from a clean test state");
             return;
         }
-        int status = run("./gradlew", "cleanTest", "cleanQuickProbeTest", "check", "--console=plain");
+        int status = run("./gradlew", "cleanTest", "check", "--console=plain");
         List<String> silent = printTestCounts(Path.of("."));
         if (!silent.isEmpty()) {
             System.err.println("These projects have test sources but ran no test: " + String.join(", ", silent));
@@ -59,8 +59,10 @@ public final class Test {
             if (Files.isDirectory(resultsRoot)) {
                 try (Stream<Path> taskDirs = Files.list(resultsRoot)) {
                     // jdtlsProbe is the jdtls stage's: its results, stale or not, are not the ones of this stage.
+                    // quickProbeTest is a task that no longer exists: what an older run left is not a result either.
                     tasks.addAll(taskDirs.filter(Files::isDirectory)
-                            .filter(dir -> !dir.getFileName().toString().equals("jdtlsProbe"))
+                            .filter(dir ->
+                                    !List.of("jdtlsProbe", "quickProbeTest").contains(dir.getFileName().toString()))
                             .sorted().toList());
                 }
             }

@@ -19,31 +19,38 @@ import java.util.Map;
 
 /**
  * The catalogue of the contract scenarios: every answer the core relies on from a language server for Java. The
- * project is two small classes of a package {@code demo} (and a third, broken, for the error): a {@code Greeter} with a
- * field, a method and a local variable, and a {@code Main} that uses it. All the positions are 0-based
- * ({@code line}, {@code column}) as in {@link Position}; every path is relative to the root of the project.
+ * project is two small classes of a package {@code demo}: a {@code Greeter} with a field, a method and a local
+ * variable, and a {@code Main} that uses it; and, for the problems to report, a {@code Broken} (an error) and a {@code
+ * Sloppy} (a warning). All the positions are 0-based ({@code line}, {@code column}) as in {@link Position}; every path
+ * is relative to the root of the project.
  *
- * <p>What nobody could check yet, because no real server has answered: the replay of these scenarios belongs to the
- * adapter of jdtls. Until then they are the expected behaviour as the driver and the protocol describe it, and these
+ * <p>The scenarios of the diagnostics are replayed against a real jdtls by {@code ScenarioReplayTest} (module {@code
+ * daemon}, {@code ./gradlew jdtlsProbe}), which fails on any difference. How the adapter maps what jdtls really does:
+ *
+ * <ul>
+ *   <li>a file outside the project: jdtls does not refuse it, it opens it as a non-project file and warns that only
+ *       syntax errors are reported. The adapter refuses it ({@link #DIAGNOSTICS_OUTSIDE_THE_PROJECT}) because it is not
+ *       under a folder jdtls imported, before asking;
+ *   <li>the refusal while the project is imported ({@link #DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS}) is the answer of the
+ *       adapter to a request made while jdtls is still starting; the replay asks at once, before the import is over,
+ *       which takes seconds.
+ * </ul>
+ *
+ * <p>What nobody could check yet, because the adapter does not implement the request: the replay of the renames. These
  * points are the likeliest to differ:
  *
  * <ul>
- *   <li>the text of the message of the error ({@link #FILE_WITH_AN_ERROR});
  *   <li>the order of the changes and of the edits in a rename (here the file of the symbol first, edits before the move
  *       of a file that a rename of a public type causes), which a replay may compare as sets;
- *   <li>the refusal while the project is imported ({@link #DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS}), which no replay can
- *       provoke on demand without a race: the adapter's own test covers how it is detected;
- *   <li>the refusals of a file outside the project, of an invalid name and of a position with no symbol: a real jdtls
- *       may open a file outside the project as a non-project file, and answer a rename it cannot do with a null
- *       {@code prepareRename}, a null edit or a response error depending on its version. The adapter maps what the
- *       server does to these keys, it does not just replay them.
+ *   <li>the refusals of an invalid name and of a position with no symbol: a real jdtls may answer a rename it cannot do
+ *       with a null {@code prepareRename}, a null edit or a response error depending on its version. The adapter maps
+ *       what the server does to these keys, it does not just replay them.
  * </ul>
  *
  * <p>The fake answers from the request alone: it does not check that the files a test wrote are the ones of the
  * scenario, so a test that scripts a scenario writes the project with {@code Scenario#writeProject} when it matters.
  *
- * <p>To add a scenario: write it here, add its name to {@link #all()} and to the test of the catalogue, and add its
- * replay to the integration tests of the adapter.
+ * <p>To add a scenario, follow the skill {@code .claude/skills/add-scenario/SKILL.md}.
  */
 public final class Scenarios {
 
@@ -51,6 +58,7 @@ public final class Scenarios {
     private static final Path WELCOMER = Path.of("src/main/java/demo/Welcomer.java");
     private static final Path MAIN = Path.of("src/main/java/demo/Main.java");
     private static final Path BROKEN = Path.of("src/main/java/demo/Broken.java");
+    private static final Path SLOPPY = Path.of("src/main/java/demo/Sloppy.java");
     private static final Path ELSEWHERE = Path.of("../outside/Elsewhere.java");
 
     private static final String GREETER_SOURCE = """
@@ -87,6 +95,16 @@ public final class Scenarios {
         }
         """;
 
+    private static final String SLOPPY_SOURCE = """
+        package demo;
+
+        public class Sloppy {
+            public void run() {
+                int unused = 42;
+            }
+        }
+        """;
+
     private static final Map<Path, String> PROJECT = Map.of(GREETER, GREETER_SOURCE, MAIN, MAIN_SOURCE);
 
     /** A file without a problem: no diagnostic. */
@@ -96,10 +114,18 @@ public final class Scenarios {
     /** A string where an {@code int} is expected: one error, at the string. */
     public static final Scenario FILE_WITH_AN_ERROR = new Scenario(
             "diagnostics-of-a-file-with-an-error",
-            withBroken(),
+            withProblems(),
             new Request.Diagnostics(BROKEN),
             new Answer.Diagnosed(List.of(new Diagnostic(
                     Severity.ERROR, new Position(4, 15), "Type mismatch: cannot convert from String to int"))));
+
+    /** A local variable that nothing reads: a warning, not an error, at the name of the variable. */
+    public static final Scenario FILE_WITH_A_WARNING = new Scenario(
+            "diagnostics-of-a-file-with-a-warning",
+            withProblems(),
+            new Request.Diagnostics(SLOPPY),
+            new Answer.Diagnosed(List.of(new Diagnostic(
+                    Severity.WARNING, new Position(4, 12), "The value of the local variable unused is not used"))));
 
     /** The project is still being imported: the server cannot say. */
     public static final Scenario DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS = new Scenario(
@@ -187,6 +213,7 @@ public final class Scenarios {
         return List.of(
                 CLEAN_FILE,
                 FILE_WITH_AN_ERROR,
+                FILE_WITH_A_WARNING,
                 DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS,
                 DIAGNOSTICS_OUTSIDE_THE_PROJECT,
                 RENAME_LOCAL_VARIABLE,
@@ -199,9 +226,11 @@ public final class Scenarios {
                 RENAME_OUTSIDE_THE_PROJECT);
     }
 
-    private static Map<Path, String> withBroken() {
+    /** The project with the two files that have something to report, so that their scenarios share one project. */
+    private static Map<Path, String> withProblems() {
         Map<Path, String> files = new HashMap<>(PROJECT);
         files.put(BROKEN, BROKEN_SOURCE);
+        files.put(SLOPPY, SLOPPY_SOURCE);
 
         return files;
     }

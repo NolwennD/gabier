@@ -113,14 +113,17 @@ final class JdtlsSession implements AutoCloseable {
         return projects;
     }
 
-    /** The raw language server, for whoever keeps talking to jdtls: no port in front of it yet. */
+    /** The raw language server, for whoever keeps talking to jdtls. */
     LanguageServer server() {
         return server;
     }
 
-    /** The waits that share the deadline of the start and fail when jdtls dies, for whoever keeps talking to jdtls. */
-    JdtlsWatch watch() {
-        return watch;
+    /**
+     * Waits that fail when jdtls dies or reports an error and share a new deadline, as long as the timeout of the
+     * settings, started now: for a request made long after the start, whose deadline must not be the one of the start.
+     */
+    JdtlsWatch newWatch() {
+        return new JdtlsWatch(process, client.error(), settings.timeout());
     }
 
     private void awaitReady() throws InterruptedException {

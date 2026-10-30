@@ -1,154 +1,162 @@
 package fr.craft.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.io.File;
+import fr.craft.gabier.editing.domain.Diagnostic;
+import fr.craft.gabier.editing.domain.Diagnostic.Severity;
+import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
+import fr.craft.gabier.editing.domain.LanguageServerException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
-import org.eclipse.lsp4j.Diagnostic;
-import org.eclipse.lsp4j.DiagnosticSeverity;
-import org.eclipse.lsp4j.DidOpenTextDocumentParams;
-import org.eclipse.lsp4j.PublishDiagnosticsParams;
-import org.eclipse.lsp4j.TextDocumentItem;
-import org.eclipse.lsp4j.services.LanguageServer;
 import org.junit.jupiter.api.Test;
 
 /**
- * Starts a real jdtls on this project through the adapter ({@link JdtlsSession}, which waits until jdtls has really
- * imported every module), then opens the sources and requires jdtls to publish diagnostics for each of them (after its
- * own {@code didOpen}), and an error for a deliberately broken file. It judges the diagnostics only once jdtls has
- * published nothing for {@link #QUIET}, none of them an error. Not run by {@code check} (which only compiles it): run
- * it with {@code ./gradlew jdtlsProbe}, with {@code GABIER_JDTLS} set to the jdtls launcher (mise exports it). It fails
- * at once when jdtls exits or sends a status {@code Error}; its waits share one deadline of ten minutes.
+ * Starts a real jdtls on this project through the adapter ({@link JdtlsLanguageServer}, which waits until jdtls has
+ * really imported every module) and asks it for diagnostics, through the port, the way an agent does. It checks that
+ * jdtls is refused as not ready while it imports, that every source of the project is free of errors, that a clean
+ * file gets an empty list, that a temporary broken copy of a source gets its error, and that a file outside the project is
+ * refused. Not run by {@code check} (which only compiles it): run it with {@code ./gradlew jdtlsProbe}, with {@code
+ * GABIER_JDTLS} set to the jdtls launcher (mise exports it). It fails at once when jdtls exits or sends a status {@code
+ * Error}; its waits share one deadline of ten minutes.
  */
 class JdtlsProbeTest {
 
     private static final Duration TIMEOUT = Duration.ofMinutes(10);
-    /** How long jdtls must have published nothing before the diagnostics are judged. */
-    private static final Duration QUIET = Duration.ofSeconds(5);
 
-    /** The line of the control file that assigns a String to an int (see {@code controlSource}). */
-    private static final int CONTROL_LINE = 4;
+    private static final String BROKEN_TYPE = "GabierProbeBroken";
+
+    /** Appended to the copy, just before the closing brace of its type: a String where an {@code int} is expected. */
+    private static final String BROKEN_FIELD = "    int gabierProbeControl = \"not an int\";\n";
 
     @Test
-    void importsEveryModuleOfTheProject() throws Exception {
-        Path launcher = launcher();
-        Path projectRoot = Path.of(System.getProperty("gabier.projectRoot"));
+    void answersTheDiagnosticsOfTheProject() throws Exception {
+        Path projectRoot = Path.of(System.getProperty("gabier.projectRoot"))
+                .toAbsolutePath()
+                .normalize();
         List<Path> modules = modulesOf(projectRoot);
         assertThat(modules)
                 .as("modules under %s: the probe would wait for nothing", projectRoot.resolve("modules"))
                 .isNotEmpty();
 
-        var diagnostics = new Diagnostics();
-        // The launcher runs the java of JAVA_HOME: the one that runs this test, not whatever the shell has.
-        var jdtls = new JdtlsLauncher(launcher, Path.of(System.getProperty("java.home")));
         var settings = JdtlsSettings.of(projectRoot, modules, TIMEOUT);
-        try (JdtlsSession session = JdtlsSession.start(jdtls, settings, System.out::println, publication -> {
-            diagnostics.publish(publication);
-            log(diagnostics, publication);
-        })) {
-            System.out.println("jdtls knows the projects " + session.projects());
-            checkDiagnostics(session, diagnostics, projectRoot, modules);
-        }
-    }
+        try (var server = JdtlsLanguageServer.start(
+                RealJdtls.launcher(), settings, JdtlsLanguageServer.QUIET, System.out::println)) {
+            // Importing every module takes about a minute: jdtls is still at it when it is asked.
+            Path anySource = modules.getFirst().resolve("src/main/java/module-info.java");
+            assertThatThrownBy(() -> server.diagnostics(anySource))
+                    .as("a jdtls that is still importing")
+                    .isInstanceOfSatisfying(
+                            LanguageServerException.class,
+                            refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+            System.out.println("refused as not ready while jdtls imports: ok");
 
-    /** The evidence of the probe: every publication, with what it holds. */
-    private static void log(Diagnostics diagnostics, PublishDiagnosticsParams publication) {
-        System.out.println(
-                String.format(Locale.ROOT, "[%.1fs] ", diagnostics.sinceStart().toMillis() / 1000.0)
-                        + "jdtls published " + publication.getDiagnostics().size() + " diagnostics for "
-                        + publication.getUri() + ": "
-                        + publication.getDiagnostics().stream()
-                                .map(d -> d.getSeverity() + " line "
-                                        + (d.getRange().getStart().getLine() + 1) + " " + Diagnostics.text(d))
-                                .toList());
+            List<Path> projects = server.awaitStarted();
+            System.out.println("jdtls knows the projects " + projects);
+            List<Path> sources = sourcesOf(projectRoot, modules, projects);
+
+            Path clean = checkEverySource(server, sources, projectRoot);
+            checkBrokenCopy(server, clean);
+            checkFileOutsideTheProject(server);
+        }
     }
 
     /**
-     * Opens the sources of the project, waits for the diagnostics jdtls publishes for each, then opens a file that
-     * does not compile and requires jdtls to say so: a probe that sees nothing must not pass. The project must then
-     * have no error.
+     * Asks for all the sources at once and requires that none has an error. Returns a source whose diagnostics are
+     * none, asked for again alone: the adapter answers an empty list for a clean file.
      */
-    private static void checkDiagnostics(
-            JdtlsSession session, Diagnostics diagnostics, Path projectRoot, List<Path> modules)
-            throws IOException, InterruptedException {
-        JdtlsWatch watch = session.watch();
-        LanguageServer server = session.server();
-        List<Path> sources = sourcesOf(projectRoot, modules, session.projects());
-        // Each wait is registered right before the didOpen of its file: a publication that arrived earlier (the build
-        // of
-        // the workspace publishes while the files are being opened) is not the answer for a file not yet opened.
-        Map<Path, CompletableFuture<List<Diagnostic>>> publications = new LinkedHashMap<>();
-        for (Path file : sources) {
-            String text = Files.readString(file);
-            publications.put(file, diagnostics.open(file, () -> open(server, file, text)));
-        }
-        for (var publication : publications.entrySet()) {
-            watch.await(
-                    "the diagnostics of " + projectRoot.relativize(publication.getKey()) + " (opened " + sources.size()
-                            + " files)",
-                    publication::getValue);
-        }
+    private static Path checkEverySource(JdtlsLanguageServer server, List<Path> sources, Path projectRoot) {
+        long begin = System.nanoTime();
+        Map<Path, List<Diagnostic>> answers = server.diagnostics(sources);
+        System.out.println("diagnostics of " + sources.size() + " files in "
+                + String.format(Locale.ROOT, "%.1f", (System.nanoTime() - begin) / 1e9) + " seconds");
 
-        Path control = controlOf(sources);
-        var controlErrors = diagnostics.expectError(control);
-        open(server, control, controlSource(control));
-        List<Diagnostic> found = watch.await(
-                "the diagnostics of the control file " + projectRoot.relativize(control), () -> controlErrors);
-        System.out.println("control error as jdtls reports it: "
-                + found.stream()
-                        .map(d -> projectRoot.relativize(control) + ":"
-                                + (d.getRange().getStart().getLine() + 1) + ": " + Diagnostics.text(d))
-                        .toList());
-        assertThat(found)
-                .as(
-                        "the errors jdtls reports on the control file, whose line %d assigns a String to an int",
-                        CONTROL_LINE)
-                .anySatisfy(error -> {
-                    assertThat(error.getRange().getStart().getLine()).isEqualTo(CONTROL_LINE - 1);
-                    assertThat(Diagnostics.text(error)).contains("String").contains("int");
-                });
-
-        awaitSettled(watch, diagnostics, sources, control);
-
-        for (Path file : sources) {
-            System.out.println(projectRoot.relativize(file) + ": " + diagnostics.publications(file)
-                    + " publications, latest " + diagnostics.count(DiagnosticSeverity.Error, List.of(file))
-                    + " errors, " + diagnostics.count(DiagnosticSeverity.Warning, List.of(file)) + " warnings");
-        }
-        assertThat(diagnostics.errors(sources, projectRoot))
+        List<String> errors = new ArrayList<>();
+        answers.forEach((file, diagnostics) -> {
+            long warnings = diagnostics.stream()
+                    .filter(diagnostic -> diagnostic.severity() == Severity.WARNING)
+                    .count();
+            System.out.println(projectRoot.relativize(file) + ": " + diagnostics.size() + " diagnostics, " + warnings
+                    + " warnings");
+            diagnostics.stream()
+                    .filter(diagnostic -> diagnostic.severity() == Severity.ERROR)
+                    .forEach(diagnostic -> errors.add(projectRoot.relativize(file) + ":"
+                            + (diagnostic.position().line() + 1) + ": " + diagnostic.message()));
+        });
+        assertThat(errors)
                 .as("the errors jdtls reports in the %d files of the project it opened", sources.size())
                 .isEmpty();
+
+        Path clean = answers.entrySet().stream()
+                .filter(answer -> answer.getValue().isEmpty())
+                .filter(answer -> isClassSource(answer.getKey()))
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No class of the project is without any diagnostic"));
+        assertThat(server.diagnostics(clean))
+                .as("the diagnostics of %s, asked for alone", projectRoot.relativize(clean))
+                .isEmpty();
+        System.out.println("clean file " + projectRoot.relativize(clean) + ": no diagnostic");
+        return clean;
     }
 
     /**
-     * jdtls publishes in stages (a quick reconcile, then after the build), so the first publication of a file is not
-     * the last: the verdict waits until jdtls has published nothing for {@link #QUIET}, inside the shared deadline.
+     * A temporary copy of a clean source, its type renamed and a String put where an {@code int} is expected: a probe
+     * that sees nothing must not pass. The copy is deleted whatever happens.
      */
-    private static void awaitSettled(JdtlsWatch watch, Diagnostics diagnostics, List<Path> sources, Path control)
-            throws InterruptedException {
-        List<Path> opened = Stream.concat(sources.stream(), Stream.of(control)).toList();
-        int before = published(diagnostics, opened);
-        long begin = System.nanoTime();
-        QuietWait.await(watch, "the diagnostics of the opened files", QUIET, diagnostics::quietFor);
-        System.out.println("jdtls settled: quiet for " + QUIET.toSeconds() + " seconds, waited "
-                + String.format(Locale.ROOT, "%.1f", (System.nanoTime() - begin) / 1e9) + " seconds for it, "
-                + (published(diagnostics, opened) - before)
-                + " more publications for the opened files came in that time");
+    private static void checkBrokenCopy(JdtlsLanguageServer server, Path clean) throws IOException {
+        String original = Files.readString(clean);
+        String type = clean.getFileName().toString().replace(".java", "");
+        String copy = original.replaceAll("\\b" + Pattern.quote(type) + "\\b", BROKEN_TYPE);
+        int end = copy.lastIndexOf('}');
+        int brokenLine =
+                (int) copy.substring(0, end).chars().filter(c -> c == '\n').count();
+        Path broken = clean.resolveSibling(BROKEN_TYPE + ".java");
+        Files.writeString(broken, copy.substring(0, end) + BROKEN_FIELD + copy.substring(end));
+        try {
+            List<Diagnostic> found = server.diagnostics(broken);
+            System.out.println("copy of " + clean.getFileName() + " with an error on line " + (brokenLine + 1)
+                    + ", as jdtls reports it: " + found);
+            assertThat(found)
+                    .as("the diagnostics of a copy whose line %d assigns a String to an int", brokenLine + 1)
+                    .anySatisfy(error -> {
+                        assertThat(error.severity()).isEqualTo(Severity.ERROR);
+                        assertThat(error.position().line()).isEqualTo(brokenLine);
+                        assertThat(error.message()).contains("String").contains("int");
+                    });
+        } finally {
+            Files.delete(broken);
+        }
     }
 
-    private static int published(Diagnostics diagnostics, List<Path> files) {
-        return files.stream().mapToInt(diagnostics::publications).sum();
+    /** A type of a package, which a copy can be made of: not a {@code module-info.java} or a {@code package-info.java}. */
+    private static boolean isClassSource(Path file) {
+        return !file.getFileName().toString().endsWith("-info.java");
+    }
+
+    private static void checkFileOutsideTheProject(JdtlsLanguageServer server) throws IOException {
+        Path folder = Files.createTempDirectory("gabier-outside-");
+        Path outside = folder.resolve("Elsewhere.java");
+        Files.writeString(outside, "class Elsewhere {}\n");
+        try {
+            assertThatThrownBy(() -> server.diagnostics(outside))
+                    .isInstanceOfSatisfying(
+                            LanguageServerException.class,
+                            refusal ->
+                                    assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+            System.out.println("refused a file outside the project: ok");
+        } finally {
+            Files.delete(outside);
+            Files.delete(folder);
+        }
     }
 
     /**
@@ -173,46 +181,6 @@ class JdtlsProbeTest {
             }
         }
         return sources;
-    }
-
-    /** A file that does not exist, next to a class of the first module: jdtls compiles it with that module. */
-    private static Path controlOf(List<Path> sources) {
-        Path neighbour = sources.stream()
-                .filter(file -> !file.getFileName().toString().equals("module-info.java"))
-                .findFirst()
-                .orElseThrow();
-        return neighbour.resolveSibling("GabierProbeControl.java");
-    }
-
-    private static String controlSource(Path control) {
-        Path folder = control.getParent();
-        String sourceRoot = "src" + File.separator + "main" + File.separator + "java" + File.separator;
-        String relative = folder.toString().substring(folder.toString().indexOf(sourceRoot) + sourceRoot.length());
-        // The line CONTROL_LINE is the one that does not compile.
-        return "package " + relative.replace(File.separatorChar, '.') + ";\n\n"
-                + "final class GabierProbeControl {\n"
-                + "    int control = \"not an int\";\n"
-                + "}\n";
-    }
-
-    private static void open(LanguageServer server, Path file, String text) {
-        var item = new TextDocumentItem(file.toUri().toString(), "java", 1, text);
-        server.getTextDocumentService().didOpen(new DidOpenTextDocumentParams(item));
-    }
-
-    /** The launcher is required: a missing one is a failure to fix, never a reason to skip the probe. */
-    private static Path launcher() {
-        String path = System.getenv("GABIER_JDTLS");
-        if (path == null || path.isBlank()) {
-            return fail("GABIER_JDTLS is not set: it must be the path of the jdtls launcher. Run `mise install` (it"
-                    + " installs jdtls and exports the variable), then `mise exec -- ./gradlew jdtlsProbe`.");
-        }
-        Path launcher = Path.of(path);
-        if (!Files.isRegularFile(launcher) || !Files.isExecutable(launcher)) {
-            return fail("GABIER_JDTLS is " + path + ", which is not an executable file. "
-                    + "It must be the path of the jdtls launcher: run `mise install` to install it.");
-        }
-        return launcher;
     }
 
     /** The folders under {@code modules/} that hold a {@code module-info.java}, which are the Gradle projects. */

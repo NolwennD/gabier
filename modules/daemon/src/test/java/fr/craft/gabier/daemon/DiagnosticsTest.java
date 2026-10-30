@@ -13,14 +13,16 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 import org.eclipse.lsp4j.Diagnostic;
 import org.eclipse.lsp4j.DiagnosticSeverity;
+import org.eclipse.lsp4j.MarkupContent;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
 import org.eclipse.lsp4j.Range;
+import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-/** What jdtls publishes about the files the probe opened, kept and judged. No jdtls is started. */
+/** What jdtls publishes about the files that were opened, kept for whoever asked. No jdtls is started. */
 class DiagnosticsTest {
 
     private static final Path ROOT = Path.of("/project");
@@ -68,82 +70,31 @@ class DiagnosticsTest {
     }
 
     @Test
-    void theErrorsAreListedWithFileLineAndMessage() {
-        diagnostics.publish(publicationOf(FILE, error(2, "Type mismatch"), error(6, "Missing semicolon")));
-        diagnostics.publish(publicationOf(OTHER, error(0, "Unknown module")));
-
-        assertThat(diagnostics.errors(List.of(FILE, OTHER), ROOT))
-                .containsExactly(
-                        "modules/a/src/main/java/A.java:3: Type mismatch",
-                        "modules/a/src/main/java/A.java:7: Missing semicolon",
-                        "modules/b/src/main/java/B.java:1: Unknown module");
-    }
-
-    @Test
-    void warningsAndHintsAreNotErrors() {
-        diagnostics.publish(publicationOf(
-                FILE, diagnostic(1, DiagnosticSeverity.Warning, "Unused"), diagnostic(2, null, "No severity")));
-
-        assertThat(diagnostics.errors(List.of(FILE), ROOT)).isEmpty();
-    }
-
-    @Test
     void onlyTheLatestPublicationOfAFileCounts() {
         diagnostics.publish(publicationOf(FILE, error(2, "Stale")));
         diagnostics.publish(publicationOf(FILE));
 
-        assertThat(diagnostics.errors(List.of(FILE), ROOT)).isEmpty();
+        assertThat(diagnostics.latest(FILE)).isEmpty();
     }
 
     @Test
-    void aFileNeverPublishedHasNoError() {
-        assertThat(diagnostics.errors(List.of(FILE), ROOT)).isEmpty();
+    void theLatestPublicationIsWhatJdtlsPublishedWithoutAnyExpectation() {
+        diagnostics.publish(publicationOf(FILE, error(2, "Type mismatch")));
+
+        assertThat(diagnostics.latest(FILE)).extracting(Diagnostics::text).containsExactly("Type mismatch");
     }
 
     @Test
-    void theDiagnosticsAreCountedByKindOverTheFilesGiven() {
-        diagnostics.publish(publicationOf(
-                FILE, error(1, "One"), diagnostic(2, DiagnosticSeverity.Warning, "Two"), error(3, "Three")));
-        diagnostics.publish(publicationOf(OTHER, diagnostic(1, DiagnosticSeverity.Warning, "Four")));
-
-        assertThat(diagnostics.count(DiagnosticSeverity.Error, List.of(FILE, OTHER)))
-                .isEqualTo(2);
-        assertThat(diagnostics.count(DiagnosticSeverity.Warning, List.of(FILE, OTHER)))
-                .isEqualTo(2);
-        assertThat(diagnostics.count(DiagnosticSeverity.Warning, List.of(OTHER)))
-                .isEqualTo(1);
+    void aFileNeverPublishedHasNoLatestPublication() {
+        assertThat(diagnostics.latest(FILE)).isEmpty();
     }
 
     @Test
-    void thePublicationsOfAFileAreCounted() {
-        diagnostics.publish(publicationOf(FILE));
-        diagnostics.publish(publicationOf(FILE, error(1, "Late")));
-        diagnostics.publish(publicationOf(OTHER));
+    void aMarkupMessageIsReadAsItsText() {
+        var markup = error(0, "");
+        markup.setMessage(Either.forRight(new MarkupContent("markdown", "**bold**")));
 
-        assertThat(diagnostics.publications(FILE)).isEqualTo(2);
-        assertThat(diagnostics.publications(OTHER)).isEqualTo(1);
-        assertThat(diagnostics.publications(ROOT.resolve("Unknown.java"))).isZero();
-    }
-
-    @Test
-    void anErrorIsAwaitedThroughPublicationsWithoutOne() {
-        var error = diagnostics.expectError(FILE);
-
-        diagnostics.publish(publicationOf(FILE));
-        diagnostics.publish(publicationOf(FILE, diagnostic(1, DiagnosticSeverity.Warning, "Unused")));
-        assertThat(error).isNotDone();
-
-        diagnostics.publish(publicationOf(FILE, error(4, "Type mismatch")));
-        assertThat(error)
-                .isCompletedWithValueMatching(found -> found.size() == 1
-                        && found.getFirst().getMessage().getLeft().equals("Type mismatch"));
-    }
-
-    @Test
-    void anErrorFromBeforeTheExpectationDoesNotCount() {
-        diagnostics.publish(publicationOf(FILE, error(4, "Old")));
-
-        assertThat(diagnostics.expectError(FILE)).isNotDone();
+        assertThat(Diagnostics.text(markup)).isEqualTo("**bold**");
     }
 
     @Test
@@ -158,7 +109,8 @@ class DiagnosticsTest {
         CompletableFuture.allOf(expected).get(10, TimeUnit.SECONDS);
         reader.join();
 
-        assertThat(diagnostics.errors(files, ROOT)).hasSize(200);
+        assertThat(files)
+                .allSatisfy(file -> assertThat(diagnostics.latest(file)).hasSize(1));
     }
 
     @Test
@@ -193,7 +145,6 @@ class DiagnosticsTest {
     @Test
     void aPublicationForAUriThatIsNotAFileIsIgnored() {
         var publication = diagnostics.expect(FILE);
-        var error = diagnostics.expectError(FILE);
 
         assertThatCode(() -> diagnostics.publish(new PublishDiagnosticsParams(
                         "jdt://contents/java.base/java.lang/String.class?=gabier/%5C/usr%5C/lib%5C/jvm=/String.class",
@@ -201,11 +152,9 @@ class DiagnosticsTest {
                 .doesNotThrowAnyException();
 
         assertThat(publication).isNotDone();
-        assertThat(error).isNotDone();
-        assertThat(diagnostics.errors(List.of(FILE), ROOT)).isEmpty();
+        assertThat(diagnostics.latest(FILE)).isEmpty();
         diagnostics.publish(publicationOf(FILE));
         assertThat(publication).isCompletedWithValue(List.of());
-        assertThat(diagnostics.publications(FILE)).isEqualTo(1);
     }
 
     @ParameterizedTest
@@ -217,7 +166,7 @@ class DiagnosticsTest {
                 .doesNotThrowAnyException();
 
         assertThat(publication).isNotDone();
-        assertThat(diagnostics.errors(List.of(FILE), ROOT)).isEmpty();
+        assertThat(diagnostics.latest(FILE)).isEmpty();
     }
 
     @Test
@@ -249,13 +198,6 @@ class DiagnosticsTest {
         diagnostics.publish(new PublishDiagnosticsParams("jdt://contents/java.base/String.class", List.of()));
 
         assertThat(diagnostics.quietFor()).isEqualTo(Duration.ofSeconds(5));
-    }
-
-    @Test
-    void theTimeSinceTheStartIsReadFromTheClock() {
-        nanos.set(Duration.ofMillis(1500).toNanos());
-
-        assertThat(diagnostics.sinceStart()).isEqualTo(Duration.ofMillis(1500));
     }
 
     private static Diagnostic error(int line, String message) {

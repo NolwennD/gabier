@@ -23,9 +23,10 @@ the review (see the `ticket` skill). The formatting hook, the coverage gate and 
   `architecture/src/test/java/fr/craft/gabier/architecture/HexagonalArchTest.java`. These architecture tests (ArchUnit,
   adapted from the `HexagonalArchTest` that [seed4j](https://github.com/seed4j/seed4j) generates, without its Spring
   parts; the project `:architecture` sees the classes of every module) also keep the packages free of cycles, the
-  contexts (the sub-packages of `fr.craft.gabier` other than `shared`) off each other's domain, each context a hexagon
-  (domain, application, primary and secondary adapters, pointing towards the domain), the application off the
-  infrastructure and the primary and secondary adapters apart, next to the module boundaries that JPMS already
+  contexts (the sub-packages of `fr.craft.gabier` other than `shared`) off each other's domain (the `daemon`, composition
+  root and home of the adapters of the real servers, is the one that may depend on the domain of the others), each
+  context a hexagon (domain, application, primary and secondary adapters, pointing towards the domain), the application
+  off the infrastructure and the primary and secondary adapters apart, next to the module boundaries that JPMS already
   enforces at compile time.
 - **Null safety is checked at compile time**: JSpecify annotations, checked by NullAway through Error Prone (configured
   once, in `gabier.java-module-conventions`, on the main code; `NullAway:ERROR`, `JSpecifyMode`, `OnlyNullMarked`).
