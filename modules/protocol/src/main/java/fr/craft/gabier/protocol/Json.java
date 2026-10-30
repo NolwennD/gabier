@@ -5,12 +5,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
 /** JSON, by hand: the cli native image has no third-party library. */
-public final class Json {
+final class Json {
 
     private Json() {}
 
@@ -224,24 +225,23 @@ public final class Json {
             if (!matcher.lookingAt()) {
                 throw fail("a value was expected");
             }
-            var number = bounded(matcher.group());
-            if (number == null) {
-                // Said at the start of the number, even when the text ends with it.
-                throw MalformedJsonException.at(position, "the exponent of the number is out of range");
-            }
+            // Said at the start of the number, even when the text ends with it.
+            var number = bounded(matcher.group())
+                    .orElseThrow(
+                            () -> MalformedJsonException.at(position, "the exponent of the number is out of range"));
             position = matcher.end();
 
             return number;
         }
 
-        /** The number, or null when its exponent is beyond what the daemon reads. */
-        private static @Nullable BigDecimal bounded(String digits) {
+        /** The number, or nothing when its exponent is beyond what the daemon reads. */
+        private static Optional<BigDecimal> bounded(String digits) {
             try {
                 var number = new BigDecimal(digits);
 
-                return Math.abs((long) number.scale()) > MAX_SCALE ? null : number;
+                return Math.abs((long) number.scale()) > MAX_SCALE ? Optional.empty() : Optional.of(number);
             } catch (NumberFormatException e) {
-                return null;
+                return Optional.empty();
             }
         }
 

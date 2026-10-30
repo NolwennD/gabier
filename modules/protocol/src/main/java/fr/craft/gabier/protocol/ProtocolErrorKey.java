@@ -3,7 +3,7 @@ package fr.craft.gabier.protocol;
 import fr.craft.gabier.shared.error.domain.ErrorKey;
 
 /** The keys of the refusals of the protocol: the socket path and the lines of JSON-RPC. */
-public enum ProtocolErrorKey implements ErrorKey {
+enum ProtocolErrorKey implements ErrorKey {
     INVALID_REQUEST("invalid-request"),
     INVALID_RESPONSE("invalid-response"),
     MALFORMED_JSON("malformed-json"),

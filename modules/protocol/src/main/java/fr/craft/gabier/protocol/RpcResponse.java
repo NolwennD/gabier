@@ -3,6 +3,7 @@ package fr.craft.gabier.protocol;
 import fr.craft.gabier.shared.error.domain.AssertionException;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
@@ -15,7 +16,12 @@ public sealed interface RpcResponse {
      *
      * @param result the members of the result object
      */
-    record Success(Map<String, @Nullable Object> result) implements RpcResponse {}
+    record Success(Map<String, @Nullable Object> result) implements RpcResponse {
+
+        public Success {
+            result = Collections.unmodifiableMap(new LinkedHashMap<>(result));
+        }
+    }
 
     /**
      * The request was refused, or failed.

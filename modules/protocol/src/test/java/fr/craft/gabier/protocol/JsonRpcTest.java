@@ -1,6 +1,7 @@
 package fr.craft.gabier.protocol;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.assertj.core.api.Assertions.entry;
 
@@ -9,6 +10,7 @@ import fr.craft.gabier.shared.error.domain.ErrorStatus;
 import fr.craft.gabier.shared.error.domain.GeneratorException;
 import fr.craft.gabier.shared.error.domain.MissingMandatoryValueException;
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -202,6 +204,19 @@ class JsonRpcTest {
                             RpcResponse.Success.class,
                             success ->
                                     assertThat(success.result()).containsExactly(entry("pid", new BigDecimal("12"))));
+        }
+
+        @Test
+        void aSuccessKeepsTheResultItWasGivenWhateverTheCallerDoesWithTheMapAfterwards() {
+            var given = new HashMap<String, Object>();
+            given.put("pid", 12);
+            var success = new RpcResponse.Success(given);
+
+            given.put("later", 13);
+
+            assertThat(success.result()).containsExactly(entry("pid", 12));
+            assertThatThrownBy(() -> success.result().put("other", 14))
+                    .isInstanceOf(UnsupportedOperationException.class);
         }
 
         @Test

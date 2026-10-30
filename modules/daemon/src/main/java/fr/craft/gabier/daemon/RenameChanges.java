@@ -74,32 +74,37 @@ final class RenameChanges {
             return Optional.empty();
         }
         Path file = path(document.getTextDocument().getUri());
-        Optional<List<Integer>> lines = texts.apply(file).map(RenameChanges::lengthsOfLines);
+        Function<org.eclipse.lsp4j.Position, Position> position = texts.apply(file)
+                .map(RenameChanges::lengthsOfLines)
+                .<Function<org.eclipse.lsp4j.Position, Position>>map(lengths -> given -> clamped(given, lengths))
+                .orElse(RenameChanges::unclamped);
         List<TextEdit> edits =
-                document.getEdits().stream().map(edit -> edit(edit, lines)).toList();
+                document.getEdits().stream().map(edit -> edit(edit, position)).toList();
 
         return Optional.of(new FileChange.EditFile(file, edits));
     }
 
     private static TextEdit edit(
-            Either<org.eclipse.lsp4j.TextEdit, SnippetTextEdit> either, Optional<List<Integer>> lines) {
+            Either<org.eclipse.lsp4j.TextEdit, SnippetTextEdit> either,
+            Function<org.eclipse.lsp4j.Position, Position> position) {
         if (either.isRight()) {
             throw new JdtlsException("jdtls sent a snippet edit, which gabier did not ask for: " + either.getRight());
         }
         org.eclipse.lsp4j.TextEdit edit = either.getLeft();
         var range = new Range(
-                position(edit.getRange().getStart(), lines),
-                position(edit.getRange().getEnd(), lines));
+                position.apply(edit.getRange().getStart()),
+                position.apply(edit.getRange().getEnd()));
 
         return new TextEdit(range, edit.getNewText());
     }
 
-    /** The position of the protocol, clamped to the text when it is known. */
-    private static Position position(org.eclipse.lsp4j.Position position, Optional<List<Integer>> lines) {
-        if (lines.isEmpty()) {
-            return new Position(position.getLine(), position.getCharacter());
-        }
-        List<Integer> lengths = lines.get();
+    /** The position of the protocol, as it is when the text of the file is not known. */
+    private static Position unclamped(org.eclipse.lsp4j.Position position) {
+        return new Position(position.getLine(), position.getCharacter());
+    }
+
+    /** The position of the protocol, clamped to the lines of the text whose lengths are given. */
+    private static Position clamped(org.eclipse.lsp4j.Position position, List<Integer> lengths) {
         int last = lengths.size() - 1;
         if (position.getLine() > last) {
             return new Position(last, lengths.get(last));
