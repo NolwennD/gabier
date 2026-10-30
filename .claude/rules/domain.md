@@ -80,3 +80,9 @@ change that needs a check adds it as a `@Nested` class of `HexagonalArchTest`.
 - A text block ends with a line break unless its closing delimiter sits on the last line of text. Where the line matters
   (the protocol of the daemon is one JSON object per line), join the lines with `\<line break>`, and keep a trailing
   space with `\s`. A test that compares text compares what the block really holds, not what it looks like.
+- **A long text in a test is a file, not code.** A text of more than about fifteen lines (a diff, a source file given to
+  jdtls, a JSON document, an expected output) goes to a file under the `src/test/resources` of its module, read by a small
+  helper of the test fixtures; the test says what it proves, not the whole text. Every read of the test file, by a person
+  or by an agent, costs its whole length in context: a long inline text makes a test class heavy to read and to edit.
+  A text that is large only in volume (a line of a mebibyte, ten thousand members) is generated in the test
+  (`"x".repeat(n)`), never stored.
