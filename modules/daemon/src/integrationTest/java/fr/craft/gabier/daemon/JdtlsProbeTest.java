@@ -3,37 +3,48 @@ package fr.craft.gabier.daemon;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 import org.eclipse.lsp4j.ClientCapabilities;
+import org.eclipse.lsp4j.Diagnostic;
+import org.eclipse.lsp4j.DiagnosticSeverity;
+import org.eclipse.lsp4j.DidOpenTextDocumentParams;
 import org.eclipse.lsp4j.ExecuteCommandParams;
 import org.eclipse.lsp4j.InitializeParams;
 import org.eclipse.lsp4j.InitializedParams;
+import org.eclipse.lsp4j.TextDocumentItem;
 import org.eclipse.lsp4j.launch.LSPLauncher;
 import org.eclipse.lsp4j.services.LanguageServer;
 import org.junit.jupiter.api.Test;
 
 /**
- * Starts a real jdtls on this project and waits until it has really imported it. Not run by {@code check} (which only
+ * Starts a real jdtls on this project, waits until it has really imported it, then opens the sources and requires jdtls
+ * to publish diagnostics for each of them, none of them an error, and an error for a deliberately broken file. Not run by {@code check} (which only
  * compiles it): run it with {@code ./gradlew jdtlsProbe}, with {@code GABIER_JDTLS} set to the jdtls launcher (mise
- * exports it). It fails at once when jdtls exits or sends a status {@code Error}; its three waits share one deadline of
- * ten minutes.
+ * exports it). It fails at once when jdtls exits or sends a status {@code Error}; its waits share one deadline of ten
+ * minutes.
  */
 class JdtlsProbeTest {
 
     private static final Duration TIMEOUT = Duration.ofMinutes(10);
     private static final Duration POLL_INTERVAL = Duration.ofSeconds(2);
     private static final Duration SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
+    /** The line of the control file that assigns a String to an int (see {@code controlSource}). */
+    private static final int CONTROL_LINE = 4;
 
     @Test
     void importsEveryModuleOfTheProject() throws Exception {
@@ -74,6 +85,7 @@ class JdtlsProbeTest {
             });
             List<String> projects = awaitProjects(watch, server, modules);
             System.out.println("jdtls knows the projects " + projects);
+            checkDiagnostics(watch, server, client.diagnostics(), projectRoot, modules, projects);
         } finally {
             try {
                 stop(jdtls, server);
@@ -81,6 +93,112 @@ class JdtlsProbeTest {
                 delete(data);
             }
         }
+    }
+
+    /**
+     * Opens the sources of the project, waits for the diagnostics jdtls publishes for each, then opens a file that
+     * does not compile and requires jdtls to say so: a probe that sees nothing must not pass. The project must then
+     * have no error.
+     */
+    private static void checkDiagnostics(
+            ProbeWatch watch,
+            LanguageServer server,
+            Diagnostics diagnostics,
+            Path projectRoot,
+            List<Path> modules,
+            List<String> projects)
+            throws IOException, InterruptedException {
+        List<Path> sources = sourcesOf(projectRoot, modules, projects);
+        // Every wait is registered before any file is opened: a publication cannot arrive before its expectation.
+        Map<Path, CompletableFuture<List<Diagnostic>>> publications = new LinkedHashMap<>();
+        sources.forEach(file -> publications.put(file, diagnostics.expect(file)));
+        for (Path file : sources) {
+            open(server, file, Files.readString(file));
+        }
+        for (var publication : publications.entrySet()) {
+            watch.await(
+                    "the diagnostics of " + projectRoot.relativize(publication.getKey()) + " (opened " + sources.size()
+                            + " files)",
+                    publication::getValue);
+        }
+
+        Path control = controlOf(sources);
+        var controlErrors = diagnostics.expectError(control);
+        open(server, control, controlSource(control));
+        List<Diagnostic> found = watch.await(
+                "the diagnostics of the control file " + projectRoot.relativize(control), () -> controlErrors);
+        System.out.println("control error as jdtls reports it: "
+                + found.stream()
+                        .map(d -> projectRoot.relativize(control) + ":"
+                                + (d.getRange().getStart().getLine() + 1) + ": " + Diagnostics.text(d))
+                        .toList());
+        assertThat(found)
+                .as(
+                        "the errors jdtls reports on the control file, whose line %d assigns a String to an int",
+                        CONTROL_LINE)
+                .anySatisfy(error -> {
+                    assertThat(error.getRange().getStart().getLine()).isEqualTo(CONTROL_LINE - 1);
+                    assertThat(Diagnostics.text(error)).contains("String").contains("int");
+                });
+
+        for (Path file : sources) {
+            System.out.println(projectRoot.relativize(file) + ": " + diagnostics.publications(file)
+                    + " publications, latest " + diagnostics.count(DiagnosticSeverity.Error, List.of(file))
+                    + " errors, " + diagnostics.count(DiagnosticSeverity.Warning, List.of(file)) + " warnings");
+        }
+        assertThat(diagnostics.errors(sources, projectRoot))
+                .as("the errors jdtls reports in the %d files of the project it opened", sources.size())
+                .isEmpty();
+    }
+
+    /**
+     * The {@code module-info.java} and the classes of each module, and the sources of the {@code architecture} project
+     * when jdtls imported it.
+     */
+    private static List<Path> sourcesOf(Path projectRoot, List<Path> modules, List<String> projects)
+            throws IOException {
+        List<Path> roots = new ArrayList<>();
+        modules.forEach(module -> roots.add(module.resolve("src/main/java")));
+        Path architecture = projectRoot.resolve("architecture").toAbsolutePath().normalize();
+        boolean imported = projects.stream().anyMatch(project -> isProjectOf(project, architecture));
+        System.out.println("jdtls " + (imported ? "imported" : "did not import") + " the project " + architecture);
+        if (imported) {
+            roots.add(architecture.resolve("src"));
+        }
+        List<Path> sources = new ArrayList<>();
+        for (Path root : roots) {
+            try (Stream<Path> files = Files.walk(root)) {
+                files.filter(file -> file.getFileName().toString().endsWith(".java"))
+                        .sorted()
+                        .forEach(sources::add);
+            }
+        }
+        return sources;
+    }
+
+    /** A file that does not exist, next to a class of the first module: jdtls compiles it with that module. */
+    private static Path controlOf(List<Path> sources) {
+        Path neighbour = sources.stream()
+                .filter(file -> !file.getFileName().toString().equals("module-info.java"))
+                .findFirst()
+                .orElseThrow();
+        return neighbour.resolveSibling("GabierProbeControl.java");
+    }
+
+    private static String controlSource(Path control) {
+        Path folder = control.getParent();
+        String sourceRoot = "src" + File.separator + "main" + File.separator + "java" + File.separator;
+        String relative = folder.toString().substring(folder.toString().indexOf(sourceRoot) + sourceRoot.length());
+        // The line CONTROL_LINE is the one that does not compile.
+        return "package " + relative.replace(File.separatorChar, '.') + ";\n\n"
+                + "final class GabierProbeControl {\n"
+                + "    int control = \"not an int\";\n"
+                + "}\n";
+    }
+
+    private static void open(LanguageServer server, Path file, String text) {
+        var item = new TextDocumentItem(file.toUri().toString(), "java", 1, text);
+        server.getTextDocumentService().didOpen(new DidOpenTextDocumentParams(item));
     }
 
     /** The launcher is required: a missing one is a failure to fix, never a reason to skip the probe. */

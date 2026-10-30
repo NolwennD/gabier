@@ -2,6 +2,9 @@ package fr.craft.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.file.Path;
+import java.util.List;
+import org.eclipse.lsp4j.PublishDiagnosticsParams;
 import org.junit.jupiter.api.Test;
 
 /** The statuses jdtls sends, which tell the probe to go on or to stop. No jdtls is started. */
@@ -24,6 +27,17 @@ class JdtlsClientTest {
 
         assertThat(client.error()).isNotDone();
         assertThat(client.serviceReady()).isNotDone();
+    }
+
+    @Test
+    void thePublishedDiagnosticsAreKeptForTheProbe() {
+        Path file = Path.of("/project/modules/a/src/main/java/A.java");
+        var publication = client.diagnostics().expect(file);
+
+        client.publishDiagnostics(new PublishDiagnosticsParams(file.toUri().toString(), List.of()));
+
+        assertThat(publication).isCompletedWithValue(List.of());
+        assertThat(client.diagnostics().publications(file)).isEqualTo(1);
     }
 
     @Test

@@ -8,7 +8,10 @@ import org.eclipse.lsp4j.ShowMessageRequestParams;
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification;
 import org.eclipse.lsp4j.services.LanguageClient;
 
-/** The client side of the conversation with jdtls. It only listens for {@code language/status}, a jdtls extension. */
+/**
+ * The client side of the conversation with jdtls. It listens for {@code language/status}, a jdtls extension, and keeps
+ * the diagnostics jdtls publishes.
+ */
 final class JdtlsClient implements LanguageClient {
 
     /**
@@ -23,6 +26,13 @@ final class JdtlsClient implements LanguageClient {
 
     /** Completed, with what jdtls said, as soon as it sends a status of type {@code Error}. */
     private final CompletableFuture<String> error = new CompletableFuture<>();
+
+    private final Diagnostics diagnostics = new Diagnostics();
+
+    /** What jdtls published about the files, delivered by the reader thread of LSP4J. */
+    Diagnostics diagnostics() {
+        return diagnostics;
+    }
 
     CompletableFuture<Void> serviceReady() {
         return serviceReady;
@@ -50,7 +60,16 @@ final class JdtlsClient implements LanguageClient {
     public void telemetryEvent(Object object) {}
 
     @Override
-    public void publishDiagnostics(PublishDiagnosticsParams diagnostics) {}
+    public void publishDiagnostics(PublishDiagnosticsParams publication) {
+        diagnostics.publish(publication);
+        // The evidence of the probe: every publication, with what it holds.
+        System.out.println("jdtls published " + publication.getDiagnostics().size() + " diagnostics for "
+                + publication.getUri() + ": "
+                + publication.getDiagnostics().stream()
+                        .map(d -> d.getSeverity() + " line "
+                                + (d.getRange().getStart().getLine() + 1) + " " + Diagnostics.text(d))
+                        .toList());
+    }
 
     @Override
     public void showMessage(MessageParams messageParams) {}
