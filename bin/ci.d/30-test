@@ -11,8 +11,9 @@ import java.util.stream.Stream;
 
 /**
  * Stage {@code test} of the local CI (see {@code bin/ci}): the tests and the gates (coverage, architecture), from a
- * clean test state so that a cached result never passes for a fresh one, then the test counts per project, read from
- * the XML reports. Runs in the current directory, the checkout under verification.
+ * clean test state so that a cached result never passes for a fresh one (the unit tests and the daemon's quick probe
+ * tests, which need no jdtls), then the test counts per project and test task, read from the XML reports. Runs in the
+ * current directory, the checkout under verification.
  */
 public final class Test {
 
@@ -24,7 +25,7 @@ public final class Test {
             System.out.println("tests and gates (coverage, architecture), from a clean test state");
             return;
         }
-        int status = run("./gradlew", "cleanTest", "check", "--console=plain");
+        int status = run("./gradlew", "cleanTest", "cleanQuickProbeTest", "check", "--console=plain");
         printTestCounts(Path.of("."));
         System.exit(status);
     }
@@ -44,26 +45,38 @@ public final class Test {
             projects.add(architecture);
         }
         for (Path project : projects) {
-            Path results = project.resolve("build/test-results/test");
-            if (!Files.isDirectory(results)) {
+            Path resultsRoot = project.resolve("build/test-results");
+            List<Path> tasks = new ArrayList<>();
+            if (Files.isDirectory(resultsRoot)) {
+                try (Stream<Path> taskDirs = Files.list(resultsRoot)) {
+                    // jdtlsProbe is the jdtls stage's: its results, stale or not, are not the ones of this stage.
+                    tasks.addAll(taskDirs.filter(Files::isDirectory)
+                            .filter(dir -> !dir.getFileName().toString().equals("jdtlsProbe"))
+                            .sorted().toList());
+                }
+            }
+            if (tasks.isEmpty()) {
                 System.out.printf("%-12s no test results%n", project.getFileName());
                 continue;
             }
-            int tests = 0;
-            int skipped = 0;
-            int failures = 0;
-            try (Stream<Path> files = Files.list(results)) {
-                for (Path xml : files.filter(p -> p.toString().endsWith(".xml")).toList()) {
-                    Matcher matcher = TEST_COUNTS.matcher(Files.readString(xml));
-                    if (matcher.find()) {
-                        tests += Integer.parseInt(matcher.group(1));
-                        skipped += Integer.parseInt(matcher.group(2));
-                        failures += Integer.parseInt(matcher.group(3)) + Integer.parseInt(matcher.group(4));
+            for (Path results : tasks) {
+                int tests = 0;
+                int skipped = 0;
+                int failures = 0;
+                try (Stream<Path> files = Files.list(results)) {
+                    for (Path xml : files.filter(p -> p.toString().endsWith(".xml")).toList()) {
+                        Matcher matcher = TEST_COUNTS.matcher(Files.readString(xml));
+                        if (matcher.find()) {
+                            tests += Integer.parseInt(matcher.group(1));
+                            skipped += Integer.parseInt(matcher.group(2));
+                            failures += Integer.parseInt(matcher.group(3)) + Integer.parseInt(matcher.group(4));
+                        }
                     }
                 }
+                String task = results.getFileName().toString();
+                String name = project.getFileName() + (task.equals("test") ? "" : " " + task);
+                System.out.printf("%-26s tests=%d skipped=%d failures=%d%n", name, tests, skipped, failures);
             }
-            System.out.printf(
-                    "%-12s tests=%d skipped=%d failures=%d%n", project.getFileName(), tests, skipped, failures);
         }
     }
 

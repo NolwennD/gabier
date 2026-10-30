@@ -19,16 +19,20 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 - The native CLI (`:cli:nativeCompile`, about a minute) needs a GraalVM 25 with `native-image`, which Gradle finds among
   the toolchains (the SDKMAN! candidates included); it is not part of `check`. The binary lands in
   `modules/cli/build/native/nativeCompile/gabier`.
-- The jdtls probe, `./gradlew jdtlsProbe` (the integration test in `modules/daemon/src/integrationTest`), is not run by
-  `check` (which only compiles that source set, so that it cannot rot): it starts a real jdtls on the checkout in a
+- The integration tests of the daemon (`modules/daemon/src/integrationTest`) are split by class name into two Gradle
+  tasks. `./gradlew :daemon:quickProbeTest` runs the ones that start no jdtls (`ProbeWatchTest`, `JdtlsClientTest`,
+  `DiagnosticsTest`, with a `sleep` or `sh` child process standing in for jdtls): `check` runs it, its results are
+  shown and counted by `bin/ci`, and it needs no `GABIER_JDTLS`. `--tests` picks one class, and `cleanQuickProbeTest`
+  comes before it, like `cleanTest`. A new test that starts a real jdtls is added to `realProbe` in
+  `modules/daemon/build.gradle.kts`, otherwise `check` runs it.
+- The jdtls probe, `./gradlew jdtlsProbe` (`JdtlsProbeTest` alone), is not run by `check` (which only compiles that
+  source set, so that it cannot rot): it starts a real jdtls on the checkout in a
   fresh temporary `-data` directory and waits, up to ten minutes in all for its waits together (about a minute
   and a half here), until it has imported every module. It then opens the `module-info.java` and the classes of each
   module (and the sources of `architecture`), requires a `publishDiagnostics` for each (an empty one counts, silence
   fails naming the file) and no error in them, after an in-memory control file with a type error that jdtls must
   report. It fails at once, with the exit code in the message, when jdtls
-  exits, and at once on a `language/status` of type `Error`; a timeout says what was awaited and for how long. The
-  source set also holds quick tests of that watching (`ProbeWatchTest`, `JdtlsClientTest`, with a `sleep` or `sh` child
-  process standing in for jdtls); `./gradlew jdtlsProbe` runs them too, and `--tests` picks one class. It needs
+  exits, and at once on a `language/status` of type `Error`; a timeout says what was awaited and for how long. It needs
   `GABIER_JDTLS`, the path of the `jdtls` launcher (`mise exec -- ./gradlew jdtlsProbe` outside an activated mise), and
   fails at once, never skips, without it. It stops jdtls and deletes the data directory in every case. jdtls leaves
   its Eclipse files (`.project`, `.classpath`, `.settings/`, `bin/`) in the checkout: they are git-ignored.
@@ -38,6 +42,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 | Modified files                                                    | Command                                                                                                               |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `modules/<m>/src/**` (main or `*Test.java`)                       | `./gradlew :<m>:cleanTest :<m>:test --tests 'fr.craft.gabier.<m>.<Class>*'`                                           |
+| `modules/daemon/src/integrationTest/**` (not `JdtlsProbeTest`)    | `./gradlew :daemon:cleanQuickProbeTest :daemon:quickProbeTest --tests 'fr.craft.gabier.daemon.<Class>*'`              |
 | one method                                                        | `--tests 'fr.craft.gabier.<m>.<Class>.<method>'`; inside a `@Nested` class: `'…<Class>$<Nested>.<method>'`           |
 | `module-info.java`, `build.gradle.kts`, `build-logic/**`          | `./gradlew build`: the modules are compiled as modules, so a forbidden dependency fails here                          |
 | `settings.gradle.kts`, `gradle/libs.versions.toml`                | `./gradlew projects` to see the modules, then `./gradlew build`                                                       |
@@ -70,7 +75,7 @@ The targeted test never closes a task: it misses what a changed class reaches wi
 is ready, run the local CI on your worktree:
 
 ```bash
-bin/ci                      # formatting, build, tests and gates, native cli, jdtls probe: the stages that apply
+bin/ci                      # formatting, build, tests (quick probe tests included) and gates, native cli, jdtls probe
 bin/ci --list               # the stages, and why one is skipped
 bin/ci --stage test         # one stage
 ```

@@ -31,28 +31,49 @@ tasks.check {
   dependsOn(selfCheck)
 }
 
-// The probe against a real jdtls: an integration test, in a source set of its own so that the unit tests, their coverage
-// and `check` never start jdtls (`check` only compiles it, below). It sees the same dependencies as the unit tests
-// (JUnit, LSP4J, Gson).
+// The integration tests, in a source set of their own so that the unit tests and their coverage stay apart. It sees the
+// same dependencies as the unit tests (JUnit, LSP4J, Gson). Two Test tasks run it, split by class name: the quick tests,
+// which start no jdtls and run in `check`, and the real probe, which starts jdtls and runs only on demand.
 val integrationTest = sourceSets.create("integrationTest")
 configurations["integrationTestImplementation"].extendsFrom(configurations.testImplementation.get())
 configurations["integrationTestRuntimeOnly"].extendsFrom(configurations.testRuntimeOnly.get())
 
-// The probe is never run by `check`, but it must compile there: otherwise it rots unnoticed until the next real run.
-tasks.check {
-  dependsOn(integrationTest.classesTaskName)
-}
+// The one class that starts a real jdtls (it needs GABIER_JDTLS). Every other class of the source set is a quick test:
+// a new test that starts jdtls is added here, otherwise `check` runs it and fails at once for lack of GABIER_JDTLS.
+val realProbe = "fr.craft.gabier.daemon.JdtlsProbeTest"
 
-tasks.register<Test>("jdtlsProbe") {
+fun Test.runIntegrationTests() {
   group = "verification"
-  description = "Starts a real jdtls (GABIER_JDTLS) on this project and waits until it has imported every module."
   testClassesDirs = integrationTest.output.classesDirs
   classpath = integrationTest.runtimeClasspath
+  // The coverage gate is about the unit tests: the JaCoCo plugin would otherwise attach its agent to every Test task.
+  extensions.configure<JacocoTaskExtension> { isEnabled = false }
+}
+
+// Cheap, and in `check`: what the probe waits for and how it reads jdtls, tested with child processes and hand-made
+// messages, so that these assertions cannot go stale unnoticed. Up to date when nothing changed, like the unit tests.
+val quickProbeTest = tasks.register<Test>("quickProbeTest") {
+  description = "Runs the integration tests that start no jdtls (everything but JdtlsProbeTest)."
+  runIntegrationTests()
+  filter.excludeTestsMatching(realProbe)
+  testLogging {
+    events("passed", "failed", "skipped")
+    exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+  }
+}
+
+tasks.check {
+  dependsOn(quickProbeTest)
+}
+
+// The real probe against a real jdtls. `check` only compiles it (through quickProbeTest, which needs the classes).
+tasks.register<Test>("jdtlsProbe") {
+  description = "Starts a real jdtls (GABIER_JDTLS) on this project and waits until it has imported every module."
+  runIntegrationTests()
+  filter.includeTestsMatching(realProbe)
   // The checkout whose modules jdtls must import; GABIER_JDTLS is the jdtls launcher, which mise exports.
   systemProperty("gabier.projectRoot", rootProject.projectDir.path)
   providers.environmentVariable("GABIER_JDTLS").orNull?.let { environment("GABIER_JDTLS", it) }
-  // The coverage gate is about the unit tests: the JaCoCo plugin would otherwise attach its agent to every Test task.
-  extensions.configure<JacocoTaskExtension> { isEnabled = false }
   // It talks to a real server: never up to date, and the output (pid, status, projects) is the evidence.
   outputs.upToDateWhen { false }
   testLogging {
