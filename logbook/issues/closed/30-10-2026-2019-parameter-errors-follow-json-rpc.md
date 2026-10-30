@@ -27,3 +27,18 @@ Done when:
 
 Depends on: 30-10-2026-1937-the-daemon-answers-diagnostics-of-a-file (same files: `RpcRequest`, `RequestHandler`, the
 tests of the daemon).
+
+## Resolution
+
+Merged as `347deb4` (second commit of the batch), `bin/ci --all` green, see the first issue of the batch (`terminal-text-hides-nothing`).
+
+A problem object that names a `parameter` is answered `-32602`, unless it is a failure of gabier (`-32603`): `JsonRpc.code`, constant `JsonRpc.PARAMETER`. Covered by `RequestHandlerTest.Parameters` (`params` as array, string, number, `null`, `true`; a non-string member; an unknown and a missing parameter) and `JsonRpcTest.Responses`; red first (16 failures in `RequestHandlerTest`, 8 in the protocol tests). Order of refusals: unknown before missing, first by name inside each kind. Over-limit name or value: the line limit (1 MiB, `line-too-long`, id `null`) is the only bound, three tests in `ConnectionTest`.
+
+Choice: a repeated member is refused by `Json.parse` at any depth (a name written with and without a `\u` escape included), so the answer is `-32700` `malformed-json` with id `null`, not `-32602`: one rule at one place; the name is never quoted. The README states it. The skill `add-daemon-method` carries the `-32602` rule.
+
+Review (one pass): nothing blocking. Suggestion: `ofSeveralMissingParametersTheFirstByNameIsNamed` uses `Set.of`, whose order varies per JVM, so it catches a missing sort only on some runs: issue `reading-two-test-orders-its-names`.
+
+Tokens:
+- worker: shared with the first issue of the batch (190380)
+- reviewer: shared with the first issue (79226)
+- supervisor: shared with the batch, see the first issue
