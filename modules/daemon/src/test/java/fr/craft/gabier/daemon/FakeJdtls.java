@@ -218,6 +218,12 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         return this;
     }
 
+    /** Forgets the answers scripted so far: from now on, {@code java.project.getAll} answers these projects. */
+    FakeJdtls listsOnlyProjects(String... projectUris) {
+        projectAnswers.clear();
+        return listsProjects(projectUris);
+    }
+
     @Override
     public JdtlsConnection start(Path dataDirectory) throws IOException {
         this.data = dataDirectory;

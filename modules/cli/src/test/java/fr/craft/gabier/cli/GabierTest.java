@@ -323,6 +323,49 @@ class GabierTest {
             }
 
             @Test
+            void saysWhyJdtlsFailedWhenTheDaemonKnows() throws IOException {
+                var status = """
+                    {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"failed",\
+                    "jdtlsFailure":"jdtls exited with code 137 after it was ready"}\
+                    """;
+                try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", status))) {
+                    assertThat(runWithSocket("status")).isZero();
+
+                    assertThat(out())
+                            .isEqualTo("gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls failed"
+                                    + " (jdtls exited with code 137 after it was ready)" + System.lineSeparator());
+                }
+            }
+
+            @Test
+            void showsTheReasonOfJdtlsWithItsControlCharactersEscaped() throws IOException {
+                var status = """
+                    {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"failed",\
+                    "jdtlsFailure":"red\\u001b[2Jgone \\\\ back"}\
+                    """;
+                try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", status))) {
+                    assertThat(runWithSocket("status")).isZero();
+
+                    assertThat(out())
+                            .isEqualTo("gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls failed"
+                                    + " (red\\u001b[2Jgone \\\\ back)" + System.lineSeparator());
+                }
+            }
+
+            @Test
+            void givesTheReasonOfJdtlsExactlyAsJsonWithTheJsonOption() throws IOException {
+                var status = """
+                    {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"failed",\
+                    "jdtlsFailure":"red\\u001b[2Jgone \\\\ back"}\
+                    """;
+                try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", status))) {
+                    assertThat(runWithSocket("--json", "status")).isZero();
+
+                    assertThat(out()).isEqualTo(status + System.lineSeparator());
+                }
+            }
+
+            @Test
             void showsAHostileVersionWithItsControlCharactersEscaped() throws IOException {
                 var status = """
                     {"version":"\\u001b[2J\\u3164","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"ready"}\

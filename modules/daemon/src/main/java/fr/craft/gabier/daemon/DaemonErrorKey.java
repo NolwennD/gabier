@@ -9,6 +9,7 @@ enum DaemonErrorKey implements ErrorKey {
     JDTLS_START_FAILED("jdtls-start-failed"),
     LINE_TOO_LONG("line-too-long"),
     MISSING_PARAMETER("missing-parameter"),
+    NO_BUILD_TO_IMPORT("no-build-to-import"),
     SOCKET_NOT_PRIVATE("socket-not-private"),
     SOCKET_UNAVAILABLE("socket-unavailable"),
     UNKNOWN_PARAMETER("unknown-parameter"),

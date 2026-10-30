@@ -103,11 +103,15 @@ public final class Gabier {
         out.println(json ? status.toJson() : statusText(status));
     }
 
-    /** The version and the project come from the daemon: the line is neutralised ({@link TerminalText}). */
+    /**
+     * The version, the project and the reason jdtls failed come from the daemon, which has them from jdtls: the line
+     * is neutralised ({@link TerminalText}).
+     */
     private static String statusText(DaemonStatus status) {
+        var failure = status.jdtlsFailure().map(reason -> " (" + reason + ")").orElse("");
         return TerminalText.neutralise("gabier-daemon " + status.version() + ", pid " + status.pid() + ", up "
                 + status.uptime().toSeconds() + "s, project " + status.project() + ", jdtls "
-                + status.jdtls().text());
+                + status.jdtls().text() + failure);
     }
 
     private static void stop(Path socket, boolean json, PrintStream out) {

@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -46,7 +47,8 @@ class ProjectServerTest {
     private static final Executor REQUESTS = Executors.newVirtualThreadPerTaskExecutor();
 
     private final CountingStarter starter = new CountingStarter();
-    private final ProjectServer project = new ProjectServer(ROOT, starter);
+    private final List<String> log = new CopyOnWriteArrayList<>();
+    private final ProjectServer project = new ProjectServer(ROOT, starter, log::add);
 
     /** Hands out the language servers it is given, in turn, and counts the starts. */
     private static final class CountingStarter implements ProjectServer.Starter {
@@ -83,6 +85,7 @@ class ProjectServerTest {
         private final AtomicInteger closes = new AtomicInteger();
         private volatile JdtlsState state = JdtlsState.STARTING;
         private volatile String failure;
+        private volatile Exception closeFailure;
         private final boolean held;
 
         ScriptedServer() {
@@ -120,6 +123,11 @@ class ProjectServerTest {
         }
 
         @Override
+        public Optional<String> failure() {
+            return state == JdtlsState.FAILED ? Optional.ofNullable(failure) : Optional.empty();
+        }
+
+        @Override
         public void awaitReady() throws InterruptedException {
             waiting.incrementAndGet();
             released.await();
@@ -138,11 +146,27 @@ class ProjectServerTest {
             return RENAMED;
         }
 
+        /** jdtls was ready and is dead now: nobody asked it to end. */
+        void dies() {
+            failure = "it was killed";
+            state = JdtlsState.FAILED;
+        }
+
+        /** Closing this server fails with the exception. */
+        void failsToClose(Exception failure) {
+            closeFailure = failure;
+        }
+
         @Override
-        public void close() {
+        public void close() throws IOException, InterruptedException {
             closes.incrementAndGet();
             if (state == JdtlsState.STARTING) {
                 finish("closed while it started");
+            }
+            switch (closeFailure) {
+                case IOException failure -> throw failure;
+                case InterruptedException failure -> throw failure;
+                case null, default -> {}
             }
         }
     }
@@ -162,6 +186,7 @@ class ProjectServerTest {
         void startsNothingBeforeARequestAndSaysWhere() {
             assertThat(project.root()).isEqualTo(ROOT);
             assertThat(project.state()).isEqualTo(JdtlsState.NOT_STARTED);
+            assertThat(project.jdtlsFailure()).isEmpty();
             assertThat(starter.starts).hasValue(0);
         }
 
@@ -271,6 +296,7 @@ class ProjectServerTest {
                     .isEqualTo("jdtls did not start: Timed out after 300 s (jdtls is given 300 s)");
             assertThat(failure.parameters()).containsExactly(Map.entry("project", ROOT.toString()));
             assertThat(project.state()).isEqualTo(JdtlsState.FAILED);
+            assertThat(project.jdtlsFailure()).contains("Timed out after 300 s (jdtls is given 300 s)");
         }
 
         @Test
@@ -282,6 +308,56 @@ class ProjectServerTest {
 
             assertThat(starter.starts).hasValue(2);
             assertThat(project.state()).isEqualTo(JdtlsState.READY);
+        }
+
+        @Test
+        void aJdtlsThatDiedWhileReadyIsFailedAndTheNextRequestEndsItAndStartsAnother() {
+            var first = starter.willStart(new ScriptedServer());
+            project.diagnostics(FILE);
+
+            first.dies();
+
+            assertThat(project.state()).isEqualTo(JdtlsState.FAILED);
+            assertThat(project.jdtlsFailure()).contains("it was killed");
+            assertThat(project.diagnostics(FILE)).containsExactly(ScriptedServer.WARNING);
+            assertThat(starter.starts).hasValue(2);
+            assertThat(first.closes).hasValue(1);
+            assertThat(project.state()).isEqualTo(JdtlsState.READY);
+            assertThat(log).containsExactly("jdtls failed: ending it and starting another");
+        }
+
+        @Test
+        void startsAnotherJdtlsEvenWhenEndingTheDeadOneFails() {
+            var first = starter.willStart(new ScriptedServer());
+            project.diagnostics(FILE);
+            first.dies();
+            first.failsToClose(new IOException("cannot delete the data folder"));
+
+            assertThat(project.diagnostics(FILE)).containsExactly(ScriptedServer.WARNING);
+
+            assertThat(starter.starts).hasValue(2);
+            assertThat(log)
+                    .contains("could not end the jdtls that failed: java.io.IOException: "
+                            + "cannot delete the data folder");
+        }
+
+        @Test
+        void startsAnotherJdtlsEvenWhenEndingTheDeadOneIsInterruptedAndKeepsTheInterruption() {
+            var first = starter.willStart(new ScriptedServer());
+            project.diagnostics(FILE);
+            first.dies();
+            first.failsToClose(new InterruptedException("stop"));
+
+            try {
+                // The other jdtls is started, then the request that was interrupted stops waiting for it.
+                assertThatThrownBy(() -> project.diagnostics(FILE))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Interrupted while waiting for jdtls to start");
+                assertThat(Thread.currentThread().isInterrupted()).isTrue();
+            } finally {
+                Thread.interrupted();
+            }
+            assertThat(starter.starts).hasValue(2);
         }
 
         @Test
@@ -393,7 +469,8 @@ class ProjectServerTest {
 
             assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
                     .isInstanceOf(JdtlsStartException.class)
-                    .hasMessageContaining("jdtls did not start");
+                    .hasMessageContaining("jdtls did not start")
+                    .hasMessageContaining("jdtls exited with code 3");
         }
     }
 }

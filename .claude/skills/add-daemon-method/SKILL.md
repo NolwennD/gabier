@@ -44,7 +44,11 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    answers there.
 4. **A structured result is a type of `protocol`**, written and read with `Json` (`DaemonStatus` is the model: `toJson()`
    for the daemon, `of(Map)` for the client, which refuses a result that is not the expected one with an
-   `InvalidResponseException`). The cli has no third-party library, so nothing else may parse it.
+   `InvalidResponseException`). The cli has no third-party library, so nothing else may parse it. A member that is not
+   always there is an `Optional` of the record, written only when present and read as absent when missing
+   (`DaemonStatus.jdtlsFailure`, the reason jdtls failed, is the model). A text that comes from jdtls (a reason, a
+   message) is hostile input: the result carries it exactly, and whatever prints it for a person goes through
+   `TerminalText.neutralise`, as the text of `gabier status` does.
 5. **The cli command**, if there is one: in `Gabier.execute` (`modules/cli`), through `DaemonClient`; its output as text
    by default and as the result with `--json`, a refusal of the daemon printed as its problem object with the exit code
    of its category (`DaemonRefusal`). Test it in `GabierTest` against `ScriptedDaemon` (a real socket, scripted answers).

@@ -47,7 +47,8 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   where that is): `Main` takes the folder from its argument, `GABIER_PROJECT` or the working directory, and builds
   `ProjectServer.jdtls`, which starts the real jdtls (`JdtlsLanguageServer`, launcher `GABIER_JDTLS`) at the first request
   that needs it, once whatever the number of requests, waits for it (5 minutes at most, `jdtls-start-failed` otherwise,
-  and the next request tries again) and ends it when the daemon stops (`DaemonServer.close`: `stop`, SIGTERM). `status`
+  and the next request tries again, as it does for a jdtls that died while ready; a folder with no build is refused at
+  once as `no-build-to-import`) and ends it when the daemon stops (`DaemonServer.close`: `stop`, SIGTERM). `status`
   shows the project and `not-started`, `starting`, `ready` or `failed`, and starts nothing. The `native` stage runs the cli
   against the installed daemon with `GABIER_JDTLS` pointing nowhere (a jdtls that cannot start, `status` shows `failed`)
   and against the installed daemon served by the fake language server instead (`./gradlew :daemon:installFakeServed`,

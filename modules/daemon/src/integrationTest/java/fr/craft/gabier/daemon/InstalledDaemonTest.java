@@ -180,6 +180,68 @@ class InstalledDaemonTest {
     }
 
     @Test
+    void refusesAFolderWithNoBuildToImportAtOnceInsteadOfWaitingForTheTimeout() throws Exception {
+        // The sources of the project, without the Eclipse files that make it a project jdtls can import.
+        var project = Files.createDirectory(directory.resolve("no-build")).toRealPath();
+        Scenarios.FILE_WITH_AN_ERROR.writeProject(project);
+        try (var daemon = new Daemon(project)) {
+            long begin = System.nanoTime();
+
+            var answer = daemon.ask("diagnostics", diagnosticsOf(project));
+            daemon.remember();
+
+            assertThat(answer).contains("\"key\":\"no-build-to-import\"");
+            assertThat(Duration.ofNanos(System.nanoTime() - begin)).isLessThan(Duration.ofMinutes(1));
+            var failed = daemon.status();
+            assertThat(failed.jdtls()).isEqualTo(JdtlsState.FAILED);
+            assertThat(failed.jdtlsFailure())
+                    .hasValueSatisfying(reason -> assertThat(reason).contains("no build to import in " + project));
+            System.out.println("a folder with no build was refused: " + answer);
+
+            // The failed start has ended jdtls itself, before the answer: nothing was left for the stop to find.
+            daemon.stop();
+            assertThat(daemon.process.exitValue()).isZero();
+            assertThat(daemon.socket).doesNotExist();
+        }
+    }
+
+    @Test
+    void startsJdtlsAgainAtTheNextRequestWhenItWasKilledWhileReady() throws Exception {
+        var project = project();
+        try (var daemon = new Daemon(project)) {
+            assertThat(RpcResponse.parse(daemon.ask("diagnostics", diagnosticsOf(project))))
+                    .isInstanceOf(RpcResponse.Success.class);
+            assertThat(daemon.status().jdtls()).isEqualTo(JdtlsState.READY);
+            var first = List.copyOf(daemon.processes);
+            assertThat(first).as("the processes of the first jdtls").isNotEmpty();
+
+            // kill -9 of the whole tree of jdtls: the launcher and the java process.
+            first.forEach(ProcessHandle::destroyForcibly);
+            var status = daemon.status();
+            for (var attempt = 0; attempt < 100 && status.jdtls() != JdtlsState.FAILED; attempt++) {
+                TimeUnit.MILLISECONDS.sleep(100);
+                status = daemon.status();
+            }
+            assertThat(status.jdtls()).as("status after the kill").isEqualTo(JdtlsState.FAILED);
+            assertThat(status.jdtlsFailure())
+                    .hasValueSatisfying(reason -> assertThat(reason)
+                            .startsWith("jdtls is not running any more: it exited with code ")
+                            .endsWith(" after it was ready"));
+            assertThat(daemon.log()).contains("jdtls exited with code ");
+
+            var answer = RpcResponse.parse(daemon.ask("diagnostics", diagnosticsOf(project)));
+            daemon.remember();
+            assertThat(answer).as("the answer after the restart: %s", answer).isInstanceOf(RpcResponse.Success.class);
+            assertThat(daemon.status().jdtls()).isEqualTo(JdtlsState.READY);
+            assertThat(daemon.processes).as("the first jdtls and the second").hasSizeGreaterThan(first.size());
+            System.out.println("jdtls killed with SIGKILL, restarted by the next request");
+
+            daemon.stop();
+            daemon.assertNothingIsLeft();
+        }
+    }
+
+    @Test
     void endsJdtlsWhileItStillStartsWhenTheDaemonIsStopped() throws Exception {
         var project = project();
         try (var daemon = new Daemon(project)) {
@@ -202,8 +264,12 @@ class InstalledDaemonTest {
 
             daemon.stop();
 
-            System.out.println("the request that waited ended with: "
-                    + request.orTimeout(1, TimeUnit.MINUTES).join());
+            var answer = request.orTimeout(1, TimeUnit.MINUTES).join();
+            System.out.println("the request that waited ended with: " + answer);
+            assertThat(answer)
+                    .as("the answer of the request that waited, before its connection ended")
+                    .contains("\"key\":\"jdtls-start-failed\"")
+                    .contains("the daemon is stopping");
             daemon.assertNothingIsLeft();
         }
     }

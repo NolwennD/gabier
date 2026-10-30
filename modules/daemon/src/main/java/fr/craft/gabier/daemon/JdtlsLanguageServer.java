@@ -84,6 +84,9 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         Thread starter = Thread.ofPlatform().name("gabier-jdtls-start").daemon().unstarted(() -> {
             try {
                 starting.complete(JdtlsSession.start(jdtls, settings, log, diagnostics::publish));
+            } catch (InterruptedException stopped) {
+                // Only close() interrupts the start, and the requests that wait for it are told why it ended.
+                starting.completeExceptionally(new JdtlsException("the daemon is stopping", stopped));
             } catch (Exception failure) {
                 starting.completeExceptionally(failure);
             }
@@ -96,7 +99,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     public JdtlsState state() {
         return switch (starting.state()) {
             case RUNNING -> JdtlsState.STARTING;
-            case SUCCESS -> JdtlsState.READY;
+            // A jdtls that died after it was ready is failed: the next request must start it again.
+            case SUCCESS -> starting.resultNow().isAlive() ? JdtlsState.READY : JdtlsState.FAILED;
             default -> JdtlsState.FAILED;
         };
     }
@@ -231,10 +235,39 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             throw LanguageServerException.notReady();
         }
         if (starting.state() == Future.State.FAILED) {
-            Throwable failure = starting.exceptionNow();
-            throw new JdtlsException("jdtls did not start: " + failure.getMessage(), failure);
+            throw failureOfTheStart(starting.exceptionNow());
         }
-        return starting.resultNow();
+        JdtlsSession session = starting.resultNow();
+        if (!session.isAlive()) {
+            throw death(session);
+        }
+        return session;
+    }
+
+    @Override
+    public Optional<String> failure() {
+        return switch (starting.state()) {
+            case FAILED ->
+                Optional.ofNullable(failureOfTheStart(starting.exceptionNow()).getMessage());
+            case SUCCESS ->
+                starting.resultNow().isAlive()
+                        ? Optional.empty()
+                        : Optional.ofNullable(death(starting.resultNow()).getMessage());
+            default -> Optional.empty();
+        };
+    }
+
+    /** A refusal that has a problem object of its own stays one; any other failure is a failure to start. */
+    private static RuntimeException failureOfTheStart(Throwable failure) {
+        if (failure instanceof NoBuildToImportException noBuild) {
+            return noBuild;
+        }
+        return new JdtlsException("jdtls did not start: " + failure.getMessage(), failure);
+    }
+
+    private static JdtlsException death(JdtlsSession session) {
+        return new JdtlsException(
+                "jdtls is not running any more: it exited with code " + session.exitValue() + " after it was ready");
     }
 
     /** The text of a file of the project; the file is registered to await its publication before it is opened. */

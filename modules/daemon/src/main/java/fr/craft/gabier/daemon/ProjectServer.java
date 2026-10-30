@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 
@@ -20,7 +21,8 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>There is one start at a time, whatever the number of requests: the ones that arrive while it goes on wait for the
  * same one. A start that fails is the failure of every request that waited for it, and stays visible as {@code
- * FAILED}; the next request starts jdtls again. Closing ends the start in progress or the running jdtls, and nothing
+ * FAILED}; the next request ends what is left of that jdtls and starts another. A jdtls that died while ready is
+ * {@code FAILED} too, and treated the same way. Closing ends the start in progress or the running jdtls, and nothing
  * is started afterwards.
  */
 final class ProjectServer implements ServedProject {
@@ -40,12 +42,14 @@ final class ProjectServer implements ServedProject {
 
     private final Path root;
     private final Starter starter;
+    private final Consumer<String> log;
     private volatile @Nullable StartedLanguageServer current;
     private boolean closed;
 
-    ProjectServer(Path root, Starter starter) {
+    ProjectServer(Path root, Starter starter, Consumer<String> log) {
         this.root = root;
         this.starter = starter;
+        this.log = log;
     }
 
     /**
@@ -56,7 +60,7 @@ final class ProjectServer implements ServedProject {
      * @param log receives a line for what happens to jdtls
      */
     static ProjectServer jdtls(Path root, Map<String, String> environment, Consumer<String> log) {
-        var settings = JdtlsSettings.ofWhatJdtlsImports(root, TIMEOUT);
+        var settings = JdtlsSettings.of(root, List.of(), TIMEOUT);
         var launcher = environment.getOrDefault(LAUNCHER_VARIABLE, "");
         JdtlsStarter jdtls = launcher.isBlank()
                 ? data -> {
@@ -65,7 +69,7 @@ final class ProjectServer implements ServedProject {
                 : new JdtlsLauncher(Path.of(launcher), Path.of(System.getProperty("java.home")));
 
         return new ProjectServer(
-                root, () -> JdtlsLanguageServer.start(jdtls, settings, JdtlsLanguageServer.QUIET, log));
+                root, () -> JdtlsLanguageServer.start(jdtls, settings, JdtlsLanguageServer.QUIET, log), log);
     }
 
     @Override
@@ -78,6 +82,13 @@ final class ProjectServer implements ServedProject {
         var server = current;
 
         return server == null ? JdtlsState.NOT_STARTED : server.state();
+    }
+
+    @Override
+    public Optional<String> jdtlsFailure() {
+        var server = current;
+
+        return server == null ? Optional.empty() : server.failure();
     }
 
     @Override
@@ -124,11 +135,30 @@ final class ProjectServer implements ServedProject {
             throw LanguageServerException.notReady();
         }
         var server = current;
-        if (server == null || server.state() == JdtlsState.FAILED) {
+        if (server != null && server.state() == JdtlsState.FAILED) {
+            log.accept("jdtls failed: ending it and starting another");
+            end(server);
+            server = null;
+        }
+        if (server == null) {
             server = starter.start();
             current = server;
         }
 
         return server;
+    }
+
+    /**
+     * Ends a server that failed, so that nothing of it is left (a jdtls that died while ready still holds its data
+     * folder): its failure to end is told, it does not stop the next start.
+     */
+    private void end(StartedLanguageServer failed) {
+        try {
+            failed.close();
+        } catch (IOException failure) {
+            log.accept("could not end the jdtls that failed: " + failure);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

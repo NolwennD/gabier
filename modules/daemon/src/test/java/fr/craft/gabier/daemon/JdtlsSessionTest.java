@@ -59,8 +59,7 @@ class JdtlsSessionTest {
     }
 
     private JdtlsSettings settings(Duration timeout, List<Path> expectedProjects) {
-        return new JdtlsSettings(
-                PROJECT_ROOT, expectedProjects, timeout, Duration.ofMillis(20), Duration.ofSeconds(5), false);
+        return new JdtlsSettings(PROJECT_ROOT, expectedProjects, timeout, Duration.ofMillis(20), Duration.ofSeconds(5));
     }
 
     private JdtlsSession start(JdtlsStarter starter, Duration timeout, Path... expectedProjects) throws Exception {
@@ -123,62 +122,14 @@ class JdtlsSessionTest {
         }
 
         @Test
-        void asksOnceWhenNoProjectIsExpected() throws Exception {
-            fake.listsProjects();
+        void isReadyAtTheServiceReadyStatusOfJdtlsAndAsksTheListOfProjectsOnce() throws Exception {
+            // jdtls says ServiceReady once its import jobs are over: what it lists then is the project, not a draft.
+            fake.listsProjects(URI_A).listsProjects(URI_A, URI_B);
 
             try (JdtlsSession session = start()) {
-                assertThat(session.projects()).isEmpty();
+                assertThat(session.projects()).containsExactly(MODULE_A);
                 assertThat(fake.projectRequests()).isEqualTo(1);
             }
-        }
-
-        @Test
-        void asksAgainUntilEveryExpectedProjectIsListed() throws Exception {
-            fake.listsProjects(URI_A).listsProjects(URI_A).listsProjects(URI_A, URI_B);
-
-            try (JdtlsSession session = start(MODULE_A, MODULE_B)) {
-                assertThat(fake.projectRequests()).isEqualTo(3);
-                assertThat(session.projects()).containsExactly(MODULE_A, MODULE_B);
-            }
-        }
-
-        @Test
-        void waitsUntilTheListOfProjectsStopsChangingWhenNoneIsExpectedByName() throws Exception {
-            fake.listsProjects().listsProjects(URI_A).listsProjects(URI_A, URI_B);
-
-            try (JdtlsSession session = JdtlsSession.start(
-                    fake,
-                    new JdtlsSettings(
-                            PROJECT_ROOT, List.of(), LONG, Duration.ofMillis(20), Duration.ofSeconds(5), true),
-                    log::add,
-                    published::add)) {
-                assertThat(session.projects()).containsExactly(MODULE_A, MODULE_B);
-                assertThat(fake.projectRequests()).isEqualTo(4);
-            }
-        }
-
-        @Test
-        void givesUpWhenJdtlsNeverListsAProjectAndSaysWhatItWaitedFor() throws Exception {
-            fake.listsProjects();
-
-            assertThatThrownBy(() -> JdtlsSession.start(
-                            fake,
-                            new JdtlsSettings(
-                                    PROJECT_ROOT,
-                                    List.of(),
-                                    MEDIUM,
-                                    Duration.ofMillis(20),
-                                    Duration.ofSeconds(5),
-                                    true),
-                            log::add,
-                            published::add))
-                    .isInstanceOf(JdtlsException.class)
-                    .hasMessageContaining("Timed out")
-                    .hasMessageContaining("jdtls to list the projects it imports")
-                    .hasMessageContaining("until the list stops changing (it listed [])");
-
-            assertThat(fake.process().isAlive()).isFalse();
-            assertThat(fake.data()).doesNotExist();
         }
 
         @Test
@@ -328,16 +279,31 @@ class JdtlsSessionTest {
         }
 
         @Test
-        void aTimeoutNamesTheProjectsStillMissing() throws Exception {
+        void aFolderWithNothingToImportIsRefusedAtOnceAsHavingNoBuild() throws Exception {
+            fake.listsProjects();
+            long begin = System.nanoTime();
+
+            assertThatThrownBy(() -> start()).isInstanceOfSatisfying(NoBuildToImportException.class, refusal -> {
+                assertThat(refusal.key().get()).isEqualTo("no-build-to-import");
+                assertThat(refusal.getMessage()).contains("no build to import in " + PROJECT_ROOT);
+                assertThat(refusal.parameters()).containsEntry("project", PROJECT_ROOT.toString());
+            });
+
+            assertThat(Duration.ofNanos(System.nanoTime() - begin)).isLessThan(Duration.ofSeconds(10));
+            assertThat(fake.projectRequests()).isEqualTo(1);
+            assertNothingLeftBehind();
+        }
+
+        @Test
+        void aModuleThatJdtlsDidNotImportIsAFailureAtOnceThatNamesIt() throws Exception {
             fake.listsProjects(URI_A);
 
-            assertThatThrownBy(() -> start(fake, MEDIUM, MODULE_A, MODULE_B))
+            assertThatThrownBy(() -> start(MODULE_A, MODULE_B))
                     .isInstanceOf(JdtlsException.class)
-                    .hasMessageContaining("Timed out")
-                    .hasMessageContaining("jdtls to list the modules [" + MODULE_A + ", " + MODULE_B + "]")
-                    .hasMessageContaining("still missing [" + MODULE_B + "]")
+                    .hasMessageContaining("did not import [" + MODULE_B + "]")
                     .hasMessageContaining("it listed [" + MODULE_A + "]");
 
+            assertThat(fake.projectRequests()).isEqualTo(1);
             assertNothingLeftBehind();
         }
 
@@ -522,6 +488,24 @@ class JdtlsSessionTest {
         }
 
         @Test
+        void logsTheExitCodeOfAJdtlsThatDiedWithoutBeingAskedTo() throws Exception {
+            fake.listsProjects(URI_A);
+            JdtlsSession session = start();
+            long begin = System.nanoTime();
+
+            fake.process().destroyForcibly().onExit().get();
+            while (log.stream().noneMatch(line -> line.startsWith("jdtls exited with code "))
+                    && System.nanoTime() - begin < Duration.ofSeconds(10).toNanos()) {
+                Thread.sleep(10);
+            }
+
+            assertThat(log).contains("jdtls exited with code " + fake.process().exitValue());
+            assertThat(session.isAlive()).isFalse();
+            assertThat(session.exitValue()).isEqualTo(fake.process().exitValue());
+            session.close();
+        }
+
+        @Test
         void deletesTheDataDirectoryWithWhatJdtlsWroteInIt() throws Exception {
             fake.listsProjects(URI_A);
             JdtlsSession session = start();
@@ -588,8 +572,7 @@ class JdtlsSessionTest {
         }
 
         private JdtlsSettings shortShutdown() {
-            return new JdtlsSettings(
-                    PROJECT_ROOT, List.of(), LONG, Duration.ofMillis(20), Duration.ofMillis(300), false);
+            return new JdtlsSettings(PROJECT_ROOT, List.of(), LONG, Duration.ofMillis(20), Duration.ofMillis(300));
         }
 
         @Test
@@ -597,8 +580,7 @@ class JdtlsSessionTest {
             fake.listsProjects(URI_A).shutdown(FakeJdtls.Shutdown.NEVER_ANSWERS);
             JdtlsSession session = JdtlsSession.start(
                     fake,
-                    new JdtlsSettings(
-                            PROJECT_ROOT, List.of(), LONG, Duration.ofMillis(20), Duration.ofMillis(300), false),
+                    new JdtlsSettings(PROJECT_ROOT, List.of(), LONG, Duration.ofMillis(20), Duration.ofMillis(300)),
                     log::add,
                     published::add);
 

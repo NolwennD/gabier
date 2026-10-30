@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -25,22 +23,23 @@ import org.eclipse.lsp4j.launch.LSPLauncher;
 import org.eclipse.lsp4j.services.LanguageServer;
 
 /**
- * A jdtls that is ready: started on a project root with a data folder of its own, initialized, and known to have
- * imported the projects that were expected of it. The session waits for that without guessing a delay: for the answer
- * to {@code initialize}, for the {@code ServiceReady} status, and for the list of projects jdtls gives. It fails at once
- * when the process dies (with its exit code) or when jdtls reports an error, and every timeout names what was awaited.
+ * A jdtls that is ready: started on a project root with a data folder of its own, initialized, and done with importing
+ * the project. The session waits for that without guessing a delay: for the answer to {@code initialize} and for the
+ * {@code ServiceReady} status, which jdtls sends once its import jobs are over (checked on the real jdtls: the
+ * notifications of the import, then {@code ServiceReady}, then the list of projects is complete). It then asks the
+ * projects jdtls imported, once. It fails at once when the process dies (with its exit code), when jdtls reports an
+ * error, when a project that was expected is not listed, or when nothing at all was imported; every timeout names what
+ * was awaited.
  *
  * <p>Closing the session asks jdtls to shut down, ends the whole process tree and deletes the data folder; it does so
  * too when the start fails. The launcher starts a java process in turn, and the tree of a process that died cannot be
- * read any more: the session therefore records the tree from the moment the process started, again each time it is
- * asked (the poll interval of the settings, at most a quarter of a second), and a last time at the close. What the
- * launcher started and stopped between two readings, or started and left behind in less than that before dying, is
- * not seen.
+ * read any more: the session therefore records the tree from the moment the process started, again every tree interval
+ * of the settings (a quarter of a second), and a last time at the close. What the launcher started and stopped between
+ * two readings, or started and left behind in less than that before dying, is not seen.
  */
 final class JdtlsSession implements AutoCloseable {
 
     private static final String DATA_DIRECTORY_PREFIX = "gabier-jdtls-data-";
-    private static final Duration MAXIMUM_RECORD_INTERVAL = Duration.ofMillis(250);
 
     private final JdtlsSettings settings;
     private final Process process;
@@ -53,6 +52,7 @@ final class JdtlsSession implements AutoCloseable {
     private List<Path> projects = List.of();
     private final Set<ProcessHandle> started = ConcurrentHashMap.newKeySet();
     private final Thread recorder;
+    private final Future<Void> exitLog;
     private boolean closed;
 
     private JdtlsSession(
@@ -70,6 +70,8 @@ final class JdtlsSession implements AutoCloseable {
         this.listening = launcher.startListening();
         this.server = launcher.getRemoteProxy();
         this.watch = new JdtlsWatch(process, client.error(), settings.timeout());
+        // The reason of a death that nobody asked for, in the log of the daemon, whoever notices it and whenever.
+        this.exitLog = process.onExit().thenAccept(ended -> log.accept("jdtls exited with code " + ended.exitValue()));
         this.recorder = Thread.ofPlatform()
                 .daemon()
                 .name("jdtls-process-tree-" + process.pid())
@@ -120,6 +122,16 @@ final class JdtlsSession implements AutoCloseable {
         return process.pid();
     }
 
+    /** False once the jdtls process has exited, whatever the reason: killed, crashed or ended by its launcher. */
+    boolean isAlive() {
+        return process.isAlive();
+    }
+
+    /** The exit code of the jdtls process, once it is not alive. */
+    int exitValue() {
+        return process.exitValue();
+    }
+
     Path dataDirectory() {
         return data;
     }
@@ -141,11 +153,10 @@ final class JdtlsSession implements AutoCloseable {
     }
 
     private void record() {
-        Duration interval = Collections.min(List.of(settings.pollInterval(), MAXIMUM_RECORD_INTERVAL));
         try {
             while (true) {
                 started.addAll(process.descendants().toList());
-                Thread.sleep(interval);
+                Thread.sleep(settings.treeInterval());
             }
         } catch (InterruptedException e) {
             // The close stops the recording.
@@ -176,41 +187,33 @@ final class JdtlsSession implements AutoCloseable {
             server.initialized(new InitializedParams());
             return client.serviceReady();
         });
-        projects = awaitProjects();
+        projects = importedProjects();
     }
 
     /**
-     * Asks {@code java.project.getAll} until jdtls lists every expected project, or, when nothing is expected by name,
-     * until it lists a project and the list is the same twice in a row. Returns what it listed.
+     * Asks {@code java.project.getAll} once, when jdtls has said {@code ServiceReady}: jdtls says it after its import
+     * jobs are over (the {@code initialized} handler waits for them first), so the list is final, not a draft to wait
+     * on. A list without an expected project, or an empty one, is refused at once.
      */
-    private List<Path> awaitProjects() throws InterruptedException {
-        List<Path> expected = settings.expectedProjects();
-        List<Path> listed = List.of();
-        while (true) {
-            List<Path> before = listed;
-            List<Path> missing = missing(expected, before);
-            String what = settings.awaitSettledProjects()
-                    ? "jdtls to list the projects it imports with java.project.getAll, until the list stops changing"
-                            + " (it listed " + before + ")"
-                    : "jdtls to list the modules " + expected + " with java.project.getAll (still missing " + missing
-                            + ", it listed " + before + ")";
-            listed = listProjects(what);
-            if (settings.awaitSettledProjects()
-                    ? !listed.isEmpty() && listed.equals(before)
-                    : missing(expected, listed).isEmpty()) {
-                return listed;
-            }
-            watch.pause(what, settings.pollInterval());
+    private List<Path> importedProjects() throws InterruptedException {
+        List<Path> listed = listProjects();
+        List<Path> missing = settings.expectedProjects().stream()
+                .filter(project -> !listed.contains(project))
+                .toList();
+        if (!missing.isEmpty()) {
+            throw new JdtlsException("jdtls is ready but did not import " + missing + " (it listed " + listed + ")");
         }
+        if (listed.isEmpty()) {
+            throw NoBuildToImportException.of(settings.projectRoot());
+        }
+        return listed;
     }
 
-    private static List<Path> missing(List<Path> expected, List<Path> listed) {
-        return expected.stream().filter(project -> !listed.contains(project)).toList();
-    }
-
-    private List<Path> listProjects(String what) throws InterruptedException {
+    private List<Path> listProjects() throws InterruptedException {
         var command = new ExecuteCommandParams("java.project.getAll", List.of());
-        Object answer = watch.await(what, () -> server.getWorkspaceService().executeCommand(command));
+        Object answer = watch.await(
+                "the projects jdtls imported (java.project.getAll)",
+                () -> server.getWorkspaceService().executeCommand(command));
         if (!(answer instanceof List<?> uris)) {
             throw new JdtlsException("java.project.getAll answered " + answer + ", which is not a list of projects");
         }
@@ -232,8 +235,10 @@ final class JdtlsSession implements AutoCloseable {
             return;
         }
         closed = true;
-        // What was recorded answers for the launcher having died since: its children outlive it.
+        // The death that is asked for is not told as one.
+        exitLog.cancel(false);
         recorder.interrupt();
+        // What was recorded answers for the launcher having died since: its children outlive it.
         started.addAll(process.descendants().toList());
         started.add(process.toHandle());
         List<ProcessHandle> tree = List.copyOf(started);

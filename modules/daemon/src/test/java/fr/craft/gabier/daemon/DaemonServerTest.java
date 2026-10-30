@@ -347,6 +347,36 @@ class DaemonServerTest {
         }
 
         @Test
+        void statusSaysWhyJdtlsFailedAsTheProjectSaysItAndOnlyThen() throws IOException {
+            project.because("jdtls exited with code 137 after it was ready");
+            serving();
+
+            try (var client = connect(socket())) {
+                project.in(JdtlsState.FAILED);
+                assertThat(statusOf(client).jdtlsFailure()).contains("jdtls exited with code 137 after it was ready");
+
+                project.in(JdtlsState.READY);
+                assertThat(statusOf(client).jdtlsFailure()).isEmpty();
+            }
+        }
+
+        @Test
+        void statusSaysNoReasonWhenJdtlsFailedForAReasonThatIsNotKnown() throws IOException {
+            project.in(JdtlsState.FAILED);
+            serving();
+
+            try (var client = connect(socket())) {
+                assertThat(statusOf(client).jdtlsFailure()).isEmpty();
+            }
+        }
+
+        private static DaemonStatus statusOf(Client client) throws IOException {
+            var answer = RpcResponse.parse(client.ask(STATUS_REQUEST));
+
+            return DaemonStatus.of(((RpcResponse.Success) answer).result());
+        }
+
+        @Test
         void diagnosticsAnswersTheProblemsOfTheFileAndRefusesTheOneOutsideTheProject() throws IOException {
             serving();
             var broken =
@@ -500,6 +530,51 @@ class DaemonServerTest {
                 assertThat(project.closes()).isEqualTo(1);
             }
             running.orTimeout(10, TimeUnit.SECONDS).join();
+        }
+
+        @Test
+        void aRequestThatWaitsWhenTheDaemonStopsGetsItsAnswerBeforeItsConnectionEnds() throws Exception {
+            project.whoseRequestsWaitForTheClose();
+            var running = serve(open());
+
+            try (var waiter = connect(socket());
+                    var stopper = connect(socket())) {
+                waiter.send(diagnosticsRequest());
+                assertThat(project.awaitRequest()).as("the request waits").isTrue();
+
+                stopper.ask(STOP_REQUEST);
+
+                assertThat(waiter.readLine())
+                        .contains("\"key\":\"jdtls-start-failed\"")
+                        .contains("the daemon is stopping");
+                assertThat(waiter.readLine()).isNull();
+            }
+            running.orTimeout(10, TimeUnit.SECONDS).join();
+        }
+
+        @Test
+        void givesUpOnARequestThatNeverEndsOnceTheGraceIsOverAndDisconnectsItsClient() throws Exception {
+            project.whoseRequestsNeverEnd();
+            var running = serve(open().disconnectingAfter(Duration.ofMillis(200)));
+
+            try (var waiter = connect(socket());
+                    var stopper = connect(socket())) {
+                waiter.send(diagnosticsRequest());
+                assertThat(project.awaitRequest()).as("the request waits").isTrue();
+
+                stopper.ask(STOP_REQUEST);
+
+                assertThat(waiter.readLine()).isNull();
+                running.orTimeout(10, TimeUnit.SECONDS).join();
+            } finally {
+                project.release();
+            }
+        }
+
+        private String diagnosticsRequest() {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"%s"}}
+                """.formatted(directory.resolve("src/main/java/demo/Broken.java"));
         }
 
         @Test

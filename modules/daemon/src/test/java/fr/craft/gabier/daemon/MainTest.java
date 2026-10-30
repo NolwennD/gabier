@@ -300,7 +300,9 @@ class MainTest {
 
             assertThat(ask("""
                 {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"%s"}}
-                """.formatted(directory.resolve("File.java")))).contains("\"key\":\"jdtls-start-failed\"");
+                """.formatted(directory.resolve("File.java"))))
+                    .contains("\"key\":\"jdtls-start-failed\"")
+                    .contains("jdtls exited with code 3");
             ask(STOP);
 
             daemon.orTimeout(10, TimeUnit.SECONDS).join();

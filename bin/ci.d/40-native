@@ -407,8 +407,10 @@ public final class Native {
                             + " that says why, exit 1");
             Run status = gabier("status");
             expect(
-                    status.exit() == 0 && status.out().endsWith(", jdtls failed"),
-                    "gabier status shows the failed start");
+                    status.exit() == 0
+                            && status.out().contains(", jdtls failed (jdtls did not start: ")
+                            && status.out().contains("no-jdtls"),
+                    "gabier status shows the failed start and why");
             Run again = gabier("diagnostics", "Main.java");
             expect(again.exit() == 1 && again.err().contains("(jdtls-start-failed; "), "the next request tries again");
             gabier("stop");

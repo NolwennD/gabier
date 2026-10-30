@@ -6,6 +6,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -16,8 +17,11 @@ import org.jspecify.annotations.Nullable;
  * @param uptime the time since the daemon started listening
  * @param project the root of the project the daemon serves
  * @param jdtls where the jdtls of the daemon is: not started, starting, ready or failed
+ * @param jdtlsFailure why jdtls is failed, as jdtls or the daemon said it (text from jdtls is hostile input: whoever
+ *     prints it goes through {@link TerminalText}); empty when jdtls is not failed or the reason is not known
  */
-public record DaemonStatus(String version, long pid, Duration uptime, Path project, JdtlsState jdtls) {
+public record DaemonStatus(
+        String version, long pid, Duration uptime, Path project, JdtlsState jdtls, Optional<String> jdtlsFailure) {
 
     public DaemonStatus {
         Assert.notBlank("version", version);
@@ -26,14 +30,28 @@ public record DaemonStatus(String version, long pid, Duration uptime, Path proje
         Assert.field("uptime", uptime.toMillis()).min(0);
         Assert.notNull("project", project);
         Assert.notNull("jdtls", jdtls);
+        Assert.notNull("jdtlsFailure", jdtlsFailure);
     }
 
-    /** The result as JSON, the members in a stable order. */
+    /** A status that says no reason for the state of jdtls. */
+    public DaemonStatus(String version, long pid, Duration uptime, Path project, JdtlsState jdtls) {
+        this(version, pid, uptime, project, jdtls, Optional.empty());
+    }
+
+    /** The result as JSON, the members in a stable order; the reason is a member only when there is one. */
     public String toJson() {
+        var failure = jdtlsFailure
+                .map(reason -> ",\"jdtlsFailure\":" + Json.quote(reason))
+                .orElse("");
         return """
-            {"version":%s,"pid":%d,"uptimeMillis":%d,"project":%s,"jdtls":%s}\
+            {"version":%s,"pid":%d,"uptimeMillis":%d,"project":%s,"jdtls":%s%s}\
             """.formatted(
-                Json.quote(version), pid, uptime.toMillis(), Json.quote(project.toString()), Json.quote(jdtls.text()));
+                        Json.quote(version),
+                        pid,
+                        uptime.toMillis(),
+                        Json.quote(project.toString()),
+                        Json.quote(jdtls.text()),
+                        failure);
     }
 
     /**
@@ -51,7 +69,19 @@ public record DaemonStatus(String version, long pid, Duration uptime, Path proje
                 integer(result, "pid"),
                 Duration.ofMillis(integer(result, "uptimeMillis")),
                 project(result.get("project")),
-                state(result.get("jdtls")));
+                state(result.get("jdtls")),
+                failure(result.get("jdtlsFailure")));
+    }
+
+    private static Optional<String> failure(@Nullable Object failure) {
+        if (failure == null) {
+            return Optional.empty();
+        }
+        if (failure instanceof String reason) {
+            return Optional.of(reason);
+        }
+
+        throw member("jdtlsFailure");
     }
 
     private static Path project(@Nullable Object project) {

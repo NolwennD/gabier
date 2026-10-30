@@ -90,6 +90,11 @@ public final class FakeServedMain {
         }
 
         @Override
+        public Optional<String> jdtlsFailure() {
+            return Optional.empty();
+        }
+
+        @Override
         public List<Diagnostic> diagnostics(Path file) {
             return server.diagnostics(file);
         }

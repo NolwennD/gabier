@@ -3,12 +3,16 @@ package fr.craft.gabier.daemon;
 import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.protocol.JdtlsState;
 import java.io.IOException;
+import java.util.Optional;
 
 /** A language server that starts in the background as soon as it is created, and that can be asked where it is. */
 interface StartedLanguageServer extends JavaLanguageServer, AutoCloseable {
 
     /** Where the start is: {@code STARTING}, then {@code READY} or {@code FAILED}. */
     JdtlsState state();
+
+    /** Why the server is {@code FAILED} (the failure of its start, or its death); empty when it is not failed. */
+    Optional<String> failure();
 
     /**
      * Waits until the start is over.

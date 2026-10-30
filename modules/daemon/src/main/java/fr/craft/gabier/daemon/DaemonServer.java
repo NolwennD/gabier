@@ -2,7 +2,9 @@ package fr.craft.gabier.daemon;
 
 import fr.craft.gabier.editing.application.Diagnose;
 import fr.craft.gabier.protocol.DaemonStatus;
+import fr.craft.gabier.protocol.JdtlsState;
 import fr.craft.gabier.protocol.ProtocolVersion;
+import fr.craft.gabier.shared.generation.ExcludeFromGeneratedCodeCoverage;
 import java.io.IOException;
 import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
@@ -14,6 +16,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,6 +29,11 @@ import java.util.function.LongSupplier;
  */
 final class DaemonServer implements AutoCloseable {
 
+    /** How long the clients are given to end by themselves, once the project is closed, before they are cut. */
+    private static final Duration DISCONNECT_GRACE = Duration.ofSeconds(5);
+
+    private static final Duration POLL = Duration.ofMillis(10);
+
     private final Path socket;
     private final ServerSocketChannel listener;
     private final RequestHandler handler;
@@ -33,6 +41,7 @@ final class DaemonServer implements AutoCloseable {
     private final Set<SocketChannel> connections = ConcurrentHashMap.newKeySet();
     private final CompletableFuture<Void> stopRequested = new CompletableFuture<>();
     private boolean closed;
+    private Duration grace = DISCONNECT_GRACE;
 
     private DaemonServer(
             Path socket, ServerSocketChannel listener, LongSupplier nanoClock, long pid, ServedProject project) {
@@ -42,12 +51,7 @@ final class DaemonServer implements AutoCloseable {
         var startedAt = nanoClock.getAsLong();
         // The method table: to add a method, add it here (.claude/skills/add-daemon-method/SKILL.md).
         handler = new RequestHandler(List.of(
-                new StatusMethod(() -> new DaemonStatus(
-                        ProtocolVersion.CURRENT.toString(),
-                        pid,
-                        Duration.ofNanos(nanoClock.getAsLong() - startedAt),
-                        project.root(),
-                        project.state())),
+                new StatusMethod(() -> status(nanoClock, startedAt, pid)),
                 new StopMethod(this::requestStop),
                 new DiagnosticsMethod(new Diagnose(project))));
     }
@@ -118,7 +122,9 @@ final class DaemonServer implements AutoCloseable {
     /**
      * Stops listening, removes the socket, ends the language server of the project (jdtls, started or still
      * starting) and disconnects the clients still there. They are disconnected last, so that a client that waits for
-     * its connection to end knows the socket is gone and that no process of the daemon is left.
+     * its connection to end knows the socket is gone and that no process of the daemon is left, and without cutting
+     * the answer of a request that was waiting for the language server: that request ends when the project is closed,
+     * and its answer is written before its connection ends (bounded by the grace, see {@link #disconnect}).
      */
     @Override
     public synchronized void close() throws IOException {
@@ -136,10 +142,40 @@ final class DaemonServer implements AutoCloseable {
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             } finally {
-                for (var connection : connections) {
-                    connection.close();
-                }
+                disconnect();
             }
+        }
+    }
+
+    /**
+     * Lets each client end its conversation: no new line is read, the answer being written (the one a request that
+     * waited for jdtls gets when the project is closed) goes out, then the connection ends by itself. A connection
+     * that is still there once the grace is over, or when this thread is interrupted, is closed.
+     */
+    private void disconnect() throws IOException {
+        connections.forEach(DaemonServer::stopReading);
+        var deadline = System.nanoTime() + grace.toNanos();
+        try {
+            while (!connections.isEmpty() && System.nanoTime() < deadline) {
+                Thread.sleep(POLL);
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        } finally {
+            for (var connection : connections) {
+                connection.close();
+            }
+        }
+    }
+
+    @ExcludeFromGeneratedCodeCoverage(
+            reason = "A connection can end by itself between the snapshot of the set and this call, and no test can"
+                    + " place its close in that gap: the failure is the wanted outcome, so it is ignored")
+    private static void stopReading(SocketChannel connection) {
+        try {
+            connection.shutdownInput();
+        } catch (IOException alreadyClosed) {
+            // It ended by itself, which is what is asked.
         }
     }
 
@@ -154,6 +190,27 @@ final class DaemonServer implements AutoCloseable {
         } catch (IOException e) {
             // The JVM is going down: a socket that cannot be removed is a stale one for the next daemon to remove.
         }
+    }
+
+    private DaemonStatus status(LongSupplier nanoClock, long startedAt, long pid) {
+        var state = project.state();
+        // The reason is only said of a jdtls that is failed, whatever the project knows of an earlier failure.
+        var failure = state == JdtlsState.FAILED ? project.jdtlsFailure() : Optional.<String>empty();
+
+        return new DaemonStatus(
+                ProtocolVersion.CURRENT.toString(),
+                pid,
+                Duration.ofNanos(nanoClock.getAsLong() - startedAt),
+                project.root(),
+                state,
+                failure);
+    }
+
+    /** How long the clients are given to end by themselves when the daemon stops; for a test to shorten. */
+    DaemonServer disconnectingAfter(Duration grace) {
+        this.grace = grace;
+
+        return this;
     }
 
     private void requestStop() {

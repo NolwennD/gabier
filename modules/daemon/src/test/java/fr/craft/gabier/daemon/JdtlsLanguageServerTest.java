@@ -99,8 +99,7 @@ class JdtlsLanguageServerTest {
     }
 
     private JdtlsLanguageServer start(Duration timeout) {
-        var settings =
-                new JdtlsSettings(root, List.of(root), timeout, Duration.ofMillis(20), Duration.ofSeconds(5), false);
+        var settings = new JdtlsSettings(root, List.of(root), timeout, Duration.ofMillis(20), Duration.ofSeconds(5));
         var server = JdtlsLanguageServer.start(fake, settings, QUIET, log::add);
         fake.initializeParams();
         return server;
@@ -372,6 +371,32 @@ class JdtlsLanguageServerTest {
         }
 
         @Test
+        void saysThatJdtlsDiedWithItsExitCodeWhenAskedAfterItsDeath() throws Exception {
+            try (var server = started()) {
+                fake.process().destroyForcibly().onExit().get();
+
+                assertThatThrownBy(() -> server.diagnostics(clean))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("jdtls is not running any more")
+                        .hasMessageContaining(
+                                "it exited with code " + fake.process().exitValue());
+                assertThat(fake.opened()).isEmpty();
+            }
+        }
+
+        @Test
+        void passesOnTheRefusalOfAFolderWithNoBuildToImportAsItIs() throws Exception {
+            fake.listsOnlyProjects();
+            var settings = JdtlsSettings.of(root, List.of(), LONG);
+
+            try (var server = JdtlsLanguageServer.start(fake, settings, QUIET, log::add)) {
+                assertThatThrownBy(server::awaitStarted).isInstanceOf(NoBuildToImportException.class);
+                assertThatThrownBy(() -> server.diagnostics(clean)).isInstanceOf(NoBuildToImportException.class);
+                assertThat(server.state()).isEqualTo(JdtlsState.FAILED);
+            }
+        }
+
+        @Test
         void saysWhyJdtlsDidNotStartInsteadOfAnsweringNotReadyForEver() throws Exception {
             fake.sendsStatus("Error");
 
@@ -396,6 +421,7 @@ class JdtlsLanguageServerTest {
 
             try (var server = start()) {
                 assertThat(server.state()).isEqualTo(JdtlsState.STARTING);
+                assertThat(server.failure()).isEmpty();
             }
         }
 
@@ -405,6 +431,16 @@ class JdtlsLanguageServerTest {
                 server.awaitReady();
 
                 assertThat(server.state()).isEqualTo(JdtlsState.READY);
+                assertThat(server.failure()).isEmpty();
+            }
+        }
+
+        @Test
+        void isFailedWhenJdtlsDiedAfterItWasReady() throws Exception {
+            try (var server = started()) {
+                fake.process().destroyForcibly().onExit().get();
+
+                assertThat(server.state()).isEqualTo(JdtlsState.FAILED);
             }
         }
 
@@ -416,6 +452,34 @@ class JdtlsLanguageServerTest {
                 assertThatThrownBy(server::awaitReady).isInstanceOf(JdtlsException.class);
 
                 assertThat(server.state()).isEqualTo(JdtlsState.FAILED);
+                assertThat(server.failure())
+                        .hasValueSatisfying(reason -> assertThat(reason)
+                                .startsWith("jdtls did not start: ")
+                                .contains("jdtls sent the status Error"));
+            }
+        }
+
+        @Test
+        void saysWhyJdtlsFailedWhenItDiedAfterItWasReady() throws Exception {
+            try (var server = started()) {
+                fake.process().destroyForcibly().onExit().get();
+
+                assertThat(server.failure())
+                        .contains("jdtls is not running any more: it exited with code "
+                                + fake.process().exitValue() + " after it was ready");
+            }
+        }
+
+        @Test
+        void saysThatThereIsNoBuildToImportWhenThereIsNone() throws Exception {
+            fake.listsOnlyProjects();
+
+            try (var server =
+                    JdtlsLanguageServer.start(fake, JdtlsSettings.of(root, List.of(), LONG), QUIET, log::add)) {
+                assertThatThrownBy(server::awaitReady).isInstanceOf(NoBuildToImportException.class);
+
+                assertThat(server.failure())
+                        .hasValueSatisfying(reason -> assertThat(reason).contains("no build to import in " + root));
             }
         }
     }
@@ -442,6 +506,20 @@ class JdtlsLanguageServerTest {
 
             assertThat(fake.process().isAlive()).isFalse();
             assertThat(fake.data()).doesNotExist();
+        }
+
+        @Test
+        void tellsTheRequestThatWaitsWhenTheDaemonStopsThatItIsStopping() throws Exception {
+            fake.neverAnswersInitialize();
+            var server = start();
+
+            server.close();
+
+            assertThatThrownBy(server::awaitStarted)
+                    .isInstanceOf(JdtlsException.class)
+                    .hasMessage("jdtls did not start: the daemon is stopping");
+            assertThat(server.state()).isEqualTo(JdtlsState.FAILED);
+            assertThat(server.failure()).contains("jdtls did not start: the daemon is stopping");
         }
 
         @Test

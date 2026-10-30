@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class DaemonStatusTest {
@@ -73,6 +74,57 @@ class DaemonStatusTest {
         }
         assertThat(List.of(JdtlsState.values()).stream().map(JdtlsState::text))
                 .containsExactly("not-started", "starting", "ready", "failed");
+    }
+
+    @Test
+    void saysWhyJdtlsFailedInAMemberOfItsOwnThatIsOnlyThereWhenItIsKnown() {
+        var failed = new DaemonStatus(
+                "0.1",
+                4242,
+                Duration.ofMillis(65_432),
+                Path.of("/work/demo"),
+                JdtlsState.FAILED,
+                Optional.of("jdtls exited with code 137"));
+
+        assertThat(failed.toJson()).isEqualTo("""
+            {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"failed",\
+            "jdtlsFailure":"jdtls exited with code 137"}\
+            """);
+        StrictJson.parse(failed.toJson());
+        assertThat(STATUS.jdtlsFailure()).isEmpty();
+        assertThat(STATUS.toJson()).doesNotContain("jdtlsFailure");
+    }
+
+    @Test
+    void carriesTheReasonExactlyAsJdtlsGaveIt() {
+        var reason = "jdtls said \"no\"\n\u001b[2J and \\ left";
+        var failed = new DaemonStatus(
+                "0.1", 4242, Duration.ofMillis(65_432), Path.of("/work/demo"), JdtlsState.FAILED, Optional.of(reason));
+        var result = ((RpcResponse.Success) RpcResponse.parse(JsonRpc.success("1", failed.toJson()))).result();
+
+        assertThat(DaemonStatus.of(result)).isEqualTo(failed);
+        assertThat(DaemonStatus.of(result).jdtlsFailure()).contains(reason);
+    }
+
+    @Test
+    void readsTheReasonWhenTheResultHasOne() {
+        var result = result("jdtls", "failed");
+        result.put("jdtlsFailure", "no build");
+
+        assertThat(DaemonStatus.of(result).jdtlsFailure()).contains("no build");
+        assertThat(DaemonStatus.of(result()).jdtlsFailure()).isEmpty();
+    }
+
+    @Test
+    void isRefusedWhenTheReasonIsNotText() {
+        assertThatExceptionOfType(InvalidResponseException.class)
+                .isThrownBy(() -> DaemonStatus.of(result("jdtlsFailure", 3)));
+    }
+
+    @Test
+    void refusesAMissingReasonHolder() {
+        assertThatExceptionOfType(MissingMandatoryValueException.class)
+                .isThrownBy(() -> new DaemonStatus("0.1", 1, Duration.ZERO, Path.of("/p"), JdtlsState.FAILED, null));
     }
 
     @Test
