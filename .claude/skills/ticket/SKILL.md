@@ -1,6 +1,6 @@
 ---
 name: ticket
-description: Open the logbook issue of a piece of work and start it in a worktree and a branch of its own. Use when a feature, a fix or any change is asked, when something is left to do that would have been a TODO (it becomes an issue), or when the user asks for a ticket, an issue or a branch.
+description: Open the logbook issue of a piece of work and have a subagent do it in a worktree and a branch of its own, under the supervision of the current session. Use when a feature, a fix or any change is asked, when something is left to do that would have been a TODO (it becomes an issue), when a subagent reports a bug unrelated to its ticket, or when the user asks for a ticket, an issue or a branch.
 argument-hint: '<title of the work> [--issue-only]'
 ---
 
@@ -10,11 +10,14 @@ argument-hint: '<title of the work> [--issue-only]'
 autonomous: execute end-to-end without confirmation, and stop only on a refusal below.
 
 An issue is a file of the logbook (`.claude/rules/logbook.md` holds its format, its name and its size). Every piece of
-work starts the same way: the issue is committed on `main`, then the work gets a worktree and a branch of its own. A
-one-line fix gets a one-line issue.
+work starts the same way: the issue is committed on `main`, then **a subagent** does the work in a worktree and a branch
+of its own. The session that ran this skill is the **supervisor**: it does not do the work itself, it follows the
+subagent, answers when the subagent stops to ask, and decides what to do with what comes back. A one-line fix gets a
+one-line issue.
 
-`--issue-only`: only step 1. For work left for later (what would have been a `TODO`, a defect found on the way that is
-too large to carry): the issue is opened and committed, nothing is started, the report gives its file name.
+`--issue-only`: only step 1. For work left for later (what would have been a `TODO`), and for a bug a subagent reports
+as unrelated to its ticket: the issue is opened and committed on `main`, nothing is started, the report gives its file
+name.
 
 ## Procedure
 
@@ -26,9 +29,8 @@ git rev-parse --verify main && git status --short logbook
 
 - No `main` with a commit. Refuse: "`main` has no commit: nothing to branch from."
 - Uncommitted changes under `logbook/`. Refuse: "The logbook has uncommitted changes: commit or stash them first."
-- Already in a ticket worktree (`git rev-parse --git-dir` differs from `git rev-parse --git-common-dir`) and no
-  `--issue-only`. Refuse: "Already in the worktree of another ticket: do not nest. Finish it, or open the ticket with
-  `--issue-only`."
+- Inside a worktree (`git rev-parse --git-dir` differs from `git rev-parse --git-common-dir`). Refuse: "This is a ticket
+  worktree: a subagent working a ticket does not open tickets. Report to your supervisor."
 
 ### 1. The issue
 
@@ -50,34 +52,65 @@ git add "logbook/issues/open/<file>"
 git commit -m "Open issue: <title>"
 ```
 
-Inside a ticket worktree (only possible with `--issue-only`) the commit lands on that branch, not on `main`: say so in
-the report.
-
 With `--issue-only`: report the file name and stop.
 
-### 2. The worktree and the branch
+### 2. The subagent
 
-`EnterWorktree` with the name `<slug>`: the date and time of the file name stay out of the branch name. Check the base:
+Launch it with the Agent tool, `subagent_type: "general-purpose"` and `isolation: "worktree"`: the worktree starts from
+`main`, which must hold the issue, which is why the commit comes first. The prompt is self-contained, the subagent has
+none of this conversation:
 
-```bash
-test "$(git merge-base HEAD main)" = "$(git rev-parse main)"
-```
+- the ticket: the path of the issue file, which it reads first, and the `Done when` points as the only scope;
+- the project rules: read `CLAUDE.md` if it exists and `.claude/rules/`; test first, then implement;
+- the delivery: all the work in **one commit**, files added by explicit paths (never `git add -A`); it does not close the
+  issue and does not merge;
+- the supervision (below);
+- the final report: what was done, the commit hash, how each `Done when` point was checked, and the unrelated bugs found.
 
-- Not the case: `git rebase main` (the branch holds nothing yet, nothing to lose).
+**Supervision**, in the spirit of the advisor: the subagent works alone, but it **stops and returns to the supervisor**
+instead of pushing on when:
 
-A new worktree starts from `main`, which must hold the issue: that is why the commit comes first. If an `origin` remote
-exists, `git push -u origin HEAD` publishes the branch; without one, skip it.
+- it is stuck, or considers an approach other than the one the ticket implies;
+- it finds a bug unrelated to its ticket: it returns the description (what it saw, where, how to reproduce) and, if the
+  bug does not block the ticket, it may carry on and put it in its final report instead;
+- it is done: it reports before anything is closed or merged.
 
-### 3. Report
+The supervisor answers by continuing the same agent (`SendMessage` with its id), so its context is kept.
 
-The issue (file name), the branch and the path of the worktree. Then the work starts.
+### 3. What the supervisor does with a report
+
+- **An unrelated bug**: run this skill with `--issue-only` for it, on `main`, right away; never fix it inside the
+  ticket's branch.
+- **A question**: answer it, or ask the user when the answer is theirs.
+- **Done**: in this order.
+  1. Check the `Done when` points yourself by running the checks, not by trusting the report.
+  2. Run the quality gates of `.claude/rules/quality.md` (`./gradlew check` once they exist): coverage at 100%, the
+     architecture tests.
+  3. **Neutral review.** Launch a fresh agent (`general-purpose`, no worktree, read-only) that did not do the work and
+     has none of its reasoning. Give it only: the issue file, the range `main..<branch>`, `.claude/rules/`, and this
+     brief: "You are a senior Java reviewer who knows the recent releases well (21 to 27: records and record patterns,
+     sealed types, pattern matching for switch, unnamed variables, sequenced collections, virtual threads, structured
+     concurrency, scoped values, stream gatherers, modules). Review this change without modifying any file. Check:
+     correctness and edge cases; idiomatic modern Java for the module's release; test quality (does each test fail for
+     the right reason); every `@ExcludeFromGeneratedCodeCoverage` use is truly too complicated or too unlikely to test;
+     the core's purity (the domain depends only on `java..`); simplicity (nothing beyond the issue). Report blocking
+     findings first, then suggestions, each with file and line, in under 300 words, or say 'nothing to report'."
+     Send each blocking finding back to the worker (`SendMessage`), then review again. Suggestions go to the user.
+  4. Once the review is clean: close the issue as the logbook rule says, merge the branch into `main`, then remove the
+     worktree and the branch. If an `origin` remote exists, `git push -u origin HEAD` publishes the branch first.
+
+### 4. Report to the user
+
+The issue (file name), the branch, the commit, and every unrelated bug with the issue opened for it.
 
 ## Forbidden
 
+- Doing the ticket's work in the supervisor session: the subagent does it.
 - Writing a time that did not come from `date`.
 - A second issue for a subject that has one open.
-- `git add -A`, `git add .`, or committing anything but the issue file on `main`.
-- Closing an issue: it is closed once its `Done when` points are verified, as the logbook rule says, not here.
+- `git add -A`, `git add .`, or committing anything but the issue file on `main` when opening a ticket.
+- Closing or merging before the supervisor has checked the `Done when` points itself, run the quality gates and had the
+  neutral review come back clean.
 - Pushing to `main`.
 - French in the issue, the commit or the branch name: translate.
 
@@ -89,4 +122,5 @@ The issue (file name), the branch and the path of the worktree. Then the work st
 | Existing issue | `grep -ril "<keywords>" logbook/issues 2>/dev/null`             |
 | Time           | `date +%d-%m-%Y-%H%M`                                          |
 | Commit         | `git add "logbook/issues/open/<file>" && git commit -m "…"`     |
-| Worktree       | `EnterWorktree` named `<slug>`                                  |
+| Subagent       | Agent tool, `isolation: "worktree"`                             |
+| Continue it    | `SendMessage` to the agent id                                   |

@@ -13,6 +13,12 @@ closing one. To open an issue and start its work, use the `ticket` skill.
 - **Size**: small, concrete, doable in a short time. State the goal and how to check it, not the
   code to write. Give exact lines only for a typo or a trap that would otherwise bite.
 - **Pace**: open one or two issues at a time, when their turn comes. No backlog in advance.
+- **Unrelated bugs**: a bug found while working on another ticket, and not needed for its `Done
+  when` points, is not fixed in that ticket. A subagent working a ticket **reports it to its
+  supervisor** (what it saw, where, how to reproduce) and does not open the issue itself; the
+  supervisor opens it on `main` with the `ticket` skill and `--issue-only`. A session with no
+  supervisor opens it itself. If the bug blocks the ticket, the subagent says so and stops instead
+  of working around it silently.
 - **Closing**: only once every `Done when` point is verified. `git mv` the file to `closed/`, add a
   `## Resolution` section saying what was done and the short hash of the fixing commit, and commit.
 - **Language**: English, like the rest of the repository.
