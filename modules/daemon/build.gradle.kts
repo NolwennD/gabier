@@ -17,7 +17,7 @@ application {
 
 // Starts the installed daemon (not the classes of the build): what a user runs, on the module path. A self-check run
 // on the class path would pass where Gson fails on the module path, so this is the one that counts.
-val selfCheck by tasks.registering(Exec::class) {
+val selfCheck = tasks.register<Exec>("selfCheck") {
   group = "verification"
   description = "Runs the installed daemon with --self-check, on the module path."
   dependsOn(tasks.installDist)
