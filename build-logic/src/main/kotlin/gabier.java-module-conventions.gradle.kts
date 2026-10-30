@@ -4,8 +4,24 @@ plugins {
   id("org.gradlex.extra-java-module-info")
 }
 
+// Java 25 by default, the level of the native image. A module that needs another release sets both lines in its own
+// build file.
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(25)
+  }
+}
+
+tasks.compileJava {
+  options.release = 25
+}
+
 tasks.withType<Test>().configureEach {
   useJUnitPlatform()
+}
+
+// Only the unit tests feed the coverage report: a later integration suite is not mixed into it.
+tasks.test {
   finalizedBy(tasks.jacocoTestReport)
 }
 
@@ -16,11 +32,13 @@ afterEvaluate {
   }
 }
 
+// Not redundant: run alone, the report would otherwise be skipped for lack of execution data.
 tasks.jacocoTestReport {
   dependsOn(tasks.test)
 }
 
 tasks.jacocoTestCoverageVerification {
+  // Not redundant: run alone, the verification would otherwise read an empty execution file and fail.
   dependsOn(tasks.test)
   // Without tests the test task is NO-SOURCE, there is no execution data, and Gradle would skip the verification:
   // a module without tests would then pass. Verify anyway, against an empty execution data file: every class that
