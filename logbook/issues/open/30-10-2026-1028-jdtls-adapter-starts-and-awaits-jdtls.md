@@ -19,4 +19,4 @@ Done when:
   real jdtls, and a killed jdtls still makes it fail in seconds;
 - nothing is left behind after a run (process tree, data folder).
 
-Depends on: apply-edits-to-files-atomically (both create a module and touch the build files).
+Depends on: core-operations-on-a-fake-language-server (the core comes first, with the fake; the adapter then makes it real).
