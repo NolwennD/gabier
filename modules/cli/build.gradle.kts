@@ -22,10 +22,14 @@ graalvmNative {
       // The plugin builds a shared library (--shared) for a module with the java-library plugin: this one is a program.
       sharedLibrary = false
       mainClass = "fr.craft.gabier.cli.Gabier"
-      // No fallback: an image that cannot be built natively fails the build instead of quietly needing a JVM.
+      // No fallback: an image that cannot be built natively fails the build instead of quietly needing a JVM. This is
+      // already the plugin's default; it is written down to keep the intent.
       buildArgs.add("--no-fallback")
       // The baseline of the architecture instead of the host CPU: the binary runs on any machine of its architecture.
+      // The cost is some vector intrinsics, which does not matter for a thin client.
       buildArgs.add("-march=compatibility")
+      // The image is built from the classpath, so module-info is ignored. It works because `shared` is `requires
+      // static` (the exclusion annotation is only read at compile time) and absent from the runtime classpath.
     }
   }
 }
