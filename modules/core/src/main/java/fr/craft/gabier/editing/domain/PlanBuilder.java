@@ -108,8 +108,8 @@ final class PlanBuilder {
 
     /**
      * A path as the one name of its file: absolute, without {@code .} nor {@code ..} segments, so that {@code ./x},
-     * {@code x} and {@code a/../x} are one entry of the picture. The cleaning is on the text of the path: a link in it is
-     * not followed.
+     * {@code x} and {@code a/../x} are one entry of the picture. The cleaning is on the text of the path: a link in it
+     * is not followed.
      */
     private static Path normalized(Path file) {
         return file.toAbsolutePath().normalize();
