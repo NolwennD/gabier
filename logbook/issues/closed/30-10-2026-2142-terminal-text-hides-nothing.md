@@ -29,3 +29,18 @@ Done when:
 - the sweep test names what it checks and its expected side does not call the predicates of the code under test (a
   hand-written list of classes);
 - `bin/ci` green, coverage 100%.
+
+## Resolution
+
+Merged as `7fad762` (first commit of the batch with `parameter-errors-follow-json-rpc`).
+
+Checked by the worker's `bin/ci --all` on the final commit: format 5s, build 5s, test 101s (cli 68, core 259, daemon 339, protocol 315, shared 236, architecture 19, 0 failures), native 14s (binary recompiled with `--rerun`, status, stop, diagnostics, stale socket and fake-served project print ok), jdtls 239s (real jdtls, scenarios replayed). `TerminalText` switches on `Character.getType` (format, line and paragraph separators, spaces other than U+0020) plus the listed fillers, braille blank, U+034F, variation selectors, backslash and unpaired surrogates; the whole line of `gabier status` goes through it; `Json.quote` escapes DEL and U+0080 to U+009F. `TerminalTextTest.Sweep` goes over every code point against a table written by hand from the Unicode character database. Red first: 22 failures on the old code.
+
+Changed tests, with the reason: the old `ProblemTest` sweep shared its predicates with the code and checked U+2028/2029 only, so it is replaced; two tests no longer hold DEL or U+00A0 raw, as the issue requires.
+
+Review (one pass): nothing blocking. Suggestions: the invisible marks are an incomplete list (Default_Ignorable code points such as U+17B4, U+180B to U+180D, U+E0002 to U+E001F stay raw, and the sweep pins the gap), only one lone surrogate case is tested: issue `terminal-text-escapes-default-ignorable`. The README sentence that said the JSON "does not drive a terminal" overclaimed (a bidi override in `--json` stays raw): narrowed to the controls by the supervisor.
+
+Tokens:
+- worker: shared with the batch (190380, both issues)
+- reviewer: shared with the batch (79226, both issues)
+- supervisor: covers the session over the period of the batch (20:53 to 21:40 UTC), other work included: 78 calls, 82462 output, 219339 input + cache write (28818542 cache read); exchanges with the user: 10 messages
