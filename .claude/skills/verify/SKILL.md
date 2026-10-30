@@ -23,10 +23,10 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   tasks. `./gradlew :daemon:quickProbeTest` runs the ones that start no jdtls (`ProbeWatchTest`, `JdtlsClientTest`,
   `DiagnosticsTest`, with a `sleep` or `sh` child process standing in for jdtls): `check` runs it, its results are
   shown and counted by `bin/ci`, and it needs no `GABIER_JDTLS`. `--tests` picks one class, and `cleanQuickProbeTest`
-  comes before it, like `cleanTest`. A new test that starts a real jdtls is added to `realProbe` in
-  `modules/daemon/build.gradle.kts`, otherwise `check` runs it.
-- The jdtls probe, `./gradlew jdtlsProbe` (`JdtlsProbeTest` alone), is not run by `check` (which only compiles that
-  source set, so that it cannot rot): it starts a real jdtls on the checkout in a
+  comes before it, like `cleanTest`. A test that starts a real jdtls must be the class named by `realProbe` in
+  `modules/daemon/build.gradle.kts` (change the constant if it is renamed), otherwise `check` runs it.
+- The jdtls probe, `./gradlew jdtlsProbe` (`JdtlsProbeTest` alone), is not run by `check` (which only compiles it, so
+  that it cannot rot): it starts a real jdtls on the checkout in a
   fresh temporary `-data` directory and waits, up to ten minutes in all for its waits together (about a minute
   and a half here), until it has imported every module. It then opens the `module-info.java` and the classes of each
   module (and the sources of `architecture`), requires a `publishDiagnostics` for each (an empty one counts, silence

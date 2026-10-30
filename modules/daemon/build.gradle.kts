@@ -39,7 +39,8 @@ configurations["integrationTestImplementation"].extendsFrom(configurations.testI
 configurations["integrationTestRuntimeOnly"].extendsFrom(configurations.testRuntimeOnly.get())
 
 // The one class that starts a real jdtls (it needs GABIER_JDTLS). Every other class of the source set is a quick test:
-// a new test that starts jdtls is added here, otherwise `check` runs it and fails at once for lack of GABIER_JDTLS.
+// a class that starts jdtls must be this one, or this constant must name it too, otherwise `check` runs it and fails at
+// once for lack of GABIER_JDTLS.
 val realProbe = "fr.craft.gabier.daemon.JdtlsProbeTest"
 
 fun Test.runIntegrationTests() {
