@@ -52,7 +52,7 @@ tasks.compileJava {
 // nothing there: Error Prone runs on the main code only (compileJava), and the test source sets are compiled as before.
 tasks.withType<JavaCompile>().configureEach {
   options.errorprone {
-    isEnabled = name == "compileJava"
+    enabled = name == "compileJava"
     error("NullAway")
     option("NullAway:JSpecifyMode", "true")
     option("NullAway:OnlyNullMarked", "true")
