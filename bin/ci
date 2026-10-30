@@ -30,14 +30,26 @@ import java.util.stream.Stream;
  * A skipped stage is reported as skipped with its reason: it is never a green one. The stages are started with the same
  * java as this program, so a mise shim on the PATH is never used.
  *
- * <p>Usage: {@code bin/ci [--list] [--stage <name>]... [<directory>]}. The directory is the checkout to verify (a ticket
- * worktree, for instance); it defaults to the current one.
+ * <p>The slow stages ({@code native}, {@code jdtls}) are kept off the working path: {@code --fast} leaves them out, to be
+ * used while working, and the full run is made once when the work is ready. A stage may also skip itself when nothing
+ * that changed can reach it: the list of the changed files (against the merge base with {@code main}, working tree and
+ * untracked files included) is given to the stages in {@code GABIER_CI_CHANGED}, one path per line, and is absent when it
+ * cannot be known (the checkout is {@code main} itself, clean) or with {@code --all}, so that everything then runs.
+ *
+ * <p>Usage: {@code bin/ci [--list] [--fast] [--all] [--stage <name>]... [<directory>]}. The directory is the checkout to
+ * verify (a ticket worktree, for instance); it defaults to the current one.
  */
 public final class Ci {
 
     private static final int SKIPPED = 77;
     private static final Pattern STAGE_FILE = Pattern.compile("(\\d+)-(.+)");
     private static final Pattern SKIP_LINE = Pattern.compile("skip: (.*)");
+
+    /** The stages that take minutes: {@code --fast} leaves them out. */
+    private static final List<String> SLOW = List.of("native", "jdtls");
+
+    /** The changed files given to the stages, or null when unknown. */
+    private static String changed;
 
     private record Stage(String name, Path file) {}
 
@@ -46,15 +58,20 @@ public final class Ci {
     public static void main(String[] args) throws Exception {
         List<String> wanted = new ArrayList<>();
         boolean list = false;
+        boolean fast = false;
+        boolean all = false;
         Path root = Path.of(".");
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--list" -> list = true;
+                case "--fast" -> fast = true;
+                case "--all" -> all = true;
                 case "--stage" -> wanted.add(args[++i]);
                 default -> root = Path.of(args[i]);
             }
         }
         root = root.toAbsolutePath().normalize();
+        changed = all ? null : changedFiles(root);
 
         List<Stage> stages = stages(root);
         if (stages.isEmpty()) {
@@ -92,6 +109,10 @@ public final class Ci {
                 outcomes.add(new Outcome(stage.name(), "not run", Duration.ZERO));
                 continue;
             }
+            if (fast && SLOW.contains(stage.name())) {
+                outcomes.add(new Outcome(stage.name(), "skipped: --fast (run bin/ci without it when ready)", Duration.ZERO));
+                continue;
+            }
             System.out.printf("%n== [%d/%d] %s ==%n", index, stages.size(), stage.name());
             long start = System.nanoTime();
             Run run = run(root, stage);
@@ -113,6 +134,41 @@ public final class Ci {
                 outcome.status(),
                 outcome.duration().isZero() ? "" : " in " + outcome.duration().toSeconds() + "s"));
         System.exit(failed ? 1 : 0);
+    }
+
+    /**
+     * The files that differ from the merge base with {@code main}, working tree and untracked files included, or null
+     * when that cannot tell anything: no {@code main}, no Git, or the checkout is {@code main} itself and clean.
+     */
+    private static String changedFiles(Path root) {
+        try {
+            String head = git(root, "rev-parse", "HEAD");
+            String base = git(root, "merge-base", "main", "HEAD");
+            if (head == null || base == null) {
+                return null;
+            }
+            List<String> paths = new ArrayList<>();
+            for (String output : new String[] {
+                git(root, "diff", "--name-only", base), git(root, "ls-files", "--others", "--exclude-standard")
+            }) {
+                if (output == null) {
+                    return null;
+                }
+                output.lines().filter(line -> !line.isBlank()).forEach(paths::add);
+            }
+            return base.equals(head) && paths.isEmpty() ? null : String.join("\n", paths);
+        } catch (IOException | InterruptedException e) {
+            return null;
+        }
+    }
+
+    /** The output of a Git command, or null when it fails. */
+    private static String git(Path root, String... arguments) throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>(List.of("git", "-C", root.toString()));
+        command.addAll(List.of(arguments));
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+        return process.waitFor() == 0 ? output : null;
     }
 
     /** The executable files of {@code bin/ci.d/}, named {@code NN-name}, in the order of their names. */
@@ -171,10 +227,12 @@ public final class Ci {
         String java = ProcessHandle.current().info().command().orElse("java");
         List<String> command = new ArrayList<>(List.of(java, "--source", "25", stage.file().toString()));
         command.addAll(List.of(arguments));
-        return new ProcessBuilder(command)
-                .directory(root.toFile())
-                .redirectErrorStream(true)
-                .start();
+        ProcessBuilder builder =
+                new ProcessBuilder(command).directory(root.toFile()).redirectErrorStream(true);
+        if (changed != null) {
+            builder.environment().put("GABIER_CI_CHANGED", changed);
+        }
+        return builder.start();
     }
 
     private static String skipReason(String line) {

@@ -16,6 +16,21 @@ public final class Jdtls {
         String skip = !probeExists()
                 ? "no jdtlsProbe task yet"
                 : System.getenv("GABIER_JDTLS") == null ? "GABIER_JDTLS is not set" : null;
+        // jdtls reads the sources and the build: documentation, rules and the logbook cannot change what it says.
+        if (skip == null
+                && !reachedBy(
+                        "modules/",
+                        "architecture/",
+                        "build-logic/",
+                        "gradle/",
+                        "settings.gradle.kts",
+                        "build.gradle.kts",
+                        "gradle.properties",
+                        "mise.toml",
+                        "scripts/jdtls-install.sh",
+                        "bin/ci.d/50-jdtls")) {
+            skip = "no changed file reaches what jdtls reads (bin/ci --all forces it)";
+        }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("integration probe against a real jdtls");
             if (skip != null) {
@@ -28,6 +43,15 @@ public final class Jdtls {
             System.exit(77);
         }
         System.exit(run("./gradlew", "jdtlsProbe", "--console=plain"));
+    }
+
+    /** True when a changed file starts with one of the prefixes, or when the changed files are unknown. */
+    private static boolean reachedBy(String... prefixes) {
+        String changed = System.getenv("GABIER_CI_CHANGED");
+        if (changed == null) {
+            return true;
+        }
+        return changed.lines().anyMatch(path -> java.util.Arrays.stream(prefixes).anyMatch(path::startsWith));
     }
 
     private static boolean probeExists() throws IOException {

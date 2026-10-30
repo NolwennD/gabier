@@ -14,6 +14,20 @@ public final class Native {
 
     public static void main(String[] args) throws Exception {
         String skip = appliesGraalvm(Path.of("modules/cli/build.gradle.kts")) ? null : "no native build yet";
+        // The native cli is built from the cli and what it requires at run time (protocol, shared) and from the build.
+        if (skip == null
+                && !reachedBy(
+                        "modules/cli/",
+                        "modules/protocol/",
+                        "modules/shared/",
+                        "build-logic/",
+                        "gradle/",
+                        "settings.gradle.kts",
+                        "build.gradle.kts",
+                        "gradle.properties",
+                        "bin/ci.d/40-native")) {
+            skip = "no changed file reaches the native cli (bin/ci --all forces it)";
+        }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory");
             if (skip != null) {
@@ -26,6 +40,15 @@ public final class Native {
             System.exit(77);
         }
         System.exit(nativeCli(Path.of(".").toAbsolutePath().normalize()));
+    }
+
+    /** True when a changed file starts with one of the prefixes, or when the changed files are unknown. */
+    private static boolean reachedBy(String... prefixes) {
+        String changed = System.getenv("GABIER_CI_CHANGED");
+        if (changed == null) {
+            return true;
+        }
+        return changed.lines().anyMatch(path -> java.util.Arrays.stream(prefixes).anyMatch(path::startsWith));
     }
 
     /** The native build exists once the build file of the cli applies the GraalVM plugin. */
