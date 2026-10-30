@@ -35,3 +35,33 @@ Done when:
 
 Depends on: errors-reported-as-problem-objects (the shape of an error), jdtls-adapter-starts-and-awaits-jdtls (both edit
 the `daemon` module).
+
+## Resolution
+
+Merged as `6b0eb83`.
+
+The first worker's report was lost with its supervisor session, so a second agent re-proved the ticket in the same
+worktree. Its `bin/ci` (full): format, build, test (JaCoCo 100% and architecture tests), native and jdtls all passed;
+each `Done when` point was shown by named tests and by the native `gabier status` / `stop` run (exit codes, 120-byte
+`GABIER_SOCKET` refused, second daemon refused, stale socket removed, no process left).
+
+Review (one pass): two BLOCKING findings, both fixed in the same commit with `bin/ci` green again (format 7s, build 5s,
+test 85s, native 157s, jdtls 115s):
+- a number with an absurd exponent (`1e99999999999`, `"id":1e999999999`) killed the connection with no answer; it now
+  gets the `malformed-json` problem object (exponent limited to ±1000);
+- deeply nested input (100,000 `[`) threw `StackOverflowError`; the nesting is now limited to 64 levels, with the same
+  problem object. `DaemonServerTest` proves the daemon answers a normal `status` after each hostile line.
+
+Suggestions, left open: no limit on the length of a line (`LineReader.java:25`, a client that never sends `\n` grows the
+buffer until `OutOfMemoryError`); the uptime uses `Clock.systemUTC()`, so a clock set back makes `DaemonStatus` throw
+and `gabier status` fail on a healthy daemon; `DaemonServer.open` leaves the listener and the socket file behind when
+`guard.restrict` fails after `bind`.
+
+Worth remembering: the transport is JSON-RPC 2.0, one object per line, as the issue chose. The skill
+`add-daemon-method` was delivered with the mechanism and describes how to plug a method in.
+
+Tokens:
+- worker: first session unknown (its notification was lost); second agent 73083 (sum of its two notifications, 56832 + the resumed run)
+- reviewer: 68343
+- supervisor: 9146 output, 37700 input + cache write over 16 calls (cache read 999180), supervisor session over the
+  period of the ticket (the resumption of the worktree, other work included); exchanges with the user: 0 messages
