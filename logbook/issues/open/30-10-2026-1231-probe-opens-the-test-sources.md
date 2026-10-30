@@ -6,7 +6,9 @@ The probe opens the `module-info.java` and the sources of `src/main/java` of eac
 runs on `compileJava` only, so the test code, the fixtures and the integration tests are checked by javac alone, and
 jdtls has already shown that it can see what javac accepts: it rejected the inferred generics of a `map` in a test of the
 shared error package. Open the sources of `src/test`, `src/testFixtures` and `src/integrationTest` as well, by the same
-rule (a publication per file, no error), so that what an agent edits in tests is covered too.
+rule (a publication per file, no error), so that what an agent edits in tests is covered too. Known finding: jdtls reports `The package fr.craft.gabier.daemon
+conflicts with a package accessible from another module` on `JdtlsProbeTest.java`, because the `integrationTest` source
+set shares the package of the main code of the daemon.
 
 Done when:
 - the probe opens the Java files of every test source set of the modules and of the `architecture` project, receives a
