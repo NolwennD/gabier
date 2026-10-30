@@ -11,8 +11,8 @@ import java.util.Map;
 
 /**
  * Turns a line of the client into the line to answer, whatever the line is: a line that is not JSON, not a request, or
- * for a method that does not exist is answered with a JSON-RPC error that holds the problem object, and the daemon goes
- * on. No socket in here: the lines are strings.
+ * for a method that does not exist, or whose parameters are not the ones the method takes, is answered with a JSON-RPC
+ * error that holds the problem object, and the daemon goes on. No socket in here: the lines are strings.
  */
 final class RequestHandler {
 
@@ -54,12 +54,31 @@ final class RequestHandler {
 
     private static Reply call(DaemonMethod method, RpcRequest request) {
         try {
-            var outcome = method.call();
+            checkParameters(method, request.params());
+            var outcome = method.call(request.params());
 
             return new Reply(JsonRpc.success(request.id(), outcome.resultJson()), outcome.afterReply());
         } catch (RuntimeException failure) {
             // Whatever a method throws, the client gets a problem object and the daemon goes on.
             return Reply.of(JsonRpc.failure(request.id(), failure));
         }
+    }
+
+    /** Refuses the request that carries a parameter the method does not take, or lacks one it needs. */
+    private static void checkParameters(DaemonMethod method, Map<String, String> params) {
+        var needed = method.parameters();
+        params.keySet().stream()
+                .filter(name -> !needed.contains(name))
+                .findFirst()
+                .ifPresent(name -> {
+                    throw ParameterException.unknown(method.name(), name);
+                });
+        needed.stream()
+                .sorted()
+                .filter(name -> !params.containsKey(name))
+                .findFirst()
+                .ifPresent(name -> {
+                    throw ParameterException.missing(method.name(), name);
+                });
     }
 }

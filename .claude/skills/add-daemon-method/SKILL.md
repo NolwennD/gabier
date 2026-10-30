@@ -21,8 +21,15 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    against a jdtls, in `check`.
 2. **Write the method**: a package-private record implementing `DaemonMethod` (`name()`, `call()` returning an
    `Outcome` with the JSON of the result and, when needed, the `afterReply` to run once the answer is written, which is
-   how `stop` answers before it stops). Methods take no parameters yet: the first one that needs parameters changes
-   `RpcRequest` and `DaemonMethod`, which is a ticket of its own.
+   how `stop` answers before it stops). **Parameters**: the request carries them in `params`, an object of strings
+   (`RpcRequest.params()`). The method declares the names it needs by overriding `parameters()` (none by default, all
+   required) and reads them in `call(Map<String, String> params)`, which receives exactly those names: `RequestHandler`
+   refuses before the call a request with a parameter the method does not take (`unknown-parameter`) or without one it
+   needs (`missing-parameter`), as a `badRequest` whose `parameters` name it. The method never checks that they are
+   there; it checks what they mean (a path that does not exist is its own refusal, like `fileMissing`). A value that is
+   not a string is refused by `RpcRequest.parse`; a number or a list is written as a string and read by the method.
+   Test it with the scripted method of `RequestHandlerTest` (`Reading`): its parameters, what it read, and that a
+   refused request never reaches `call`. The client writes them with `DaemonClient.call(method, params)`.
 3. **Register it** in the `List.of(...)` of the `DaemonServer` constructor. A test on a real socket
    (`DaemonServerTest`, a temporary directory, never the default path) shows it answers there.
 4. **A structured result is a type of `protocol`**, written and read with `Json` (`DaemonStatus` is the model: `toJson()`

@@ -1,5 +1,7 @@
 package fr.craft.gabier.daemon;
 
+import java.util.Map;
+
 /** {@code stop}: the daemon answers, then stops. */
 record StopMethod(Runnable stop) implements DaemonMethod {
 
@@ -9,7 +11,7 @@ record StopMethod(Runnable stop) implements DaemonMethod {
     }
 
     @Override
-    public Outcome call() {
+    public Outcome call(Map<String, String> params) {
         return new Outcome("{\"stopping\":true}", stop);
     }
 }

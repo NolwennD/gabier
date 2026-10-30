@@ -18,6 +18,15 @@ public final class InvalidRequestException extends GeneratorException {
                 GeneratorException.badRequest(ProtocolErrorKey.INVALID_REQUEST).message(message), id);
     }
 
+    /** The request is refused because of one of its parameters, which the problem object names in {@code parameter}. */
+    static InvalidRequestException of(@Nullable String id, String message, String parameter) {
+        return new InvalidRequestException(
+                GeneratorException.badRequest(ProtocolErrorKey.INVALID_REQUEST)
+                        .message(message)
+                        .addParameter("parameter", parameter),
+                id);
+    }
+
     /** The id of the request as JSON text, or null when there is none or it is not one. */
     public @Nullable String id() {
         return id;

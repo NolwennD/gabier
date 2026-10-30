@@ -70,9 +70,83 @@ class JsonRpcTest {
 
         @Test
         void ignoreTheMembersTheyDoNotKnow() {
-            assertThat(parse("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"status\",\"params\":[1]}")
+            assertThat(parse("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"status\",\"extra\":[1]}")
                             .method())
                     .isEqualTo("status");
+        }
+
+        @Test
+        void haveNoParametersWhenTheyCarryNone() {
+            assertThat(parse("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"status\"}")
+                            .params())
+                    .isEmpty();
+            assertThat(new RpcRequest("1", "status").params()).isEmpty();
+        }
+
+        @Test
+        void readTheParametersAsStrings() {
+            var request = parse("""
+                {"jsonrpc":"2.0","id":1,"method":"diagnostics","params":{"file":"src/A.java","name":"a\\"b"}}\
+                """);
+
+            assertThat(request.params()).containsOnly(entry("file", "src/A.java"), entry("name", "a\"b"));
+        }
+
+        @Test
+        void haveNoParametersWhenParamsIsEmpty() {
+            assertThat(parse("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"status\",\"params\":{}}")
+                            .params())
+                    .isEmpty();
+        }
+
+        @Test
+        void writeTheParametersSortedByNameAndOmitNoneAtAll() {
+            var request = new RpcRequest("1", "diagnostics", Map.of("name", "a\"b", "file", "A.java"));
+
+            assertThat(request.toLine()).isEqualTo("""
+                {"jsonrpc":"2.0","id":1,"method":"diagnostics","params":{"file":"A.java","name":"a\\"b"}}\
+                """);
+            StrictJson.parse(request.toLine());
+            assertThat(RpcRequest.parse(request.toLine())).isEqualTo(request);
+        }
+
+        @Test
+        void keepTheirParametersApartFromTheMapTheyWereGiven() {
+            var given = new HashMap<>(Map.of("file", "A.java"));
+            var request = new RpcRequest("1", "diagnostics", given);
+
+            given.put("other", "x");
+
+            assertThat(request.params()).containsOnly(entry("file", "A.java"));
+            assertThatThrownBy(() -> request.params().put("other", "x"))
+                    .isInstanceOf(UnsupportedOperationException.class);
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"[\"A.java\"]", "\"A.java\"", "null", "1"})
+        void refuseParamsThatAreNotAnObjectAndNameIt(String params) {
+            var failure =
+                    catchThrowableOfType(InvalidRequestException.class, () -> RpcRequest.parse("""
+                        {"jsonrpc":"2.0","id":4,"method":"status","params":%s}\
+                        """.formatted(params)));
+
+            assertThat(failure.key()).isEqualTo(ProtocolErrorKey.INVALID_REQUEST);
+            assertThat(failure.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+            assertThat(failure.id()).isEqualTo("4");
+            assertThat(failure.parameters()).containsOnly(entry("parameter", "params"));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"1", "true", "null", "[\"a\"]", "{\"a\":\"b\"}"})
+        void refuseAParameterThatIsNotAStringAndNameIt(String value) {
+            var failure =
+                    catchThrowableOfType(InvalidRequestException.class, () -> RpcRequest.parse("""
+                        {"jsonrpc":"2.0","id":4,"method":"status","params":{"file":"A.java","line":%s}}\
+                        """.formatted(value)));
+
+            assertThat(failure.key()).isEqualTo(ProtocolErrorKey.INVALID_REQUEST);
+            assertThat(failure.id()).isEqualTo("4");
+            assertThat(failure.parameters()).containsOnly(entry("parameter", "line"));
         }
 
         @Test

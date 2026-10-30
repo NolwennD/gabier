@@ -14,6 +14,7 @@ import java.nio.channels.Channels;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Map;
 
 /**
  * One conversation with the daemon, in JSON-RPC 2.0 on its Unix socket, one JSON object per line. Plain JDK, written
@@ -50,8 +51,13 @@ final class DaemonClient implements AutoCloseable {
 
     /** Asks the daemon to run a method that takes no parameters, and reads its response. */
     RpcResponse call(String method) {
+        return call(method, Map.of());
+    }
+
+    /** Asks the daemon to run a method with these parameters, written in the {@code params} of the request. */
+    RpcResponse call(String method, Map<String, String> params) {
         try {
-            output.write((new RpcRequest("1", method).toLine() + "\n").getBytes(StandardCharsets.UTF_8));
+            output.write((new RpcRequest("1", method, params).toLine() + "\n").getBytes(StandardCharsets.UTF_8));
             output.flush();
             var line = input.readLine();
             if (line == null) {

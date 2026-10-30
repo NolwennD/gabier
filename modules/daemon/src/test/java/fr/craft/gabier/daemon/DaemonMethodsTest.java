@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import fr.craft.gabier.protocol.DaemonStatus;
 import java.time.Duration;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
@@ -16,12 +17,12 @@ class DaemonMethodsTest {
         var method = new StatusMethod(() -> STATUS);
 
         assertThat(method.name()).isEqualTo("status");
-        assertThat(method.call().resultJson()).isEqualTo(STATUS.toJson());
+        assertThat(method.call(Map.of()).resultJson()).isEqualTo(STATUS.toJson());
     }
 
     @Test
     void statusDoesNothingAfterTheReply() {
-        new StatusMethod(() -> STATUS).call().afterReply().run();
+        new StatusMethod(() -> STATUS).call(Map.of()).afterReply().run();
     }
 
     @Test
@@ -29,13 +30,13 @@ class DaemonMethodsTest {
         var method = new StopMethod(() -> {});
 
         assertThat(method.name()).isEqualTo("stop");
-        assertThat(method.call().resultJson()).isEqualTo("{\"stopping\":true}");
+        assertThat(method.call(Map.of()).resultJson()).isEqualTo("{\"stopping\":true}");
     }
 
     @Test
     void stopStopsTheDaemonAfterTheReplyAndNotBefore() {
         var stops = new AtomicInteger();
-        var outcome = new StopMethod(stops::incrementAndGet).call();
+        var outcome = new StopMethod(stops::incrementAndGet).call(Map.of());
 
         assertThat(stops).hasValue(0);
 

@@ -10,6 +10,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class ConnectionTest {
@@ -133,7 +134,7 @@ class ConnectionTest {
         }
 
         @Override
-        public Outcome call() {
+        public Outcome call(Map<String, String> params) {
             return Outcome.of("{}");
         }
     }

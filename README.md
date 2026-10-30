@@ -70,7 +70,10 @@ Daemon not running: No daemon answers on /run/user/1000/gabier/gabier.sock: star
 nobody answers on, `status` and `stop` do not wait: they report `daemon-not-running` at once, with exit code 2.
 
 The cli and the daemon talk JSON-RPC 2.0 on a Unix domain socket, one JSON object per line (no framing header). A
-request is `{"jsonrpc":"2.0","id":1,"method":"status"}`; the methods take no parameters, a request without an `id` (a
+request is `{"jsonrpc":"2.0","id":1,"method":"status"}`. A request may carry `params`, an object whose members are
+strings (`"params":{"file":"src/A.java"}`): a method refuses, as a bad request, a parameter it does not take
+(`unknown-parameter`) and one it needs and lacks (`missing-parameter`), the name of the parameter in the `parameters` of
+the problem; a `params` that is not an object of strings is an invalid request. A request without an `id` (a
 notification) and a batch are refused as invalid requests. An error is a JSON-RPC error whose `message` is the title of
 the problem and whose `data` is the problem object: its `code` tells who is at fault (`-32603` a failure of gabier, any
 other code a refusal of the request, `-32700` a line that is not JSON, `-32600` not a request, `-32601` unknown method).
