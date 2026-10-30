@@ -78,7 +78,8 @@ none of this conversation:
   business cases handled with the test that covers each one (the reviewer starts from them), and the unrelated bugs
   found.
 
-Keep the prompt short, because the subagent reads the rules and the skills itself: the path of the issue, the scope, the
+The prompt and every answer of the subagent follow "Exchanges between agents" (`.claude/rules/workflow.md`): short,
+explicit, unambiguous. Keep the prompt short, because the subagent reads the rules and the skills itself: the path of the issue, the scope, the
 points above in a line each, and only what the rules do not already say. Do not copy the rules into it.
 
 **Supervision**, in the spirit of the advisor: the subagent works alone, but it **stops and returns to the supervisor**

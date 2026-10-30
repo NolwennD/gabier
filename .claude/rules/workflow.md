@@ -106,6 +106,14 @@ its size.
 A ticket that adopts, reverses, defers or rejects a choice that the code, a rule or a document carries says why in the
 `## Resolution` of its issue: the code says what the repository does, the issue says why, and what it replaced.
 
+## Exchanges between agents
+
+Every message between agents (prompt, question, answer, report, review) is short, explicit and unambiguous. It states
+facts and decisions, not reasoning: what was done, what was proven and how (command, count, test name), what is asked.
+A finding names `file:line`, the problem and the case that shows it. No hedging ("maybe", "might"), no praise, no
+recap of what the reader already has. A question offers its options, with a recommendation. A report that is longer than
+the work it reports is cut.
+
 ## Worktrees
 
 Several sessions may write in this repository at once. The local `main` is the reference, and a ticket's worktree
