@@ -16,6 +16,8 @@ Done when:
   architecture tests green and no LSP4J anywhere near them;
 - the fake is usable from the tests of other modules (a test fixture of the core), and the tests of the use cases show:
   files written on a rename, nothing written on a dry run or on a refusal, and each refusal reported with its message;
+- each answer the fake gives comes from a contract scenario (project files, request, answer in domain types) defined
+  once in the test fixtures, in a form the adapters' integration tests can replay against a real server;
 - the coverage stays at 100% and nothing in `check` starts a process.
 
 Depends on: apply-edits-to-files-atomically.

@@ -22,6 +22,12 @@ adapter's own tests (`integrationTest`, the jdtls probe), which prove that the r
 scripted. The same holds one level up: the daemon and the CLI are first run against the fake. A ticket that needs a
 running jdtls for a point of the core is cut badly: split the core from the adapter.
 
+A fake is a promise about the real server, and it is kept by **contract scenarios**: each answer the core relies on is
+a scenario (the files of a small project, the request, the answer in domain types) written once in the test fixtures.
+The fake is scripted with the scenario's answer in `check`; the integration tests of the adapter replay the same
+scenario against the real server and fail if it answers differently. A scripted answer that no integration test
+replays is a guess, so a ticket that adds one adds its replay, or says in its resolution why it cannot.
+
 ## Absolute prohibitions
 
 - Deleting or weakening a test or an assertion to get to green.

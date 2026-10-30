@@ -12,6 +12,8 @@ Done when:
 - on the real jdtls (the probe, with a temporary broken copy of a source of the checkout), the adapter answers an empty
   list for a clean file and the errors of a broken one, and fails with the typed refusal of the port for a file outside
   the project or a jdtls that is still importing;
+- the contract scenarios of the diagnostics (those the core's fake is scripted with) are replayed against the real
+  jdtls in an integration test, and any difference between its answer and the scenario's fails the test;
 - the unit tests of the adapter need no jdtls (an in-process fake language server over piped streams) and the coverage
   stays at 100%; what the core already proves with the fake of the port is not proved again here;
 - no LSP4J outside `daemon`, the architecture tests green.

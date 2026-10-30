@@ -12,6 +12,8 @@ Done when:
   reference, shown on a small fixture project that jdtls imports without network access, and the result compiles;
 - a position that holds no renamable symbol, an invalid name and a project still importing give the typed refusals of
   the port and change nothing;
+- the contract scenarios of the rename (those the core's fake is scripted with) are replayed against the real jdtls in
+  an integration test, and any difference between its answer and the scenario's fails the test;
 - the unit tests of the adapter need no jdtls (fake language server over piped streams) and the coverage stays at 100%.
 
 Depends on: diagnostics-of-a-file-through-jdtls (same adapter).
