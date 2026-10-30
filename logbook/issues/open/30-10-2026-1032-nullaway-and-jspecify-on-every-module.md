@@ -18,6 +18,9 @@ Done when:
   lacks it, and `./gradlew check` fails on a deliberate null passed where none is allowed in a main class (try it,
   then undo);
 - the check is configured once, in the convention plugin, not module by module;
+- whatever accepts or may return null says so with \`@Nullable\` (a parameter, a return type, a field, a type argument:
+  JSpecify annotates the type usage, not the method or the class), \`.claude/rules/quality.md\` states it, and the existing
+  code complies;
 - the jdtls probe stays green: jdtls reports no error on the annotated code (otherwise report what it says and stop);
 - `.claude/rules/quality.md` describes the rule (nullness by default, `@Nullable` as the exception) and the
   architecture allow-list is updated; `bin/ci` is green, native image included.
