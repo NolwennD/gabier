@@ -64,6 +64,10 @@ tasks.withType<JavaCompile>().configureEach {
   options.errorprone {
     enabled = name == "compileJava"
     error("NullAway")
+    // Unused code: Error Prone only warns by default. UnusedVariable covers the private fields, the local variables and
+    // the parameters (of private methods, and of the others when nothing overrides them); UnusedMethod the private methods.
+    error("UnusedMethod")
+    error("UnusedVariable")
     option("NullAway:JSpecifyMode", "true")
     option("NullAway:OnlyNullMarked", "true")
   }
