@@ -84,6 +84,24 @@ final class ProbeWatch {
         throw stopped(what, null);
     }
 
+    /**
+     * Waits until the subject has been quiet for the given pause: it asks how long it has been quiet, and waits for
+     * what is missing until the answer reaches the pause. A subject that keeps moving keeps the wait going, up to the
+     * deadline.
+     *
+     * @param subject what must stay quiet, for the message of the failure ("waiting for the subject to stay quiet for
+     *     5.0 seconds")
+     * @param quiet how long the subject must have been quiet
+     * @param quietFor how long the subject has been quiet so far
+     * @throws AssertionError when jdtls exits or reports an error, or when the deadline is over, before the quiet
+     */
+    void awaitQuiet(String subject, Duration quiet, Supplier<Duration> quietFor) throws InterruptedException {
+        String what = subject + " to stay quiet for " + seconds(quiet);
+        for (Duration quietSoFar = quietFor.get(); quietSoFar.compareTo(quiet) < 0; quietSoFar = quietFor.get()) {
+            pause(what, quiet.minus(quietSoFar));
+        }
+    }
+
     /** Explains why the wait cannot go on: the status Error, the exit of jdtls (its code first), or else the cause. */
     private AssertionError stopped(String what, Throwable cause) throws InterruptedException {
         if (failure.isDone()) {

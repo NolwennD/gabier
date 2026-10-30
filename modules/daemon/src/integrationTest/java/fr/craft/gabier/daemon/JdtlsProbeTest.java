@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -33,14 +34,18 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Starts a real jdtls on this project, waits until it has really imported it, then opens the sources and requires jdtls
- * to publish diagnostics for each of them, none of them an error, and an error for a deliberately broken file. Not run by {@code check} (which only
- * compiles it): run it with {@code ./gradlew jdtlsProbe}, with {@code GABIER_JDTLS} set to the jdtls launcher (mise
+ * to publish diagnostics for each of them (after its own {@code didOpen}), and an error for a deliberately broken file.
+ * It judges the diagnostics only once jdtls has published nothing for {@link #QUIET}, none of them an error. Not run by
+ * {@code check} (which only compiles it): run it with {@code ./gradlew jdtlsProbe}, with {@code GABIER_JDTLS} set to the jdtls launcher (mise
  * exports it). It fails at once when jdtls exits or sends a status {@code Error}; its waits share one deadline of ten
  * minutes.
  */
 class JdtlsProbeTest {
 
     private static final Duration TIMEOUT = Duration.ofMinutes(10);
+    /** How long jdtls must have published nothing before the diagnostics are judged. */
+    private static final Duration QUIET = Duration.ofSeconds(5);
+
     private static final Duration POLL_INTERVAL = Duration.ofSeconds(2);
     private static final Duration SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
     /** The line of the control file that assigns a String to an int (see {@code controlSource}). */
@@ -109,11 +114,13 @@ class JdtlsProbeTest {
             List<String> projects)
             throws IOException, InterruptedException {
         List<Path> sources = sourcesOf(projectRoot, modules, projects);
-        // Every wait is registered before any file is opened: a publication cannot arrive before its expectation.
+        // Each wait is registered right before the didOpen of its file: a publication that arrived earlier (the build
+        // of
+        // the workspace publishes while the files are being opened) is not the answer for a file not yet opened.
         Map<Path, CompletableFuture<List<Diagnostic>>> publications = new LinkedHashMap<>();
-        sources.forEach(file -> publications.put(file, diagnostics.expect(file)));
         for (Path file : sources) {
-            open(server, file, Files.readString(file));
+            String text = Files.readString(file);
+            publications.put(file, diagnostics.open(file, () -> open(server, file, text)));
         }
         for (var publication : publications.entrySet()) {
             watch.await(
@@ -141,6 +148,8 @@ class JdtlsProbeTest {
                     assertThat(Diagnostics.text(error)).contains("String").contains("int");
                 });
 
+        awaitSettled(watch, diagnostics, sources, control);
+
         for (Path file : sources) {
             System.out.println(projectRoot.relativize(file) + ": " + diagnostics.publications(file)
                     + " publications, latest " + diagnostics.count(DiagnosticSeverity.Error, List.of(file))
@@ -149,6 +158,26 @@ class JdtlsProbeTest {
         assertThat(diagnostics.errors(sources, projectRoot))
                 .as("the errors jdtls reports in the %d files of the project it opened", sources.size())
                 .isEmpty();
+    }
+
+    /**
+     * jdtls publishes in stages (a quick reconcile, then after the build), so the first publication of a file is not
+     * the last: the verdict waits until jdtls has published nothing for {@link #QUIET}, inside the shared deadline.
+     */
+    private static void awaitSettled(ProbeWatch watch, Diagnostics diagnostics, List<Path> sources, Path control)
+            throws InterruptedException {
+        List<Path> opened = Stream.concat(sources.stream(), Stream.of(control)).toList();
+        int before = published(diagnostics, opened);
+        long begin = System.nanoTime();
+        watch.awaitQuiet("the diagnostics of the opened files", QUIET, diagnostics::quietFor);
+        System.out.println("jdtls settled: quiet for " + QUIET.toSeconds() + " seconds, waited "
+                + String.format(Locale.ROOT, "%.1f", (System.nanoTime() - begin) / 1e9) + " seconds for it, "
+                + (published(diagnostics, opened) - before)
+                + " more publications for the opened files came in that time");
+    }
+
+    private static int published(Diagnostics diagnostics, List<Path> files) {
+        return files.stream().mapToInt(diagnostics::publications).sum();
     }
 
     /**

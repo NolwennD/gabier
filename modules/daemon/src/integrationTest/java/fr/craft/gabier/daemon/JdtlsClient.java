@@ -1,5 +1,6 @@
 package fr.craft.gabier.daemon;
 
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import org.eclipse.lsp4j.MessageActionItem;
 import org.eclipse.lsp4j.MessageParams;
@@ -63,12 +64,14 @@ final class JdtlsClient implements LanguageClient {
     public void publishDiagnostics(PublishDiagnosticsParams publication) {
         diagnostics.publish(publication);
         // The evidence of the probe: every publication, with what it holds.
-        System.out.println("jdtls published " + publication.getDiagnostics().size() + " diagnostics for "
-                + publication.getUri() + ": "
-                + publication.getDiagnostics().stream()
-                        .map(d -> d.getSeverity() + " line "
-                                + (d.getRange().getStart().getLine() + 1) + " " + Diagnostics.text(d))
-                        .toList());
+        System.out.println(
+                String.format(Locale.ROOT, "[%.1fs] ", diagnostics.sinceStart().toMillis() / 1000.0)
+                        + "jdtls published " + publication.getDiagnostics().size() + " diagnostics for "
+                        + publication.getUri() + ": "
+                        + publication.getDiagnostics().stream()
+                                .map(d -> d.getSeverity() + " line "
+                                        + (d.getRange().getStart().getLine() + 1) + " " + Diagnostics.text(d))
+                                .toList());
     }
 
     @Override

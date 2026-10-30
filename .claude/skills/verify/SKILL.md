@@ -29,9 +29,11 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   that it cannot rot): it starts a real jdtls on the checkout in a
   fresh temporary `-data` directory and waits, up to ten minutes in all for its waits together (about a minute
   and a half here), until it has imported every module. It then opens the `module-info.java` and the classes of each
-  module (and the sources of `architecture`), requires a `publishDiagnostics` for each (an empty one counts, silence
-  fails naming the file) and no error in them, after an in-memory control file with a type error that jdtls must
-  report. It fails at once, with the exit code in the message, when jdtls
+  module (and the sources of `architecture`), requires a `publishDiagnostics` for each, sent after the `didOpen` of that
+  file (an empty one counts, silence fails naming the file; a publication that arrived earlier, or for a URI that is
+  not `file:`, is not an answer), after an in-memory control file with a type error that jdtls must report. It then
+  waits until jdtls has published nothing for five seconds (it publishes in stages), inside the same deadline, and only
+  then judges the latest publication of each file: no error in them. It fails at once, with the exit code in the message, when jdtls
   exits, and at once on a `language/status` of type `Error`; a timeout says what was awaited and for how long. It needs
   `GABIER_JDTLS`, the path of the `jdtls` launcher (`mise exec -- ./gradlew jdtlsProbe` outside an activated mise), and
   fails at once, never skips, without it. It stops jdtls and deletes the data directory in every case. jdtls leaves

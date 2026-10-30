@@ -1,11 +1,15 @@
 package fr.craft.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 import org.eclipse.lsp4j.Diagnostic;
 import org.eclipse.lsp4j.DiagnosticSeverity;
@@ -21,7 +25,8 @@ class DiagnosticsTest {
     private static final Path FILE = ROOT.resolve("modules/a/src/main/java/A.java");
     private static final Path OTHER = ROOT.resolve("modules/b/src/main/java/B.java");
 
-    private final Diagnostics diagnostics = new Diagnostics();
+    private final AtomicLong nanos = new AtomicLong();
+    private final Diagnostics diagnostics = new Diagnostics(nanos::get);
 
     @Test
     void anEmptyPublicationAfterTheOpeningCountsAsAnAnswer() {
@@ -152,6 +157,91 @@ class DiagnosticsTest {
         reader.join();
 
         assertThat(diagnostics.errors(files, ROOT)).hasSize(200);
+    }
+
+    @Test
+    void aPublicationSentWhileAnotherFileIsBeingOpenedDoesNotAnswerForTheNextOne() {
+        diagnostics.open(FILE, () -> diagnostics.publish(publicationOf(OTHER)));
+
+        var publication = diagnostics.open(OTHER, () -> {});
+
+        assertThat(publication).isNotDone();
+    }
+
+    @Test
+    void aPublicationSentOnceTheOpeningIsRegisteredAnswersForTheFile() {
+        var publication = diagnostics.open(FILE, () -> diagnostics.publish(publicationOf(FILE, error(1, "Seen"))));
+
+        assertThat(publication).isCompleted();
+    }
+
+    @Test
+    void theOpeningIsSentAfterTheExpectationIsRegistered() {
+        var registered = new ArrayList<Boolean>();
+
+        var publication = diagnostics.open(FILE, () -> {
+            diagnostics.publish(publicationOf(FILE));
+            registered.add(true);
+        });
+
+        assertThat(registered).containsExactly(true);
+        assertThat(publication).isCompletedWithValue(List.of());
+    }
+
+    @Test
+    void aPublicationForAUriThatIsNotAFileIsIgnored() {
+        var publication = diagnostics.expect(FILE);
+        var error = diagnostics.expectError(FILE);
+
+        assertThatCode(() -> diagnostics.publish(new PublishDiagnosticsParams(
+                        "jdt://contents/java.base/java.lang/String.class?=gabier/%5C/usr%5C/lib%5C/jvm=/String.class",
+                        List.of(error(0, "Not ours")))))
+                .doesNotThrowAnyException();
+
+        assertThat(publication).isNotDone();
+        assertThat(error).isNotDone();
+        assertThat(diagnostics.errors(List.of(FILE), ROOT)).isEmpty();
+        diagnostics.publish(publicationOf(FILE));
+        assertThat(publication).isCompletedWithValue(List.of());
+        assertThat(diagnostics.publications(FILE)).isEqualTo(1);
+    }
+
+    @Test
+    void jdtlsIsQuietFromTheStartWhileNothingWasPublished() {
+        nanos.set(Duration.ofSeconds(7).toNanos());
+
+        assertThat(diagnostics.quietFor()).isEqualTo(Duration.ofSeconds(7));
+    }
+
+    @Test
+    void jdtlsIsQuietSinceTheLastPublication() {
+        nanos.set(Duration.ofSeconds(3).toNanos());
+        diagnostics.publish(publicationOf(FILE));
+        nanos.set(Duration.ofSeconds(10).toNanos());
+
+        assertThat(diagnostics.quietFor()).isEqualTo(Duration.ofSeconds(7));
+
+        diagnostics.publish(publicationOf(OTHER));
+        nanos.set(Duration.ofSeconds(12).toNanos());
+
+        assertThat(diagnostics.quietFor()).isEqualTo(Duration.ofSeconds(2));
+    }
+
+    @Test
+    void aPublicationForAUriThatIsNotAFileDoesNotBreakTheQuiet() {
+        diagnostics.publish(publicationOf(FILE));
+        nanos.set(Duration.ofSeconds(5).toNanos());
+
+        diagnostics.publish(new PublishDiagnosticsParams("jdt://contents/java.base/String.class", List.of()));
+
+        assertThat(diagnostics.quietFor()).isEqualTo(Duration.ofSeconds(5));
+    }
+
+    @Test
+    void theTimeSinceTheStartIsReadFromTheClock() {
+        nanos.set(Duration.ofMillis(1500).toNanos());
+
+        assertThat(diagnostics.sinceStart()).isEqualTo(Duration.ofMillis(1500));
     }
 
     private static Diagnostic error(int line, String message) {

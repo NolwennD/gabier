@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -156,6 +158,51 @@ class ProbeWatchTest {
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("Timed out")
                 .hasMessageContaining("the next poll");
+    }
+
+    @Test
+    void waitsUntilTheSubjectHasBeenQuietForLongEnough() throws Exception {
+        var watch = new ProbeWatch(running(), failure, LONG);
+        var asked = new AtomicInteger();
+        // Not quiet the first two times it is asked, then quiet for long enough.
+        Supplier<Duration> quietFor = () -> asked.incrementAndGet() <= 2 ? Duration.ZERO : Duration.ofMillis(100);
+
+        watch.awaitQuiet("the diagnostics", Duration.ofMillis(100), quietFor);
+
+        assertThat(asked).hasValue(3);
+    }
+
+    @Test
+    void returnsAtOnceWhenTheSubjectIsAlreadyQuiet() throws Exception {
+        var watch = new ProbeWatch(running(), failure, LONG);
+        var asked = new AtomicInteger();
+
+        watch.awaitQuiet("the diagnostics", Duration.ofMillis(100), () -> {
+            asked.incrementAndGet();
+            return Duration.ofSeconds(1);
+        });
+
+        assertThat(asked).hasValue(1);
+    }
+
+    @Test
+    void aSubjectThatNeverGetsQuietTimesOutNamingWhatWasAwaited() throws Exception {
+        var watch = new ProbeWatch(running(), failure, Duration.ofMillis(400));
+
+        assertThatThrownBy(() -> watch.awaitQuiet("the diagnostics", Duration.ofSeconds(5), () -> Duration.ZERO))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("Timed out")
+                .hasMessageContaining("waiting for the diagnostics to stay quiet for 5.0 seconds");
+    }
+
+    @Test
+    void waitingForTheQuietEndsAtOnceWhenJdtlsExits() throws Exception {
+        var watch = new ProbeWatch(exitingWith(7), failure, LONG);
+
+        assertThatThrownBy(() -> watch.awaitQuiet("the diagnostics", LONG, () -> Duration.ZERO))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("jdtls exited with code 7")
+                .hasMessageContaining("the diagnostics to stay quiet");
     }
 
     private static Executor delayed(Duration delay) {
