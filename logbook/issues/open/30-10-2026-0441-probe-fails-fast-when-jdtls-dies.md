@@ -13,3 +13,5 @@ Done when:
 - the three waits share one deadline, and a timeout always says what was awaited (the bare `get(1, MINUTES)` too);
 - `integrationTest` is compiled by `./gradlew check` (or by a stage of `bin/ci`) without starting jdtls;
 - killing the jdtls process during a run (try it, then undo) makes the probe fail in seconds, and nothing is left behind.
+
+Depends on: use-assertj-for-assertions (both edit `JdtlsProbeTest`).

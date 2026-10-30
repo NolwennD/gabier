@@ -16,4 +16,4 @@ Done when:
 - what jdtls says about this project is written in the resolution, false errors included: if there are any, stop and
   decide with the user between a newer jdtls, a jdtls-specific Gradle setting, or a list of tolerated errors.
 
-Depends on: probe-fails-fast-when-jdtls-dies (both edit the probe).
+Depends on: probe-fails-fast-when-jdtls-dies (both edit the probe), use-assertj-for-assertions.
