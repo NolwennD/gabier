@@ -32,10 +32,16 @@ tasks.check {
 }
 
 // The probe against a real jdtls: an integration test, in a source set of its own so that the unit tests, their coverage
-// and `check` never start jdtls. It sees the same dependencies as the unit tests (JUnit, LSP4J, Gson).
+// and `check` never start jdtls (`check` only compiles it, below). It sees the same dependencies as the unit tests
+// (JUnit, LSP4J, Gson).
 val integrationTest = sourceSets.create("integrationTest")
 configurations["integrationTestImplementation"].extendsFrom(configurations.testImplementation.get())
 configurations["integrationTestRuntimeOnly"].extendsFrom(configurations.testRuntimeOnly.get())
+
+// The probe is never run by `check`, but it must compile there: otherwise it rots unnoticed until the next real run.
+tasks.check {
+  dependsOn(integrationTest.classesTaskName)
+}
 
 tasks.register<Test>("jdtlsProbe") {
   group = "verification"

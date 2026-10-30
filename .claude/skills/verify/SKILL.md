@@ -19,11 +19,15 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 - The native CLI (`:cli:nativeCompile`, about a minute) needs a GraalVM 25 with `native-image`, which Gradle finds among
   the toolchains (the SDKMAN! candidates included); it is not part of `check`. The binary lands in
   `modules/cli/build/native/nativeCompile/gabier`.
-- The jdtls probe, `./gradlew jdtlsProbe` (the integration test in `modules/daemon/src/integrationTest`), is not part of
-  `check`: it starts a real jdtls on the checkout in a fresh temporary `-data` directory and waits, up to ten minutes
-  (about a minute and a half here), until it has imported every module. It needs `GABIER_JDTLS`, the path of the
-  `jdtls` launcher (`mise exec -- ./gradlew jdtlsProbe` outside an activated mise), and fails at once, never skips,
-  without it. It stops jdtls and deletes the data directory in every case. jdtls leaves its Eclipse files (`.project`,
+- The jdtls probe, `./gradlew jdtlsProbe` (the integration test in `modules/daemon/src/integrationTest`), is not run by
+  `check` (which only compiles that source set, so that it cannot rot): it starts a real jdtls on the checkout in a
+  fresh temporary `-data` directory and waits, up to ten minutes in all for its three waits together (about a minute
+  and a half here), until it has imported every module. It fails at once, with the exit code in the message, when jdtls
+  exits, and at once on a `language/status` of type `Error`; a timeout says what was awaited and for how long. The
+  source set also holds quick tests of that watching (`ProbeWatchTest`, `JdtlsClientTest`, with a `sleep` or `sh` child
+  process standing in for jdtls); `./gradlew jdtlsProbe` runs them too, and `--tests` picks one class. It needs
+  `GABIER_JDTLS`, the path of the `jdtls` launcher (`mise exec -- ./gradlew jdtlsProbe` outside an activated mise), and
+  fails at once, never skips, without it. It stops jdtls and deletes the data directory in every case. jdtls leaves its Eclipse files (`.project`,
   `.classpath`, `.settings/`, `bin/`) in the checkout: they are git-ignored.
 
 ## 1. Choose the scope

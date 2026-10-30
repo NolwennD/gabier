@@ -21,8 +21,15 @@ final class JdtlsClient implements LanguageClient {
 
     private final CompletableFuture<Void> serviceReady = new CompletableFuture<>();
 
+    /** Completed, with what jdtls said, as soon as it sends a status of type {@code Error}. */
+    private final CompletableFuture<String> error = new CompletableFuture<>();
+
     CompletableFuture<Void> serviceReady() {
         return serviceReady;
+    }
+
+    CompletableFuture<String> error() {
+        return error;
     }
 
     @JsonNotification("language/status")
@@ -33,6 +40,9 @@ final class JdtlsClient implements LanguageClient {
         }
         if ("ServiceReady".equals(status.type())) {
             serviceReady.complete(null);
+        }
+        if ("Error".equals(status.type())) {
+            error.complete("jdtls sent the status Error: " + status.message());
         }
     }
 

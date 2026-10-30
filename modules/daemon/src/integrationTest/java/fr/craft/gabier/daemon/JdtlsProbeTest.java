@@ -8,11 +8,9 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -26,8 +24,10 @@ import org.eclipse.lsp4j.services.LanguageServer;
 import org.junit.jupiter.api.Test;
 
 /**
- * Starts a real jdtls on this project and waits until it has really imported it. Not part of {@code check}: run it with
- * {@code ./gradlew jdtlsProbe}, with {@code GABIER_JDTLS} set to the jdtls launcher (mise exports it).
+ * Starts a real jdtls on this project and waits until it has really imported it. Not run by {@code check} (which only
+ * compiles it): run it with {@code ./gradlew jdtlsProbe}, with {@code GABIER_JDTLS} set to the jdtls launcher (mise
+ * exports it). It fails at once when jdtls exits or sends a status {@code Error}; its three waits share one deadline of
+ * ten minutes.
  */
 class JdtlsProbeTest {
 
@@ -64,11 +64,15 @@ class JdtlsProbeTest {
             initialize.setRootUri(projectRoot.toUri().toString());
             initialize.setCapabilities(new ClientCapabilities());
             initialize.setInitializationOptions(Map.of());
-            await("the answer to initialize", server.initialize(initialize));
-            server.initialized(new InitializedParams());
-
-            await("the language/status notification of type ServiceReady", client.serviceReady());
-            List<String> projects = awaitProjects(server, modules);
+            var jdtlsServer = server;
+            var watch = new ProbeWatch(jdtls, client.error(), TIMEOUT);
+            watch.await("the answer to initialize", () -> jdtlsServer.initialize(initialize));
+            // Telling jdtls that the client is ready is part of the wait: writing to a jdtls that died throws.
+            watch.await("the language/status notification of type ServiceReady", () -> {
+                jdtlsServer.initialized(new InitializedParams());
+                return client.serviceReady();
+            });
+            List<String> projects = awaitProjects(watch, server, modules);
             System.out.println("jdtls knows the projects " + projects);
         } finally {
             try {
@@ -105,23 +109,22 @@ class JdtlsProbeTest {
     }
 
     /** Polls {@code java.project.getAll} until jdtls lists every module, and returns what it listed. */
-    private static List<String> awaitProjects(LanguageServer server, List<Path> modules)
-            throws ExecutionException, InterruptedException, TimeoutException {
-        Instant deadline = Instant.now().plus(TIMEOUT);
+    private static List<String> awaitProjects(ProbeWatch watch, LanguageServer server, List<Path> modules)
+            throws InterruptedException {
         List<String> projects = List.of();
         List<Path> missing = modules;
-        while (Instant.now().isBefore(deadline)) {
+        while (true) {
+            String what = "jdtls to list the modules " + modules + " with java.project.getAll (still missing " + missing
+                    + ", it listed " + projects + ")";
             var command = new ExecuteCommandParams("java.project.getAll", List.of());
-            Object answer = server.getWorkspaceService().executeCommand(command).get(1, TimeUnit.MINUTES);
+            Object answer = watch.await(what, () -> server.getWorkspaceService().executeCommand(command));
             projects = ((List<?>) answer).stream().map(String::valueOf).toList();
             missing = missingFrom(projects, modules);
             if (missing.isEmpty()) {
                 return projects;
             }
-            Thread.sleep(POLL_INTERVAL);
+            watch.pause(what, POLL_INTERVAL);
         }
-        return fail("Timed out after " + TIMEOUT.toSeconds() + " seconds waiting for jdtls to list the modules "
-                + modules + " with java.project.getAll. Still missing " + missing + ", it listed " + projects);
     }
 
     private static List<Path> missingFrom(List<String> projects, List<Path> modules) {
@@ -133,14 +136,6 @@ class JdtlsProbeTest {
     /** jdtls reports a project by the URI of its folder, which must be the folder of the module itself. */
     private static boolean isProjectOf(String project, Path module) {
         return Path.of(URI.create(project)).toAbsolutePath().normalize().equals(module);
-    }
-
-    private static <T> T await(String what, CompletableFuture<T> future) throws Exception {
-        try {
-            return future.get(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
-            return fail("Timed out after " + TIMEOUT.toSeconds() + " seconds waiting for jdtls to send " + what);
-        }
     }
 
     /** Asks jdtls to leave, then ends whatever is left of its process tree: the launcher starts a java process. */
