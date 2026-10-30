@@ -16,4 +16,8 @@ Done when:
   an integration test, and any difference between its answer and the scenario's fails the test;
 - the unit tests of the adapter need no jdtls (fake language server over piped streams) and the coverage stays at 100%.
 
-Depends on: diagnostics-of-a-file-through-jdtls (same adapter).
+A `WorkspaceEdit` may hold a `TextDocumentEdit` with no edit, which is legal in LSP while a file change of the core
+refuses an empty list: the conversion drops it. Positions past the end of a line are clamped by LSP and refused by the
+core: the conversion decides.
+
+Depends on: diagnostics-of-a-file-through-jdtls (same adapter), change-application-is-hardened (a rename moves files).

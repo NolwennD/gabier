@@ -20,3 +20,7 @@ Done when:
 - nothing is left behind after a run (process tree, data folder).
 
 Depends on: core-operations-on-a-fake-language-server (the core comes first, with the fake; the adapter then makes it real).
+
+The daemon will depend on the domain of the core (the change set, the port): the architecture rule that keeps the
+contexts off each other's domain sees `daemon` as a context. The daemon is the composition root and the home of the
+adapters, so the rule is adjusted here (it is part of this ticket) and the reason is said in the resolution.

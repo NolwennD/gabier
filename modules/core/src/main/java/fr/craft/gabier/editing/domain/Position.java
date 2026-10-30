@@ -19,7 +19,8 @@ import fr.craft.gabier.shared.error.domain.Assert;
  * line:column} from 1: it adds one to both numbers for display and subtracts one from what the user types.
  *
  * <p>A column that splits a surrogate pair is not a position in the text: the edit that uses it is refused when it is
- * applied.
+ * applied. So is a position past the end of a line or of the text, or inside a line terminator, where LSP would clamp it
+ * to the end: the adapter that converts a server's answer decides whether to clamp before building the edit.
  *
  * @param line the line, from 0
  * @param column the column in UTF-16 code units, from 0
