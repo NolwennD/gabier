@@ -9,6 +9,7 @@ import org.eclipse.lsp4j.CodeActionLiteralSupportCapabilities;
 import org.eclipse.lsp4j.CodeActionResolveSupportCapabilities;
 import org.eclipse.lsp4j.CompletionCapabilities;
 import org.eclipse.lsp4j.CompletionItemCapabilities;
+import org.eclipse.lsp4j.RenameCapabilities;
 import org.eclipse.lsp4j.ResourceOperationKind;
 import org.eclipse.lsp4j.TextDocumentClientCapabilities;
 import org.eclipse.lsp4j.WorkspaceClientCapabilities;
@@ -16,7 +17,9 @@ import org.eclipse.lsp4j.WorkspaceEditCapabilities;
 
 /**
  * The capabilities the client declares to jdtls. A server offers a refactoring only to a client that says it can
- * receive it: these are the ones of the reference driver (section 7 of the design), which a refactoring needs.
+ * receive it: these are the ones of the reference driver (section 7 of the design), which a refactoring needs. jdtls
+ * puts the move of a file in the edit of a rename (the file of a renamed type) only for a client that declares all
+ * three resource operations, create, rename and delete.
  */
 final class JdtlsCapabilities {
 
@@ -32,7 +35,8 @@ final class JdtlsCapabilities {
     private static WorkspaceClientCapabilities workspace() {
         var workspaceEdit = new WorkspaceEditCapabilities();
         workspaceEdit.setDocumentChanges(true);
-        workspaceEdit.setResourceOperations(List.of(ResourceOperationKind.Rename));
+        workspaceEdit.setResourceOperations(
+                List.of(ResourceOperationKind.Create, ResourceOperationKind.Rename, ResourceOperationKind.Delete));
         var workspace = new WorkspaceClientCapabilities();
         workspace.setApplyEdit(true);
         workspace.setWorkspaceEdit(workspaceEdit);
@@ -58,9 +62,13 @@ final class JdtlsCapabilities {
         completionItem.setSnippetSupport(true);
         var completion = new CompletionCapabilities();
         completion.setCompletionItem(completionItem);
+        // A rename is asked for the range of the symbol first: that is how jdtls says there is nothing to rename.
+        var rename = new RenameCapabilities();
+        rename.setPrepareSupport(true);
         var textDocument = new TextDocumentClientCapabilities();
         textDocument.setCodeAction(codeAction);
         textDocument.setCompletion(completion);
+        textDocument.setRename(rename);
         return textDocument;
     }
 }

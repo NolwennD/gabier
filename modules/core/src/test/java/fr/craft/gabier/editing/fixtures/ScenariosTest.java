@@ -44,12 +44,17 @@ class ScenariosTest {
         return startsHere ? line.substring(position.column(), end) : "";
     }
 
-    private static String selected(Scenario scenario, EditFile change, TextEdit edit) {
-        int line = edit.range().start().line();
-        assertThat(edit.range().end().line()).as("a single-line edit").isEqualTo(line);
+    /** Both ends of the edit are in the text of the file, the end not before the start. */
+    private static boolean isInsideItsFile(Scenario scenario, EditFile change, TextEdit edit) {
+        return isInside(scenario, change.file(), edit.range().start())
+                && isInside(scenario, change.file(), edit.range().end())
+                && edit.range().start().compareTo(edit.range().end()) <= 0;
+    }
 
-        return lineOf(scenario, change.file(), line)
-                .substring(edit.range().start().column(), edit.range().end().column());
+    private static boolean isInside(Scenario scenario, Path file, Position position) {
+        String[] lines = scenario.files().get(file).split("\n", -1);
+
+        return position.line() < lines.length && position.column() <= lines[position.line()].length();
     }
 
     private static List<Scenario> answeredWith(Class<? extends Answer> answer) {
@@ -153,8 +158,14 @@ class ScenariosTest {
                 .isEqualTo("unused");
     }
 
+    /**
+     * What a rename answer holds, whatever the server cuts its edits like (jdtls gives one edit per file, from the
+     * first occurrence to the last, repeating the code between them): it asks for a symbol, each edit of a file is in
+     * the file, starts on that symbol and has the new name as its text start. What the answer does is the business of
+     * the next test.
+     */
     @Test
-    void startsEveryRenameOnTheSymbolAndEditsOnlyThatSymbol() {
+    void startsEveryRenameOnTheSymbolAndGivesEditsThatStartWhereItIsAndFitTheirFile() {
         for (Scenario scenario : answeredWith(Answer.Renamed.class)) {
             Request.Rename request = (Request.Rename) scenario.request();
             String symbol = identifierAt(scenario, request.file(), request.position());
@@ -166,10 +177,14 @@ class ScenariosTest {
                     .filter(EditFile.class::isInstance)
                     .map(EditFile.class::cast)
                     .forEach(change -> change.edits().forEach(edit -> {
-                        assertThat(selected(scenario, change, edit))
+                        assertThat(isInsideItsFile(scenario, change, edit))
+                                .as(scenario.name())
+                                .isTrue();
+                        assertThat(identifierAt(
+                                        scenario, change.file(), edit.range().start()))
                                 .as(scenario.name())
                                 .isEqualTo(symbol);
-                        assertThat(edit.newText()).as(scenario.name()).isEqualTo(request.newName());
+                        assertThat(edit.newText()).as(scenario.name()).startsWith(request.newName());
                     }));
         }
     }

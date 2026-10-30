@@ -16,11 +16,18 @@ class JdtlsCapabilitiesTest {
     }
 
     @Test
-    void understandsEditsAsDocumentChangesThatMayRenameFiles() {
+    void understandsEditsAsDocumentChangesThatMayCreateRenameAndDeleteFiles() {
         var workspaceEdit = capabilities.getWorkspace().getWorkspaceEdit();
 
         assertThat(workspaceEdit.getDocumentChanges()).isTrue();
-        assertThat(workspaceEdit.getResourceOperations()).containsExactly("rename");
+        // jdtls moves the file of a renamed type only for a client that declares all three operations.
+        assertThat(workspaceEdit.getResourceOperations()).containsExactlyInAnyOrder("create", "rename", "delete");
+    }
+
+    @Test
+    void asksForTheRangeOfTheSymbolBeforeARename() {
+        assertThat(capabilities.getTextDocument().getRename().getPrepareSupport())
+                .isTrue();
     }
 
     @Test

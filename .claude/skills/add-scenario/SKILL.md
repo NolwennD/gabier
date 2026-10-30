@@ -43,8 +43,17 @@ request the adapter already implements adds its replay for free.
    scenario states the decision, the Javadoc of `Scenarios` says what jdtls does. A refusal that needs jdtls in a state
    (still importing) is provoked by the harness in a deterministic way (`needsJdtlsToImport` in the replay), never by a
    delay.
-7. **A request the adapter does not implement yet** (a rename today) is not replayed: the ticket that adds the request
-   to the adapter extends `replayed` in `ScenarioReplayTest`, makes `replay` call it, and runs this skill for each
-   scenario that was waiting.
-8. **Update `Scenarios`'s Javadoc** if the scenario settles a point that was listed as unchecked, then run `bin/ci`
+7. **The comparison is exact, and the scenario holds what jdtls answered.** jdtls merges the edits of a file into one that
+   spans from the first occurrence to the last and repeats the code between them (a local variable used twice, a field,
+   a type used twice on a line): the scenario of such a rename holds that edit, its `newText` copied byte for byte from
+   the line `<scenario>: jdtls answered ...` of the replay (indentation and line breaks included), never retyped and
+   never split into one edit per occurrence. The replay compares the change set with `isEqualTo` (the order counts:
+   edits first, the move of a file last, under its old path), then applies it to a copy of the project and compiles
+   it, and checks that the sources of the project are untouched whatever was asked. `ScenariosTest` only checks what
+   holds for any cut of the edits (inside the file, on the symbol, starting with the new name) and that the old name
+   is gone once the answer is applied.
+8. **A request the adapter does not implement yet** is not replayed: the ticket that adds the request to the adapter
+   extends `replayed` in `ScenarioReplayTest`, makes `ask` and `replay` call it, and runs this skill for each scenario
+   that was waiting.
+9. **Update `Scenarios`'s Javadoc** if the scenario settles a point that was listed as unchecked, then run `bin/ci`
    (the replay is the `jdtls` stage: it runs when a file under `modules/` changed).

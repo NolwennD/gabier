@@ -58,9 +58,9 @@ class FakeJavaLanguageServerTest {
                 .singleElement()
                 .isEqualTo(new FileChange.EditFile(
                         GREETER,
-                        List.of(
-                                new TextEdit(new Range(new Position(6, 15), new Position(6, 22)), "text"),
-                                new TextEdit(new Range(new Position(7, 15), new Position(7, 22)), "text"))));
+                        List.of(new TextEdit(
+                                new Range(new Position(6, 15), new Position(7, 22)),
+                                "text = greeting + \", \" + name;\n        return text"))));
     }
 
     @Test

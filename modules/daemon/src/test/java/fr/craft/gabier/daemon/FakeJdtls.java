@@ -26,9 +26,15 @@ import org.eclipse.lsp4j.ExecuteCommandParams;
 import org.eclipse.lsp4j.InitializeParams;
 import org.eclipse.lsp4j.InitializeResult;
 import org.eclipse.lsp4j.InitializedParams;
+import org.eclipse.lsp4j.PrepareRenameDefaultBehavior;
+import org.eclipse.lsp4j.PrepareRenameParams;
+import org.eclipse.lsp4j.PrepareRenameResult;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
+import org.eclipse.lsp4j.RenameParams;
 import org.eclipse.lsp4j.ServerCapabilities;
+import org.eclipse.lsp4j.WorkspaceEdit;
 import org.eclipse.lsp4j.jsonrpc.Launcher;
+import org.eclipse.lsp4j.jsonrpc.messages.Either3;
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification;
 import org.eclipse.lsp4j.launch.LSPLauncher;
 import org.eclipse.lsp4j.services.LanguageClient;
@@ -81,6 +87,11 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private Duration pauseBetweenPublications = Duration.ZERO;
     private final List<Opened> opened = new CopyOnWriteArrayList<>();
     private final List<String> closed = new CopyOnWriteArrayList<>();
+    private CompletableFuture<Either3<org.eclipse.lsp4j.Range, PrepareRenameResult, PrepareRenameDefaultBehavior>>
+            prepareRenameAnswer = new CompletableFuture<>();
+    private CompletableFuture<WorkspaceEdit> renameAnswer = new CompletableFuture<>();
+    private final List<PrepareRenameParams> prepared = new CopyOnWriteArrayList<>();
+    private final List<RenameParams> renamed = new CopyOnWriteArrayList<>();
 
     private volatile Process process;
     private volatile Path data;
@@ -154,6 +165,36 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     FakeJdtls pausesBetweenPublications(Duration pause) {
         this.pauseBetweenPublications = pause;
         return this;
+    }
+
+    /**
+     * The answer to {@code textDocument/prepareRename}, whatever the position: a range, null (nothing can be renamed)
+     * or a failed future (a refusal). Unscripted, the request never gets an answer.
+     */
+    FakeJdtls prepareRenameAnswers(
+            CompletableFuture<Either3<org.eclipse.lsp4j.Range, PrepareRenameResult, PrepareRenameDefaultBehavior>>
+                    answer) {
+        this.prepareRenameAnswer = answer;
+        return this;
+    }
+
+    /**
+     * The answer to {@code textDocument/rename}, whatever the request: an edit, null or a failed future (a refusal).
+     * Unscripted, the request never gets an answer.
+     */
+    FakeJdtls renameAnswers(CompletableFuture<WorkspaceEdit> answer) {
+        this.renameAnswer = answer;
+        return this;
+    }
+
+    /** The {@code prepareRename} requests received, in order. */
+    List<PrepareRenameParams> prepared() {
+        return prepared;
+    }
+
+    /** The {@code rename} requests received, in order. */
+    List<RenameParams> renamed() {
+        return renamed;
     }
 
     /** What {@code java.project.getAll} answers, in turn; the last answer is repeated. */
@@ -318,6 +359,20 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                         }
                         client.publishDiagnostics(new PublishDiagnosticsParams(uri, stages.get(stage)));
                     }
+                }
+
+                @Override
+                public CompletableFuture<
+                                Either3<org.eclipse.lsp4j.Range, PrepareRenameResult, PrepareRenameDefaultBehavior>>
+                        prepareRename(PrepareRenameParams params) {
+                    prepared.add(params);
+                    return prepareRenameAnswer;
+                }
+
+                @Override
+                public CompletableFuture<WorkspaceEdit> rename(RenameParams params) {
+                    renamed.add(params);
+                    return renameAnswer;
                 }
 
                 @Override

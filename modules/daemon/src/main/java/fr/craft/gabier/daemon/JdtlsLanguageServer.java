@@ -3,6 +3,7 @@ package fr.craft.gabier.daemon;
 import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.Diagnostic.Severity;
+import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
@@ -15,6 +16,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.SequencedMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -23,6 +25,8 @@ import java.util.function.Consumer;
 import org.eclipse.lsp4j.DiagnosticSeverity;
 import org.eclipse.lsp4j.DidCloseTextDocumentParams;
 import org.eclipse.lsp4j.DidOpenTextDocumentParams;
+import org.eclipse.lsp4j.PrepareRenameParams;
+import org.eclipse.lsp4j.RenameParams;
 import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.eclipse.lsp4j.TextDocumentItem;
 import org.jspecify.annotations.Nullable;
@@ -37,6 +41,10 @@ import org.jspecify.annotations.Nullable;
  * follows, then for jdtls to be quiet, because it publishes in stages (a quick reconcile, then after the build), and
  * answers the latest publication. It closes the file afterwards, so that the next request reads it from disk again. It
  * asks one thing at a time.
+ *
+ * <p>A rename is {@code textDocument/prepareRename} then {@code textDocument/rename}, and the {@code WorkspaceEdit}
+ * that jdtls answers is turned into the change set of the domain by {@link RenameChanges}. The refusals of the port
+ * are mapped from what jdtls really does (see {@code Scenarios} in the fixtures of the core).
  *
  * <p>A file is in the project when it is under a folder jdtls imported. jdtls itself does not refuse the others: it
  * opens them as non-project files and warns that only syntax errors are reported, which is not an answer about the
@@ -137,10 +145,48 @@ final class JdtlsLanguageServer implements JavaLanguageServer, AutoCloseable {
         return answers;
     }
 
-    /** Not this ticket's: the rename of the port comes with its own adapter. */
+    /**
+     * Asks jdtls whether the symbol can be renamed ({@code prepareRename}), then for the rename, and gives its edit in
+     * the terms of the domain ({@link RenameChanges}). jdtls reads the files as it knows them: nothing is opened. A
+     * symbol that jdtls says it cannot rename is no symbol (jdtls answers so for a blank, a keyword, a position past
+     * the text), and a name that jdtls declines is invalid for the symbol.
+     *
+     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, there is no symbol at the
+     *     position or jdtls declines the name
+     * @throws JdtlsException if jdtls dies or does not answer in time
+     */
     @Override
-    public ChangeSet rename(Path file, Position position, String newName) {
-        throw new UnsupportedOperationException("The jdtls adapter does not rename yet");
+    public synchronized ChangeSet rename(Path file, Position position, String newName) {
+        JdtlsSession session = ready();
+        Path path = normalized(file);
+        textInProject(session, path);
+        var document = new TextDocumentIdentifier(path.toUri().toString());
+        var at = new org.eclipse.lsp4j.Position(position.line(), position.column());
+        var service = session.server().getTextDocumentService();
+        JdtlsWatch watch = session.newWatch();
+        try {
+            var renamable = watch.await(
+                    "whether the symbol at " + position + " of " + path + " can be renamed",
+                    () -> JdtlsRequests.unlessDeclined(service.prepareRename(new PrepareRenameParams(document, at))));
+            if (renamable.isEmpty()) {
+                throw LanguageServerException.noSuchSymbol(path, position);
+            }
+            var edit = watch.await(
+                    "the rename of the symbol at " + position + " of " + path + " to " + newName,
+                    () -> JdtlsRequests.unlessDeclined(service.rename(new RenameParams(document, at, newName))));
+            List<FileChange> changes = RenameChanges.of(
+                    edit.orElseThrow(() -> LanguageServerException.invalidName(path, position, newName)),
+                    JdtlsLanguageServer::textOnDisk);
+            if (changes.isEmpty()) {
+                throw LanguageServerException.noSuchSymbol(path, position);
+            }
+            return new ChangeSet(changes);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException(
+                    "Interrupted while waiting for the rename of the symbol at " + position + " of " + path,
+                    interrupted);
+        }
     }
 
     /** Asks jdtls to shut down, or ends its start when it is not over, and deletes what the session made. */
@@ -230,6 +276,16 @@ final class JdtlsLanguageServer implements JavaLanguageServer, AutoCloseable {
             case Information -> Severity.INFORMATION;
             case Hint -> Severity.HINT;
         };
+    }
+
+    private static Optional<String> textOnDisk(Path file) {
+        try {
+            return Optional.of(Files.readString(file));
+        } catch (NoSuchFileException missing) {
+            return Optional.empty();
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
     }
 
     private static Path normalized(Path file) {

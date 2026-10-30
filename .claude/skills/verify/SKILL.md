@@ -30,7 +30,8 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   until it is ready and ends its process tree on close (`JdtlsWatch`, `JdtlsClient`, `JdtlsLauncher`).
   `JdtlsLanguageServer` implements the port `JavaLanguageServer` on top of it (with `Diagnostics`, the store of what
   jdtls publishes, and `QuietWait`): it starts jdtls in the background and answers "not ready" until the start is over;
-  it implements `diagnostics` and not yet `rename`. Its unit tests (`modules/daemon/src/test`, run by `:daemon:test`)
+  it implements `diagnostics` and `rename` (`RenameChanges` turns the `WorkspaceEdit` of jdtls into a change set;
+  `JdtlsRequests` tells a request jdtls declines from one that fails). Its unit tests (`modules/daemon/src/test`, run by `:daemon:test`)
   use `FakeJdtls`: a language server in the test process over pipes, with a `sleep` or `sh` child process standing in
   for the jdtls process. No jdtls is started. The daemon depends on the domain of the core (`requires
   fr.craft.gabier.core`): it is the composition root, the one exemption of the architecture rule on the contexts.
@@ -49,7 +50,9 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
     once on a `language/status` of type `Error`; a timeout says what was awaited and for how long.
   - `ScenarioReplayTest` replays the contract scenarios of the core (`Scenarios.all()`) that the adapter implements
     against a real jdtls started on each scenario's project (written in a temporary folder, with an Eclipse `.project`
-    and `.classpath` that jdtls imports without network), and fails on any difference. How to add one:
+    and `.classpath` that jdtls imports without network), and fails on any difference. The answer of a rename is
+    compared exactly (jdtls merges the edits of a file, and the scenarios hold what it answered), must compile once
+    applied to a copy of the project, and no request may change the sources. How to add one:
     `.claude/skills/add-scenario/SKILL.md`.
   `JdtlsSession` stops jdtls (the whole process tree) and deletes the data directory in every case. jdtls leaves its
   Eclipse files (`.project`, `.classpath`, `.settings/`, `bin/`) in the checkout: they are git-ignored.

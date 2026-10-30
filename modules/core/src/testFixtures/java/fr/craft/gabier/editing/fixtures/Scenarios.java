@@ -24,27 +24,28 @@ import java.util.Map;
  * Sloppy} (a warning). All the positions are 0-based ({@code line}, {@code column}) as in {@link Position}; every path
  * is relative to the root of the project.
  *
- * <p>The scenarios of the diagnostics are replayed against a real jdtls by {@code ScenarioReplayTest} (module {@code
- * daemon}, {@code ./gradlew jdtlsProbe}), which fails on any difference. How the adapter maps what jdtls really does:
+ * <p>The scenarios are replayed against a real jdtls by {@code ScenarioReplayTest} (module {@code daemon}, {@code
+ * ./gradlew jdtlsProbe}), which fails on any difference. How the adapter maps what jdtls really does:
  *
  * <ul>
  *   <li>a file outside the project: jdtls does not refuse it, it opens it as a non-project file and warns that only
- *       syntax errors are reported. The adapter refuses it ({@link #DIAGNOSTICS_OUTSIDE_THE_PROJECT}) because it is not
- *       under a folder jdtls imported, before asking;
- *   <li>the refusal while the project is imported ({@link #DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS}) is the answer of the
- *       adapter to a request made while jdtls is still starting; the replay asks at once, before the import is over,
- *       which takes seconds.
- * </ul>
- *
- * <p>What nobody could check yet, because the adapter does not implement the request: the replay of the renames. These
- * points are the likeliest to differ:
- *
- * <ul>
- *   <li>the order of the changes and of the edits in a rename (here the file of the symbol first, edits before the move
- *       of a file that a rename of a public type causes), which a replay may compare as sets;
- *   <li>the refusals of an invalid name and of a position with no symbol: a real jdtls may answer a rename it cannot do
- *       with a null {@code prepareRename}, a null edit or a response error depending on its version. The adapter maps
- *       what the server does to these keys, it does not just replay them.
+ *       syntax errors are reported. The adapter refuses it ({@link #DIAGNOSTICS_OUTSIDE_THE_PROJECT}, {@link
+ *       #RENAME_OUTSIDE_THE_PROJECT}) because it is not under a folder jdtls imported, before asking;
+ *   <li>the refusal while the project is imported ({@link #DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS}, {@link
+ *       #RENAME_WHILE_THE_SERVER_IMPORTS}) is the answer of the adapter to a request made while jdtls is still
+ *       starting; the replay asks at once, before the import is over, which takes seconds;
+ *   <li>a position with no symbol ({@link #RENAME_WHERE_THERE_IS_NO_SYMBOL}): jdtls answers {@code prepareRename} with
+ *       a response error of the code {@code InvalidRequest} ("Renaming this element is not supported."), and an empty
+ *       edit to the rename itself. The adapter asks {@code prepareRename} first and maps that error;
+ *   <li>an invalid name ({@link #RENAME_TO_AN_INVALID_NAME}): jdtls accepts the position and answers the rename with a
+ *       response error of the code {@code InvalidRequest} ("'1st' is not a valid Java identifier"), which the adapter
+ *       maps. The same error comes for any condition of the refactoring that is fatal, so it means "this name is not
+ *       accepted";
+ *   <li>the edits of a rename: jdtls merges the edits of a file into one that spans from the first occurrence to the
+ *       last and repeats the text between them, so the scenarios hold that edit, copied from what jdtls answered, and
+ *       not one small edit per occurrence. The replay compares the answer to the scenario exactly, and the project
+ *       with jdtls' answer applied to a copy must compile. The order of the changes counts, as it does in the
+ *       application: the edits of a renamed type come first, the move of its file last, under its old path.
  * </ul>
  *
  * <p>The fake answers from the request alone: it does not check that the files a test wrote are the ones of the
@@ -141,21 +142,32 @@ public final class Scenarios {
             new Request.Diagnostics(ELSEWHERE),
             new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
 
-    /** {@code message}, declared and used in the same method: two edits in one file. */
+    /**
+     * {@code message}, declared and used in the same method: jdtls answers one edit, from the declaration to the use,
+     * that repeats what is between them.
+     */
     public static final Scenario RENAME_LOCAL_VARIABLE = new Scenario(
             "rename-a-local-variable",
             PROJECT,
             new Request.Rename(GREETER, new Position(6, 15), "text"),
-            new Answer.Renamed(
-                    new ChangeSet(List.of(edits(GREETER, replace(6, 15, 22, "text"), replace(7, 15, 22, "text"))))));
+            new Answer.Renamed(new ChangeSet(List.of(
+                    edits(GREETER, replace(6, 15, 7, 22, "text = greeting + \", \" + name;\n        return text"))))));
 
-    /** {@code greeting}, the field of the class: its declaration and its use. */
+    /** {@code greeting}, the field of the class: one edit from its declaration to its use, as for a local variable. */
     public static final Scenario RENAME_FIELD = new Scenario(
             "rename-a-field",
             PROJECT,
             new Request.Rename(GREETER, new Position(3, 19), "salutation"),
-            new Answer.Renamed(new ChangeSet(
-                    List.of(edits(GREETER, replace(3, 19, 27, "salutation"), replace(6, 25, 33, "salutation"))))));
+            new Answer.Renamed(new ChangeSet(List.of(edits(
+                    GREETER,
+                    replace(
+                            3,
+                            19,
+                            6,
+                            33,
+                            "salutation = \"Hello\";\n\n"
+                                    + "    public String greet(String name) {\n"
+                                    + "        String message = salutation"))))));
 
     /** {@code greet}, called from another class: edits in two files. */
     public static final Scenario RENAME_METHOD = new Scenario(
@@ -166,8 +178,9 @@ public final class Scenarios {
                     edits(GREETER, replace(5, 18, 23, "welcome")), edits(MAIN, replace(5, 35, 40, "welcome"))))));
 
     /**
-     * {@code Greeter}, a public type: its uses are edited, then its file is moved to the name of the new type, as an
-     * IDE does (the edits name the old path, as the set is applied in order).
+     * {@code Greeter}, a public type: its uses are edited (in {@code Main}, one edit for the two uses of the line), then
+     * its file is moved to the name of the new type, as an IDE does (the edits name the old path, as the set is applied
+     * in order).
      */
     public static final Scenario RENAME_TYPE = new Scenario(
             "rename-a-type",
@@ -175,7 +188,7 @@ public final class Scenarios {
             new Request.Rename(GREETER, new Position(2, 13), "Welcomer"),
             new Answer.Renamed(new ChangeSet(List.of(
                     edits(GREETER, replace(2, 13, 20, "Welcomer")),
-                    edits(MAIN, replace(4, 8, 15, "Welcomer"), replace(4, 30, 37, "Welcomer")),
+                    edits(MAIN, replace(4, 8, 4, 37, "Welcomer greeter = new Welcomer")),
                     new RenameFile(GREETER, WELCOMER)))));
 
     /** An empty line: there is nothing to rename. */
@@ -241,6 +254,11 @@ public final class Scenarios {
 
     /** Replaces the text of one line, from a column to another. */
     private static TextEdit replace(int line, int from, int to, String text) {
-        return new TextEdit(new Range(new Position(line, from), new Position(line, to)), text);
+        return replace(line, from, line, to, text);
+    }
+
+    /** Replaces the text from a position to another, possibly on other lines. */
+    private static TextEdit replace(int fromLine, int fromColumn, int toLine, int toColumn, String text) {
+        return new TextEdit(new Range(new Position(fromLine, fromColumn), new Position(toLine, toColumn)), text);
     }
 }
