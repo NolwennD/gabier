@@ -29,5 +29,7 @@ closing one. To open an issue and start its work, use the `ticket` skill.
   that worked on it: the worker, the reviewer, and the supervisor. Closed tickets are not filled in afterwards. A
   subagent's figure is the `subagent_tokens` of its completion notification (the sum of its notifications when it was
   resumed). The supervisor's figure is measured, not estimated (`.claude/skills/ship/SKILL.md`, step 4), and says that
-  it covers the supervisor session over the period of the ticket, other work included.
+  it covers the supervisor session over the period of the ticket, other work included, and gives the number of messages
+  the user typed in that period (`exchanges with the user: <n> messages`, zero if none), as an indicator of how much of
+  the figure is conversation and not the ticket's work.
 - **Language**: English, like the rest of the repository.

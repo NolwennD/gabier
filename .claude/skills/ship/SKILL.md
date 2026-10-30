@@ -100,11 +100,17 @@ A=$(date -u -d "$(git log -1 --format=%cI <commit that opened the issue>)" +%Y-%
 jq -s --arg a "$A" --arg b "$B" '[.[] | select(.message.usage != null and .timestamp >= $a and .timestamp <= $b)]
   | {calls: length, input: (map(.message.usage.input_tokens) | add), cache_write: (map(.message.usage.cache_creation_input_tokens) | add),
      cache_read: (map(.message.usage.cache_read_input_tokens) | add), output: (map(.message.usage.output_tokens) | add)}' "$J"
+# messages the user typed in the period (not agent reports, not system notices)
+jq -c --arg a "$A" --arg b "$B" 'select(.type == "user" and .timestamp >= $a and .timestamp <= $b and .isSidechain != true)
+  | .message.content | if type == "string" then . else (map(select(.type == "text").text) | join(" ")) end
+  | select(length > 0 and (test("^(Another Claude session|\\[SYSTEM|<)") | not))' "$J" | wc -l
 ```
 
 The supervisor line gives `calls`, `output` and `input + cache_write` (the cache reads are named apart: they dominate
-and cost little). It includes talk with the user and other tickets of the same period; say so. Commit **only the issue
-file**, on `main` (never `git add -A`).
+and cost little), then `exchanges with the user: <n> messages` (a floor: a message sent while the supervisor was
+working is not counted). The tokens include that talk and the other tickets of the same period; say so, so that a
+statistic can tell the tickets with exchanges from those without. Commit **only the issue file**, on `main` (never
+`git add -A`).
 
 ### 5. Clean up
 
