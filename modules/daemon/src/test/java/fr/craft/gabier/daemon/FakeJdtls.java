@@ -66,6 +66,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /** The command of the child process that stands in for the jdtls process. */
     private String[] child = {"sleep", "300"};
 
+    private int children;
     private CompletableFuture<ProcessHandle> onExitOfHandle;
     private boolean answersInitialize = true;
     private String status = "ServiceReady";
@@ -102,6 +103,15 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /** The child that stands in for the jdtls process; the default one sleeps until it is killed. */
     FakeJdtls child(String... command) {
         this.child = command;
+        return this;
+    }
+
+    /**
+     * The command of the child process starts this many processes in turn ({@code sh -c "sleep 300 & wait"} starts
+     * one): {@code start} returns only once they run, so that no test reads the tree before it exists.
+     */
+    FakeJdtls whoseLauncherStarts(int children) {
+        this.children = children;
         return this;
     }
 
@@ -208,6 +218,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     public JdtlsConnection start(Path dataDirectory) throws IOException {
         this.data = dataDirectory;
         Process started = new ProcessBuilder(child).start();
+        awaitChildren(started);
         this.process = onExitOfHandle == null ? started : new StubbornProcess(started, onExitOfHandle);
         Pipe toServer = Pipe.open();
         Pipe fromServer = Pipe.open();
@@ -222,6 +233,16 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         this.client = launcher.getRemoteProxy();
         return new JdtlsConnection(
                 process, Channels.newInputStream(fromServer.source()), Channels.newOutputStream(toServer.sink()));
+    }
+
+    private void awaitChildren(Process started) throws IOException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+        while (started.descendants().count() < children) {
+            if (System.nanoTime() > deadline) {
+                throw new IOException("the launcher did not start " + children + " process(es) in time");
+            }
+            Thread.onSpinWait();
+        }
     }
 
     /** Closes the pipes: from now on, writing to the fake fails as writing to a dead jdtls does. */

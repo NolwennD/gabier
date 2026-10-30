@@ -32,8 +32,16 @@ class JdtlsSessionTest {
     private static final String URI_A = "file:///work/project/modules/a";
     private static final String URI_B = "file:///work/project/modules/b/";
     private static final Duration LONG = Duration.ofSeconds(30);
+    /**
+     * The deadline of a test that times out on the answer to {@code initialize}, the first step: the fake never answers
+     * it, so no earlier step can use the time up and the message does not depend on the speed of the machine.
+     */
     private static final Duration SHORT = Duration.ofMillis(500);
-    /** Long enough for the whole start of the fake, short enough to let it pass in a test. */
+    /**
+     * The deadline of a test that times out on a later step: the steps before it (initialize, the status) are
+     * answered by the fake in milliseconds, so they cannot use it up, even on a slow machine, and the timeout is the
+     * one of the step the test names.
+     */
     private static final Duration MEDIUM = Duration.ofSeconds(2);
 
     private final FakeJdtls fake = new FakeJdtls();
@@ -156,7 +164,12 @@ class JdtlsSessionTest {
             assertThatThrownBy(() -> JdtlsSession.start(
                             fake,
                             new JdtlsSettings(
-                                    PROJECT_ROOT, List.of(), SHORT, Duration.ofMillis(20), Duration.ofSeconds(5), true),
+                                    PROJECT_ROOT,
+                                    List.of(),
+                                    MEDIUM,
+                                    Duration.ofMillis(20),
+                                    Duration.ofSeconds(5),
+                                    true),
                             log::add,
                             published::add))
                     .isInstanceOf(JdtlsException.class)
@@ -202,7 +215,24 @@ class JdtlsSessionTest {
 
                 assertThat(session.newWatch().await("the project list", () -> answer))
                         .isEqualTo(List.of(URI_A));
-                session.newWatch().pause("a short pause", Duration.ofMillis(1));
+            }
+        }
+
+        @Test
+        void theWatchOfTheSessionPausesForTheIntervalAndSeesJdtlsDie() throws Exception {
+            fake.listsProjects(URI_A);
+
+            try (JdtlsSession session = start()) {
+                long begin = System.nanoTime();
+                session.newWatch().pause("a short pause", Duration.ofMillis(50));
+                assertThat(Duration.ofNanos(System.nanoTime() - begin)).isGreaterThanOrEqualTo(Duration.ofMillis(50));
+
+                fake.process().destroyForcibly().onExit().get();
+
+                assertThatThrownBy(() -> session.newWatch().pause("a long pause", LONG))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("jdtls exited with code")
+                        .hasMessageContaining("a long pause");
             }
         }
 
@@ -289,7 +319,7 @@ class JdtlsSessionTest {
         void aTimeoutNamesTheServiceReadyStatus() throws Exception {
             fake.sendsStatus("");
 
-            assertThatThrownBy(() -> start(fake, SHORT))
+            assertThatThrownBy(() -> start(fake, MEDIUM))
                     .isInstanceOf(JdtlsException.class)
                     .hasMessageContaining("Timed out")
                     .hasMessageContaining("the language/status notification of type ServiceReady");
@@ -301,7 +331,7 @@ class JdtlsSessionTest {
         void aTimeoutNamesTheProjectsStillMissing() throws Exception {
             fake.listsProjects(URI_A);
 
-            assertThatThrownBy(() -> start(fake, SHORT, MODULE_A, MODULE_B))
+            assertThatThrownBy(() -> start(fake, MEDIUM, MODULE_A, MODULE_B))
                     .isInstanceOf(JdtlsException.class)
                     .hasMessageContaining("Timed out")
                     .hasMessageContaining("jdtls to list the modules [" + MODULE_A + ", " + MODULE_B + "]")
@@ -378,7 +408,7 @@ class JdtlsSessionTest {
 
         @Test
         void endsTheWholeProcessTree() throws Exception {
-            fake.listsProjects(URI_A).child("sh", "-c", "sleep 300 & wait");
+            fake.listsProjects(URI_A).child("sh", "-c", "sleep 300 & wait").whoseLauncherStarts(1);
             JdtlsSession session = start();
             List<ProcessHandle> tree = fake.process().descendants().toList();
             assertThat(tree).as("the process the launcher started in turn").isNotEmpty();
@@ -391,7 +421,7 @@ class JdtlsSessionTest {
 
         @Test
         void endsTheChildrenOfALauncherThatDiedBeforeTheClose() throws Exception {
-            fake.listsProjects(URI_A).child("sh", "-c", "sleep 300 & wait");
+            fake.listsProjects(URI_A).child("sh", "-c", "sleep 300 & wait").whoseLauncherStarts(1);
             JdtlsSession session = start();
             List<ProcessHandle> orphans = fake.process().descendants().toList();
             assertThat(orphans).as("the process the launcher started in turn").isNotEmpty();
