@@ -6,7 +6,9 @@ The business of gabier must advance without any real language server (`.claude/r
 run it"). Define the port `JavaLanguageServer` in the domain of the core, with no LSP type: the diagnostics of a source
 file (severity, line, column, message) and the rename of the symbol at a position, answered as the change set of
 `apply-edits-to-files-atomically`, plus the refusals a server gives (not ready, no such symbol, invalid name, file
-outside the project) as typed errors. Write a hand-written fake of the port that a test scripts with what the server
+outside the project) as typed errors: exceptions of the shared error package, each with its `ErrorKey` and its
+parameters (the file, the name, the position), so that one mapper at the edge can later turn any of them into a problem
+report. Write a hand-written fake of the port that a test scripts with what the server
 would answer, and the application use cases on top of the port: diagnostics of a file, and rename by position or by the
 first occurrence of an identifier in a file (the `--token` of the Python driver), applying the answer, or giving the
 diff on a dry run. Everything is proven with the fake: no jdtls, no process.
