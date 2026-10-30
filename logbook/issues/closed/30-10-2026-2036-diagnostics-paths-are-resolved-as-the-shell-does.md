@@ -18,3 +18,16 @@ Done when:
 - `bin/ci` green, coverage 100%.
 
 Depends on: 30-10-2026-2036-diagnostics-text-neutralises-control-characters (same file, `Gabier.java`).
+
+## Resolution
+
+Merged as `ce548f0` (fourth commit of the batch).
+
+Checked as the first issue of the batch. Choice taken (the issue's "state it" option, confirmed by the review): the cli sends `Path.of(file).toAbsolutePath()` without `normalize()`; the daemon cleans the path lexically without following links. Resolving links in the cli (`toRealPath`) would make a file of a project reached through a symlinked folder look outside the project, because projects are matched as paths; the README says so, with an example. Test `doesNotCollapseTheDotDotOfAPathThroughALinkBecauseOnlyTheDaemonCleansPaths` (a temporary directory with `links/src -> targets/real`), red first. `FakeServedMain.serving(Path)` refuses a folder that is not empty or that is a file (`IllegalArgumentException`, exit 2); `FakeServedMainTest` has 4 tests, 2 fail with the check removed; the native stage runs the refusal on the real distribution. One existing test changed on purpose: `asksTheDaemonForTheAbsolutePathOfARelativeFileAndShowsTheFileAsTyped` now uses `src/Broken.java`, since its old input `src/../Broken.java` expected the cli to collapse the path.
+
+Review (one pass): see the second issue. Left for the daemon follow-up issue: a dangling symlink passes `Files.notExists` in `FakeServedMain.requireNewOrEmpty`, and its new `catch (IllegalArgumentException)` is wider than the check.
+
+Tokens:
+- worker: shared with the batch, see the first issue (153359)
+- reviewer: shared with the second issue (72243)
+- supervisor: shared with the batch, see the first issue
