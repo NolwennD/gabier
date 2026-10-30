@@ -18,6 +18,7 @@ class EditingErrorKeyTest {
                         "editing-read-failed",
                         "editing-rollback-incomplete",
                         "editing-stale-edit",
+                        "editing-token-not-found",
                         "editing-unsupported-encoding",
                         "editing-write-failed");
     }

@@ -9,8 +9,8 @@ import fr.craft.gabier.shared.error.domain.Assert;
  * writes then run in the order of the set. If one fails, the ones already done are undone, in reverse order, so that
  * the files are back as they were. A file that someone else changes between the check and the writes is not detected.
  *
- * <p>There is no application layer in this context: applying and previewing a set is all there is to do, and the
- * domain does it.
+ * <p>Applying and previewing a set is all it does, so it lives in the domain; the use cases of the application layer
+ * ({@code Rename}) ask a language server for a set and hand it to this class.
  */
 public final class ChangeApplier {
 

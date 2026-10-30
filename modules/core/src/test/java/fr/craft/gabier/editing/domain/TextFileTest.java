@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
+import fr.craft.gabier.shared.error.domain.MissingMandatoryValueException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -321,6 +323,91 @@ class TextFileTest {
             System.arraycopy(body, 0, bytes, BOM.length, body.length);
 
             return bytes;
+        }
+    }
+
+    @Nested
+    class FirstWord {
+
+        private Optional<Position> firstWord(String text, String word) {
+            return new TextFile(text, false).firstWord(word);
+        }
+
+        @Test
+        void findsAWordInTheFirstLine() {
+            assertThat(firstWord("int count = 1;", "count")).contains(new Position(0, 4));
+        }
+
+        @Test
+        void countsTheColumnFromTheStartOfItsLine() {
+            assertThat(firstWord("class A {\n    int count;\n}\n", "count")).contains(new Position(1, 8));
+        }
+
+        @Test
+        void findsAWordAtTheStartAndAtTheEndOfTheText() {
+            assertThat(firstWord("count", "count")).contains(new Position(0, 0));
+            assertThat(firstWord("a = count", "count")).contains(new Position(0, 4));
+        }
+
+        @Test
+        void takesTheFirstOccurrence() {
+            assertThat(firstWord("x = count + count;", "count")).contains(new Position(0, 4));
+        }
+
+        @Test
+        void findsAWordNextToPunctuation() {
+            assertThat(firstWord("this.count(1)", "count")).contains(new Position(0, 5));
+        }
+
+        @Test
+        void skipsALongerWordThatStartsWithIt() {
+            assertThat(firstWord("greeting greet", "greet")).contains(new Position(0, 9));
+        }
+
+        @Test
+        void skipsALongerWordThatEndsWithIt() {
+            assertThat(firstWord("pregreet greet", "greet")).contains(new Position(0, 9));
+        }
+
+        @Test
+        void countsTheDollarTheUnderscoreAndTheDigitsAsPartsOfAWord() {
+            assertThat(firstWord("greet$ greet_ greet1 _greet 1greet greet", "greet"))
+                    .contains(new Position(0, 35));
+        }
+
+        @Test
+        void countsALetterOutsideTheBmpAsPartOfAWord() {
+            String mathematicalBoldX = "𝐱";
+
+            assertThat(firstWord(mathematicalBoldX + "name name" + mathematicalBoldX + " name", "name"))
+                    .contains(new Position(0, 14));
+        }
+
+        @Test
+        void countsTheColumnInUtf16CodeUnits() {
+            assertThat(firstWord("😀 name", "name")).contains(new Position(0, 3));
+        }
+
+        @Test
+        void countsTheLinesOfEveryTerminator() {
+            assertThat(firstWord("a\r\nb\rc\nname", "name")).contains(new Position(3, 0));
+        }
+
+        @Test
+        void saysNothingForAWordThatIsOnlyPartOfOthers() {
+            assertThat(firstWord("greeting pregreet greet1", "greet")).isEmpty();
+        }
+
+        @Test
+        void saysNothingForAWordThatIsNotThere() {
+            assertThat(firstWord("", "greet")).isEmpty();
+        }
+
+        @Test
+        void rejectsABlankWord() {
+            assertThatExceptionOfType(MissingMandatoryValueException.class)
+                    .isThrownBy(() -> firstWord("a b", " "))
+                    .satisfies(exception -> assertThat(exception.field()).isEqualTo("word"));
         }
     }
 }

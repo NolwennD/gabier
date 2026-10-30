@@ -1,0 +1,140 @@
+package fr.craft.gabier.editing.fixtures;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+
+import fr.craft.gabier.editing.domain.ChangeSet;
+import fr.craft.gabier.editing.domain.Diagnostic;
+import fr.craft.gabier.editing.domain.FileChange;
+import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
+import fr.craft.gabier.editing.domain.LanguageServerException;
+import fr.craft.gabier.editing.domain.Position;
+import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.TextEdit;
+import fr.craft.gabier.editing.fixtures.Scenario.Answer;
+import fr.craft.gabier.editing.fixtures.Scenario.Request;
+import java.nio.file.Path;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+class FakeJavaLanguageServerTest {
+
+    private static final Path ROOT = Path.of("/project");
+    private static final Path MAIN = ROOT.resolve("src/main/java/demo/Main.java");
+    private static final Path GREETER = ROOT.resolve("src/main/java/demo/Greeter.java");
+    private static final Path BROKEN = ROOT.resolve("src/main/java/demo/Broken.java");
+
+    private FakeJavaLanguageServer server;
+
+    @BeforeEach
+    void createServer() {
+        server = new FakeJavaLanguageServer(ROOT);
+    }
+
+    @Test
+    void answersTheDiagnosticsOfAScenario() {
+        server.scripted(Scenarios.CLEAN_FILE).scripted(Scenarios.FILE_WITH_AN_ERROR);
+
+        assertThat(server.diagnostics(MAIN)).isEmpty();
+        assertThat(server.diagnostics(BROKEN))
+                .containsExactly(new Diagnostic(
+                        Diagnostic.Severity.ERROR,
+                        new Position(4, 15),
+                        "Type mismatch: cannot convert from String to int"));
+    }
+
+    @Test
+    void answersTheChangeSetOfARenameScenarioWithPathsUnderItsRoot() {
+        server.scripted(Scenarios.RENAME_LOCAL_VARIABLE);
+
+        ChangeSet changes = server.rename(GREETER, new Position(6, 15), "text");
+
+        assertThat(changes)
+                .isEqualTo(((Answer.Renamed)
+                                Scenarios.RENAME_LOCAL_VARIABLE.inside(ROOT).answer())
+                        .changes());
+        assertThat(changes.changes())
+                .singleElement()
+                .isEqualTo(new FileChange.EditFile(
+                        GREETER,
+                        List.of(
+                                new TextEdit(new Range(new Position(6, 15), new Position(6, 22)), "text"),
+                                new TextEdit(new Range(new Position(7, 15), new Position(7, 22)), "text"))));
+    }
+
+    @Test
+    void throwsTheRefusalOfAScenarioWithItsKeyAndItsParameters() {
+        server.scripted(Scenarios.RENAME_TO_AN_INVALID_NAME)
+                .scripted(Scenarios.RENAME_WHERE_THERE_IS_NO_SYMBOL)
+                .scripted(Scenarios.DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS)
+                .scripted(Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.rename(GREETER, new Position(6, 15), "1st"))
+                .satisfies(exception -> {
+                    assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME);
+                    assertThat(exception.parameters())
+                            .containsEntry("file", GREETER.toString())
+                            .containsEntry("name", "1st");
+                });
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.rename(GREETER, new Position(4, 0), "anything"))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.diagnostics(MAIN))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.diagnostics(Path.of("/outside/Elsewhere.java")))
+                .satisfies(exception -> {
+                    assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT);
+                    assertThat(exception.parameters()).containsEntry("file", "/outside/Elsewhere.java");
+                });
+    }
+
+    @Test
+    void recognizesARequestWhateverTheSpellingOfItsPath() {
+        server.scripted(Scenarios.CLEAN_FILE);
+
+        assertThat(server.diagnostics(ROOT.resolve("src/main/../main/java/demo/./Main.java")))
+                .isEmpty();
+    }
+
+    @Test
+    void failsOnARequestNoScenarioScripted() {
+        server.scripted(Scenarios.RENAME_LOCAL_VARIABLE);
+
+        assertThatExceptionOfType(AssertionError.class)
+                .isThrownBy(() -> server.rename(GREETER, new Position(6, 15), "another"))
+                .withMessageContaining("not scripted")
+                .withMessageContaining("another");
+        assertThatExceptionOfType(AssertionError.class).isThrownBy(() -> server.diagnostics(MAIN));
+    }
+
+    @Test
+    void remembersEveryRequestInOrderTheUnscriptedOnesIncluded() {
+        server.scripted(Scenarios.CLEAN_FILE);
+
+        server.diagnostics(MAIN);
+        assertThatExceptionOfType(AssertionError.class).isThrownBy(() -> server.diagnostics(GREETER));
+
+        assertThat(server.asked()).containsExactly(new Request.Diagnostics(MAIN), new Request.Diagnostics(GREETER));
+    }
+
+    @Test
+    void refusesToScriptTwoAnswersToTheSameRequest() {
+        server.scripted(Scenarios.CLEAN_FILE);
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> server.scripted(Scenarios.DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS));
+    }
+
+    @Test
+    void listsWhatItWasScriptedWithInTheFailure() {
+        server.scripted(Scenarios.CLEAN_FILE);
+
+        assertThatExceptionOfType(AssertionError.class)
+                .isThrownBy(() -> server.diagnostics(GREETER))
+                .withMessageContaining(MAIN.toString());
+    }
+}

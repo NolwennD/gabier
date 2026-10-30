@@ -1,5 +1,6 @@
 package fr.craft.gabier.editing.domain;
 
+import fr.craft.gabier.shared.error.domain.Assert;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -87,6 +88,30 @@ record TextFile(String text, boolean bom) {
         return new TextFile(result.toString(), bom);
     }
 
+    /**
+     * Where {@code word} first occurs as a whole word: not next to a character that can be part of a Java identifier,
+     * so {@code greet} is not found in {@code greeting}. Comments and string literals are text like any other.
+     */
+    Optional<Position> firstWord(String word) {
+        Assert.notBlank("word", word);
+
+        for (int at = text.indexOf(word); at >= 0; at = text.indexOf(word, at + 1)) {
+            if (isWholeWord(at, at + word.length())) {
+                LineIndex index = new LineIndex(text);
+                int line = index.lineOf(at);
+
+                return Optional.of(new Position(line, at - index.start(line)));
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    private boolean isWholeWord(int start, int end) {
+        return (start == 0 || !Character.isJavaIdentifierPart(text.codePointBefore(start)))
+                && (end == text.length() || !Character.isJavaIdentifierPart(text.codePointAt(end)));
+    }
+
     private Located locate(Path file, LineIndex index, TextEdit edit) {
         return new Located(
                 offset(file, index, edit.range().start()),
@@ -153,6 +178,13 @@ record TextFile(String text, boolean bom) {
 
         int lineCount() {
             return starts.length;
+        }
+
+        /** The line that holds the offset, which must be inside a line and not in its terminator. */
+        int lineOf(int offset) {
+            int found = Arrays.binarySearch(starts, offset);
+
+            return found >= 0 ? found : -found - 2;
         }
 
         int start(int line) {

@@ -45,6 +45,13 @@ public final class EditingException extends GeneratorException {
                 .addParameter("column", String.valueOf(position.column())));
     }
 
+    static EditingException tokenNotFound(Path file, String token) {
+        return new EditingException(GeneratorException.badRequest(EditingErrorKey.TOKEN_NOT_FOUND)
+                .message("\"" + token + "\" does not occur as a whole word in " + file)
+                .addParameter("file", file.toString())
+                .addParameter("token", token));
+    }
+
     static EditingException fileMissing(Path file) {
         return new EditingException(GeneratorException.badRequest(EditingErrorKey.FILE_MISSING)
                 .message("The file " + file + " does not exist")

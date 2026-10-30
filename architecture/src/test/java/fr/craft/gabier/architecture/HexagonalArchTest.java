@@ -30,8 +30,9 @@ import org.junit.jupiter.api.Test;
  *
  * <p>The packages follow {@code fr.craft.gabier.<context>.domain}, {@code .application}, {@code .infrastructure.primary}
  * and {@code .infrastructure.secondary}. The {@code editing} context of the {@code core} module is the first to have
- * them, but not all four: a rule that matches no class passes ({@code allowEmptyShould}), and starts to bite with the
- * first class of its package.
+ * them, but three of the four (no primary adapter yet): a rule that matches no class passes ({@code allowEmptyShould}),
+ * and starts to bite with the first class of its package. The test fixtures of a module (the fake language server of the
+ * core) are not on this project's classpath, which only has the main code of the modules.
  */
 class HexagonalArchTest {
 

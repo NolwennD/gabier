@@ -21,6 +21,16 @@ extraJavaModuleInfo {
   failOnMissingModuleInfo = true
   failOnAutomaticModules = true
 
+  // The test fixtures of core (src/testFixtures: the fake language server and its scenarios), for the tests of the other
+  // modules. Their jar has no descriptor, and the transform above refuses a jar without one on the test runtime path of
+  // the consumer. It cannot carry its own module-info.java: jdtls reports "The package ... does not exist or is empty"
+  // on a second descriptor in the same project. So the descriptor is given here, like a third-party jar's. A module
+  // whose fixtures are used by another one adds its own rule: <project>-test-fixtures.jar.
+  module("core-test-fixtures.jar", "fr.craft.gabier.core.test.fixtures") {
+    exportAllPackages()
+    requiresTransitive("fr.craft.gabier.core")
+  }
+
   // The LSP4J 1.0.0 jars have no module-info and no Automatic-Module-Name: their automatic names come from the file
   // names. Their descriptors are not closed (no closeModule()): Gson reads and writes their fields by reflection, which
   // needs the packages open at run time.

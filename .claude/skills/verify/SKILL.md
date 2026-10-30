@@ -19,6 +19,13 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 - The native CLI (`:cli:nativeCompile`, about a minute) needs a GraalVM 25 with `native-image`, which Gradle finds among
   the toolchains (the SDKMAN! candidates included); it is not part of `check`. The binary lands in
   `modules/cli/build/native/nativeCompile/gabier`.
+- The test fixtures of `core` (`modules/core/src/testFixtures`: the fake language server and the contract scenarios, in
+  the package `fr.craft.gabier.editing.fixtures`) are shared by the tests of every module: another module uses them with
+  `testImplementation(testFixtures(project(":core")))` in its `build.gradle.kts`. They are test code (no coverage gate,
+  not seen by the architecture tests) and they have no `module-info.java` (jdtls reports an error on a second descriptor
+  in the same project): their jar gets a descriptor from a `module(...)` rule in `gabier.java-module-conventions`, which
+  the build needs for any jar on the test runtime path, so the fixtures of another module need a rule of their own. The
+  tests of the fixtures themselves are in `modules/core/src/test`.
 - The integration tests of the daemon (`modules/daemon/src/integrationTest`) are split by class name into two Gradle
   tasks. `./gradlew :daemon:quickProbeTest` runs the ones that start no jdtls (`ProbeWatchTest`, `JdtlsClientTest`,
   `DiagnosticsTest`, with a `sleep` or `sh` child process standing in for jdtls): `check` runs it, its results are
@@ -43,7 +50,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 
 | Modified files                                                    | Command                                                                                                               |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `modules/<m>/src/**` (main or `*Test.java`)                       | `./gradlew :<m>:cleanTest :<m>:test --tests 'fr.craft.gabier.<package>.<Class>*'`                                       |
+| `modules/<m>/src/**` (main, `*Test.java`, `testFixtures`)         | `./gradlew :<m>:cleanTest :<m>:test --tests 'fr.craft.gabier.<package>.<Class>*'`                                       |
 | `modules/daemon/src/integrationTest/**` (not `JdtlsProbeTest`)    | `./gradlew :daemon:cleanQuickProbeTest :daemon:quickProbeTest --tests 'fr.craft.gabier.daemon.<Class>*'`              |
 | one method                                                        | `--tests 'fr.craft.gabier.<package>.<Class>.<method>'`; inside a `@Nested` class: `'…<Class>$<Nested>.<method>'`           |
 | `module-info.java`, `build.gradle.kts`, `build-logic/**`          | `./gradlew build`: the modules are compiled as modules, so a forbidden dependency fails here                          |

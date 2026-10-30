@@ -1,0 +1,65 @@
+package fr.craft.gabier.editing.domain;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import fr.craft.gabier.shared.error.domain.ErrorStatus;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+class LanguageServerExceptionTest {
+
+    private static final Path FILE = Path.of("/project/src/A.java");
+
+    @Test
+    void givesTheKeyThatReportsAreMappedFrom() {
+        assertThat(Arrays.stream(LanguageServerErrorKey.values()).map(LanguageServerErrorKey::get))
+                .containsExactly(
+                        "language-server-file-outside-project",
+                        "language-server-invalid-name",
+                        "language-server-no-such-symbol",
+                        "language-server-not-ready");
+    }
+
+    @Test
+    void saysThatTheServerIsStillImportingTheProject() {
+        LanguageServerException exception = LanguageServerException.notReady();
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters()).isEmpty();
+        assertThat(exception).hasMessage("The language server is still importing the project: try again later");
+    }
+
+    @Test
+    void saysWhichPositionHoldsNoSymbol() {
+        LanguageServerException exception = LanguageServerException.noSuchSymbol(FILE, new Position(4, 7));
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NO_SUCH_SYMBOL);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters()).isEqualTo(Map.of("file", FILE.toString(), "line", "4", "column", "7"));
+        assertThat(exception).hasMessage("There is no symbol at 4:7 in " + FILE);
+    }
+
+    @Test
+    void saysWhichNameIsNotAcceptedForTheSymbol() {
+        LanguageServerException exception = LanguageServerException.invalidName(FILE, new Position(4, 7), "1st");
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters())
+                .isEqualTo(Map.of("file", FILE.toString(), "line", "4", "column", "7", "name", "1st"));
+        assertThat(exception).hasMessage("\"1st\" is not a valid name for the symbol at 4:7 in " + FILE);
+    }
+
+    @Test
+    void saysWhichFileIsNotInTheProject() {
+        LanguageServerException exception = LanguageServerException.fileOutsideProject(FILE);
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters()).isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(exception).hasMessage("The file " + FILE + " is not in the project of the language server");
+    }
+}
