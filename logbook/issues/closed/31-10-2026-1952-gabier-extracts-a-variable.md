@@ -57,9 +57,9 @@ core 322, daemon 486, protocol 326, shared 236, architecture 19, 0 failures; cov
 Review (neutral reviewer, once): nothing blocking. Suggestions, all in `JdtlsLanguageServer` and the scenarios:
 - an `errorMessage` answer of jdtls with no edit becomes an internal error, not `not-an-expression`; the README claims a
   statement and a `void` call are refused, with no scenario behind it; no replay of a name equal to jdtls's guess nor of a
-  name colliding with a local: issue `31-10-2026-2041-extract-variable-refuses-what-jdtls-refuses.md`;
+  name colliding with a local: issue `31-10-2026-2040-extract-variable-refuses-what-jdtls-refuses.md`;
 - CRLF, BOM, non-BMP untested, and no stale-file check between the read and the write: issue
-  `31-10-2026-2041-extract-variable-keeps-crlf-bom-and-concurrent-edits.md` (on hold).
+  `31-10-2026-2040-extract-variable-keeps-crlf-bom-and-concurrent-edits.md` (on hold).
 
 Tokens:
 - worker: 77447 (one agent; its two notifications, 72675 interim then 77447, are cumulative)
