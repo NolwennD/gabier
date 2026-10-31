@@ -24,6 +24,7 @@ class FakeJavaLanguageServerTest {
     private static final Path ROOT = Path.of("/project");
     private static final Path MAIN = ROOT.resolve("src/main/java/demo/Main.java");
     private static final Path GREETER = ROOT.resolve("src/main/java/demo/Greeter.java");
+    private static final Path TOTALS = ROOT.resolve("src/main/java/demo/Totals.java");
     private static final Path BROKEN = ROOT.resolve("src/main/java/demo/Broken.java");
     private static final Path UNTIDY = ROOT.resolve("src/main/java/demo/Untidy.java");
     private static final Path TIDY = ROOT.resolve("src/main/java/demo/Tidy.java");
@@ -115,6 +116,35 @@ class FakeJavaLanguageServerTest {
                 .isThrownBy(() ->
                         server.extractVariable(GREETER, new Range(new Position(6, 25), new Position(6, 47)), "1st"))
                 .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME));
+    }
+
+    @Test
+    void answersTheChangeSetOfAnExtractMethodScenarioWithPathsUnderItsRoot() {
+        server.scripted(Scenarios.EXTRACT_METHOD_FROM_AN_EXPRESSION);
+
+        ChangeSet changes =
+                server.extractMethod(TOTALS, new Range(new Position(29, 15), new Position(29, 28)), "scaled");
+
+        assertThat(changes)
+                .isEqualTo(((Answer.Extracted) Scenarios.EXTRACT_METHOD_FROM_AN_EXPRESSION
+                                .inside(ROOT)
+                                .answer())
+                        .changes());
+        assertThat(changes.changes())
+                .singleElement()
+                .isInstanceOfSatisfying(
+                        FileChange.EditFile.class,
+                        edit -> assertThat(edit.file()).isEqualTo(TOTALS));
+    }
+
+    @Test
+    void throwsTheRefusalOfAnExtractMethodScenario() {
+        server.scripted(Scenarios.EXTRACT_METHOD_FROM_HALF_A_STATEMENT);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() ->
+                        server.extractMethod(TOTALS, new Range(new Position(5, 30), new Position(6, 20)), "partial"))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE));
     }
 
     @Test

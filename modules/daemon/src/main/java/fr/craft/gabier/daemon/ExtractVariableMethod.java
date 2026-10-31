@@ -18,11 +18,6 @@ import java.util.Set;
  */
 record ExtractVariableMethod(ExtractVariable extract) implements DaemonMethod {
 
-    private static final String START_LINE = "startLine";
-    private static final String START_COLUMN = "startColumn";
-    private static final String END_LINE = "endLine";
-    private static final String END_COLUMN = "endColumn";
-
     @Override
     public String name() {
         return "extract-variable";
@@ -32,10 +27,10 @@ record ExtractVariableMethod(ExtractVariable extract) implements DaemonMethod {
     public Set<String> parameters() {
         return Set.of(
                 ChangeRequest.FILE,
-                START_LINE,
-                START_COLUMN,
-                END_LINE,
-                END_COLUMN,
+                ChangeRequest.START_LINE,
+                ChangeRequest.START_COLUMN,
+                ChangeRequest.END_LINE,
+                ChangeRequest.END_COLUMN,
                 ChangeRequest.NAME,
                 ChangeRequest.DRY_RUN);
     }
@@ -44,8 +39,8 @@ record ExtractVariableMethod(ExtractVariable extract) implements DaemonMethod {
     public Outcome call(Map<String, String> params) {
         var request = new ChangeRequest(name(), params);
         var selection = new Range(
-                new Position(request.number(START_LINE), request.number(START_COLUMN)),
-                new Position(request.number(END_LINE), request.number(END_COLUMN)));
+                new Position(request.number(ChangeRequest.START_LINE), request.number(ChangeRequest.START_COLUMN)),
+                new Position(request.number(ChangeRequest.END_LINE), request.number(ChangeRequest.END_COLUMN)));
 
         return request.run(extract, selection);
     }

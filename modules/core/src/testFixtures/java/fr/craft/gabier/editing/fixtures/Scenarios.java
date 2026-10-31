@@ -58,6 +58,16 @@ import java.util.stream.IntStream;
  *       method already uses ({@link #EXTRACT_VARIABLE_TO_A_NAME_IN_USE}) is not declined by jdtls: its rename answers an
  *       edit that corrupts the declaration ({@code name= ...}), which the adapter detects and refuses as {@code
  *       invalid-name};
+ *   <li>the extraction of a method: {@code java/getRefactorEdit} with the command {@code extractMethod} answers no edit
+ *       for a selection it cannot extract (half a statement, an {@code if} whose branch returns), which the adapter maps
+ *       to {@code not-extractable} ({@link #EXTRACT_METHOD_FROM_HALF_A_STATEMENT}, {@link
+ *       #EXTRACT_METHOD_FROM_A_BRANCH_THAT_RETURNS}). The name it proposes is renamed to the one asked for, and the
+ *       answer holds the one edit that results from both, from the first character that differs from the file to the
+ *       last. The rename of jdtls declines a name that is not an identifier ({@link
+ *       #EXTRACT_METHOD_TO_AN_INVALID_NAME}) but not the name of a method the class already has with the same
+ *       parameters: it answers an edit that leaves two methods of one signature. The adapter refuses it, from the
+ *       methods that jdtls lists for the text ({@code textDocument/documentSymbol}), as {@code invalid-name} ({@link
+ *       #EXTRACT_METHOD_TO_A_NAME_IN_USE});
  *   <li>files changed on disk between two requests: jdtls reads a file once, and learns of what changes only if the
  *       client tells it ({@code workspace/didChangeWatchedFiles}, which it asks for by registering its watchers). A
  *       {@link Sequel} is two scenarios in a row with the disk changed between them ({@link #sequels()}): a type
@@ -96,6 +106,7 @@ public final class Scenarios {
     private static final Path TIDY = Path.of("src/main/java/demo/Tidy.java");
     private static final Path WIDE = Path.of("src/main/java/demo/Wide.java");
     private static final Path TWICE = Path.of("src/main/java/demo/Twice.java");
+    private static final Path TOTALS = Path.of("src/main/java/demo/Totals.java");
 
     /** How many types of one package, and constants of one class, {@code Wide} imports one by one: over the 99 of jdtls. */
     private static final int MANY = 100;
@@ -120,6 +131,46 @@ public final class Scenarios {
             public static void main(String[] args) {
                 Greeter greeter = new Greeter();
                 System.out.println(greeter.greet("world"));
+            }
+        }
+        """;
+
+    /**
+     * What the extractions of a method are asked on: a statement that reads a local variable, a block that computes
+     * one the rest of the method needs, an expression, an {@code if} whose branch returns, and a method of the
+     * signature the extraction is asked to give its method. Nothing refers to it.
+     */
+    private static final String TOTALS_SOURCE = """
+        package demo;
+
+        public class Totals {
+            public void print(int[] values) {
+                int count = values.length;
+                System.out.println("count: " + count);
+                System.out.println("done");
+            }
+
+            public int total(int[] values, int bonus) {
+                int sum = 0;
+                for (int value : values) {
+                    sum += value;
+                }
+                return sum + bonus;
+            }
+
+            public String describe(int count) {
+                if (count == 0) {
+                    return "none";
+                }
+                return "items: " + count;
+            }
+
+            public int doubled(int value) {
+                return value * 2;
+            }
+
+            public int quadrupled(int count) {
+                return count * 2 * 2;
             }
         }
         """;
@@ -186,7 +237,8 @@ public final class Scenarios {
         }
         """;
 
-    private static final Map<Path, String> PROJECT = Map.of(GREETER, GREETER_SOURCE, MAIN, MAIN_SOURCE);
+    private static final Map<Path, String> PROJECT =
+            Map.of(GREETER, GREETER_SOURCE, MAIN, MAIN_SOURCE, TOTALS, TOTALS_SOURCE);
 
     /**
      * {@code Untidy}, {@code Tidy} and {@code Wide}, with the types and the constants {@code Wide} imports: the project
@@ -211,7 +263,12 @@ public final class Scenarios {
 
     /** The project after {@link #RENAME_TYPE}: the type is {@code Welcomer}, in its own file, and {@code Main} uses it. */
     private static final Map<Path, String> RENAMED_PROJECT = Map.of(
-            WELCOMER, GREETER_SOURCE.replace("Greeter", "Welcomer"), MAIN, MAIN_SOURCE.replace("Greeter", "Welcomer"));
+            WELCOMER,
+            GREETER_SOURCE.replace("Greeter", "Welcomer"),
+            MAIN,
+            MAIN_SOURCE.replace("Greeter", "Welcomer"),
+            TOTALS,
+            TOTALS_SOURCE);
 
     /** A file without a problem: no diagnostic. */
     public static final Scenario CLEAN_FILE = new Scenario(
@@ -473,6 +530,100 @@ public final class Scenarios {
             new Request.ExtractVariable(ELSEWHERE, new Range(new Position(0, 0), new Position(0, 1)), "joined"),
             new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
 
+    /**
+     * {@code System.out.println("count: " + count);}: a statement that reads a local variable, which becomes a
+     * parameter. The edit is the one jdtls answers, folded with the rename: it starts where the file differs and ends
+     * where it stops differing, so it reaches the next statement.
+     */
+    public static final Scenario EXTRACT_METHOD_THAT_USES_A_LOCAL_VARIABLE = new Scenario(
+            "extract-a-method-that-uses-a-local-variable",
+            PROJECT,
+            new Request.ExtractMethod(TOTALS, new Range(new Position(5, 8), new Position(5, 46)), "printCount"),
+            new Answer.Extracted(new ChangeSet(List.of(edits(TOTALS, replace(5, 8, 6, 33, """
+                printCount(count);
+                        System.out.println("done");
+                    }
+
+                    private void printCount(int count) {
+                        System.out.println("count: " + count\
+                """))))));
+
+    /** The block that computes {@code sum}, which the rest of the method returns: the method returns it. */
+    public static final Scenario EXTRACT_METHOD_THAT_ASSIGNS_A_LOCAL_VARIABLE = new Scenario(
+            "extract-a-method-that-assigns-a-local-variable",
+            PROJECT,
+            new Request.ExtractMethod(TOTALS, new Range(new Position(10, 8), new Position(13, 9)), "sumOf"),
+            new Answer.Extracted(new ChangeSet(List.of(edits(TOTALS, replace(10, 18, 14, 26, """
+                sumOf(values);
+                        return sum + bonus;
+                    }
+
+                    private int sumOf(int[] values) {
+                        int sum = 0;
+                        for (int value : values) {
+                            sum += value;
+                        }
+                        return sum\
+                """))))));
+
+    /** {@code count * 2 * 2}: an expression, which becomes the call. */
+    public static final Scenario EXTRACT_METHOD_FROM_AN_EXPRESSION = new Scenario(
+            "extract-a-method-from-an-expression",
+            PROJECT,
+            new Request.ExtractMethod(TOTALS, new Range(new Position(29, 15), new Position(29, 28)), "scaled"),
+            new Answer.Extracted(new ChangeSet(List.of(edits(TOTALS, replace(29, 15, 29, 15, """
+                scaled(count);
+                    }
+
+                    private int scaled(int count) {
+                        return\s\
+                """))))));
+
+    /** From the middle of one statement to the middle of the next: not statements, jdtls offers no extraction. */
+    public static final Scenario EXTRACT_METHOD_FROM_HALF_A_STATEMENT = new Scenario(
+            "extract-a-method-from-half-a-statement",
+            PROJECT,
+            new Request.ExtractMethod(TOTALS, new Range(new Position(5, 30), new Position(6, 20)), "partial"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_EXTRACTABLE));
+
+    /** An {@code if} whose branch returns, with more code after it: not all the paths of the selection return. */
+    public static final Scenario EXTRACT_METHOD_FROM_A_BRANCH_THAT_RETURNS = new Scenario(
+            "extract-a-method-from-a-branch-that-returns",
+            PROJECT,
+            new Request.ExtractMethod(TOTALS, new Range(new Position(18, 8), new Position(20, 9)), "none"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_EXTRACTABLE));
+
+    /** A name that begins with a digit is not an identifier: jdtls declines the rename that gives the name. */
+    public static final Scenario EXTRACT_METHOD_TO_AN_INVALID_NAME = new Scenario(
+            "extract-a-method-to-an-invalid-name",
+            PROJECT,
+            new Request.ExtractMethod(TOTALS, new Range(new Position(5, 8), new Position(5, 46)), "1st"),
+            new Answer.Refused(LanguageServerErrorKey.INVALID_NAME));
+
+    /**
+     * {@code doubled(int)}, which the class already has: the extracted method would have the same signature. jdtls does
+     * not decline the rename, the adapter refuses it.
+     */
+    public static final Scenario EXTRACT_METHOD_TO_A_NAME_IN_USE = new Scenario(
+            "extract-a-method-to-a-name-in-use",
+            PROJECT,
+            new Request.ExtractMethod(TOTALS, new Range(new Position(29, 15), new Position(29, 28)), "doubled"),
+            new Answer.Refused(LanguageServerErrorKey.INVALID_NAME));
+
+    /** The project is still being imported: the server cannot say what an extraction changes. */
+    public static final Scenario EXTRACT_METHOD_WHILE_THE_SERVER_IMPORTS = new Scenario(
+            "extract-a-method-while-the-server-imports",
+            PROJECT,
+            new Request.ExtractMethod(TOTALS, new Range(new Position(5, 8), new Position(5, 46)), "printCount"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_READY));
+
+    /** A file that is not in the project the server was started on. */
+    public static final Scenario EXTRACT_METHOD_OUTSIDE_THE_PROJECT = new Scenario(
+            "extract-a-method-of-a-file-outside-the-project",
+            PROJECT,
+            new Request.ExtractMethod(ELSEWHERE, new Range(new Position(0, 0), new Position(0, 1)), "anything"),
+            new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+
     /** The project is still being imported: the server cannot say what a rename changes. */
     public static final Scenario RENAME_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "rename-while-the-server-imports",
@@ -551,7 +702,16 @@ public final class Scenarios {
                 EXTRACT_VARIABLE_TO_A_NAME_IN_USE,
                 EXTRACT_VARIABLE_TO_AN_INVALID_NAME,
                 EXTRACT_VARIABLE_WHILE_THE_SERVER_IMPORTS,
-                EXTRACT_VARIABLE_OUTSIDE_THE_PROJECT);
+                EXTRACT_VARIABLE_OUTSIDE_THE_PROJECT,
+                EXTRACT_METHOD_THAT_USES_A_LOCAL_VARIABLE,
+                EXTRACT_METHOD_THAT_ASSIGNS_A_LOCAL_VARIABLE,
+                EXTRACT_METHOD_FROM_AN_EXPRESSION,
+                EXTRACT_METHOD_FROM_HALF_A_STATEMENT,
+                EXTRACT_METHOD_FROM_A_BRANCH_THAT_RETURNS,
+                EXTRACT_METHOD_TO_AN_INVALID_NAME,
+                EXTRACT_METHOD_TO_A_NAME_IN_USE,
+                EXTRACT_METHOD_WHILE_THE_SERVER_IMPORTS,
+                EXTRACT_METHOD_OUTSIDE_THE_PROJECT);
     }
 
     /** The sequels of the catalogue: scenarios in a row, with the files changed on disk between them. */

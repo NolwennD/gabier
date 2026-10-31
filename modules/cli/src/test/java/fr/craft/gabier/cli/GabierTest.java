@@ -246,6 +246,25 @@ class GabierTest {
         }
 
         @Test
+        void extractMethodWithoutAFileTwoPositionsAndANameIsAnUnknownUsage() {
+            for (var arguments : List.of(
+                    List.of("extract-method"),
+                    List.of("extract-method", "--dry-run"),
+                    List.of("extract-method", "A.java", "3:4", "3:9"),
+                    List.of("extract-method", "A.java", "3:4", "3:9", "name", "more"),
+                    List.of("extract-method", "A.java", "3", "3:9", "name"))) {
+                out.reset();
+                err.reset();
+
+                assertThat(run(arguments.toArray(String[]::new)))
+                        .as(arguments.toString())
+                        .isEqualTo(2);
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(usageText(String.join(" ", arguments)));
+            }
+        }
+
+        @Test
         void extractVariableWithAPositionThatIsNotLineColonColumnFromOneIsAnUnknownUsage() {
             for (var positions : List.of(
                     List.of("3", "3:9"),
@@ -280,8 +299,15 @@ class GabierTest {
     @Nested
     class Help {
 
-        private static final List<String> COMMANDS =
-                List.of("diagnostics", "rename", "organize-imports", "extract-variable", "status", "stop", "help");
+        private static final List<String> COMMANDS = List.of(
+                "diagnostics",
+                "rename",
+                "organize-imports",
+                "extract-variable",
+                "extract-method",
+                "status",
+                "stop",
+                "help");
 
         private static Map<String, Object> object(Object json) {
             var members = new LinkedHashMap<String, Object>();
@@ -396,7 +422,8 @@ class GabierTest {
             assertThat(out()).isEmpty();
             assertThat(err())
                     .startsWith("Usage error: Unknown command; the commands are diagnostics, rename, organize-imports,"
-                            + " extract-variable, status, stop, help (usage-error; command=frobnicate)");
+                            + " extract-variable, extract-method, status, stop, help (usage-error;"
+                            + " command=frobnicate)");
         }
 
         @Test
@@ -1586,6 +1613,118 @@ class GabierTest {
 
                 assertThat(out()).isEmpty();
                 assertThat(err()).contains("(invalid-response)");
+            }
+        }
+    }
+
+    @Nested
+    class ExtractingAMethod {
+
+        private static final String REQUEST = """
+            {"jsonrpc":"2.0","id":1,"method":"extract-method","params":{"dryRun":"%s","endColumn":"%s","endLine":"%s",\
+            "file":"%s","name":"%s","startColumn":"%s","startLine":"%s"}}\
+            """;
+        private static final ChangedFiles EXTRACTED =
+                new ChangedFiles(List.of(), List.of(), List.of(), List.of(Path.of("/project/Totals.java")), """
+                    --- /project/Totals.java
+                    +++ /project/Totals.java
+                    @@ -6,2 +6,6 @@
+                    -        System.out.println("count: " + count);
+                    +        printCount(count);
+                    +    }
+                    +
+                    +    private void printCount(int count) {
+                    +        System.out.println("count: " + count);
+                    """);
+        private static final Problem NOT_EXTRACTABLE = new Problem(
+                "urn:gabier:error:language-server-not-extractable",
+                "Not extractable",
+                "The selection 6:30-7:20 of /project/Totals.java is not statements or an expression to extract",
+                "language-server-not-extractable",
+                Map.of("file", "/project/Totals.java"),
+                ErrorStatus.BAD_REQUEST);
+
+        private Path socket() {
+            return directory.resolve("gabier.sock");
+        }
+
+        private int runWithSocket(String... args) {
+            return run(Map.of("GABIER_SOCKET", socket().toString()), args);
+        }
+
+        @Test
+        void asksTheDaemonToExtractTheSelectionCountedFromOneAsItIsShownAndSendsItFromZero() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", EXTRACTED.toJson()))) {
+                assertThat(runWithSocket("extract-method", "/project/Totals.java", "6:9", "6:47", "printCount"))
+                        .isZero();
+
+                assertThat(daemon.requests())
+                        .containsExactly(
+                                REQUEST.formatted(false, 46, 5, Path.of("/project/Totals.java"), "printCount", 8, 5));
+            }
+        }
+
+        @Test
+        void asksForADryRunWithTheDryRunOptionWhereverItIsAndSaysThatNothingWasWritten() throws IOException {
+            for (var arguments : List.of(
+                    List.of("extract-method", "--dry-run", "/project/Totals.java", "6:9", "6:47", "printCount"),
+                    List.of("extract-method", "/project/Totals.java", "6:9", "6:47", "printCount", "--dry-run"))) {
+                try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", EXTRACTED.toJson()))) {
+                    out.reset();
+                    assertThat(runWithSocket(arguments.toArray(String[]::new))).isZero();
+
+                    assertThat(daemon.requests())
+                            .containsExactly(REQUEST.formatted(
+                                    true, 46, 5, Path.of("/project/Totals.java"), "printCount", 8, 5));
+                    assertThat(out().lines()).startsWith("dry run, nothing written", "modified /project/Totals.java");
+                }
+                Files.deleteIfExists(socket());
+            }
+        }
+
+        @Test
+        void listsTheFileThatChangedThenShowsTheDiff() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", EXTRACTED.toJson()))) {
+                assertThat(runWithSocket("extract-method", "/project/Totals.java", "6:9", "6:47", "printCount"))
+                        .isZero();
+
+                assertThat(out().lines())
+                        .startsWith("modified /project/Totals.java", "", "--- /project/Totals.java")
+                        .contains("+    private void printCount(int count) {");
+                assertThat(err()).isEmpty();
+            }
+        }
+
+        @Test
+        void givesTheResultAsJsonWithTheJsonOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", EXTRACTED.toJson()))) {
+                assertThat(runWithSocket(
+                                "--json", "extract-method", "/project/Totals.java", "6:9", "6:47", "printCount"))
+                        .isZero();
+
+                assertThat(out()).isEqualTo(EXTRACTED.toJson() + System.lineSeparator());
+                assertThat(err()).isEmpty();
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsItsProblemObjectWithTheExitCodeOfItsCategory() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", NOT_EXTRACTABLE))) {
+                assertThat(runWithSocket("extract-method", "/project/Totals.java", "6:31", "7:21", "partial"))
+                        .isEqualTo(2);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(NOT_EXTRACTABLE.toText() + System.lineSeparator());
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsJsonWithTheJsonOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", NOT_EXTRACTABLE))) {
+                assertThat(runWithSocket("--json", "extract-method", "/project/Totals.java", "6:31", "7:21", "partial"))
+                        .isEqualTo(2);
+
+                assertThat(err()).isEqualTo(NOT_EXTRACTABLE.toJson() + System.lineSeparator());
             }
         }
     }

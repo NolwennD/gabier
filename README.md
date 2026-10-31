@@ -19,6 +19,7 @@ in [The daemon](docs/daemon.md). The daemon starts by itself at the first comman
   ones and order the rest, never with a star import.
 - [`gabier extract-variable`](docs/commands/extract-variable.md): turn an expression into a local variable.
 - [`gabier help [<command>]`](docs/commands/help.md): list the commands, or explain one (usage, example, refusals).
+- [`gabier extract-method`](docs/commands/extract-method.md): turn statements, or an expression, into a method.
 - [`gabier status` and `gabier stop`](docs/commands/status-and-stop.md): see what the daemon serves, and stop it.
 
 ## Reference

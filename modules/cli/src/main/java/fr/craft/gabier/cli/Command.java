@@ -75,6 +75,23 @@ enum Command {
                     "language-server-invalid-name: the name is not a Java identifier, or is a parameter of the method",
                     "language-server-file-outside-project: the file is not in the project the daemon serves",
                     "language-server-not-ready: the Java language server is not ready")),
+    EXTRACT_METHOD(
+            "extract-method",
+            "turn statements, or an expression, into a method",
+            "gabier [--json] extract-method [--dry-run] <file> <line>:<column> <line>:<column> <name>",
+            """
+            $ gabier extract-method --dry-run src/main/java/demo/Totals.java 6:9 6:47 printCount
+            dry run, nothing written
+            modified /work/demo/src/main/java/demo/Totals.java
+            ...\
+            """,
+            List.of(
+                    "language-server-not-extractable: the selection is not statements or an expression jdtls can"
+                            + " extract (half a statement, an if whose branch returns)",
+                    "language-server-invalid-name: the name is not a Java identifier, or another method of the class"
+                            + " has it with the same parameters",
+                    "language-server-file-outside-project: the file is not in the project the daemon serves",
+                    "language-server-not-ready: the Java language server is not ready")),
     STATUS(
             "status",
             "the project the daemon serves, and where jdtls is",

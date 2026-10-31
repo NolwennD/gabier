@@ -108,6 +108,11 @@ final class ProjectServer implements ServedProject {
     }
 
     @Override
+    public ChangeSet extractMethod(Path file, Range selection, String name) {
+        return ready().extractMethod(file, selection, name);
+    }
+
+    @Override
     public Optional<ChangeSet> organizeImports(Path file) {
         return ready().organizeImports(file);
     }

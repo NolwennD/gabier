@@ -1,5 +1,6 @@
 package fr.craft.gabier.daemon;
 
+import fr.craft.gabier.editing.application.ExtractMethod;
 import fr.craft.gabier.editing.application.ExtractVariable;
 import fr.craft.gabier.editing.application.OrganizeImports;
 import fr.craft.gabier.editing.application.Rename;
@@ -23,6 +24,10 @@ final class ChangeRequest {
     static final String NEW_NAME = "newName";
     static final String NAME = "name";
     static final String DRY_RUN = "dryRun";
+    static final String START_LINE = "startLine";
+    static final String START_COLUMN = "startColumn";
+    static final String END_LINE = "endLine";
+    static final String END_COLUMN = "endColumn";
 
     private final String method;
     private final Map<String, String> params;
@@ -74,6 +79,15 @@ final class ChangeRequest {
 
     /** What extracting the expression of the selection into a variable does, written unless the request is a dry run. */
     DaemonMethod.Outcome run(ExtractVariable extract, Range selection) {
+        Path file = file();
+        String name = token(NAME);
+        ChangeReport report = dryRun() ? extract.dryRun(file, selection, name) : extract.apply(file, selection, name);
+
+        return DaemonMethod.Outcome.of(changed(report).toJson());
+    }
+
+    /** What extracting the selection into a method does, written unless the request is a dry run. */
+    DaemonMethod.Outcome run(ExtractMethod extract, Range selection) {
         Path file = file();
         String name = token(NAME);
         ChangeReport report = dryRun() ? extract.dryRun(file, selection, name) : extract.apply(file, selection, name);

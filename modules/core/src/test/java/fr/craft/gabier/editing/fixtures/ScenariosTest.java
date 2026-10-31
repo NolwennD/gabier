@@ -142,7 +142,16 @@ class ScenariosTest {
                         "extract-a-variable-to-a-name-in-use",
                         "extract-a-variable-to-an-invalid-name",
                         "extract-a-variable-while-the-server-imports",
-                        "extract-a-variable-of-a-file-outside-the-project");
+                        "extract-a-variable-of-a-file-outside-the-project",
+                        "extract-a-method-that-uses-a-local-variable",
+                        "extract-a-method-that-assigns-a-local-variable",
+                        "extract-a-method-from-an-expression",
+                        "extract-a-method-from-half-a-statement",
+                        "extract-a-method-from-a-branch-that-returns",
+                        "extract-a-method-to-an-invalid-name",
+                        "extract-a-method-to-a-name-in-use",
+                        "extract-a-method-while-the-server-imports",
+                        "extract-a-method-of-a-file-outside-the-project");
     }
 
     @Test
@@ -180,6 +189,20 @@ class ScenariosTest {
                         LanguageServerErrorKey.NOT_AN_EXPRESSION,
                         LanguageServerErrorKey.NOT_AN_EXPRESSION,
                         LanguageServerErrorKey.NOT_AN_EXPRESSION,
+                        LanguageServerErrorKey.NOT_READY);
+    }
+
+    @Test
+    void refusesForEachReasonOfThePortOnAnExtractMethod() {
+        assertThat(answeredWith(Answer.Refused.class).stream()
+                        .filter(scenario -> scenario.request() instanceof Request.ExtractMethod)
+                        .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
+                        LanguageServerErrorKey.INVALID_NAME,
+                        LanguageServerErrorKey.INVALID_NAME,
+                        LanguageServerErrorKey.NOT_EXTRACTABLE,
+                        LanguageServerErrorKey.NOT_EXTRACTABLE,
                         LanguageServerErrorKey.NOT_READY);
     }
 
@@ -415,6 +438,9 @@ class ScenariosTest {
     @Test
     void declaresTheNameAskedForAndUsesItInPlaceOfTheSelectedExpression(@TempDir Path directory) throws IOException {
         for (Scenario scenario : answeredWith(Answer.Extracted.class)) {
+            if (!(scenario.request() instanceof Request.ExtractVariable)) {
+                continue;
+            }
             Path root = Files.createTempDirectory(directory, "project");
             Scenario inside = scenario.inside(root);
             inside.writeProject(root);
@@ -427,6 +453,28 @@ class ScenariosTest {
                     .as(scenario.name())
                     .contains(" " + request.name() + " = " + expression + ";")
                     .contains(" = " + request.name() + ";");
+        }
+    }
+
+    @Test
+    void declaresTheMethodWithTheNameAskedForAndCallsItWhereTheSelectionWas(@TempDir Path directory)
+            throws IOException {
+        List<Scenario> extractions = answeredWith(Answer.Extracted.class).stream()
+                .filter(scenario -> scenario.request() instanceof Request.ExtractMethod)
+                .toList();
+        assertThat(extractions).hasSize(3);
+        for (Scenario scenario : extractions) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+            var request = (Request.ExtractMethod) inside.request();
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.Extracted) inside.answer()).changes());
+
+            assertThat(Files.readString(request.file()))
+                    .as(scenario.name())
+                    .containsPattern("\\b" + request.name() + "\\([a-z]*\\);")
+                    .containsPattern("private \\w+(\\[\\])? " + request.name() + "\\(");
         }
     }
 

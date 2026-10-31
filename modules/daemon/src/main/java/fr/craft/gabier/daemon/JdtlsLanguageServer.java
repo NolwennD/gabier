@@ -28,6 +28,7 @@ import java.util.SequencedMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionContext;
@@ -36,10 +37,13 @@ import org.eclipse.lsp4j.CodeActionParams;
 import org.eclipse.lsp4j.DiagnosticSeverity;
 import org.eclipse.lsp4j.DidCloseTextDocumentParams;
 import org.eclipse.lsp4j.DidOpenTextDocumentParams;
+import org.eclipse.lsp4j.DocumentSymbolParams;
 import org.eclipse.lsp4j.FileChangeType;
 import org.eclipse.lsp4j.FileEvent;
 import org.eclipse.lsp4j.PrepareRenameParams;
 import org.eclipse.lsp4j.RenameParams;
+import org.eclipse.lsp4j.SymbolInformation;
+import org.eclipse.lsp4j.SymbolKind;
 import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.eclipse.lsp4j.TextDocumentItem;
 import org.eclipse.lsp4j.WorkspaceEdit;
@@ -258,31 +262,92 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      */
     @Override
     public synchronized ChangeSet extractVariable(Path file, Range selection, String name) {
+        return extract(Extraction.VARIABLE, file, selection, name);
+    }
+
+    /**
+     * Extracts the selection (statements, or an expression) into a new method named as asked, and replaces it by the
+     * call. As for the variable, jdtls proposes a name of its own ({@code java/getRefactorEdit}, command {@code
+     * extractMethod}) and says where it is for the client to rename: the method is renamed with {@code
+     * textDocument/rename} on the text the edit gives, and the two edits are folded into one.
+     *
+     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, jdtls cannot extract the
+     *     selection or declines the name
+     * @throws JdtlsException if jdtls dies, does not answer in time or answers what the adapter cannot apply
+     */
+    @Override
+    public synchronized ChangeSet extractMethod(Path file, Range selection, String name) {
+        return extract(Extraction.METHOD, file, selection, name);
+    }
+
+    /**
+     * The refactorings of {@code java/getRefactorEdit} that introduce a name for the client to rename.
+     *
+     * @param command the refactoring
+     * @param what how the extraction is called in the messages
+     * @param refusal the refusal when jdtls has no extraction for the selection
+     */
+    private enum Extraction {
+        VARIABLE(
+                "extractVariable",
+                "the extraction of the expression",
+                "the extracted variable",
+                LanguageServerException::notAnExpression),
+        METHOD(
+                "extractMethod",
+                "the extraction of the selection into a method",
+                "the extracted method",
+                LanguageServerException::notExtractable);
+
+        private final String command;
+        private final String what;
+        private final String extracted;
+        private final BiFunction<Path, Range, LanguageServerException> refusal;
+
+        Extraction(
+                String command,
+                String what,
+                String extracted,
+                BiFunction<Path, Range, LanguageServerException> refusal) {
+            this.command = command;
+            this.what = what;
+            this.extracted = extracted;
+            this.refusal = refusal;
+        }
+    }
+
+    /** The extraction that jdtls offers as a command of {@code java/getRefactorEdit}, with the name asked for. */
+    private ChangeSet extract(Extraction extraction, Path file, Range selection, String name) {
+        String command = extraction.command;
+        String what = extraction.what;
+        BiFunction<Path, Range, LanguageServerException> refusal = extraction.refusal;
         JdtlsSession session = ready();
         Path path = normalized(file);
         String original = textInProject(session, path);
         var document = new TextDocumentIdentifier(path.toUri().toString());
         var refactoring = new JdtlsServer.RefactorEditParams(
-                "extractVariable", new CodeActionParams(document, lsp(selection), new CodeActionContext(List.of())));
+                command, new CodeActionParams(document, lsp(selection), new CodeActionContext(List.of())));
         JdtlsWatch watch = session.newWatch();
         try {
             takeInChangesOnDisk(session, watch);
             var proposal = watch.await(
-                    "the extraction of the expression at " + selection + " of " + path,
+                    what + " at " + selection + " of " + path,
                     () -> JdtlsRequests.unlessDeclined(session.server().getRefactorEdit(refactoring)));
-            var refactor = proposal.orElseThrow(() -> LanguageServerException.notAnExpression(path, selection));
+            var refactor = proposal.orElseThrow(() -> refusal.apply(path, selection));
             // jdtls gives no edit, and says why in errorMessage, for a selection it cannot extract: a statement, a call
             // of a void method.
             var proposed = refactor.edit();
             if (proposed == null) {
-                throw LanguageServerException.notAnExpression(path, selection);
+                throw refusal.apply(path, selection);
             }
             String extracted = SourceText.edited(path, original, editsOf(path, proposed, original));
             var introduced = introducedName(refactor, extracted);
             String named = extracted;
             if (!introduced.text().equals(name)) {
                 named = SourceText.edited(
-                        path, extracted, renamed(session, watch, path, extracted, introduced, name, selection));
+                        path,
+                        extracted,
+                        renamed(session, watch, extraction, path, extracted, introduced, name, selection));
             }
 
             return new ChangeSet(
@@ -290,8 +355,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new JdtlsException(
-                    "Interrupted while waiting for the extraction of the expression at " + selection + " of " + path,
-                    interrupted);
+                    "Interrupted while waiting for " + what + " at " + selection + " of " + path, interrupted);
         }
     }
 
@@ -332,6 +396,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     private List<TextEdit> renamed(
             JdtlsSession session,
             JdtlsWatch watch,
+            Extraction extraction,
             Path path,
             String text,
             Introduced introduced,
@@ -342,9 +407,12 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         var where = SourceText.positionAt(text, introduced.offset());
         try {
             var publication = open(session, Map.of(path, text)).get(path);
-            watch.await("jdtls to take in the extracted variable in " + path, () -> publication);
+            watch.await("jdtls to take in " + extraction.extracted + " in " + path, () -> publication);
+            if (extraction == Extraction.METHOD) {
+                refuseASignatureInUse(session, watch, path, introduced, name, selection);
+            }
             var edit = watch.await(
-                    "the rename of the extracted variable at " + where + " of " + path + " to " + name,
+                    "the rename of " + extraction.extracted + " at " + where + " of " + path + " to " + name,
                     () -> JdtlsRequests.unlessDeclined(service.rename(new RenameParams(
                             new TextDocumentIdentifier(path.toUri().toString()),
                             new org.eclipse.lsp4j.Position(where.line(), where.column()),
@@ -362,6 +430,53 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         } finally {
             close(session, List.of(path));
         }
+    }
+
+    /**
+     * Refuses the name of a method that the class already declares with the parameters of the extracted one. jdtls
+     * does not decline it: its rename answers an edit that leaves two methods of one signature, which does not
+     * compile. The methods are those jdtls lists for the text it was given (a flat list: the client declares no
+     * hierarchical symbols), labelled {@code name(parameters) : return type}, under the name of their class.
+     */
+    private void refuseASignatureInUse(
+            JdtlsSession session, JdtlsWatch watch, Path path, Introduced introduced, String name, Range selection)
+            throws InterruptedException {
+        var listed = watch.await(
+                "the methods of the extracted text of " + path,
+                () -> session.server()
+                        .getTextDocumentService()
+                        .documentSymbol(new DocumentSymbolParams(
+                                new TextDocumentIdentifier(path.toUri().toString()))));
+        List<SymbolInformation> methods = Optional.ofNullable(listed).orElse(List.of()).stream()
+                .filter(Either::isLeft)
+                .map(Either::getLeft)
+                .filter(symbol -> symbol.getKind() == SymbolKind.Method)
+                .toList();
+        var extracted = methods.stream()
+                .filter(method -> method.getName().startsWith(introduced.text() + "("))
+                .findFirst()
+                .orElseThrow(() -> new JdtlsException("jdtls did not list the method " + introduced.text()
+                        + " it extracted in " + path + ": " + methods));
+        String wanted = name + parametersOf(extracted);
+        if (methods.stream()
+                .anyMatch(method -> Objects.equals(method.getContainerName(), extracted.getContainerName())
+                        && signatureOf(method).equals(wanted))) {
+            throw LanguageServerException.invalidName(path, selection.start(), name);
+        }
+    }
+
+    /** {@code name(parameters)} of a label {@code name(parameters) : return type}. */
+    private static String signatureOf(SymbolInformation method) {
+        String label = method.getName();
+        int returnType = label.indexOf(" : ");
+
+        return returnType < 0 ? label : label.substring(0, returnType);
+    }
+
+    private static String parametersOf(SymbolInformation method) {
+        String signature = signatureOf(method);
+
+        return signature.substring(signature.indexOf('('));
     }
 
     /**

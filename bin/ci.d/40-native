@@ -22,7 +22,8 @@ import java.util.stream.Stream;
  * daemon served by the fake language server, {@code :daemon:installFakeServed}, so that no jdtls runs in this stage;
  * {@code rename} is run against the latter too (a dry run, a rename by token, by position and of a type, and refusals),
  * and so are {@code organize-imports} (a dry run, a file organized, a file in order, a refusal) and {@code
- * extract-variable} (a dry run, a variable extracted under the name given, refusals);
+ * extract-variable} (a dry run, a variable extracted under the name given, refusals) and {@code extract-method} (a dry run,
+ * a method extracted under the name given, refusals);
  * a request command with no daemon running starts {@code gabier-daemon} (found on the {@code PATH} or next to the cli;
  * not found, exiting at once), the next request uses it, and {@code stop} ends it. Runs in the current directory, the
  * checkout under verification. It starts and signals only the processes it started, by their handle, and the daemons
@@ -61,7 +62,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, help, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports and extract-variable included, the daemon started on demand)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, extract-variable and extract-method included, the daemon started on demand)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -247,6 +248,7 @@ public final class Native {
                 renameWithTheFakeServer();
                 organizeImportsWithTheFakeServer();
                 extractVariableWithTheFakeServer();
+                extractMethodWithTheFakeServer();
                 fakeServedRefusesAFolderThatIsNotEmpty();
             } finally {
                 for (Process process : started) {
@@ -685,6 +687,70 @@ public final class Native {
                     "gabier extract-variable writes the file, with the variable declared under the name given");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after the extractions");
+        }
+
+        /**
+         * {@code gabier extract-method} against the daemon served by the fake language server: the dry run writes
+         * nothing, the method is declared under the name given and called in place of the statement, a selection that
+         * cannot be extracted and a name that is not valid are refused as problem objects and write nothing.
+         */
+        private void extractMethodWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("extract-method-project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            Path totals = project.resolve("src/main/java/demo/Totals.java");
+            String file = "extract-method-project/src/main/java/demo/Totals.java";
+            String original = Files.readString(totals);
+
+            Run dryRun = gabier("extract-method", "--dry-run", file, "6:9", "6:47", "printCount");
+            expect(
+                    dryRun.exit() == 0
+                            && dryRun.err().isEmpty()
+                            && dryRun.out().lines().findFirst().orElse("").equals("dry run, nothing written")
+                            && dryRun.out().contains("modified " + totals)
+                            && dryRun.out().contains("+        printCount(count);")
+                            && dryRun.out().contains("+    private void printCount(int count) {")
+                            && Files.readString(totals).equals(original),
+                    "gabier extract-method --dry-run lists the file and the diff and writes nothing");
+
+            Run notExtractable = gabier("extract-method", file, "6:31", "7:21", "partial");
+            expect(
+                    notExtractable.exit() == 2
+                            && notExtractable.out().isEmpty()
+                            && notExtractable.err().contains("(language-server-not-extractable; ")
+                            && Files.readString(totals).equals(original),
+                    "extract-method of half a statement is refused as a problem object, exit 2");
+
+            Run invalidName = gabier("extract-method", file, "6:9", "6:47", "1st");
+            expect(
+                    invalidName.exit() == 2
+                            && invalidName.out().isEmpty()
+                            && invalidName.err().contains("(language-server-invalid-name; ")
+                            && Files.readString(totals).equals(original),
+                    "extract-method to a name that is not an identifier is refused as a problem object, exit 2");
+
+            Run json = gabier("--json", "extract-method", "--dry-run", file, "6:9", "6:47", "printCount");
+            expect(
+                    json.exit() == 0
+                            && json.out()
+                                    .startsWith("{\"created\":[],\"renamed\":[],\"deleted\":[],\"modified\":[\""
+                                            + totals + "\"],\"diff\":\"")
+                            && Files.readString(totals).equals(original),
+                    "gabier --json extract-method gives the result as the daemon gave it");
+
+            Run extracted = gabier("extract-method", file, "6:9", "6:47", "printCount");
+            String text = Files.readString(totals);
+            expect(
+                    extracted.exit() == 0
+                            && extracted.out().contains("modified " + totals)
+                            && text.contains("        printCount(count);\n")
+                            && text.contains("    private void printCount(int count) {\n"),
+                    "gabier extract-method writes the file, with the method declared under the name given");
+            gabier("stop");
+            expect(ends(process), "the daemon served by the fake stops after the method extractions");
         }
 
         /** A {@code gabier-daemon} in the folder: a script with this body, which the cli finds and launches. */

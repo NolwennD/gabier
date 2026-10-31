@@ -74,6 +74,7 @@ public final class Gabier {
             case RENAME -> () -> rename(starting(environment), arguments, json, out);
             case ORGANIZE_IMPORTS -> () -> organizeImports(starting(environment), arguments, json, out);
             case EXTRACT_VARIABLE -> () -> extractVariable(starting(environment), arguments, json, out);
+            case EXTRACT_METHOD -> () -> extractMethod(starting(environment), arguments, json, out);
             case STATUS -> () -> status(waiting(environment, arguments), json, out);
             case STOP -> () -> stop(waiting(environment, arguments), json, out);
             case HELP -> () -> help(arguments, json, out);
@@ -246,6 +247,21 @@ public final class Gabier {
      */
     private static void extractVariable(
             Supplier<DaemonClient> daemon, List<String> arguments, boolean json, PrintStream out) {
+        extractSelection(Command.EXTRACT_VARIABLE, daemon, arguments, json, out);
+    }
+
+    /**
+     * {@code extract-method [--dry-run] <file> <line>:<column> <line>:<column> <name>}, as {@code extract-variable}: the
+     * selection is the statements, or the expression, to extract into a method of that name.
+     */
+    private static void extractMethod(
+            Supplier<DaemonClient> daemon, List<String> arguments, boolean json, PrintStream out) {
+        extractSelection(Command.EXTRACT_METHOD, daemon, arguments, json, out);
+    }
+
+    /** What the commands that extract a selection under a name share: the operands, and the answer of the daemon. */
+    private static void extractSelection(
+            Command command, Supplier<DaemonClient> daemon, List<String> arguments, boolean json, PrintStream out) {
         var words = arguments.subList(1, arguments.size());
         var dryRun = words.contains(DRY_RUN_OPTION);
         var operands =
@@ -263,8 +279,8 @@ public final class Gabier {
         params.put("endColumn", end.getLast());
         params.put("name", operands.getLast());
         params.put("dryRun", String.valueOf(dryRun));
-        var changed = ChangedFiles.of(ask(daemon, Command.EXTRACT_VARIABLE.commandName(), params, false)
-                .result());
+        var changed = ChangedFiles.of(
+                ask(daemon, command.commandName(), params, false).result());
         print(changed, dryRun, json, out);
     }
 

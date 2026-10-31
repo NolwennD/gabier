@@ -88,7 +88,9 @@ class DaemonServerTest {
                         .scripted(Scenarios.ORGANIZE_IMPORTS)
                         .scripted(Scenarios.ORGANIZE_IMPORTS_IN_ORDER)
                         .scripted(Scenarios.EXTRACT_VARIABLE)
-                        .scripted(Scenarios.EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION));
+                        .scripted(Scenarios.EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION)
+                        .scripted(Scenarios.EXTRACT_METHOD_THAT_USES_A_LOCAL_VARIABLE)
+                        .scripted(Scenarios.EXTRACT_METHOD_FROM_HALF_A_STATEMENT));
     }
 
     private DaemonServer open() {
@@ -488,6 +490,52 @@ class DaemonServerTest {
                 {"jsonrpc":"2.0","id":3,"method":"extract-variable","params":{"file":"%s","startLine":"%s",\
                 "startColumn":"%s","endLine":"%s","endColumn":"%s","name":"joined","dryRun":"%s"}}
                 """.formatted(file, startLine, startColumn, endLine, endColumn, dryRun);
+        }
+
+        @Test
+        void extractMethodAnswersWhatChangedAndWritesTheFileUnlessItIsADryRun() throws IOException {
+            serving();
+            Scenarios.EXTRACT_METHOD_THAT_USES_A_LOCAL_VARIABLE.writeProject(directory);
+            var totals = directory.resolve("src/main/java/demo/Totals.java");
+
+            try (var client = connect(socket())) {
+                var dryRun = client.ask(extractMethodRequest(totals, "5", "8", "5", "46", "printCount", true));
+
+                assertThat(dryRun).contains("\"modified\":[").contains("private void printCount");
+                assertThat(Files.readString(totals)).doesNotContain("printCount");
+
+                var done = client.ask(extractMethodRequest(totals, "5", "8", "5", "46", "printCount", false));
+
+                assertThat(done).contains("\"modified\":[");
+                assertThat(Files.readString(totals)).contains("        printCount(count);");
+            }
+        }
+
+        @Test
+        void aSelectionThatCannotBeExtractedIsRefusedWithItsProblemObject() throws IOException {
+            serving();
+            Scenarios.EXTRACT_METHOD_THAT_USES_A_LOCAL_VARIABLE.writeProject(directory);
+            var totals = directory.resolve("src/main/java/demo/Totals.java");
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask(extractMethodRequest(totals, "5", "30", "6", "20", "partial", false)))
+                        .contains("\"key\":\"language-server-not-extractable\"");
+                assertThat(Files.readString(totals)).doesNotContain("partial");
+            }
+        }
+
+        private static String extractMethodRequest(
+                Path file,
+                String startLine,
+                String startColumn,
+                String endLine,
+                String endColumn,
+                String name,
+                boolean dryRun) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"extract-method","params":{"file":"%s","startLine":"%s",\
+                "startColumn":"%s","endLine":"%s","endColumn":"%s","name":"%s","dryRun":"%s"}}
+                """.formatted(file, startLine, startColumn, endLine, endColumn, name, dryRun);
         }
 
         @Test

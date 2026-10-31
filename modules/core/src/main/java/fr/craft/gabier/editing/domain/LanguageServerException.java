@@ -43,6 +43,18 @@ public final class LanguageServerException extends GeneratorException {
                 .addParameter("endColumn", String.valueOf(selection.end().column())));
     }
 
+    /**
+     * The selection is not statements or an expression the server can extract into a method (half a statement, a
+     * {@code return} of a branch that the rest of the method needs, a type).
+     */
+    public static LanguageServerException notExtractable(Path file, Range selection) {
+        return new LanguageServerException(positioned(LanguageServerErrorKey.NOT_EXTRACTABLE, file, selection.start())
+                .message("The selection " + format(selection.start()) + "-" + format(selection.end()) + " of " + file
+                        + " is not statements or an expression to extract")
+                .addParameter("endLine", String.valueOf(selection.end().line()))
+                .addParameter("endColumn", String.valueOf(selection.end().column())));
+    }
+
     /** The server does not accept the name for the symbol at the position. */
     public static LanguageServerException invalidName(Path file, Position position, String name) {
         return new LanguageServerException(positioned(LanguageServerErrorKey.INVALID_NAME, file, position)

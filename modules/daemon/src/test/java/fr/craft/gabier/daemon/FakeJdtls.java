@@ -32,6 +32,8 @@ import org.eclipse.lsp4j.DidChangeWatchedFilesParams;
 import org.eclipse.lsp4j.DidCloseTextDocumentParams;
 import org.eclipse.lsp4j.DidOpenTextDocumentParams;
 import org.eclipse.lsp4j.DidSaveTextDocumentParams;
+import org.eclipse.lsp4j.DocumentSymbol;
+import org.eclipse.lsp4j.DocumentSymbolParams;
 import org.eclipse.lsp4j.ExecuteCommandParams;
 import org.eclipse.lsp4j.FileChangeType;
 import org.eclipse.lsp4j.InitializeParams;
@@ -45,6 +47,7 @@ import org.eclipse.lsp4j.Registration;
 import org.eclipse.lsp4j.RegistrationParams;
 import org.eclipse.lsp4j.RenameParams;
 import org.eclipse.lsp4j.ServerCapabilities;
+import org.eclipse.lsp4j.SymbolInformation;
 import org.eclipse.lsp4j.WorkspaceEdit;
 import org.eclipse.lsp4j.jsonrpc.Launcher;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
@@ -117,6 +120,8 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private CompletableFuture<WorkspaceEdit> renameAnswer = new CompletableFuture<>();
     private final List<PrepareRenameParams> prepared = new CopyOnWriteArrayList<>();
     private final List<RenameParams> renamed = new CopyOnWriteArrayList<>();
+    private CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> documentSymbolAnswer =
+            new CompletableFuture<>();
     private CompletableFuture<List<Either<Command, CodeAction>>> codeActionAnswer = new CompletableFuture<>();
     private CompletableFuture<CodeAction> resolveAnswer = new CompletableFuture<>();
     private final List<CodeActionParams> codeActionRequests = new CopyOnWriteArrayList<>();
@@ -229,6 +234,15 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
      */
     FakeJdtls renameAnswers(CompletableFuture<WorkspaceEdit> answer) {
         this.renameAnswer = answer;
+        return this;
+    }
+
+    /**
+     * The answer to {@code textDocument/documentSymbol}, whatever the request: the symbols, null or a failed future.
+     * Unscripted, the request never gets an answer.
+     */
+    FakeJdtls documentSymbolAnswers(CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> answer) {
+        this.documentSymbolAnswer = answer;
         return this;
     }
 
@@ -599,6 +613,14 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                     received.add("rename " + named(params.getTextDocument().getUri()));
                     renamed.add(params);
                     return renameAnswer;
+                }
+
+                @Override
+                public CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> documentSymbol(
+                        DocumentSymbolParams params) {
+                    received.add(
+                            "documentSymbol " + named(params.getTextDocument().getUri()));
+                    return documentSymbolAnswer;
                 }
 
                 @Override

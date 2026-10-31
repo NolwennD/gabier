@@ -44,3 +44,4 @@ daemon ([help](commands/help.md)).
 | `rename-token`     | `file`, `token`, `newName`, `dryRun`                                        | [rename](commands/rename.md)                               |
 | `organize-imports` | `file`, `dryRun`                                                            | [organize-imports](commands/organize-imports.md)           |
 | `extract-variable` | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-variable](commands/extract-variable.md)           |
+| `extract-method`   | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-method](commands/extract-method.md)               |

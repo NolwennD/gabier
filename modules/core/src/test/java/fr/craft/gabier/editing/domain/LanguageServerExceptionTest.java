@@ -23,6 +23,7 @@ class LanguageServerExceptionTest {
                         "language-server-invalid-name",
                         "language-server-no-such-symbol",
                         "language-server-not-an-expression",
+                        "language-server-not-extractable",
                         "language-server-not-a-file",
                         "language-server-not-ready",
                         "language-server-unresolved-imports");
@@ -59,6 +60,20 @@ class LanguageServerExceptionTest {
                 .isEqualTo(
                         Map.of("file", FILE.toString(), "line", "4", "column", "7", "endLine", "5", "endColumn", "2"));
         assertThat(exception).hasMessage("The selection 4:7-5:2 of " + FILE + " is not an expression");
+    }
+
+    @Test
+    void saysWhichSelectionCannotBeExtractedIntoAMethod() {
+        LanguageServerException exception =
+                LanguageServerException.notExtractable(FILE, new Range(new Position(4, 7), new Position(5, 2)));
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters())
+                .isEqualTo(
+                        Map.of("file", FILE.toString(), "line", "4", "column", "7", "endLine", "5", "endColumn", "2"));
+        assertThat(exception)
+                .hasMessage("The selection 4:7-5:2 of " + FILE + " is not statements or an expression to extract");
     }
 
     @Test

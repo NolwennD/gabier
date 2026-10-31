@@ -19,6 +19,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
@@ -32,12 +33,16 @@ import org.eclipse.lsp4j.CodeActionKind;
 import org.eclipse.lsp4j.CodeActionParams;
 import org.eclipse.lsp4j.Command;
 import org.eclipse.lsp4j.DiagnosticSeverity;
+import org.eclipse.lsp4j.DocumentSymbol;
+import org.eclipse.lsp4j.Location;
 import org.eclipse.lsp4j.MarkupContent;
 import org.eclipse.lsp4j.PrepareRenameDefaultBehavior;
 import org.eclipse.lsp4j.PrepareRenameResult;
 import org.eclipse.lsp4j.Range;
 import org.eclipse.lsp4j.ResourceOperation;
 import org.eclipse.lsp4j.SnippetTextEdit;
+import org.eclipse.lsp4j.SymbolInformation;
+import org.eclipse.lsp4j.SymbolKind;
 import org.eclipse.lsp4j.TextDocumentEdit;
 import org.eclipse.lsp4j.TextEdit;
 import org.eclipse.lsp4j.VersionedTextDocumentIdentifier;
@@ -54,6 +59,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * The port {@code JavaLanguageServer} as the jdtls adapter implements it, against {@link FakeJdtls}: a language server
@@ -1992,6 +1998,350 @@ class JdtlsLanguageServerTest {
                 assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
                         .isInstanceOf(JdtlsException.class)
                         .hasMessageContaining("Interrupted while waiting for the extraction");
+                assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+    }
+
+    @Nested
+    class ExtractingAMethod {
+
+        private static final String ORIGINAL = """
+            class Totals {
+                int quadrupled(int count) {
+                    return count * 2 * 2;
+                }
+
+                int doubled(int count) {
+                    return count * 2;
+                }
+            }
+            """;
+
+        /** The text once jdtls' edit is applied: the method carries the name jdtls proposed. */
+        private static final String PROPOSED = """
+            class Totals {
+                int quadrupled(int count) {
+                    return extracted(count);
+                }
+
+                private int extracted(int count) {
+                    return count * 2 * 2;
+                }
+
+                int doubled(int count) {
+                    return count * 2;
+                }
+            }
+            """;
+
+        /** What jdtls inserts after the method: a blank line and the declaration of the new one. */
+        private static final String DECLARATION = """
+
+
+                private int extracted(int count) {
+                    return count * 2 * 2;
+                }\
+            """;
+
+        private final fr.craft.gabier.editing.domain.Range selection =
+                new fr.craft.gabier.editing.domain.Range(new Position(2, 15), new Position(2, 28));
+        private Path totals;
+
+        @BeforeEach
+        void writeTheSources() throws IOException {
+            totals = write("src/main/java/demo/Totals.java", ORIGINAL);
+        }
+
+        private static org.eclipse.lsp4j.Position at(int line, int column) {
+            return new org.eclipse.lsp4j.Position(line, column);
+        }
+
+        private WorkspaceEdit extractsTheMethod() {
+            return new WorkspaceEdit(List.of(Either.forLeft(new TextDocumentEdit(
+                    new VersionedTextDocumentIdentifier(totals.toUri().toString(), 1),
+                    List.of(
+                            Either.forLeft(new TextEdit(new Range(at(2, 15), at(2, 28)), "extracted(count)")),
+                            Either.forLeft(new TextEdit(new Range(at(3, 5), at(3, 5)), DECLARATION)))))));
+        }
+
+        /** What jdtls answers to the rename, for the text it was given: the call and the declaration. */
+        private WorkspaceEdit renamesTo(String name) {
+            return new WorkspaceEdit(List.of(Either.forLeft(new TextDocumentEdit(
+                    new VersionedTextDocumentIdentifier(totals.toUri().toString(), 1),
+                    List.of(
+                            Either.forLeft(new TextEdit(new Range(at(2, 15), at(2, 24)), name)),
+                            Either.forLeft(new TextEdit(new Range(at(5, 16), at(5, 25)), name)))))));
+        }
+
+        private CompletableFuture<JdtlsServer.RefactorEdit> proposal() {
+            var where = new JdtlsServer.RenamePosition(
+                    totals.toUri().toString(), PROPOSED.indexOf("extracted"), "extracted".length());
+            var follow = new JdtlsServer.FollowUp("java.action.rename", List.of(where));
+
+            return CompletableFuture.completedFuture(new JdtlsServer.RefactorEdit(extractsTheMethod(), follow, null));
+        }
+
+        private Either<SymbolInformation, DocumentSymbol> symbol(String label, SymbolKind kind) {
+            return Either.forLeft(new SymbolInformation(
+                    label, kind, new Location(totals.toUri().toString(), new Range(at(0, 0), at(0, 0))), "Totals"));
+        }
+
+        /** The members of the text jdtls was given, as it lists them: its label is {@code name(parameters) : type}. */
+        private CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> members(String... methods) {
+            var listed = new ArrayList<Either<SymbolInformation, DocumentSymbol>>();
+            listed.add(symbol("Totals", SymbolKind.Class));
+            for (String method : methods) {
+                listed.add(symbol(method, SymbolKind.Method));
+            }
+
+            return CompletableFuture.completedFuture(listed);
+        }
+
+        private void scriptTheExtraction(String name) {
+            fake.refactorEditAnswers(proposal())
+                    .publishesOnOpen(totals, List.of())
+                    .documentSymbolAnswers(
+                            members("quadrupled(int) : int", "extracted(int) : int", "doubled(int) : int"))
+                    .renameAnswers(CompletableFuture.completedFuture(renamesTo(name)));
+        }
+
+        private static String applied(String text, ChangeSet changes) {
+            var edit = (FileChange.EditFile) changes.changes().getFirst();
+
+            return SourceText.edited(edit.file(), text, edit.edits());
+        }
+
+        @Test
+        void asksJdtlsForTheExtractionOfTheSelectionIntoAMethodAsGiven() throws Exception {
+            scriptTheExtraction("scaled");
+
+            try (var server = started()) {
+                server.extractMethod(totals, selection, "scaled");
+
+                assertThat(fake.refactorEditRequests()).hasSize(1);
+                var request = fake.refactorEditRequests().getFirst();
+                assertThat(request.command()).isEqualTo("extractMethod");
+                assertThat(request.context().getTextDocument().getUri())
+                        .isEqualTo(totals.toUri().toString());
+                assertThat(request.context().getRange()).isEqualTo(new Range(at(2, 15), at(2, 28)));
+            }
+        }
+
+        @Test
+        void renamesTheMethodToTheNameAskedForOnTheTextThatJdtlsGaveAfterLookingAtItsMethods() throws Exception {
+            scriptTheExtraction("scaled");
+
+            try (var server = started()) {
+                server.extractMethod(totals, selection, "scaled");
+
+                assertThat(fake.opened())
+                        .containsExactly(new FakeJdtls.Opened(totals.toUri().toString(), PROPOSED));
+                assertThat(fake.renamed()).hasSize(1);
+                assertThat(fake.renamed().getFirst().getPosition()).isEqualTo(at(2, 15));
+                assertThat(fake.renamed().getFirst().getNewName()).isEqualTo("scaled");
+                assertThat(fake.received())
+                        .containsExactly(
+                                "getRefactorEdit Totals.java",
+                                "didOpen Totals.java",
+                                "documentSymbol Totals.java",
+                                "rename Totals.java");
+                assertThat(fake.closed(1)).containsExactly(totals.toUri().toString());
+                assertThat(totals).hasContent(ORIGINAL);
+            }
+        }
+
+        @Test
+        void answersOneEditOfTheFileAsItIsOnDiskWithTheNameAskedFor() throws Exception {
+            scriptTheExtraction("scaled");
+
+            try (var server = started()) {
+                ChangeSet changes = server.extractMethod(totals, selection, "scaled");
+
+                assertThat(changes.changes()).hasSize(1);
+                assertThat(applied(ORIGINAL, changes)).isEqualTo(PROPOSED.replace("extracted", "scaled"));
+            }
+        }
+
+        @Test
+        void keepsTheNameJdtlsProposedWhenThatIsTheNameAskedForWithoutRenamingAnything() throws Exception {
+            fake.refactorEditAnswers(proposal());
+
+            try (var server = started()) {
+                ChangeSet changes = server.extractMethod(totals, selection, "extracted");
+
+                assertThat(applied(ORIGINAL, changes)).isEqualTo(PROPOSED);
+                assertThat(fake.opened()).isEmpty();
+                assertThat(fake.renamed()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesANameOfAMethodTheClassHasWithTheParametersOfTheExtractedOneAndRenamesNothing() throws Exception {
+            scriptTheExtraction("doubled");
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractMethod(totals, selection, "doubled"))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME);
+                            assertThat(refusal.parameters())
+                                    .containsEntry("name", "doubled")
+                                    .containsEntry("line", "2")
+                                    .containsEntry("column", "15");
+                        });
+                assertThat(fake.renamed()).isEmpty();
+                assertThat(fake.closed(1)).containsExactly(totals.toUri().toString());
+                assertThat(totals).hasContent(ORIGINAL);
+            }
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"doubled(int) : String", "doubled(int)"})
+        void refusesTheNameOfAMethodThatDiffersOnlyByItsReturnTypeOrHasNone(String existing) throws Exception {
+            fake.refactorEditAnswers(proposal())
+                    .publishesOnOpen(totals, List.of())
+                    .documentSymbolAnswers(members("extracted(int) : int", existing));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractMethod(totals, selection, "doubled"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME));
+            }
+        }
+
+        @Test
+        void acceptsTheNameOfAMethodThatTheClassHasWithOtherParameters() throws Exception {
+            fake.refactorEditAnswers(proposal())
+                    .publishesOnOpen(totals, List.of())
+                    .documentSymbolAnswers(members("extracted(int) : int", "doubled(String) : int"))
+                    .renameAnswers(CompletableFuture.completedFuture(renamesTo("doubled")));
+
+            try (var server = started()) {
+                ChangeSet changes = server.extractMethod(totals, selection, "doubled");
+
+                assertThat(applied(ORIGINAL, changes)).isEqualTo(PROPOSED.replace("extracted", "doubled"));
+            }
+        }
+
+        @Test
+        void acceptsTheNameOfAMethodOfAnotherClassAndOfAFieldWithTheSameParameters() throws Exception {
+            var other = symbol("doubled(int) : int", SymbolKind.Method).getLeft();
+            other.setContainerName("Other");
+            fake.refactorEditAnswers(proposal())
+                    .publishesOnOpen(totals, List.of())
+                    .documentSymbolAnswers(CompletableFuture.completedFuture(List.of(
+                            symbol("extracted(int) : int", SymbolKind.Method),
+                            Either.forLeft(other),
+                            symbol("doubled(int) : int", SymbolKind.Field))))
+                    .renameAnswers(CompletableFuture.completedFuture(renamesTo("doubled")));
+
+            try (var server = started()) {
+                ChangeSet changes = server.extractMethod(totals, selection, "doubled");
+
+                assertThat(applied(ORIGINAL, changes)).isEqualTo(PROPOSED.replace("extracted", "doubled"));
+            }
+        }
+
+        @Test
+        void failsWhenJdtlsDoesNotListTheMethodItExtracted() throws Exception {
+            fake.refactorEditAnswers(proposal())
+                    .publishesOnOpen(totals, List.of())
+                    .documentSymbolAnswers(members("doubled(int) : int"));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractMethod(totals, selection, "scaled"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("did not list the method extracted");
+                assertThat(fake.closed(1)).containsExactly(totals.toUri().toString());
+            }
+        }
+
+        @Test
+        void failsWhenJdtlsListsNothingForTheText() throws Exception {
+            fake.refactorEditAnswers(proposal())
+                    .publishesOnOpen(totals, List.of())
+                    .documentSymbolAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractMethod(totals, selection, "scaled"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("did not list the method extracted");
+            }
+        }
+
+        @Test
+        void refusesANameJdtlsDeclinesForTheMethod() throws Exception {
+            fake.refactorEditAnswers(proposal())
+                    .publishesOnOpen(totals, List.of())
+                    .documentSymbolAnswers(members("extracted(int) : int"))
+                    .renameAnswers(CompletableFuture.failedFuture(new ResponseErrorException(
+                            new ResponseError(ResponseErrorCode.InvalidRequest, "not an identifier", null))));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractMethod(totals, selection, "1st"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME));
+                assertThat(fake.closed(1)).containsExactly(totals.toUri().toString());
+            }
+        }
+
+        @Test
+        void refusesASelectionJdtlsHasNoExtractionFor() throws Exception {
+            fake.refactorEditAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractMethod(totals, selection, "scaled"))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE);
+                            assertThat(refusal.parameters())
+                                    .containsEntry("file", totals.toString())
+                                    .containsEntry("line", "2")
+                                    .containsEntry("column", "15")
+                                    .containsEntry("endLine", "2")
+                                    .containsEntry("endColumn", "28");
+                        });
+                assertThat(fake.opened()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesASelectionForWhichJdtlsGivesNoEdit() throws Exception {
+            fake.refactorEditAnswers(CompletableFuture.completedFuture(
+                    new JdtlsServer.RefactorEdit(null, null, "Cannot extract this selection")));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractMethod(totals, selection, "scaled"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE));
+            }
+        }
+
+        @Test
+        void refusesAFileOutsideTheProjectWithoutAskingJdtls() throws Exception {
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractMethod(root.resolve("../Elsewhere.java"), selection, "scaled"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key())
+                                        .isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+                assertThat(fake.refactorEditRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
+            scriptTheExtraction("scaled");
+
+            try (var server = started()) {
+                Thread.currentThread().interrupt();
+
+                assertThatThrownBy(() -> server.extractMethod(totals, selection, "scaled"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining(
+                                "Interrupted while waiting for the extraction of the selection into a method");
                 assertThat(Thread.interrupted()).isTrue();
             }
         }

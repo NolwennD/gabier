@@ -25,7 +25,7 @@ Usage:
   gabier [--json] stop
 ...
 $ gabier help frobnicate
-Usage error: Unknown command; the commands are diagnostics, rename, organize-imports, extract-variable, status, stop, help (usage-error; command=frobnicate)
+Usage error: Unknown command; the commands are diagnostics, rename, organize-imports, extract-variable, extract-method, status, stop, help (usage-error; command=frobnicate)
 ```
 
 **Where the text lives.** The help text of every command is written once, in the enum `Command` of the cli

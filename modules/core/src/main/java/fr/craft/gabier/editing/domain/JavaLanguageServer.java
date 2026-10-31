@@ -45,6 +45,18 @@ public interface JavaLanguageServer {
     ChangeSet extractVariable(Path file, Range selection, String name);
 
     /**
+     * What extracting the statements, or the expression, of a selection into a new method changes: the selection is
+     * replaced by a call, and the method, which carries the given name and not one the server would propose, is
+     * declared in the class; the server works out its parameters and its return value. Only the file itself is edited.
+     *
+     * @param selection the statements or the expression, from the first character to the end of the last
+     * @return the change set to apply
+     * @throws LanguageServerException if the server is not ready, the file is not a file of its project (outside it, missing or a folder), the selection cannot
+     *     be extracted (half a statement, a {@code return} of a branch) or the name is not valid for the method
+     */
+    ChangeSet extractMethod(Path file, Range selection, String name);
+
+    /**
      * What organizing the imports of a file changes: the missing imports are added, the unused ones removed, and the
      * rest ordered as the server is configured to (for gabier, as the project keeps them, with no import collapsed into
      * a star). Only the file itself is edited.

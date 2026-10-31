@@ -10,7 +10,9 @@ repository does it with `gabier` (installed on the PATH by `mise run install`; t
   the order of the formatter and never writes a star import; run `gabier diagnostics <file>` first, a file whose imports
   jdtls cannot resolve loses them);
 - `gabier extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>` to turn an expression into a local
-  variable (1-based positions, end excluded). A Java refactoring that gabier has a command for goes through it.
+  variable, and `gabier extract-method [--dry-run] <file> <line>:<column> <line>:<column> <name>` to turn statements, or an
+  expression, into a method (1-based positions, end excluded). A Java refactoring that gabier has a command for goes
+  through it.
 
 An operation gabier does not have yet is done as a text edit and becomes an issue (`.claude/rules/workflow.md`, step 4 of the
 development loop). The daemon serves one project: from a worktree, run the command in that worktree (the daemon of another

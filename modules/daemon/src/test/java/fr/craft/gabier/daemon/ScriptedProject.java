@@ -140,6 +140,11 @@ final class ScriptedProject implements ServedProject {
     }
 
     @Override
+    public ChangeSet extractMethod(Path file, Range selection, String name) {
+        return server.extractMethod(file, selection, name);
+    }
+
+    @Override
     public Optional<ChangeSet> organizeImports(Path file) {
         return server.organizeImports(file);
     }

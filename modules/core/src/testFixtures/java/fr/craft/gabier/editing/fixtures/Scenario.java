@@ -68,7 +68,11 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
         switch (answer) {
             case Answer.Diagnosed _ -> require(request instanceof Request.Diagnostics, "diagnosed", request);
             case Answer.Renamed _ -> require(request instanceof Request.Rename, "renamed", request);
-            case Answer.Extracted _ -> require(request instanceof Request.ExtractVariable, "extracted", request);
+            case Answer.Extracted _ ->
+                require(
+                        request instanceof Request.ExtractVariable || request instanceof Request.ExtractMethod,
+                        "extracted",
+                        request);
             case Answer.Organized _ -> require(request instanceof Request.OrganizeImports, "organized", request);
             case Answer.AlreadyOrganized _ ->
                 require(request instanceof Request.OrganizeImports, "already organized", request);
@@ -131,7 +135,12 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
-                    case NO_SUCH_SYMBOL, INVALID_NAME, NOT_AN_EXPRESSION, AMBIGUOUS_IMPORTS, UNRESOLVED_IMPORTS ->
+                    case NO_SUCH_SYMBOL,
+                            INVALID_NAME,
+                            NOT_AN_EXPRESSION,
+                            NOT_EXTRACTABLE,
+                            AMBIGUOUS_IMPORTS,
+                            UNRESOLVED_IMPORTS ->
                         throw new IllegalArgumentException("A request for diagnostics cannot get " + key);
                 };
             }
@@ -158,7 +167,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case AMBIGUOUS_IMPORTS -> LanguageServerException.ambiguousImports(file, details);
                     case UNRESOLVED_IMPORTS -> LanguageServerException.unresolvedImports(file, details);
-                    case NO_SUCH_SYMBOL, INVALID_NAME, NOT_AN_EXPRESSION ->
+                    case NO_SUCH_SYMBOL, INVALID_NAME, NOT_AN_EXPRESSION, NOT_EXTRACTABLE ->
                         throw new IllegalArgumentException("A request to organize imports cannot get " + key);
                 };
             }
@@ -187,7 +196,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NO_SUCH_SYMBOL -> LanguageServerException.noSuchSymbol(file, position);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, position, newName);
-                    case NOT_AN_EXPRESSION, AMBIGUOUS_IMPORTS, UNRESOLVED_IMPORTS ->
+                    case NOT_AN_EXPRESSION, NOT_EXTRACTABLE, AMBIGUOUS_IMPORTS, UNRESOLVED_IMPORTS ->
                         throw new IllegalArgumentException("A rename cannot get " + key);
                 };
             }
@@ -216,8 +225,37 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NOT_AN_EXPRESSION -> LanguageServerException.notAnExpression(file, selection);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, selection.start(), name);
-                    case NO_SUCH_SYMBOL, AMBIGUOUS_IMPORTS, UNRESOLVED_IMPORTS ->
+                    case NO_SUCH_SYMBOL, NOT_EXTRACTABLE, AMBIGUOUS_IMPORTS, UNRESOLVED_IMPORTS ->
                         throw new IllegalArgumentException("An extraction of a variable cannot get " + key);
+                };
+            }
+        }
+
+        /** The extraction of the statements, or the expression, of a selection into a method of a given name. */
+        record ExtractMethod(Path file, Range selection, String name) implements Request {
+
+            public ExtractMethod {
+                Assert.notNull("file", file);
+                Assert.notNull("selection", selection);
+                Assert.notNull("name", name);
+            }
+
+            @Override
+            public ExtractMethod resolvedIn(Path root) {
+                return new ExtractMethod(resolve(root, file), selection, name);
+            }
+
+            @Override
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
+                return switch (key) {
+                    case NOT_READY -> LanguageServerException.notReady();
+                    case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
+                    case FILE_MISSING -> LanguageServerException.fileMissing(file);
+                    case NOT_A_FILE -> LanguageServerException.notAFile(file);
+                    case NOT_EXTRACTABLE -> LanguageServerException.notExtractable(file, selection);
+                    case INVALID_NAME -> LanguageServerException.invalidName(file, selection.start(), name);
+                    case NO_SUCH_SYMBOL, NOT_AN_EXPRESSION, AMBIGUOUS_IMPORTS, UNRESOLVED_IMPORTS ->
+                        throw new IllegalArgumentException("An extraction of a method cannot get " + key);
                 };
             }
         }
@@ -272,7 +310,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             }
         }
 
-        /** The change set that extracts an expression into a variable: only edits of its file. */
+        /** The change set that extracts an expression into a variable, or a selection into a method: only edits of its file. */
         record Extracted(ChangeSet changes) implements Answer {
 
             public Extracted {

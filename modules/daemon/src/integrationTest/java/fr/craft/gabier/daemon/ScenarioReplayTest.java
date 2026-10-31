@@ -86,7 +86,8 @@ class ScenarioReplayTest {
         return scenario.request() instanceof Request.Diagnostics
                 || scenario.request() instanceof Request.Rename
                 || scenario.request() instanceof Request.OrganizeImports
-                || scenario.request() instanceof Request.ExtractVariable;
+                || scenario.request() instanceof Request.ExtractVariable
+                || scenario.request() instanceof Request.ExtractMethod;
     }
 
     /**
@@ -262,6 +263,8 @@ class ScenarioReplayTest {
             case Request.OrganizeImports organize -> server.organizeImports(organize.file());
             case Request.ExtractVariable extract ->
                 server.extractVariable(extract.file(), extract.selection(), extract.name());
+            case Request.ExtractMethod extract ->
+                server.extractMethod(extract.file(), extract.selection(), extract.name());
         };
     }
 
