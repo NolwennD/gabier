@@ -153,6 +153,15 @@ start cost little):
 Only when no other worker is in flight: its build runs on the same daemon. With one in flight, skip it and say so in the
 report; the last ticket to be shipped stops the daemon.
 
+Then stop the gabier daemons of worktrees that no longer exist (a worker that ended without stopping its own):
+
+```bash
+sh scripts/stop-stray-daemons.sh
+```
+
+It leaves alone the daemon of every project that exists, those of the workers in flight included, so it is safe whatever
+is running.
+
 ### 6. Report, then the next ticket
 
 Report faithfully: the issue closed, the commits now on `main` (`git log --oneline main -n <count>`), the `bin/ci`

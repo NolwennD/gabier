@@ -33,6 +33,9 @@ git rev-parse --verify main && git status --short logbook
 - Inside a worktree (`git rev-parse --git-dir` differs from `git rev-parse --git-common-dir`). Refuse: "This is a ticket
   worktree: a subagent working a ticket does not open tickets. Report to your supervisor."
 
+Then stop the gabier daemons that nobody uses (a worker stopped before it could stop its own): `sh scripts/stop-stray-daemons.sh`.
+It leaves alone every daemon whose project exists, so a worker in flight is not touched.
+
 ### 1. The issue
 
 Look first for an issue already open on the subject, never two for one piece of work:

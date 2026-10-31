@@ -15,8 +15,14 @@ repository does it with `gabier` (installed on the PATH by `mise run install`; t
   through it.
 
 An operation gabier does not have yet is done as a text edit and becomes an issue (`.claude/rules/workflow.md`, step 4 of the
-development loop). The daemon serves one project: from a worktree, run the command in that worktree (the daemon of another
-checkout keeps its own project: `gabier stop` first).
+development loop). The daemon serves one project, and there is one socket per user: two worktrees would share a daemon
+and a command run in one would change the files of the other. **In a worktree, a worker gives gabier a socket of its own**
+and runs the command in that worktree: prefix every call, the shell does not keep variables from one command to the next,
+with `GABIER_SOCKET="$XDG_RUNTIME_DIR/gabier/$(basename "$(git rev-parse --show-toplevel)").sock"` (the folder of the default
+socket, `/tmp/gabier-<uid>` when `XDG_RUNTIME_DIR` is not set; a socket path holds 107 bytes at most), `gabier status` and
+`gabier stop` included. The worker ends with `gabier stop` on that socket,
+before its report. The skills `ticket` and `ship` run `scripts/stop-stray-daemons.sh`, which stops the daemon of a worktree
+that no longer exists, for a worker that was stopped before it could.
 
 **A friction met while using gabier is a ticket**: a wrong answer, a refusal that is not explained, a command that is
 missing, a slow answer. The worker reports it to its supervisor with the command, the file and the answer, as for any
