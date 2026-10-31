@@ -1039,6 +1039,13 @@ class JdtlsLanguageServerTest {
     @Nested
     class OrganizingImports {
 
+        private static final String SQL_DATE_AND_UTIL_DATE = """
+            [{"candidates": [{"fullyQualifiedName": "java.util.Date", "id": "java.util.Date@2"},
+                             {"fullyQualifiedName": "sun.util.calendar.BaseCalendar.Date", "id": "x@3"},
+                             {"fullyQualifiedName": "java.sql.Date", "id": "java.sql.Date@1"}],
+              "range": {"start": {"line": 6, "character": 4}, "end": {"line": 6, "character": 8}}}]
+            """;
+
         private Path greeter;
 
         @BeforeEach
@@ -1051,6 +1058,16 @@ class JdtlsLanguageServerTest {
                             + "class Greeter {\n"
                             + "    List<String> names;\n"
                             + "}\n");
+            // An import that jdtls removes is judged by the diagnostics of the file: none, unless a test says.
+            fake.publishesOnOpen(greeter, List.of());
+        }
+
+        private org.eclipse.lsp4j.Diagnostic problem(DiagnosticSeverity severity, int line) {
+            return new org.eclipse.lsp4j.Diagnostic(
+                    new Range(new org.eclipse.lsp4j.Position(line, 7), new org.eclipse.lsp4j.Position(line, 20)),
+                    "The import java.util.Set cannot be resolved",
+                    severity,
+                    "jdt");
         }
 
         private CompletableFuture<List<Either<Command, CodeAction>>> offers(CodeAction action) {
@@ -1101,7 +1118,8 @@ class JdtlsLanguageServerTest {
                 assertThat(request.getContext().getDiagnostics()).isEmpty();
                 assertThat(fake.resolveRequests()).hasSize(1);
                 assertThat(fake.resolveRequests().getFirst().getData()).isEqualTo(new JsonPrimitive("jdtls-data"));
-                assertThat(fake.received()).containsExactly("codeAction Greeter.java", "resolveCodeAction");
+                assertThat(fake.received())
+                        .containsExactly("codeAction Greeter.java", "resolveCodeAction", "didOpen Greeter.java");
             }
         }
 
@@ -1214,7 +1232,8 @@ class JdtlsLanguageServerTest {
                         .containsExactly(
                                 "didChangeWatchedFiles",
                                 "acknowledged .gabier-changes-taken-1",
-                                "codeAction Greeter.java");
+                                "codeAction Greeter.java",
+                                "didOpen Greeter.java");
                 assertThat(fake.watched().getFirst().getChanges())
                         .extracting(change -> change.getType() + " " + change.getUri())
                         .containsExactly(
@@ -1226,13 +1245,133 @@ class JdtlsLanguageServerTest {
         }
 
         @Test
-        void opensNothing() throws Exception {
-            fake.codeActionAnswers(offers(resolvedAction(removeSet())));
+        void opensNothingWhenTheEditRemovesNoImport() throws Exception {
+            var reorder = new TextEdit(
+                    new Range(new org.eclipse.lsp4j.Position(2, 0), new org.eclipse.lsp4j.Position(4, 0)),
+                    "import java.util.List;\nimport java.util.Set;\n");
+            fake.codeActionAnswers(offers(resolvedAction(reorder)));
 
             try (var server = started()) {
-                server.organizeImports(greeter);
+                assertThat(server.organizeImports(greeter)).isPresent();
 
                 assertThat(fake.opened()).isEmpty();
+            }
+        }
+
+        @Test
+        void asksTheDiagnosticsOfTheFileWhenTheEditRemovesAnImportAndKeepsTheEditWithoutError() throws Exception {
+            fake.codeActionAnswers(offers(resolvedAction(removeSet())))
+                    .publishesOnOpen(greeter, List.of(problem(DiagnosticSeverity.Warning, 2)));
+
+            try (var server = started()) {
+                // An import that nothing uses has a warning, never used: that is jdtls judging it.
+                assertThat(server.organizeImports(greeter)).contains(removalOfSet());
+
+                assertThat(fake.opened()).hasSize(1);
+            }
+        }
+
+        @Test
+        void refusesAnImportThatJdtlsRemovesAndReportsAnErrorOnAndNamesIt() throws Exception {
+            fake.codeActionAnswers(offers(resolvedAction(removeSet())))
+                    .publishesOnOpen(greeter, List.of(problem(DiagnosticSeverity.Error, 2)));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.organizeImports(greeter))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.UNRESOLVED_IMPORTS);
+                            assertThat(refusal.parameters())
+                                    .containsEntry("file", greeter.toString())
+                                    .containsEntry("imports", "java.util.Set");
+                        });
+            }
+        }
+
+        @Test
+        void namesTheStaticImportsAndEveryImportRemovedThatHasAnError() throws Exception {
+            Path statics = write(
+                    "src/main/java/demo/Statics.java",
+                    "package demo;\n\n"
+                            + "import static java.util.Map.entry;\n"
+                            + "import java.util.Set;\n"
+                            + "import java.util.List;\n\n"
+                            + "class Statics {\n"
+                            + "    List<String> names;\n"
+                            + "}\n");
+            var action = lazyAction();
+            action.setEdit(new WorkspaceEdit(Map.of(
+                    statics.toUri().toString(),
+                    List.of(new TextEdit(
+                            new Range(new org.eclipse.lsp4j.Position(2, 0), new org.eclipse.lsp4j.Position(4, 0)),
+                            "")))));
+            fake.codeActionAnswers(offers(action))
+                    .publishesOnOpen(
+                            statics,
+                            List.of(
+                                    problem(DiagnosticSeverity.Error, 2),
+                                    problem(DiagnosticSeverity.Error, 3),
+                                    problem(DiagnosticSeverity.Error, 3),
+                                    problem(DiagnosticSeverity.Error, 6)));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.organizeImports(statics))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.parameters())
+                                        .containsEntry("imports", "java.util.Map.entry, java.util.Set"));
+            }
+        }
+
+        @Test
+        void keepsTheEditWhenTheErrorsAreNotOnTheImportsItRemoves() throws Exception {
+            fake.codeActionAnswers(offers(resolvedAction(removeSet())))
+                    .publishesOnOpen(greeter, List.of(problem(DiagnosticSeverity.Error, 6)));
+
+            try (var server = started()) {
+                assertThat(server.organizeImports(greeter)).contains(removalOfSet());
+            }
+        }
+
+        @Test
+        void refusesATypeSeveralPackagesDeclareWithItsCandidatesInOrderAndChoosesNone() throws Exception {
+            fake.codeActionAnswers(offers(resolvedAction(removeSet()))).asksToChooseImports(SQL_DATE_AND_UTIL_DATE);
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.organizeImports(greeter))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.AMBIGUOUS_IMPORTS);
+                            assertThat(refusal.parameters())
+                                    .containsEntry(
+                                            "candidates",
+                                            "java.sql.Date, java.util.Date, sun.util.calendar.BaseCalendar.Date");
+                        });
+                assertThat(fake.commandAnswers()).containsExactly(List.of());
+            }
+        }
+
+        @Test
+        void refusesATypeSeveralPackagesDeclareEvenWhenJdtlsHasNoEditToGive() throws Exception {
+            fake.codeActionAnswers(CompletableFuture.completedFuture(List.of()))
+                    .asksToChooseImports(SQL_DATE_AND_UTIL_DATE);
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.organizeImports(greeter))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal ->
+                                        assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.AMBIGUOUS_IMPORTS));
+            }
+        }
+
+        @Test
+        void doesNotCarryTheCandidatesOfARequestOverToTheNext() throws Exception {
+            fake.codeActionAnswers(offers(resolvedAction(removeSet()))).asksToChooseImports(SQL_DATE_AND_UTIL_DATE);
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.organizeImports(greeter)).isInstanceOf(LanguageServerException.class);
+                fake.asksToChooseImports("[]");
+
+                assertThat(server.organizeImports(greeter)).contains(removalOfSet());
             }
         }
 

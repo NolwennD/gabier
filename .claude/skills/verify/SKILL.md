@@ -88,9 +88,11 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
     temporary broken source (`GabierProbeBroken.java`, deleted whatever happens) next to it must get its error, and a
     file outside the checkout is refused. It fails at once, with the exit code in the message, when jdtls exits, and at
     once on a `language/status` of type `Error`; a timeout says what was awaited and for how long. It then organizes
-    the imports of every source of the checkout (main, test, fixtures, integration tests, `architecture`; not the
-    `fakeServed` source set, whose fixtures jdtls cannot see): none may change, and a copy of a main source and of a test
-    source with an unused import added must get the edit that removes it.
+    the imports of every source of the checkout (main, test, fixtures, integration tests, `architecture`): none may
+    change, and a copy of a main source and of a test source with an unused import added must get the edit that removes
+    it. The `fakeServed` source set, whose fixtures jdtls cannot see, is the file of the refusal: organizing its imports
+    is refused as `language-server-unresolved-imports`, naming the three imports jdtls would delete, and the file is not
+    touched.
   - `ScenarioReplayTest` replays the contract scenarios of the core (`Scenarios.all()`) that the adapter implements
     against a real jdtls started on each scenario's project (written in a temporary folder, with an Eclipse `.project`
     and `.classpath` that jdtls imports without network), and fails on any difference. The answer of a rename is

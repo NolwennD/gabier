@@ -119,6 +119,10 @@ class ScenarioTest {
                 .isThrownBy(() -> scenario(diagnostics, new Answer.Refused(LanguageServerErrorKey.INVALID_NAME)));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> scenario(diagnostics, new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(diagnostics, new Answer.Refused(LanguageServerErrorKey.AMBIGUOUS_IMPORTS)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(diagnostics, new Answer.Refused(LanguageServerErrorKey.UNRESOLVED_IMPORTS)));
     }
 
     @Test
@@ -148,6 +152,10 @@ class ScenarioTest {
         assertThat(invalidName.parameters()).containsEntry("name", "1st");
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> rename.refusal(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> rename.refusal(LanguageServerErrorKey.AMBIGUOUS_IMPORTS));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> rename.refusal(LanguageServerErrorKey.UNRESOLVED_IMPORTS));
     }
 
     @Test
@@ -168,6 +176,10 @@ class ScenarioTest {
                 .isEqualTo(Map.of("file", FILE.toString(), "line", "0", "column", "6", "name", "1st"));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.AMBIGUOUS_IMPORTS));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.UNRESOLVED_IMPORTS));
     }
 
     @Test
@@ -178,6 +190,12 @@ class ScenarioTest {
                 .isEqualTo(LanguageServerErrorKey.NOT_READY);
         assertThat(organize.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
                 .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(organize.refusal(LanguageServerErrorKey.UNRESOLVED_IMPORTS, List.of("a.B"))
+                        .parameters())
+                .isEqualTo(Map.of("file", FILE.toString(), "imports", "a.B"));
+        assertThat(organize.refusal(LanguageServerErrorKey.AMBIGUOUS_IMPORTS, List.of("a.B", "c.B"))
+                        .parameters())
+                .isEqualTo(Map.of("file", FILE.toString(), "candidates", "a.B, c.B"));
         assertThat(organize.refusal(LanguageServerErrorKey.FILE_MISSING).key())
                 .isEqualTo(LanguageServerErrorKey.FILE_MISSING);
         assertThat(organize.refusal(LanguageServerErrorKey.NOT_A_FILE).key())

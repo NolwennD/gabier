@@ -2,9 +2,11 @@ package fr.craft.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.google.gson.JsonParser;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.eclipse.lsp4j.ExecuteCommandParams;
 import org.eclipse.lsp4j.MessageParams;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
 import org.eclipse.lsp4j.Registration;
@@ -22,7 +24,9 @@ class JdtlsClientTest {
     private final List<PublishDiagnosticsParams> published = new ArrayList<>();
     private final List<Registration> registered = new ArrayList<>();
     private final List<Unregistration> unregistered = new ArrayList<>();
-    private final JdtlsClient client = new JdtlsClient(log::add, published::add, registered::add, unregistered::add);
+    private final ImportChoices choices = new ImportChoices();
+    private final JdtlsClient client =
+            new JdtlsClient(log::add, published::add, registered::add, unregistered::add, choices);
 
     @Test
     void handsEachRegistrationOfJdtlsOverAndAnswersIt() {
@@ -92,7 +96,7 @@ class JdtlsClientTest {
     void theEventsOfJdtlsAreKnownToLsp4jAndIgnored() {
         // Without the method, LSP4J logs a warning for every event jdtls sends: ProjectsImported, ClasspathUpdated...
         assertThat(ServiceEndpoints.getSupportedMethods(JdtlsClient.class))
-                .containsKeys("language/status", "language/eventNotification");
+                .containsKeys("language/status", "language/eventNotification", "workspace/executeClientCommand");
 
         client.eventNotification(Map.of("eventType", 200.0, "data", List.of("file:///project/")));
 
@@ -110,5 +114,35 @@ class JdtlsClientTest {
         assertThat(client.showMessageRequest(new ShowMessageRequestParams())).isCompletedWithValue(null);
         assertThat(log).isEmpty();
         assertThat(published).isEmpty();
+    }
+
+    private static ExecuteCommandParams chooseImports(String selections) {
+        return new ExecuteCommandParams(
+                "java.action.organizeImports.chooseImports",
+                List.of("file:///project/A.java", JsonParser.parseString(selections), false));
+    }
+
+    @Test
+    void keepsTheCandidatesJdtlsAsksTheClientToChooseBetweenAndChoosesNone() {
+        var answer = client.executeClientCommand(chooseImports("""
+            [{"candidates": [{"fullyQualifiedName": "java.sql.Date", "id": "java.sql.Date@1"},
+                             {"fullyQualifiedName": "java.util.Date", "id": "java.util.Date@2"}],
+              "range": {"start": {"line": 6, "character": 4}, "end": {"line": 6, "character": 8}}},
+             {"candidates": [{"fullyQualifiedName": "java.awt.List", "id": "java.awt.List@3"},
+                             {"fullyQualifiedName": "java.util.List", "id": "java.util.List@4"}],
+              "range": {"start": {"line": 7, "character": 4}, "end": {"line": 7, "character": 8}}}]
+            """));
+
+        assertThat(choices.offered())
+                .containsExactly("java.sql.Date", "java.util.Date", "java.awt.List", "java.util.List");
+        assertThat(answer).isCompletedWithValue(List.of());
+    }
+
+    @Test
+    void ignoresTheOtherCommandsOfJdtlsAndChoosesNothingForThem() {
+        var answer = client.executeClientCommand(new ExecuteCommandParams("java.other", List.of("x")));
+
+        assertThat(choices.offered()).isEmpty();
+        assertThat(answer).isCompletedWithValue(List.of());
     }
 }

@@ -2,6 +2,7 @@ package fr.craft.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Map;
 import org.eclipse.lsp4j.ClientCapabilities;
 import org.junit.jupiter.api.Test;
 
@@ -70,5 +71,13 @@ class JdtlsCapabilitiesTest {
         var item = capabilities.getTextDocument().getCompletion().getCompletionItem();
 
         assertThat(item.getSnippetSupport()).isTrue();
+    }
+
+    @Test
+    void sayThatItCanBeAskedToChooseAnImportAndRunACommandOfJdtls() {
+        // Without them jdtls leaves a type that several packages declare unimported, without a word.
+        assertThat(JdtlsCapabilities.extended())
+                .containsExactlyInAnyOrderEntriesOf(
+                        Map.of("advancedOrganizeImportsSupport", true, "executeClientCommandSupport", true));
     }
 }

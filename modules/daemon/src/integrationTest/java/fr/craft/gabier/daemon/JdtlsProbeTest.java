@@ -68,6 +68,7 @@ class JdtlsProbeTest {
             checkBrokenCopy(server, clean);
             checkFileOutsideTheProject(server);
             checkImportsOfTheProjectAreInOrder(server, projectRoot, modules);
+            checkImportsJdtlsCannotResolveAreRefused(server, projectRoot);
         }
     }
 
@@ -156,8 +157,8 @@ class JdtlsProbeTest {
             try (Stream<Path> files = Files.walk(root)) {
                 files.filter(file -> file.getFileName().toString().endsWith(".java"))
                         .filter(JdtlsProbeTest::isClassSource)
-                        // Left out: jdtls does not see the packages of the test fixtures from this source set ("not
-                        // accessible"), so it drops the imports it cannot resolve instead of keeping them.
+                        // Apart: jdtls does not see the packages of the test fixtures from this source set ("not
+                        // accessible"), so it drops its imports: see checkImportsJdtlsCannotResolveAreRefused.
                         .filter(file -> !file.toString().contains("/src/fakeServed/"))
                         .sorted()
                         .forEach(sources::add);
@@ -186,6 +187,30 @@ class JdtlsProbeTest {
                 .orElseThrow();
         checkUntidyCopy(server, main);
         checkUntidyCopy(server, test);
+    }
+
+    /**
+     * The source set {@code fakeServed} has no classpath for the test fixtures in jdtls ("The package
+     * fr.craft.gabier.editing is not accessible" on its imports), and jdtls answers an edit that deletes those imports.
+     * Organizing them is refused, names the imports, and the file is not touched.
+     */
+    private static void checkImportsJdtlsCannotResolveAreRefused(JdtlsLanguageServer server, Path projectRoot)
+            throws IOException {
+        Path fakeServed =
+                projectRoot.resolve("modules/daemon/src/fakeServed/java/fr/craft/gabier/daemon/FakeServedMain.java");
+        String before = Files.readString(fakeServed);
+
+        assertThatThrownBy(() -> server.organizeImports(fakeServed))
+                .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                    System.out.println("organizing the imports of " + projectRoot.relativize(fakeServed) + ": "
+                            + refusal.getMessage());
+                    assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.UNRESOLVED_IMPORTS);
+                    assertThat(refusal.parameters().get("imports"))
+                            .contains("fr.craft.gabier.editing.fixtures.FakeJavaLanguageServer")
+                            .contains("fr.craft.gabier.editing.fixtures.Scenario")
+                            .contains("fr.craft.gabier.editing.fixtures.Scenarios");
+                });
+        assertThat(Files.readString(fakeServed)).as("the source is not touched").isEqualTo(before);
     }
 
     private static boolean hasImports(Path source) {

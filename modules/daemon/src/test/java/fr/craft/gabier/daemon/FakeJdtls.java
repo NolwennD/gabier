@@ -1,7 +1,9 @@
 package fr.craft.gabier.daemon;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.nio.channels.Channels;
 import java.nio.channels.Pipe;
@@ -48,10 +50,12 @@ import org.eclipse.lsp4j.jsonrpc.Launcher;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.eclipse.lsp4j.jsonrpc.messages.Either3;
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification;
+import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
 import org.eclipse.lsp4j.launch.LSPLauncher;
 import org.eclipse.lsp4j.services.LanguageClient;
 import org.eclipse.lsp4j.services.TextDocumentService;
 import org.eclipse.lsp4j.services.WorkspaceService;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A language server standing in for jdtls, in this process: it speaks LSP4J over pipes to the adapter, and a child
@@ -65,6 +69,9 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
 
         @JsonNotification("language/status")
         void status(JdtlsClient.Status status);
+
+        @JsonRequest("workspace/executeClientCommand")
+        CompletableFuture<Object> executeClientCommand(ExecuteCommandParams command);
     }
 
     /** What the server does with {@code shutdown}. */
@@ -124,6 +131,8 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private volatile Future<Void> serving;
     private final List<AutoCloseable> channels = new ArrayList<>();
     private volatile StatusClient client;
+    private volatile @Nullable JsonElement chooseImportsSelections;
+    private final List<Object> commandAnswers = new CopyOnWriteArrayList<>();
 
     /** The child that stands in for the jdtls process; the default one sleeps until it is killed. */
     FakeJdtls child(String... command) {
@@ -253,6 +262,22 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /** The {@code java/getRefactorEdit} requests received, in order. */
     List<JdtlsServer.RefactorEditParams> refactorEditRequests() {
         return refactorEditRequests;
+    }
+
+    /**
+     * Makes the server ask the client to choose between candidates, as jdtls does for a type that several packages
+     * declare ({@code java.action.organizeImports.chooseImports}), while it answers the next {@code codeAction}.
+     *
+     * @param selections the JSON the command carries as its second argument: the candidates of each use
+     */
+    FakeJdtls asksToChooseImports(String selections) {
+        this.chooseImportsSelections = JsonParser.parseString(selections);
+        return this;
+    }
+
+    /** What the client answered to the commands the server sent it, in order. */
+    List<Object> commandAnswers() {
+        return commandAnswers;
     }
 
     /** The {@code codeAction} requests received, in order. */
@@ -580,7 +605,18 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                 public CompletableFuture<List<Either<Command, CodeAction>>> codeAction(CodeActionParams params) {
                     received.add("codeAction " + named(params.getTextDocument().getUri()));
                     codeActionRequests.add(params);
-                    return codeActionAnswer;
+                    var selections = chooseImportsSelections;
+                    if (selections == null) {
+                        return codeActionAnswer;
+                    }
+                    // Asked and answered on other threads than this one: the answer is read by the thread that is here.
+                    return client.executeClientCommand(new ExecuteCommandParams(
+                                    "java.action.organizeImports.chooseImports",
+                                    List.of(params.getTextDocument().getUri(), selections, false)))
+                            .thenCompose(answer -> {
+                                commandAnswers.add(answer);
+                                return codeActionAnswer;
+                            });
                 }
 
                 @Override

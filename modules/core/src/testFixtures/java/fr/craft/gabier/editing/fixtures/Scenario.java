@@ -72,7 +72,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             case Answer.Organized _ -> require(request instanceof Request.OrganizeImports, "organized", request);
             case Answer.AlreadyOrganized _ ->
                 require(request instanceof Request.OrganizeImports, "already organized", request);
-            case Answer.Refused refused -> request.refusal(refused.key());
+            case Answer.Refused refused -> request.refusal(refused.key(), refused.details());
         }
     }
 
@@ -99,7 +99,18 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
          *
          * @throws IllegalArgumentException if the request cannot be refused for this reason
          */
-        LanguageServerException refusal(LanguageServerErrorKey key);
+        default LanguageServerException refusal(LanguageServerErrorKey key) {
+            return refusal(key, List.of());
+        }
+
+        /**
+         * The exception that a refusal with this key and these details is for this request.
+         *
+         * @param details what the refusal names: the imports the server cannot resolve, or the types it cannot choose
+         *     between
+         * @throws IllegalArgumentException if the request cannot be refused for this reason
+         */
+        LanguageServerException refusal(LanguageServerErrorKey key, List<String> details);
 
         /** The diagnostics of a file. */
         record Diagnostics(Path file) implements Request {
@@ -114,13 +125,13 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             }
 
             @Override
-            public LanguageServerException refusal(LanguageServerErrorKey key) {
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
-                    case NO_SUCH_SYMBOL, INVALID_NAME, NOT_AN_EXPRESSION ->
+                    case NO_SUCH_SYMBOL, INVALID_NAME, NOT_AN_EXPRESSION, AMBIGUOUS_IMPORTS, UNRESOLVED_IMPORTS ->
                         throw new IllegalArgumentException("A request for diagnostics cannot get " + key);
                 };
             }
@@ -139,12 +150,14 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             }
 
             @Override
-            public LanguageServerException refusal(LanguageServerErrorKey key) {
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
+                    case AMBIGUOUS_IMPORTS -> LanguageServerException.ambiguousImports(file, details);
+                    case UNRESOLVED_IMPORTS -> LanguageServerException.unresolvedImports(file, details);
                     case NO_SUCH_SYMBOL, INVALID_NAME, NOT_AN_EXPRESSION ->
                         throw new IllegalArgumentException("A request to organize imports cannot get " + key);
                 };
@@ -166,7 +179,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             }
 
             @Override
-            public LanguageServerException refusal(LanguageServerErrorKey key) {
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
@@ -174,7 +187,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NO_SUCH_SYMBOL -> LanguageServerException.noSuchSymbol(file, position);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, position, newName);
-                    case NOT_AN_EXPRESSION -> throw new IllegalArgumentException("A rename cannot get " + key);
+                    case NOT_AN_EXPRESSION, AMBIGUOUS_IMPORTS, UNRESOLVED_IMPORTS ->
+                        throw new IllegalArgumentException("A rename cannot get " + key);
                 };
             }
         }
@@ -194,7 +208,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             }
 
             @Override
-            public LanguageServerException refusal(LanguageServerErrorKey key) {
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
@@ -202,7 +216,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NOT_AN_EXPRESSION -> LanguageServerException.notAnExpression(file, selection);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, selection.start(), name);
-                    case NO_SUCH_SYMBOL ->
+                    case NO_SUCH_SYMBOL, AMBIGUOUS_IMPORTS, UNRESOLVED_IMPORTS ->
                         throw new IllegalArgumentException("An extraction of a variable cannot get " + key);
                 };
             }
@@ -293,11 +307,23 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             }
         }
 
-        /** The server declines the request: the exception to expect, which the request builds from this key. */
-        record Refused(LanguageServerErrorKey key) implements Answer {
+        /**
+         * The server declines the request: the exception to expect, which the request builds from this key and these
+         * details.
+         *
+         * @param details what the refusal names, none for most: the imports the server cannot resolve, or the types it
+         *     cannot choose between
+         */
+        record Refused(LanguageServerErrorKey key, List<String> details) implements Answer {
 
             public Refused {
                 Assert.notNull("key", key);
+                Assert.field("details", details).notNull().noNullElement();
+                details = List.copyOf(details);
+            }
+
+            public Refused(LanguageServerErrorKey key) {
+                this(key, List.of());
             }
 
             @Override

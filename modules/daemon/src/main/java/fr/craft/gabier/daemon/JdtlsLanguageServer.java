@@ -18,9 +18,11 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.SequencedMap;
 import java.util.concurrent.CompletableFuture;
@@ -395,14 +397,21 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * opened), after it has been told of the changes on disk. It has no edit for a file whose imports are as the
      * preferences of {@link JdtlsSettings#javaPreferences} want them: that is not a refusal, the answer is none.
      *
-     * @throws LanguageServerException if jdtls is not ready or the file is not in its project
+     * <p>jdtls does not always judge the imports, and gabier does not write what jdtls could not judge. A type that
+     * several packages declare and that the file uses without importing it is left out by jdtls, which asks the client
+     * to choose ({@code java.action.organizeImports.chooseImports}, enabled by {@link JdtlsCapabilities#extended()}):
+     * the request is refused with the candidates. An import that jdtls removes and reports an error on (it cannot
+     * resolve it) is refused too, with the import.
+     *
+     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, a type has several
+     *     candidates or an import cannot be resolved
      * @throws JdtlsException if jdtls dies or does not answer in time
      */
     @Override
     public synchronized Optional<ChangeSet> organizeImports(Path file) {
         JdtlsSession session = ready();
         Path path = normalized(file);
-        textInProject(session, path);
+        String original = textInProject(session, path);
         var params = new CodeActionParams(
                 new TextDocumentIdentifier(path.toUri().toString()),
                 new org.eclipse.lsp4j.Range(new org.eclipse.lsp4j.Position(0, 0), new org.eclipse.lsp4j.Position(0, 0)),
@@ -411,6 +420,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         JdtlsWatch watch = session.newWatch();
         try {
             takeInChangesOnDisk(session, watch);
+            session.importChoices().clear();
             var offered = watch.await(
                     "the organization of the imports of " + path,
                     () -> JdtlsRequests.unlessDeclined(service.codeAction(params)));
@@ -425,16 +435,90 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                         "the edit of the organization of the imports of " + path,
                         () -> JdtlsRequests.unlessDeclined(service.resolveCodeAction(unresolved)));
             }
+            refuseTheTypesJdtlsCannotChoose(session.importChoices(), path);
             List<FileChange> changes = action.map(CodeAction::getEdit)
                     .map(edit -> WorkspaceEdits.of(edit, JdtlsLanguageServer::textOnDisk))
                     .orElse(List.of());
+            if (changes.isEmpty()) {
+                return Optional.empty();
+            }
+            refuseTheImportsJdtlsCannotResolve(path, original, changes);
 
-            return changes.isEmpty() ? Optional.empty() : Optional.of(new ChangeSet(changes));
+            return Optional.of(new ChangeSet(changes));
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new JdtlsException(
                     "Interrupted while waiting for the organization of the imports of " + path, interrupted);
         }
+    }
+
+    /**
+     * jdtls leaves a type that several packages declare unimported, and asks the client to choose (see {@link
+     * JdtlsClient#executeClientCommand}); gabier does not choose for the agent, so it refuses and names the candidates.
+     */
+    private static void refuseTheTypesJdtlsCannotChoose(ImportChoices choices, Path path) {
+        List<String> candidates = choices.offered();
+        if (!candidates.isEmpty()) {
+            throw LanguageServerException.ambiguousImports(
+                    path,
+                    candidates.stream()
+                            .sorted(Comparator.comparing(JdtlsLanguageServer::simpleName)
+                                    .thenComparing(Comparator.naturalOrder()))
+                            .toList());
+        }
+    }
+
+    private static String simpleName(String qualified) {
+        return qualified.substring(qualified.lastIndexOf('.') + 1);
+    }
+
+    /**
+     * jdtls deletes the imports it cannot resolve along with the ones nothing uses: for a file whose imports it does not
+     * see (a source set it has no classpath for: "The package p is not accessible") that is every import, used or not.
+     * An import that the edit removes and that jdtls reports an error on is one it cannot judge: the request is refused,
+     * names it, and nothing is written. A resolved import that nothing uses has a warning, not an error. The
+     * diagnostics are asked only when the edit removes an import, because they cost a wait for jdtls to be quiet.
+     */
+    private void refuseTheImportsJdtlsCannotResolve(Path path, String original, List<FileChange> changes) {
+        List<String> before = original.lines().toList();
+        String after = SourceText.edited(path, original, editsOnTheFile(path, changes));
+        List<String> kept = after.lines().toList();
+        Map<Integer, String> removed = new LinkedHashMap<>();
+        for (int line = 0; line < before.size(); line++) {
+            String text = before.get(line);
+            if (text.startsWith("import ") && !kept.contains(text)) {
+                removed.put(line, importedName(text));
+            }
+        }
+        if (removed.isEmpty()) {
+            return;
+        }
+        List<String> unresolved = diagnostics(path).stream()
+                .filter(found -> found.severity() == Severity.ERROR)
+                .map(found -> removed.get(found.position().line()))
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (!unresolved.isEmpty()) {
+            throw LanguageServerException.unresolvedImports(path, unresolved);
+        }
+    }
+
+    /** {@code import static a.B.c;} is {@code a.B.c}. */
+    private static String importedName(String declaration) {
+        return declaration
+                .substring("import ".length(), declaration.lastIndexOf(';'))
+                .replaceFirst("^static\\s+", "")
+                .strip();
+    }
+
+    private static List<TextEdit> editsOnTheFile(Path path, List<FileChange> changes) {
+        return changes.stream()
+                .filter(FileChange.EditFile.class::isInstance)
+                .map(FileChange.EditFile.class::cast)
+                .filter(edits -> edits.file().equals(path))
+                .flatMap(edits -> edits.edits().stream())
+                .toList();
     }
 
     /**

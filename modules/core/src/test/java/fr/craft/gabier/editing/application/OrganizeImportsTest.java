@@ -25,6 +25,7 @@ class OrganizeImportsTest {
 
     private static final String UNTIDY = "src/main/java/demo/Untidy.java";
     private static final String TIDY = "src/main/java/demo/Tidy.java";
+    private static final String TWICE = "src/main/java/demo/Twice.java";
 
     /** What the project keeps: the static imports, a blank line, then every other import in one block. */
     private static final String ORGANIZED_IMPORTS = """
@@ -172,6 +173,16 @@ class OrganizeImportsTest {
                 Scenarios.ORGANIZE_IMPORTS_WHILE_THE_SERVER_IMPORTS,
                 LanguageServerErrorKey.NOT_READY,
                 "The language server is still importing the project: try again later");
+    }
+
+    @Test
+    void refusesAndWritesNothingWhenSeveralPackagesDeclareATypeTheFileUses() throws IOException {
+        assertRefused(
+                Scenarios.ORGANIZE_IMPORTS_OF_A_TYPE_TWO_PACKAGES_DECLARE,
+                LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
+                "The file {root}/" + TWICE + " uses types that several packages declare, so none was imported: "
+                        + "Date (java.sql.Date, java.util.Date, sun.util.calendar.BaseCalendar.Date, "
+                        + "sun.util.calendar.LocalGregorianCalendar.Date)");
     }
 
     @Test

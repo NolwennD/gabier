@@ -1,6 +1,7 @@
 package fr.craft.gabier.daemon;
 
 import java.util.List;
+import java.util.Map;
 import org.eclipse.lsp4j.ClientCapabilities;
 import org.eclipse.lsp4j.CodeActionCapabilities;
 import org.eclipse.lsp4j.CodeActionKind;
@@ -29,6 +30,17 @@ import org.eclipse.lsp4j.WorkspaceEditCapabilities;
 final class JdtlsCapabilities {
 
     private JdtlsCapabilities() {}
+
+    /**
+     * The capabilities of jdtls beyond the protocol ({@code initializationOptions.extendedClientCapabilities}, read by
+     * its {@code ClientPreferences}). A type that several packages declare is left unimported, without a word, unless
+     * the client says it can choose: {@code advancedOrganizeImportsSupport} makes {@code source.organizeImports} ask
+     * for the choice, with {@code java.action.organizeImports.chooseImports}, and {@code executeClientCommandSupport}
+     * lets jdtls send that command to the client ({@code workspace/executeClientCommand}).
+     */
+    static Map<String, Object> extended() {
+        return Map.of("advancedOrganizeImportsSupport", true, "executeClientCommandSupport", true);
+    }
 
     static ClientCapabilities forRefactoring() {
         var capabilities = new ClientCapabilities();

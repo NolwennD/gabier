@@ -230,7 +230,7 @@ class ScenarioReplayTest {
                         .isEmpty();
             }
             case Answer.Refused refused -> {
-                LanguageServerException expected = request.refusal(refused.key());
+                LanguageServerException expected = request.refusal(refused.key(), refused.details());
                 try {
                     var answer = ask(server, request);
                     differences.fail(

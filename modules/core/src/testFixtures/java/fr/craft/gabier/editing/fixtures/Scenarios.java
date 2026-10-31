@@ -68,7 +68,13 @@ import java.util.stream.IntStream;
  *       #ORGANIZE_IMPORTS_IN_ORDER}). What it writes is decided by two preferences it is started with (see {@code
  *       JdtlsSettings.javaPreferences}): with its defaults it would put a blank line between its groups of imports and
  *       collapse a hundred imports of one package into a star ({@link #ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS}). A type
- *       that two packages declare and that a file uses without importing it is left unresolved, without a word.
+ *       that several packages declare and that a file uses without importing it is left out by jdtls, without a word,
+ *       unless the client declares that it can choose ({@code advancedOrganizeImportsSupport}): jdtls then sends {@code
+ *       java.action.organizeImports.chooseImports} with the candidates, which the adapter keeps and refuses with
+ *       ({@link #ORGANIZE_IMPORTS_OF_A_TYPE_TWO_PACKAGES_DECLARE}). The imports of a file that jdtls cannot resolve
+ *       ("The package p is not accessible") are deleted by its edit; the adapter refuses them, which the catalogue
+ *       cannot show (a package that is not accessible needs a class path that a scenario project does not have) and
+ *       {@code JdtlsProbeTest} replays on the source set {@code fakeServed} of the checkout.
  * </ul>
  *
  * <p>The fake answers from the request alone: it does not check that the files a test wrote are the ones of the
@@ -89,6 +95,7 @@ public final class Scenarios {
     private static final Path UNTIDY = Path.of("src/main/java/demo/Untidy.java");
     private static final Path TIDY = Path.of("src/main/java/demo/Tidy.java");
     private static final Path WIDE = Path.of("src/main/java/demo/Wide.java");
+    private static final Path TWICE = Path.of("src/main/java/demo/Twice.java");
 
     /** How many types of one package, and constants of one class, {@code Wide} imports one by one: over the 99 of jdtls. */
     private static final int MANY = 100;
@@ -186,6 +193,21 @@ public final class Scenarios {
      * of the scenarios about imports.
      */
     private static final Map<Path, String> IMPORTS_PROJECT = importsProject();
+
+    /** {@code Date}, used without an import, is declared by {@code java.util} and by {@code java.sql}. */
+    private static final String TWICE_SOURCE = """
+        package demo;
+
+        import java.util.List;
+
+        public class Twice {
+            List<String> names;
+            Date when;
+        }
+        """;
+
+    /** The one file whose import is ambiguous: the project does not compile as it is, on purpose. */
+    private static final Map<Path, String> AMBIGUOUS_IMPORTS_PROJECT = Map.of(TWICE, TWICE_SOURCE);
 
     /** The project after {@link #RENAME_TYPE}: the type is {@code Welcomer}, in its own file, and {@code Main} uses it. */
     private static final Map<Path, String> RENAMED_PROJECT = Map.of(
@@ -344,6 +366,24 @@ public final class Scenarios {
             new Request.OrganizeImports(WIDE),
             new Answer.AlreadyOrganized());
 
+    /**
+     * {@code Date}, used without an import: several packages declare it (jdtls offers the nested types of the JDK as
+     * well). jdtls cannot choose and asks the client
+     * ({@code java.action.organizeImports.chooseImports}); gabier cannot either, so the refusal names the candidates
+     * and nothing is written.
+     */
+    public static final Scenario ORGANIZE_IMPORTS_OF_A_TYPE_TWO_PACKAGES_DECLARE = new Scenario(
+            "organize-imports-of-a-type-two-packages-declare",
+            AMBIGUOUS_IMPORTS_PROJECT,
+            new Request.OrganizeImports(TWICE),
+            new Answer.Refused(
+                    LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
+                    List.of(
+                            "java.sql.Date",
+                            "java.util.Date",
+                            "sun.util.calendar.BaseCalendar.Date",
+                            "sun.util.calendar.LocalGregorianCalendar.Date")));
+
     /** The project is still being imported: the server cannot say what organizing the imports changes. */
     public static final Scenario ORGANIZE_IMPORTS_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "organize-imports-while-the-server-imports",
@@ -500,6 +540,7 @@ public final class Scenarios {
                 ORGANIZE_IMPORTS,
                 ORGANIZE_IMPORTS_IN_ORDER,
                 ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS,
+                ORGANIZE_IMPORTS_OF_A_TYPE_TWO_PACKAGES_DECLARE,
                 ORGANIZE_IMPORTS_WHILE_THE_SERVER_IMPORTS,
                 ORGANIZE_IMPORTS_OUTSIDE_THE_PROJECT,
                 EXTRACT_VARIABLE,

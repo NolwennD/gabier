@@ -107,7 +107,7 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
                     + script.keySet() + ": add the scenario that says what the real server answers");
         }
         if (answer instanceof Answer.Refused refused) {
-            throw request.refusal(refused.key());
+            throw request.refusal(refused.key(), refused.details());
         }
 
         return answer;

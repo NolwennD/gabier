@@ -117,7 +117,9 @@ class SelfCheckTest {
             var machinery = with(real.fromJson(), real.endpointOf(), type -> Set.of("language/status"));
 
             assertThat(onNamedModules.problems(machinery))
-                    .containsExactly("LSP4J does not know the method language/eventNotification of the jdtls client");
+                    .containsExactly(
+                            "LSP4J does not know the method language/eventNotification of the jdtls client",
+                            "LSP4J does not know the method workspace/executeClientCommand of the jdtls client");
         }
 
         @Test

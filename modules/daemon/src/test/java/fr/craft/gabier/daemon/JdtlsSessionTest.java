@@ -104,12 +104,17 @@ class JdtlsSessionTest {
         }
 
         @Test
-        void givesJdtlsItsJavaPreferencesAtInitialization() throws Exception {
+        void givesJdtlsItsJavaPreferencesAndItsExtendedCapabilitiesAtInitialization() throws Exception {
             fake.listsProjects(URI_A);
 
             try (JdtlsSession session = start()) {
                 assertThat(fake.initializeParams().getInitializationOptions())
-                        .isEqualTo(new Gson().toJsonTree(Map.of("settings", JdtlsSettings.javaPreferences())));
+                        .isEqualTo(new Gson()
+                                .toJsonTree(Map.of(
+                                        "settings",
+                                        JdtlsSettings.javaPreferences(),
+                                        "extendedClientCapabilities",
+                                        JdtlsCapabilities.extended())));
             }
         }
 

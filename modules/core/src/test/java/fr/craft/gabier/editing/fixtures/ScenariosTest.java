@@ -131,6 +131,7 @@ class ScenariosTest {
                         "organize-imports-of-a-file",
                         "organize-imports-of-a-file-in-order",
                         "organize-imports-keeps-explicit-imports",
+                        "organize-imports-of-a-type-two-packages-declare",
                         "organize-imports-while-the-server-imports",
                         "organize-imports-of-a-file-outside-the-project",
                         "extract-a-variable",
@@ -150,7 +151,9 @@ class ScenariosTest {
                         .filter(scenario -> scenario.request() instanceof Request.OrganizeImports)
                         .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
                 .containsExactlyInAnyOrder(
-                        LanguageServerErrorKey.NOT_READY, LanguageServerErrorKey.FILE_OUTSIDE_PROJECT);
+                        LanguageServerErrorKey.NOT_READY,
+                        LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
+                        LanguageServerErrorKey.AMBIGUOUS_IMPORTS);
     }
 
     @Test

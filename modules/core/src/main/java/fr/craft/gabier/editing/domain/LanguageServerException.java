@@ -2,6 +2,11 @@ package fr.craft.gabier.editing.domain;
 
 import fr.craft.gabier.shared.error.domain.GeneratorException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Every refusal of a language server, as the port {@link JavaLanguageServer} reports it: the adapter of a real server
@@ -64,6 +69,45 @@ public final class LanguageServerException extends GeneratorException {
         return new LanguageServerException(GeneratorException.badRequest(LanguageServerErrorKey.NOT_A_FILE)
                 .message(file + " is not a file")
                 .addParameter("file", file.toString()));
+    }
+
+    /**
+     * Imports of the file that the server cannot resolve: it would delete them, so nothing is changed.
+     *
+     * @param imports the qualified names of the imports, as written in the file
+     */
+    public static LanguageServerException unresolvedImports(Path file, List<String> imports) {
+        String names = String.join(", ", imports);
+
+        return new LanguageServerException(GeneratorException.badRequest(LanguageServerErrorKey.UNRESOLVED_IMPORTS)
+                .message("The language server cannot resolve the imports " + names + " of " + file
+                        + ": organizing them would delete them")
+                .addParameter("file", file.toString())
+                .addParameter("imports", names));
+    }
+
+    /**
+     * Types the file uses without importing them and that several packages declare: choosing is up to the caller.
+     *
+     * @param candidates the qualified names of every type the server offers, the candidates for one simple name being
+     *     together
+     */
+    public static LanguageServerException ambiguousImports(Path file, List<String> candidates) {
+        Map<String, List<String>> bySimpleName = new LinkedHashMap<>();
+        for (String candidate : candidates) {
+            bySimpleName
+                    .computeIfAbsent(candidate.substring(candidate.lastIndexOf('.') + 1), name -> new ArrayList<>())
+                    .add(candidate);
+        }
+        String types = bySimpleName.entrySet().stream()
+                .map(type -> type.getKey() + " (" + String.join(", ", type.getValue()) + ")")
+                .collect(Collectors.joining("; "));
+
+        return new LanguageServerException(GeneratorException.badRequest(LanguageServerErrorKey.AMBIGUOUS_IMPORTS)
+                .message("The file " + file + " uses types that several packages declare, so none was imported: "
+                        + types)
+                .addParameter("file", file.toString())
+                .addParameter("candidates", String.join(", ", candidates)));
     }
 
     private static GeneratorExceptionBuilder positioned(LanguageServerErrorKey key, Path file, Position position) {

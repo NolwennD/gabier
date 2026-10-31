@@ -25,7 +25,8 @@ record SelfCheck(@Nullable String daemonModule, @Nullable String position) {
 
     private static final String LSP4J_MODULE = "org.eclipse.lsp4j";
     private static final String POSITION_JSON = "{\"line\":1,\"character\":2}";
-    private static final List<String> CLIENT_METHODS = List.of("language/status", "language/eventNotification");
+    private static final List<String> CLIENT_METHODS =
+            List.of("language/status", "language/eventNotification", "workspace/executeClientCommand");
     private static final JdtlsClient.Status STATUS = new JdtlsClient.Status("Message", "self-check");
     private static final String STATUS_JSON = "{\"type\":\"Message\",\"message\":\"self-check\"}";
     private static final String PUBLICATION_URI = "file:///self-check/A.java";
@@ -117,10 +118,9 @@ record SelfCheck(@Nullable String daemonModule, @Nullable String position) {
         }
         List<String> heard = new ArrayList<>();
         try {
-            machinery
-                    .endpointOf()
-                    .apply(new JdtlsClient(heard::add, publication -> {}, registration -> {}, unregistration -> {}))
-                    .notify("language/status", STATUS);
+            var none = new ImportChoices();
+            var jdtls = new JdtlsClient(heard::add, publication -> {}, registration -> {}, unregistration -> {}, none);
+            machinery.endpointOf().apply(jdtls).notify("language/status", STATUS);
             if (heard.isEmpty()) {
                 problems.add("The notification language/status did not reach the jdtls client");
             }

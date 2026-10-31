@@ -47,6 +47,7 @@ final class JdtlsSession implements AutoCloseable {
     private final Path data;
     private final Consumer<String> log;
     private final JdtlsClient client;
+    private final ImportChoices choices = new ImportChoices();
     private final WatchedFiles watched;
     private final JdtlsServer server;
     private final JdtlsWatch watch;
@@ -69,7 +70,7 @@ final class JdtlsSession implements AutoCloseable {
         this.process = connection.process();
         this.data = data;
         this.log = log;
-        this.client = new JdtlsClient(log, diagnostics, watched::register, watched::unregister);
+        this.client = new JdtlsClient(log, diagnostics, watched::register, watched::unregister, choices);
         var launcher = new LSPLauncher.Builder<JdtlsServer>()
                 .setLocalService(client)
                 .setRemoteInterface(JdtlsServer.class)
@@ -127,6 +128,11 @@ final class JdtlsSession implements AutoCloseable {
             throw failure;
         }
         return session;
+    }
+
+    /** The types jdtls could not choose an import for, in the request being answered. */
+    ImportChoices importChoices() {
+        return choices;
     }
 
     long pid() {
@@ -207,7 +213,9 @@ final class JdtlsSession implements AutoCloseable {
         var initialize = new InitializeParams();
         initialize.setRootUri(settings.projectRoot().toUri().toString());
         initialize.setCapabilities(JdtlsCapabilities.forRefactoring());
-        initialize.setInitializationOptions(Map.of("settings", JdtlsSettings.javaPreferences()));
+        initialize.setInitializationOptions(Map.of(
+                "settings", JdtlsSettings.javaPreferences(),
+                "extendedClientCapabilities", JdtlsCapabilities.extended()));
         watch.await("the answer to initialize", () -> server.initialize(initialize));
         // Telling jdtls that the client is ready is part of the wait: writing to a jdtls that died throws.
         watch.await("the language/status notification of type ServiceReady", () -> {

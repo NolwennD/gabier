@@ -14,7 +14,9 @@ command) writes nothing and shows what would change. The answer is that of `rena
 `modified <file>` and the unified diff, preceded by `dry run, nothing written` for a dry run, and says `nothing to
 change` for a file whose imports are already in order; with `--json` the result is the same `ChangedFiles` object, empty
 for such a file. A refusal is the problem object, exit code 2, and nothing is written: a server that is not ready, a file
-outside the project, a change set that cannot be applied to the file as it is.
+outside the project (`language-server-file-outside-project`), a path under it with no file
+(`language-server-file-missing`) or a folder (`language-server-not-a-file`), a change set that cannot be applied to the file
+as it is, and the two cases below.
 
 ```text
 $ gabier organize-imports --dry-run src/main/java/demo/Untidy.java
@@ -33,8 +35,21 @@ $ gabier organize-imports src/main/java/demo/Tidy.java
 nothing to change
 ```
 
-A type that two packages declare (`List`, `Date`) and that the file uses without importing it is **not** imported, and
-jdtls does not say so: the file is left with that name unresolved, and `gabier diagnostics` shows it. A file whose
-imports jdtls cannot resolve (a class of a source set it has no classpath for) loses them: organize the imports of files
-jdtls sees without errors (`gabier diagnostics` first). The daemon method is `organize-imports` (parameters `file`,
+**What jdtls cannot judge, gabier does not write.** Two cases are refused as a problem object (exit code 2), and nothing
+is written:
+
+- A type that several packages declare (`Date`: `java.sql.Date`, `java.util.Date`) and that the file uses without
+  importing it. jdtls cannot choose and asks the client (`java.action.organizeImports.chooseImports`); the daemon declares
+  `advancedOrganizeImportsSupport` and `executeClientCommandSupport` in the `extendedClientCapabilities` it initializes
+  jdtls with (`JdtlsCapabilities.extended`), without which jdtls leaves the type unimported and says nothing. gabier
+  answers the command that nothing is chosen, and refuses with `language-server-ambiguous-imports`: the parameter
+  `candidates` lists the qualified names, those of one name together and in order. Choose, add the import by hand,
+  then organize.
+- An import that jdtls would delete and reports an error on, such as a class of a source set it has no classpath for
+  (`The package p is not accessible` on the import): jdtls answers an edit that deletes the used imports along with
+  the unused ones. The refusal is `language-server-unresolved-imports`, with the parameter `imports` naming them. An
+  import that is only unused has a warning, not an error, and is removed as before. The file is not given to jdtls to
+  be judged unless the edit removes an import: only then does the request wait for the diagnostics of the file.
+
+The daemon method is `organize-imports` (parameters `file`,
 `dryRun`).

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -16,13 +17,15 @@ class LanguageServerExceptionTest {
     void givesTheKeyThatReportsAreMappedFrom() {
         assertThat(Arrays.stream(LanguageServerErrorKey.values()).map(LanguageServerErrorKey::get))
                 .containsExactly(
+                        "language-server-ambiguous-imports",
                         "language-server-file-missing",
                         "language-server-file-outside-project",
                         "language-server-invalid-name",
                         "language-server-no-such-symbol",
                         "language-server-not-an-expression",
                         "language-server-not-a-file",
-                        "language-server-not-ready");
+                        "language-server-not-ready",
+                        "language-server-unresolved-imports");
     }
 
     @Test
@@ -97,5 +100,37 @@ class LanguageServerExceptionTest {
         assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
         assertThat(exception.parameters()).isEqualTo(Map.of("file", FILE.toString()));
         assertThat(exception).hasMessage(FILE + " is not a file");
+    }
+
+    @Test
+    void namesTheImportsTheServerCannotResolve() {
+        LanguageServerException exception =
+                LanguageServerException.unresolvedImports(FILE, List.of("com.nowhere.Missing", "org.gone.Lost"));
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.UNRESOLVED_IMPORTS);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters())
+                .isEqualTo(Map.of("file", FILE.toString(), "imports", "com.nowhere.Missing, org.gone.Lost"));
+        assertThat(exception)
+                .hasMessage("The language server cannot resolve the imports com.nowhere.Missing, org.gone.Lost of "
+                        + FILE + ": organizing them would delete them");
+    }
+
+    @Test
+    void namesTheCandidatesOfEachTypeThatSeveralPackagesDeclare() {
+        LanguageServerException exception = LanguageServerException.ambiguousImports(
+                FILE, List.of("java.awt.List", "java.util.List", "java.sql.Date", "java.util.Date"));
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.AMBIGUOUS_IMPORTS);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters())
+                .isEqualTo(Map.of(
+                        "file",
+                        FILE.toString(),
+                        "candidates",
+                        "java.awt.List, java.util.List, java.sql.Date, java.util.Date"));
+        assertThat(exception)
+                .hasMessage("The file " + FILE + " uses types that several packages declare, so none was imported: "
+                        + "List (java.awt.List, java.util.List); Date (java.sql.Date, java.util.Date)");
     }
 }
