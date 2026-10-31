@@ -1,6 +1,8 @@
 # The socket server bounds its connections and cleans up only what is its own
 
 Opened: 30-10-2026 22:26
+On hold: hardening with no effect on what an agent can do with gabier (a local, single-user daemon); taken up after the
+parity with the Python driver (31-10-2026 refocus).
 
 Found in the review of the batch `a-line-over-the-limit-is-refused`, `uptime-does-not-depend-on-the-wall-clock` and
 `failed-restrict-leaves-no-socket-behind`:

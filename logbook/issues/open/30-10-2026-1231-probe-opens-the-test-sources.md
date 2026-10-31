@@ -1,6 +1,8 @@
 # The jdtls probe also opens the test sources
 
 Opened: 30-10-2026 12:31
+On hold: extra coverage of the probe, no effect on what an agent can do with gabier; taken up after the parity with the
+Python driver (31-10-2026 refocus).
 
 The probe opens the `module-info.java` and the sources of `src/main/java` of each module, and nothing else. Error Prone
 runs on `compileJava` only, so the test code, the fixtures and the integration tests are checked by javac alone, and

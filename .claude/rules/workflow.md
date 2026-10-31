@@ -119,6 +119,23 @@ its size.
 A ticket that adopts, reverses, defers or rejects a choice that the code, a rule or a document carries says why in the
 `## Resolution` of its issue: the code says what the repository does, the issue says why, and what it replaced.
 
+## Value first (decision of the user, 31-10-2026)
+
+gabier exists so that an agent writes Java through a language server instead of editing text. Until it has the
+commands of the Python driver it replaces (`rename`, `organize-imports`, `extract-*`, `inline`, `create`, `help`),
+the work goes to what an agent can then do that it could not before.
+
+- A ticket says in its first lines what an agent can do once it is closed and could not before, or the real bug met
+  while using gabier. A ticket that has neither is hardening or tidying.
+- A finding of a review that breaks no `Done when` point and no real use is opened **with an `On hold:` line** by
+  default, not put in the queue. The user, or the supervisor when a use makes it matter, lifts the hold.
+- Until the parity, at most one hardening or tidying ticket runs for three feature tickets.
+- jdtls is **configured, not fought**: a ticket that needs a behaviour of jdtls starts by reading the Eclipse JDT LS
+  documentation (the `java.*` settings, the client capabilities it expects), and writes in its issue which settings or
+  capabilities give that behaviour. The code stays in `JdtlsSettings` and `JdtlsCapabilities` and in relaying the
+  answer; a workaround of the Python driver is taken over only when the documentation shows no setting that makes it
+  useless.
+
 ## Exchanges between agents
 
 Every message between agents, in both directions and including the supervisor's own to the workers and the reviewer

@@ -1,6 +1,8 @@
 # The terminal text escapes every default-ignorable character
 
 Opened: 30-10-2026 22:41
+On hold: hardening with no effect on what an agent can do with gabier (exotic Unicode); taken up after the parity with
+the Python driver (31-10-2026 refocus).
 
 `TerminalText.neutralise` keeps characters that print as a blank or as nothing: U+17B4 and U+17B5 (Khmer inherent
 vowels), U+180B to U+180D and U+180F (Mongolian variation selectors), U+FFF0 to U+FFF8 and unassigned code points that

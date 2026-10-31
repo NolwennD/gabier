@@ -1,6 +1,8 @@
 # The long texts of the tests move to the resources
 
 Opened: 30-10-2026 22:30
+On hold: tidying with no effect on what an agent can do with gabier; taken up after the parity with the Python driver
+(31-10-2026 refocus).
 
 `.claude/rules/domain.md` ("Modern Java") says a text of more than about fifteen lines in a test is a file of the
 `src/test/resources` of its module, read by a helper of the test fixtures. Today no module has test resources, and

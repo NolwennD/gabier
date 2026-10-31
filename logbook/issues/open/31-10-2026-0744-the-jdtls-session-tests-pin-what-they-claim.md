@@ -1,6 +1,8 @@
 # The tests of the jdtls session pin what they claim
 
 Opened: 31-10-2026 07:44
+On hold: test hardening; taken up after the parity with the Python driver, or earlier if one of these tests really
+flakes in `bin/ci` (31-10-2026 refocus).
 
 Findings of the review of the jdtls lifecycle batch: tests that pass for the wrong reason, or that depend on timing,
 and a lock held too long. All in `modules/daemon`.
