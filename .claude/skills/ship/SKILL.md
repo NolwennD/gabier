@@ -142,6 +142,17 @@ git worktree remove <worktree> && git branch -d <branch>
 - A leftover directory under `.claude/worktrees/` that `git worktree list` no longer shows: look at it, and delete it
   only if it holds nothing but ignored build output.
 
+Then stop the Gradle daemon, which every worktree shares and which keeps the workers of its builds (javac, tests, Kotlin)
+alive for hours (decision of the user, 31-10-2026: a ticket often lasts more than 30 minutes, so the 30 seconds of a cold
+start cost little):
+
+```bash
+./gradlew --stop
+```
+
+Only when no other worker is in flight: its build runs on the same daemon. With one in flight, skip it and say so in the
+report; the last ticket to be shipped stops the daemon.
+
 ### 6. Report, then the next ticket
 
 Report faithfully: the issue closed, the commits now on `main` (`git log --oneline main -n <count>`), the `bin/ci`
