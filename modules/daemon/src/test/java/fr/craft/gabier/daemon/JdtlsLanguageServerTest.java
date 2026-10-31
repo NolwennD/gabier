@@ -1527,6 +1527,40 @@ class JdtlsLanguageServerTest {
         }
 
         @Test
+        void refusesANameJdtlsRenamesIntoAnEditThatDoesNotLeaveTheDeclarationAsItWas() throws Exception {
+            // The name of the parameter: jdtls does not decline it, and its one merged edit loses the space before the
+            // =.
+            var merged =
+                    new TextEdit(new Range(at(2, 15), at(3, 21)), "name= \"Hello, \" + name;\n        return name");
+            fake.refactorEditAnswers(proposal(declaresString()))
+                    .publishesOnOpen(greeter, List.of())
+                    .renameAnswers(CompletableFuture.completedFuture(edit(editsOf(greeter, merged))));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "name"))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME);
+                            assertThat(refusal.parameters()).containsEntry("name", "name");
+                        });
+            }
+        }
+
+        @Test
+        void refusesANameJdtlsRenamesWithoutTouchingTheDeclaration() throws Exception {
+            fake.refactorEditAnswers(proposal(declaresString()))
+                    .publishesOnOpen(greeter, List.of())
+                    .renameAnswers(CompletableFuture.completedFuture(edit(editsOf(
+                            greeter, new TextEdit(new Range(at(3, 15), at(3, 21)), "text")))));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME));
+            }
+        }
+
+        @Test
         void refusesASelectionJdtlsHasNoExtractionFor() throws Exception {
             fake.refactorEditAnswers(CompletableFuture.completedFuture(null));
 
@@ -1593,17 +1627,17 @@ class JdtlsLanguageServerTest {
         }
 
         @Test
-        void failsWhenJdtlsGivesNoEdit() throws Exception {
-            var where = new JdtlsServer.RenamePosition(greeter.toUri().toString(), 0, 1);
-            var follow = new JdtlsServer.FollowUp("java.action.rename", List.of(where));
-            fake.refactorEditAnswers(
-                    CompletableFuture.completedFuture(new JdtlsServer.RefactorEdit(null, follow, "nothing to do")));
+        void refusesAsNotAnExpressionWhenJdtlsGivesNoEditButSaysWhy() throws Exception {
+            fake.refactorEditAnswers(CompletableFuture.completedFuture(
+                    new JdtlsServer.RefactorEdit(null, null, "Cannot extract a statement")));
 
             try (var server = started()) {
                 assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
-                        .isInstanceOf(JdtlsException.class)
-                        .hasMessageContaining("without an edit")
-                        .hasMessageContaining("nothing to do");
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION);
+                            assertThat(refusal.parameters()).containsEntry("file", greeter.toString());
+                        });
+                assertThat(fake.opened()).isEmpty();
             }
         }
 

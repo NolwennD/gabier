@@ -51,6 +51,13 @@ import java.util.stream.IntStream;
  *       not one small edit per occurrence. The replay compares the answer to the scenario exactly, and the project
  *       with jdtls' answer applied to a copy must compile. The order of the changes counts, as it does in the
  *       application: the edits of a renamed type come first, the move of its file last, under its old path.
+ *   <li>the extraction of a variable: jdtls answers {@code java/getRefactorEdit} with no edit and a message for a
+ *       statement and for a call of a {@code void} method ({@link #EXTRACT_VARIABLE_FROM_A_STATEMENT}, {@link
+ *       #EXTRACT_VARIABLE_FROM_A_VOID_CALL}), which the adapter maps to {@code not-an-expression}. The name it proposes
+ *       ({@code string}) is kept without a rename ({@link #EXTRACT_VARIABLE_TO_THE_NAME_JDTLS_PROPOSES}). A name that the
+ *       method already uses ({@link #EXTRACT_VARIABLE_TO_A_NAME_IN_USE}) is not declined by jdtls: its rename answers an
+ *       edit that corrupts the declaration ({@code name= ...}), which the adapter detects and refuses as {@code
+ *       invalid-name};
  *   <li>files changed on disk between two requests: jdtls reads a file once, and learns of what changes only if the
  *       client tells it ({@code workspace/didChangeWatchedFiles}, which it asks for by registering its watchers). A
  *       {@link Sequel} is two scenarios in a row with the disk changed between them ({@link #sequels()}): a type
@@ -372,6 +379,39 @@ public final class Scenarios {
             new Request.ExtractVariable(GREETER, new Range(new Position(7, 8), new Position(7, 14)), "joined"),
             new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION));
 
+    /** A whole statement, {@code ;} included: jdtls has no extraction for it. */
+    public static final Scenario EXTRACT_VARIABLE_FROM_A_STATEMENT = new Scenario(
+            "extract-a-variable-from-a-statement",
+            PROJECT,
+            new Request.ExtractVariable(GREETER, new Range(new Position(6, 8), new Position(6, 48)), "joined"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+
+    /** {@code System.out.println(...)}, a call of a {@code void} method: it has no value to keep in a variable. */
+    public static final Scenario EXTRACT_VARIABLE_FROM_A_VOID_CALL = new Scenario(
+            "extract-a-variable-from-a-void-call",
+            PROJECT,
+            new Request.ExtractVariable(MAIN, new Range(new Position(5, 8), new Position(5, 50)), "printed"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+
+    /**
+     * {@code string}, the name jdtls proposes for a {@code String}: no rename is needed, the answer is the edit of
+     * jdtls as it is.
+     */
+    public static final Scenario EXTRACT_VARIABLE_TO_THE_NAME_JDTLS_PROPOSES = new Scenario(
+            "extract-a-variable-to-the-name-jdtls-proposes",
+            PROJECT,
+            new Request.ExtractVariable(GREETER, new Range(new Position(6, 25), new Position(6, 47)), "string"),
+            new Answer.Extracted(new ChangeSet(List.of(edits(
+                    GREETER,
+                    replace(6, 15, 6, 47, "string = greeting + \", \" + name;\n        String message = string"))))));
+
+    /** {@code name}, the parameter of {@code greet}: a variable of that name would collide with it. */
+    public static final Scenario EXTRACT_VARIABLE_TO_A_NAME_IN_USE = new Scenario(
+            "extract-a-variable-to-a-name-in-use",
+            PROJECT,
+            new Request.ExtractVariable(GREETER, new Range(new Position(6, 25), new Position(6, 47)), "name"),
+            new Answer.Refused(LanguageServerErrorKey.INVALID_NAME));
+
     /** A name that begins with a digit is not an identifier: jdtls declines the rename that gives the name. */
     public static final Scenario EXTRACT_VARIABLE_TO_AN_INVALID_NAME = new Scenario(
             "extract-a-variable-to-an-invalid-name",
@@ -464,6 +504,10 @@ public final class Scenarios {
                 ORGANIZE_IMPORTS_OUTSIDE_THE_PROJECT,
                 EXTRACT_VARIABLE,
                 EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION,
+                EXTRACT_VARIABLE_FROM_A_STATEMENT,
+                EXTRACT_VARIABLE_FROM_A_VOID_CALL,
+                EXTRACT_VARIABLE_TO_THE_NAME_JDTLS_PROPOSES,
+                EXTRACT_VARIABLE_TO_A_NAME_IN_USE,
                 EXTRACT_VARIABLE_TO_AN_INVALID_NAME,
                 EXTRACT_VARIABLE_WHILE_THE_SERVER_IMPORTS,
                 EXTRACT_VARIABLE_OUTSIDE_THE_PROJECT);

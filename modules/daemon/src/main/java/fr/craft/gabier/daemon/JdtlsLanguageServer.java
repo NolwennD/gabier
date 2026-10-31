@@ -269,17 +269,18 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                     "the extraction of the expression at " + selection + " of " + path,
                     () -> JdtlsRequests.unlessDeclined(session.server().getRefactorEdit(refactoring)));
             var refactor = proposal.orElseThrow(() -> LanguageServerException.notAnExpression(path, selection));
+            // jdtls gives no edit, and says why in errorMessage, for a selection it cannot extract: a statement, a call
+            // of a void method.
             var proposed = refactor.edit();
             if (proposed == null) {
-                throw new JdtlsException("jdtls answered the extraction without an edit: " + refactor);
+                throw LanguageServerException.notAnExpression(path, selection);
             }
             String extracted = SourceText.edited(path, original, editsOf(path, proposed, original));
             var introduced = introducedName(refactor, extracted);
             String named = extracted;
             if (!introduced.text().equals(name)) {
-                var position = SourceText.positionAt(extracted, introduced.offset());
                 named = SourceText.edited(
-                        path, extracted, renamed(session, watch, path, extracted, position, name, selection));
+                        path, extracted, renamed(session, watch, path, extracted, introduced, name, selection));
             }
 
             return new ChangeSet(
@@ -331,11 +332,12 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             JdtlsWatch watch,
             Path path,
             String text,
-            Position where,
+            Introduced introduced,
             String name,
             Range selection)
             throws InterruptedException {
         var service = session.server().getTextDocumentService();
+        var where = SourceText.positionAt(text, introduced.offset());
         try {
             var publication = open(session, Map.of(path, text)).get(path);
             watch.await("jdtls to take in the extracted variable in " + path, () -> publication);
@@ -346,13 +348,37 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                             new org.eclipse.lsp4j.Position(where.line(), where.column()),
                             name))));
 
-            return editsOf(
+            List<TextEdit> edits = editsOf(
                     path,
                     edit.orElseThrow(() -> LanguageServerException.invalidName(path, selection.start(), name)),
                     text);
+            if (!leavesTheDeclarationAsItWas(text, SourceText.edited(path, text, edits), introduced, name)) {
+                throw LanguageServerException.invalidName(path, selection.start(), name);
+            }
+
+            return edits;
         } finally {
             close(session, List.of(path));
         }
+    }
+
+    /**
+     * Whether the rename only changed the name of the declaration. jdtls does not decline every name it should: for
+     * the name of a local variable or parameter in scope it answers an edit all the same, and that edit does not leave
+     * the declaration as it was (the space before {@code =} is lost, the end of the next line is cut). A name that
+     * jdtls renames into such an edit is not valid for the variable.
+     */
+    private static boolean leavesTheDeclarationAsItWas(
+            String before, String after, Introduced introduced, String name) {
+        int start = introduced.offset();
+        String restBefore = restOfTheLine(before, start + introduced.text().length());
+
+        return after.startsWith(name, start)
+                && restOfTheLine(after, start + name.length()).equals(restBefore);
+    }
+
+    private static String restOfTheLine(String text, int from) {
+        return text.substring(from).lines().findFirst().orElse("");
     }
 
     private static org.eclipse.lsp4j.Range lsp(Range range) {

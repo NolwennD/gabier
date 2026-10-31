@@ -151,6 +151,42 @@ class ExtractVariableTest {
     }
 
     @Test
+    void refusesAWholeStatement() throws IOException {
+        assertRefused(
+                Scenarios.EXTRACT_VARIABLE_FROM_A_STATEMENT,
+                LanguageServerErrorKey.NOT_AN_EXPRESSION,
+                "The selection 6:8-6:48 of {root}/" + GREETER + " is not an expression");
+    }
+
+    @Test
+    void refusesACallOfAVoidMethod() throws IOException {
+        assertRefused(
+                Scenarios.EXTRACT_VARIABLE_FROM_A_VOID_CALL,
+                LanguageServerErrorKey.NOT_AN_EXPRESSION,
+                "The selection 5:8-5:50 of {root}/src/main/java/demo/Main.java is not an expression");
+    }
+
+    @Test
+    void refusesANameThatTheMethodAlreadyUses() throws IOException {
+        assertRefused(
+                Scenarios.EXTRACT_VARIABLE_TO_A_NAME_IN_USE,
+                LanguageServerErrorKey.INVALID_NAME,
+                "\"name\" is not a valid name for the symbol at 6:25 in {root}/" + GREETER);
+    }
+
+    @Test
+    void keepsTheNameJdtlsWouldHaveProposedWhenThatIsTheNameAskedFor() throws IOException {
+        project(Scenarios.EXTRACT_VARIABLE_TO_THE_NAME_JDTLS_PROPOSES);
+
+        extract.apply(path(GREETER), JOINED, "string");
+
+        assertThat(text(GREETER)).contains("""
+            String string = greeting + ", " + name;
+            String message = string;
+            """.indent(8).stripTrailing());
+    }
+
+    @Test
     void reportsAServerThatIsNotReady() throws IOException {
         assertRefused(
                 Scenarios.EXTRACT_VARIABLE_WHILE_THE_SERVER_IMPORTS,

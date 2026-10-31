@@ -135,6 +135,10 @@ class ScenariosTest {
                         "organize-imports-of-a-file-outside-the-project",
                         "extract-a-variable",
                         "extract-a-variable-from-something-that-is-not-an-expression",
+                        "extract-a-variable-from-a-statement",
+                        "extract-a-variable-from-a-void-call",
+                        "extract-a-variable-to-the-name-jdtls-proposes",
+                        "extract-a-variable-to-a-name-in-use",
                         "extract-a-variable-to-an-invalid-name",
                         "extract-a-variable-while-the-server-imports",
                         "extract-a-variable-of-a-file-outside-the-project");
@@ -169,6 +173,9 @@ class ScenariosTest {
                 .containsExactlyInAnyOrder(
                         LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
                         LanguageServerErrorKey.INVALID_NAME,
+                        LanguageServerErrorKey.INVALID_NAME,
+                        LanguageServerErrorKey.NOT_AN_EXPRESSION,
+                        LanguageServerErrorKey.NOT_AN_EXPRESSION,
                         LanguageServerErrorKey.NOT_AN_EXPRESSION,
                         LanguageServerErrorKey.NOT_READY);
     }
