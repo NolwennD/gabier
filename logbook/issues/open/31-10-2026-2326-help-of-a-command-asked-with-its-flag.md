@@ -1,6 +1,7 @@
 # `gabier <command> --help` shows the help of the command, and the help lists every refusal
 
 Opened: 31-10-2026 23:26
+Depends on: 31-10-2026-2348-gabier-is-composed-of-capabilities.md (the arguments are read in one place, so the flag is handled once, in the dispatch).
 
 Found in the review of `gabier-has-a-help`. `--help` is the first thing an agent types after a command, and it does not work:
 `gabier diagnostics --help`, `diagnostics -h` and `organize-imports --help` take the flag as a file, start the daemon and ask
