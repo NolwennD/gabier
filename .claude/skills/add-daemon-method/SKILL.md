@@ -54,8 +54,10 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    (`DaemonStatus.jdtlsFailure`, the reason jdtls failed, is the model). A text that comes from jdtls (a reason, a
    message) is hostile input: the result carries it exactly, and whatever prints it for a person goes through
    `TerminalText.neutralise`, as the text of `gabier status` does.
-5. **The cli command**, if there is one: in `Gabier.execute` (`modules/cli`), through `DaemonClient`; its output as text
-   by default and as the result with `--json`, a refusal of the daemon printed as its problem object with the exit code
+5. **The cli command**, if there is one: in `Gabier.execute` (`modules/cli`), through `DaemonClient`. A command of the
+   catalogue (it asks for work on the project) takes `starting(environment)`, which starts `gabier-daemon` when nothing
+   answers (`DaemonLauncher`); an administrative command that must not start one (`status`, `stop`) takes
+   `waiting(environment)`. Its output is text by default and the result with `--json`, a refusal of the daemon printed as its problem object with the exit code
    of its category (`DaemonRefusal`). Test it in `GabierTest` against `ScriptedDaemon` (a real socket, scripted answers).
    Update the "Command line" section of the README and the usage text of `UsageException`. A file given on the command
    line is sent as an absolute path (the daemon's working directory is not the cli's), and a position is shown from 1

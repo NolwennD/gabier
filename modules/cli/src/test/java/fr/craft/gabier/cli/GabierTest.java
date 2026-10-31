@@ -24,6 +24,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -748,15 +749,6 @@ class GabierTest {
                 assertThat(daemon.requests()).hasSize(1);
             }
         }
-
-        @Test
-        void saysNoDaemonIsRunningWithoutHanging() throws Exception {
-            var code = CompletableFuture.supplyAsync(() -> runWithSocket("diagnostics", "/project/Main.java"))
-                    .get(10, TimeUnit.SECONDS);
-
-            assertThat(code).isEqualTo(2);
-            assertThat(err()).contains("(daemon-not-running; ");
-        }
     }
 
     @Nested
@@ -997,15 +989,112 @@ class GabierTest {
                 assertThat(err()).contains("(invalid-response)");
             }
         }
+    }
+
+    @Nested
+    class StartingTheDaemon {
+
+        private Path socket() {
+            return directory.resolve("gabier.sock");
+        }
+
+        private Path bin() {
+            return directory.resolve("bin");
+        }
+
+        private Path log() {
+            return directory.resolve("gabier.sock.log");
+        }
+
+        private Map<String, String> environment() {
+            return Map.of("GABIER_SOCKET", socket().toString(), "PATH", bin().toString());
+        }
+
+        @AfterEach
+        void endTheDaemon() throws IOException {
+            FakeDaemonScripts.end(log());
+        }
 
         @Test
-        void saysNoDaemonIsRunningWithoutHanging() throws Exception {
-            var code = CompletableFuture.supplyAsync(
-                            () -> runWithSocket("rename", "/project/Greeter.java", "6", "18", "welcome"))
-                    .get(10, TimeUnit.SECONDS);
+        void diagnosticsStartsTheDaemonOfThePathAndPrintsTheAnswer() throws IOException {
+            FakeDaemonScripts.installListening(bin());
 
-            assertThat(code).isEqualTo(2);
-            assertThat(err()).contains("(daemon-not-running; ");
+            assertThat(run(environment(), "diagnostics", "/project/Main.java")).isZero();
+
+            assertThat(out()).isEmpty();
+            assertThat(err()).isEmpty();
+            assertThat(Files.readString(log())).startsWith("listening ");
+        }
+
+        @Test
+        void renameStartsTheDaemonOfThePathAndPrintsTheAnswer() throws IOException {
+            FakeDaemonScripts.installListening(bin());
+
+            assertThat(run(environment(), "rename", "--dry-run", "/project/Greeter.java", "6", "18", "welcome"))
+                    .isZero();
+
+            assertThat(out()).isEqualTo("dry run, nothing written" + System.lineSeparator());
+            assertThat(Files.readString(log())).startsWith("listening ");
+        }
+
+        @Test
+        void aSecondCommandUsesTheDaemonThatIsRunningInsteadOfStartingAnother() throws IOException {
+            FakeDaemonScripts.installListening(bin());
+
+            assertThat(run(environment(), "diagnostics", "/project/Main.java")).isZero();
+            assertThat(run(environment(), "diagnostics", "/project/Other.java")).isZero();
+
+            assertThat(Files.readAllLines(log())).hasSize(1);
+        }
+
+        @Test
+        void theDaemonServesTheProjectOfTheEnvironmentAndTheCurrentFolder() throws IOException {
+            FakeDaemonScripts.installListening(bin());
+            var environment = new HashMap<>(environment());
+            environment.put("GABIER_PROJECT", "/work/demo");
+
+            assertThat(run(environment, "diagnostics", "/project/Main.java")).isZero();
+
+            assertThat(Files.readString(log()))
+                    .contains(" project=/work/demo ")
+                    .contains("cwd=" + Path.of("").toAbsolutePath().toRealPath() + " ");
+        }
+
+        @Test
+        void aDaemonThatCannotBeFoundIsAProblemObjectWithExitCodeOneAndNothingOnTheStandardOutput() throws IOException {
+            Files.createDirectories(bin());
+
+            assertThat(run(environment(), "diagnostics", "/project/Main.java")).isEqualTo(1);
+
+            assertThat(out()).isEmpty();
+            assertThat(err())
+                    .startsWith("Daemon start failed: The daemon did not start: gabier-daemon was not found")
+                    .contains("(daemon-start-failed; socket=" + socket() + ")");
+        }
+
+        @Test
+        void aDaemonThatDoesNotStartIsAProblemObjectAsJsonWithTheJsonOption() throws IOException {
+            FakeDaemonScripts.install(bin(), "echo no good; exit 4");
+
+            assertThat(run(environment(), "--json", "rename", "/project/Greeter.java", "6", "18", "welcome"))
+                    .isEqualTo(1);
+
+            assertThat(err())
+                    .startsWith("{\"type\":\"urn:gabier:error:daemon-start-failed\",")
+                    .contains("\"exitCode\":\"4\"")
+                    .contains("\"log\":\"" + log() + "\"");
+            assertThat(Files.readString(log())).isEqualTo("no good\n");
+        }
+
+        @Test
+        void aUsageErrorStartsNoDaemon() throws IOException {
+            var marker = directory.resolve("started");
+            FakeDaemonScripts.install(bin(), "echo started > '" + marker + "'");
+
+            assertThat(run(environment(), "rename", "/project/Greeter.java")).isEqualTo(2);
+            assertThat(run(environment(), "diagnostics")).isEqualTo(2);
+
+            assertThat(marker).doesNotExist();
         }
     }
 
@@ -1034,6 +1123,23 @@ class GabierTest {
                     .isEqualTo("Daemon not running: No daemon answers on " + socket()
                             + ": start it with gabier-daemon (daemon-not-running; socket=" + socket() + ")"
                             + System.lineSeparator());
+        }
+
+        @Test
+        void statusAndStopStartNoDaemonEvenWhenOneIsOnThePath() throws Exception {
+            var marker = directory.resolve("started");
+            FakeDaemonScripts.install(directory.resolve("bin"), "echo started > '" + marker + "'");
+            var environment = Map.of(
+                    "GABIER_SOCKET",
+                    socket().toString(),
+                    "PATH",
+                    directory.resolve("bin").toString());
+
+            assertThat(runWithoutHanging(environment, "status")).isEqualTo(2);
+            assertThat(runWithoutHanging(environment, "stop")).isEqualTo(2);
+
+            assertThat(err()).contains("(daemon-not-running; ");
+            assertThat(marker).doesNotExist();
         }
 
         @Test

@@ -31,7 +31,7 @@ To format or check every Java file by hand: `hk fix --all` and `hk check --all`.
 ## Command line
 
 `gabier --version` prints `gabier <protocol version>` on the standard output and exits with 0. Every refusal of
-gabier (a usage error: any other argument, or none; no daemon running...) is reported as a **problem object** on the
+gabier (a usage error: any other argument, or none; no daemon running, for `status` and `stop`; a daemon that does not start...) is reported as a **problem object** on the
 standard error, never on the standard output: one line of text by default, one line of JSON with `--json` (the option
 can come anywhere on the command line).
 
@@ -50,10 +50,35 @@ know is reported as the generic `internal-server-error`, without its message, it
 
 ### The daemon
 
-One daemon runs per user. It is started by hand, with `gabier-daemon` from the installed distribution
-(`./gradlew :daemon:installDist`, then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until
-`gabier stop` or a SIGTERM; it answers `status`, `stop`, `diagnostics`, `rename` and `rename-token`, and nothing else yet. The cli starting it on
-demand comes later.
+One daemon runs per user. `gabier diagnostics` and `gabier rename` **start it when nothing answers on the socket**, so an
+agent runs them in a project folder and gets the answer; `gabier status` and `gabier stop` never start one (see below).
+It can also be started by hand, with `gabier-daemon` from the installed distribution (`./gradlew :daemon:installDist`,
+then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until `gabier stop` or a SIGTERM; it
+answers `status`, `stop`, `diagnostics`, `rename` and `rename-token`, and nothing else yet.
+
+**Installing both by name.** `mise run install` builds the native cli and the daemon of the checkout it is run in and
+links `gabier` and `gabier-daemon` into `~/.local/bin` (`GABIER_BIN_DIR` or the argument of `scripts/install.sh` names
+another folder, which must be in the `PATH`): then `gabier` is called by name in any checkout. The links point into the
+checkout that was built, so the daemon of a worktree that is removed is gone with it: install from the checkout the
+tools should come from, and again after a change. A file that is not a link is never replaced. The build needs the
+GraalVM 25 of `./gradlew :cli:nativeCompile` and a JDK for the daemon's start script (`JAVA_HOME`, else `java` on the
+`PATH`).
+
+**Starting on demand.** A request command (`diagnostics`, `rename`) first connects to the socket: a daemon that answers is
+used, never started a second time. Otherwise the cli launches `gabier-daemon` as a process, found **next to the binary
+of the cli** (a distribution that ships the two together), else on the **`PATH`**: a native image cannot call into the
+daemon, and the two are installed by name. The daemon starts in the cli's working directory with the cli's environment,
+so it serves the project the daemon rules below give (`GABIER_PROJECT`, else the current folder; `GABIER_SOCKET`,
+`GABIER_JDTLS` reach it too). It runs on after the command, detached (no input), and its standard output and error go to
+a log next to the socket, `<socket>.log` (`gabier.sock.log`; private to the user, replaced at each start, in the
+socket's folder, which the cli creates private if it is missing). The cli waits until the socket accepts a connection,
+**20 seconds** at most (the daemon binds first; jdtls starts later, at the first request, and that wait is the one
+described below), then sends the request. A daemon that is not found, cannot be launched, exits before it listens (its
+exit code is reported) or is silent for 20 seconds is the problem object `daemon-start-failed` (exit code 1; `socket`,
+`log` and, for an exit, `exitCode` in its parameters, the output of the daemon being in the log): the daemon that did
+not come up is killed, nothing is left running. A usage error starts nothing. A daemon that already runs keeps the
+project it was started for, whatever folder the command is run in (`gabier status` says which): `gabier stop` first to
+serve another.
 
 It serves **one project**: `gabier-daemon [<project folder>]`, else the folder named by `GABIER_PROJECT`, else the
 directory it is started in (a relative folder is relative to that directory; one that is not a folder is a usage error).
@@ -169,7 +194,8 @@ The daemon's methods are `rename` (parameters `file`, `line`, `column`, `newName
 (`file`, `token`, `newName`, `dryRun`); `dryRun` is `true` or `false`, and line and column are numbers from 0.
 
 `gabier stop` returns once the daemon has removed its socket and hung up. With no daemon, or with a socket file that
-nobody answers on, `status` and `stop` do not wait: they report `daemon-not-running` at once, with exit code 2.
+nobody answers on, `status` and `stop` do not wait and do not start one: they report `daemon-not-running` at once, with
+exit code 2.
 
 The cli and the daemon talk JSON-RPC 2.0 on a Unix domain socket, one JSON object per line (no framing header). A
 request is `{"jsonrpc":"2.0","id":1,"method":"status"}`. A request may carry `params`, an object whose members are

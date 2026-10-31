@@ -20,8 +20,11 @@ import java.util.stream.Stream;
  * stop} are run against it, with no daemon, with a stale socket and with a second daemon; {@code diagnostics} is run
  * against it (with no jdtls to start, so refused as a failed start, which {@code status} then shows) and against the
  * daemon served by the fake language server, {@code :daemon:installFakeServed}, so that no jdtls runs in this stage;
- * {@code rename} is run against the latter too (a dry run, a rename by token, by position and of a type, and refusals). Runs in the current
- * directory, the checkout under verification. It starts and signals only the processes it started, by their handle.
+ * {@code rename} is run against the latter too (a dry run, a rename by token, by position and of a type, and refusals);
+ * a request command with no daemon running starts {@code gabier-daemon} (found on the {@code PATH} or next to the cli;
+ * not found, exiting at once), the next request uses it, and {@code stop} ends it. Runs in the current directory, the
+ * checkout under verification. It starts and signals only the processes it started, by their handle, and the daemons
+ * the cli started, by the pid their {@code status} gave.
  */
 public final class Native {
 
@@ -57,7 +60,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename included)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename included, the daemon started on demand)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -189,6 +192,10 @@ public final class Native {
         private static final Pattern STATUS_JSON = Pattern.compile(
                 "\\{\"version\":\"0\\.1\",\"pid\":(\\d+),\"uptimeMillis\":\\d+,\"project\":\"[^\"]+\",\"jdtls\":\"not-started\"\\}");
 
+        /** The status of a daemon the cli started: the project is the folder its script gave. */
+        private static final Pattern STARTED_STATUS = Pattern.compile(
+                "gabier-daemon 0\\.1, pid (\\d+), up \\d+s, project \\S+-project, jdtls \\w+");
+
         private final Path cli;
         private final Path daemon;
         private final Path fakeDaemon;
@@ -216,6 +223,7 @@ public final class Native {
                 sigterm();
                 secondDaemonAndStaleSocket();
                 diagnosticsWithNoJdtls();
+                startsTheDaemonOnDemand();
                 diagnosticsWithTheFakeServer();
                 renameWithTheFakeServer();
                 fakeServedRefusesAFolderThatIsNotEmpty();
@@ -238,6 +246,17 @@ public final class Native {
 
         private Run gabier(String... args) throws IOException, InterruptedException {
             Run run = runBinary(cli, directory, List.of("GABIER_SOCKET", socket.toString()), args);
+            System.out.println("gabier " + String.join(" ", args) + " -> stdout \"" + run.out() + "\", stderr \""
+                    + run.err() + "\" (exit " + run.exit() + ")");
+            return run;
+        }
+
+        /** The cli with these variables only (pairs of name and value) and the socket of the stage. */
+        private Run gabierWith(Path binary, List<String> environment, String... args)
+                throws IOException, InterruptedException {
+            var all = new ArrayList<>(List.of("GABIER_SOCKET", socket.toString()));
+            all.addAll(environment);
+            Run run = runBinary(binary, directory, all, args);
             System.out.println("gabier " + String.join(" ", args) + " -> stdout \"" + run.out() + "\", stderr \""
                     + run.err() + "\" (exit " + run.exit() + ")");
             return run;
@@ -521,6 +540,141 @@ public final class Native {
                     "gabier --json rename of a type gives the files moved and the diff, and moves the file");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after the renames");
+        }
+
+        /** A {@code gabier-daemon} in the folder: a script with this body, which the cli finds and launches. */
+        private static Path installDaemonScript(Path folder, String body) throws IOException {
+            Path script = Files.writeString(
+                    Files.createDirectories(folder).resolve("gabier-daemon"), "#!/bin/sh\n" + body + "\n");
+            script.toFile().setExecutable(true);
+            return script;
+        }
+
+        /** True once the process has ended, in a minute at most. */
+        private static boolean awaitExit(ProcessHandle handle) {
+            try {
+                handle.onExit().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        /**
+         * A request command with no daemon running starts {@code gabier-daemon}, found on the {@code PATH} or next to
+         * the binary of the cli, waits for its socket and answers; the next one uses the daemon that runs; a daemon that
+         * is not found or does not start is a problem object. The daemon is the one served by the fake language server
+         * (the script gives it its project folder), and what the cli started is ended with {@code gabier stop}.
+         */
+        private void startsTheDaemonOnDemand() throws IOException, InterruptedException {
+            Path project = directory.resolve("started-project");
+            String broken = "started-project/src/main/java/demo/Broken.java";
+            String expected = broken + ":5:16: error: Type mismatch: cannot convert from String to int";
+            String system = "/usr/bin:/bin";
+            // The start script of the daemon needs the java of JAVA_HOME and the tools of the system.
+            String java = System.getProperty("java.home");
+            Path onPath = directory.resolve("on-path");
+            installDaemonScript(onPath, "exec '" + fakeDaemon + "' '" + project + "'");
+            List<String> withPath = List.of("PATH", onPath + ":" + system, "JAVA_HOME", java);
+            Path log = directory.resolve("gabier.sock.log");
+            Long pid = null;
+            try {
+                expect(!Files.exists(socket), "no daemon runs before the first request");
+                Run first = gabierWith(cli, withPath, "diagnostics", broken);
+                expect(
+                        first.exit() == 0 && first.err().isEmpty() && first.out().equals(expected),
+                        "gabier diagnostics with no daemon starts gabier-daemon from the PATH and answers");
+                Run status = gabierWith(cli, withPath, "status");
+                var running = STARTED_STATUS.matcher(status.out());
+                expect(
+                        status.exit() == 0 && running.matches(),
+                        "the daemon the cli started answers status, serving the project of its script");
+                if (running.matches()) {
+                    pid = Long.parseLong(running.group(1));
+                }
+                expect(
+                        Files.exists(log) && Files.readString(log).contains(" listening on " + socket),
+                        "the output of the daemon went to the log next to the socket");
+                expect(Files.exists(log) && posix(log).equals("rw-------"), "the log is private to the user");
+                Run second = gabierWith(cli, withPath, "diagnostics", broken);
+                Run again = gabierWith(cli, withPath, "status");
+                var sameDaemon = STARTED_STATUS.matcher(again.out());
+                expect(
+                        second.exit() == 0
+                                && second.out().equals(expected)
+                                && sameDaemon.matches()
+                                && pid != null
+                                && sameDaemon.group(1).equals(String.valueOf(pid)),
+                        "a second request uses the daemon that runs and starts none");
+                Run stop = gabierWith(cli, withPath, "stop");
+                expect(stop.exit() == 0, "gabier stop ends the daemon the cli started");
+                expect(
+                        pid == null || ProcessHandle.of(pid).map(Daemon::awaitExit).orElse(true),
+                        "no process of the daemon is left");
+                pid = null;
+            } finally {
+                if (pid != null) {
+                    ProcessHandle.of(pid).ifPresent(ProcessHandle::destroyForcibly);
+                }
+                Files.deleteIfExists(log);
+            }
+
+            // Next to the binary of the cli, with nothing on the PATH.
+            Path own = Files.createDirectories(directory.resolve("own"));
+            Path ownCli = Files.copy(cli, own.resolve("gabier"));
+            Path besideProject = directory.resolve("own-project");
+            installDaemonScript(own, "exec '" + fakeDaemon + "' '" + besideProject + "'");
+            List<String> noPath = List.of("PATH", system, "JAVA_HOME", java);
+            String besideBroken = "own-project/src/main/java/demo/Broken.java";
+            Run beside = gabierWith(ownCli, noPath, "diagnostics", besideBroken);
+            expect(
+                    beside.exit() == 0
+                            && beside.out().equals(besideBroken + ":5:16: error: Type mismatch: cannot convert from String to int"),
+                    "gabier-daemon next to the binary of the cli is found without the PATH");
+            var besidePid = STARTED_STATUS.matcher(gabierWith(ownCli, noPath, "status").out());
+            gabierWith(ownCli, noPath, "stop");
+            expect(
+                    !besidePid.matches()
+                            || ProcessHandle.of(Long.parseLong(besidePid.group(1)))
+                                    .map(Daemon::awaitExit)
+                                    .orElse(true),
+                    "the daemon started from next to the cli ends with stop");
+            Files.deleteIfExists(log);
+
+            // Not found, and found but not coming up: problem objects, exit 1, nothing left running.
+            Run missing = gabierWith(cli, noPath, "diagnostics", broken);
+            expect(
+                    missing.exit() == 1
+                            && missing.out().isEmpty()
+                            && missing.err().startsWith("Daemon start failed: ")
+                            && missing.err().contains("gabier-daemon was not found")
+                            && missing.err().contains("(daemon-start-failed; socket=")
+                            && !Files.exists(socket),
+                    "a gabier-daemon that is not found is a problem object, exit 1, and starts nothing");
+            Path failing = directory.resolve("failing");
+            installDaemonScript(failing, "echo 'refusing to start'; exit 5");
+            Run exits = gabierWith(
+                    cli, List.of("PATH", failing + ":" + system, "JAVA_HOME", java), "diagnostics", broken);
+            expect(
+                    exits.exit() == 1
+                            && exits.err().contains("exited with code 5 before it listened")
+                            && exits.err().contains("log=" + log)
+                            && Files.readString(log).equals("refusing to start\n")
+                            && !Files.exists(socket),
+                    "a gabier-daemon that exits at once is a problem object that says its exit code and where its"
+                            + " output went");
+            Files.deleteIfExists(log);
+
+            // status and stop never start one, even with a gabier-daemon on the PATH.
+            for (String command : List.of("status", "stop")) {
+                Run run = gabierWith(cli, withPath, command);
+                expect(
+                        run.exit() == 2
+                                && run.err().contains("(daemon-not-running; ")
+                                && !Files.exists(socket)
+                                && !Files.exists(log),
+                        "gabier " + command + " with no daemon still says so at once, whatever is on the PATH");
+            }
         }
 
         /** The daemon served by the fake writes the scenarios in its folder: it refuses one that holds anything. */

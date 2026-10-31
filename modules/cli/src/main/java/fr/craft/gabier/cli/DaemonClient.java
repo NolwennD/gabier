@@ -15,6 +15,7 @@ import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * One conversation with the daemon, in JSON-RPC 2.0 on its Unix socket, one JSON object per line. Plain JDK, written
@@ -39,13 +40,24 @@ final class DaemonClient implements AutoCloseable {
      *     nobody listens on is refused at once)
      */
     static DaemonClient connect(Path socket) {
+        return tryConnect(socket).orElseThrow(() -> DaemonException.notRunning(socket));
+    }
+
+    /** Connects to the daemon listening on the socket, or says that nothing answers there: it never waits. */
+    static Optional<DaemonClient> tryConnect(Path socket) {
         try {
             var channel = SocketChannel.open(StandardProtocolFamily.UNIX);
-            channel.connect(UnixDomainSocketAddress.of(socket));
+            try {
+                channel.connect(UnixDomainSocketAddress.of(socket));
+            } catch (IOException refused) {
+                channel.close();
+                throw refused;
+            }
 
-            return new DaemonClient(Channels.newInputStream(channel), Channels.newOutputStream(channel), channel);
+            return Optional.of(
+                    new DaemonClient(Channels.newInputStream(channel), Channels.newOutputStream(channel), channel));
         } catch (IOException e) {
-            throw DaemonException.notRunning(socket);
+            return Optional.empty();
         }
     }
 

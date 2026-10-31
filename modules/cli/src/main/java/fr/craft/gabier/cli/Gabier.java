@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 public final class Gabier {
 
@@ -62,26 +63,44 @@ public final class Gabier {
     private static void execute(
             List<String> arguments, Map<String, String> environment, boolean json, PrintStream out) {
         if (arguments.size() == 2 && arguments.getFirst().equals(DIAGNOSTICS_COMMAND)) {
-            diagnostics(socket(environment), arguments.getLast(), json, out);
+            diagnostics(starting(environment), arguments.getLast(), json, out);
 
             return;
         }
         if (!arguments.isEmpty() && arguments.getFirst().equals(RENAME_COMMAND)) {
-            rename(socket(environment), arguments, json, out);
+            rename(starting(environment), arguments, json, out);
 
             return;
         }
         var command = arguments.size() == 1 ? arguments.getFirst() : "";
         switch (command) {
             case VERSION_COMMAND -> out.println("gabier " + ProtocolVersion.CURRENT);
-            case STATUS_COMMAND -> status(socket(environment), json, out);
-            case STOP_COMMAND -> stop(socket(environment), json, out);
+            case STATUS_COMMAND -> status(waiting(environment), json, out);
+            case STOP_COMMAND -> stop(waiting(environment), json, out);
             default -> throw UsageException.unsupportedArguments(arguments);
         }
     }
 
     private static Path socket(Map<String, String> environment) {
         return SocketLocation.resolve(environment, UserId.current());
+    }
+
+    /**
+     * The way to the daemon of a request command: it answers, or it is started (the cli never leaves a request unanswered
+     * for want of a daemon).
+     */
+    private static Supplier<DaemonClient> starting(Map<String, String> environment) {
+        var socket = socket(environment);
+        var launcher = DaemonLauncher.of(environment);
+
+        return () -> launcher.connect(socket);
+    }
+
+    /** The way to the daemon of {@code status} and {@code stop}: it answers or it is not running, and none is started. */
+    private static Supplier<DaemonClient> waiting(Map<String, String> environment) {
+        var socket = socket(environment);
+
+        return () -> DaemonClient.connect(socket);
     }
 
     /**
@@ -92,9 +111,9 @@ public final class Gabier {
      * as the text of a problem is ({@link TerminalText}): the message quotes source text and the file is typed, and
      * neither may drive the terminal or split the line.
      */
-    private static void diagnostics(Path socket, String file, boolean json, PrintStream out) {
+    private static void diagnostics(Supplier<DaemonClient> daemon, String file, boolean json, PrintStream out) {
         var absolute = Path.of(file).toAbsolutePath();
-        var result = ask(socket, DIAGNOSTICS_COMMAND, Map.of("file", absolute.toString()), false);
+        var result = ask(daemon, DIAGNOSTICS_COMMAND, Map.of("file", absolute.toString()), false);
         var diagnostics = FileDiagnostics.of(result.result());
         if (json) {
             out.println(diagnostics.toJson());
@@ -115,7 +134,7 @@ public final class Gabier {
      * diff, with the same neutralisation as every text that comes from the project; {@code --json} gives the result as
      * the daemon gave it.
      */
-    private static void rename(Path socket, List<String> arguments, boolean json, PrintStream out) {
+    private static void rename(Supplier<DaemonClient> daemon, List<String> arguments, boolean json, PrintStream out) {
         var words = arguments.subList(1, arguments.size());
         var dryRun = words.contains(DRY_RUN_OPTION);
         var token = words.contains(TOKEN_OPTION);
@@ -135,7 +154,7 @@ public final class Gabier {
         }
         params.put("newName", operands.getLast());
         params.put("dryRun", String.valueOf(dryRun));
-        var changed = ChangedFiles.of(ask(socket, token ? "rename-token" : RENAME_COMMAND, params, false)
+        var changed = ChangedFiles.of(ask(daemon, token ? "rename-token" : RENAME_COMMAND, params, false)
                 .result());
         if (json) {
             out.println(changed.toJson());
@@ -177,8 +196,8 @@ public final class Gabier {
         return lines;
     }
 
-    private static void status(Path socket, boolean json, PrintStream out) {
-        var result = ask(socket, STATUS_COMMAND, false);
+    private static void status(Supplier<DaemonClient> daemon, boolean json, PrintStream out) {
+        var result = ask(daemon, STATUS_COMMAND, false);
         var status = DaemonStatus.of(result.result());
         out.println(json ? status.toJson() : statusText(status));
     }
@@ -194,18 +213,19 @@ public final class Gabier {
                 + status.jdtls().text() + failure);
     }
 
-    private static void stop(Path socket, boolean json, PrintStream out) {
-        ask(socket, STOP_COMMAND, true);
+    private static void stop(Supplier<DaemonClient> daemon, boolean json, PrintStream out) {
+        ask(daemon, STOP_COMMAND, true);
         out.println(json ? "{\"stopped\":true}" : "gabier-daemon stopped");
     }
 
     /** The result of the method, or the refusal of the daemon thrown. Waits for the daemon to hang up when asked. */
-    private static RpcResponse.Success ask(Path socket, String method, boolean awaitEnd) {
-        return ask(socket, method, Map.of(), awaitEnd);
+    private static RpcResponse.Success ask(Supplier<DaemonClient> daemon, String method, boolean awaitEnd) {
+        return ask(daemon, method, Map.of(), awaitEnd);
     }
 
-    private static RpcResponse.Success ask(Path socket, String method, Map<String, String> params, boolean awaitEnd) {
-        try (var client = DaemonClient.connect(socket)) {
+    private static RpcResponse.Success ask(
+            Supplier<DaemonClient> daemon, String method, Map<String, String> params, boolean awaitEnd) {
+        try (var client = daemon.get()) {
             var response = client.call(method, params);
             if (response instanceof RpcResponse.Failure failure) {
                 throw new DaemonRefusal(failure.problem());
