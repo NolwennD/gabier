@@ -12,6 +12,12 @@ mkdir -p "$folder"
 folder=$(cd "$folder" && pwd)
 
 cd "$root"
+cat <<EOF
+install: this will
+  1. build the native cli (GraalVM native-image) and the daemon of $root,
+  2. link \`gabier\` and \`gabier-daemon\` into $folder.
+The native image is the slow part: expect a few minutes (about 5, more while other builds run).
+EOF
 ./gradlew :cli:nativeCompile :daemon:installDist --console=plain
 
 cli="$root/modules/cli/build/native/nativeCompile/gabier"
