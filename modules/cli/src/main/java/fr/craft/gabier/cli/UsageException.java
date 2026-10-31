@@ -13,8 +13,8 @@ final class UsageException extends GeneratorException {
     /** The arguments given, the {@code --json} option not included. */
     static UsageException unsupportedArguments(List<String> arguments) {
         return new UsageException(GeneratorException.badRequest(CliErrorKey.USAGE)
-                .message("Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics"
-                        + " <file>)")
+                .message("Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file>"
+                        + " | rename [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>)")
                 .addParameter("arguments", String.join(" ", arguments)));
     }
 }

@@ -19,7 +19,8 @@ import java.util.stream.Stream;
  * in a temporary directory ({@code GABIER_SOCKET}, never the default path of the user), and {@code status} and {@code
  * stop} are run against it, with no daemon, with a stale socket and with a second daemon; {@code diagnostics} is run
  * against it (with no jdtls to start, so refused as a failed start, which {@code status} then shows) and against the
- * daemon served by the fake language server, {@code :daemon:installFakeServed}, so that no jdtls runs in this stage. Runs in the current
+ * daemon served by the fake language server, {@code :daemon:installFakeServed}, so that no jdtls runs in this stage;
+ * {@code rename} is run against the latter too (a dry run, a rename by token, by position and of a type, and refusals). Runs in the current
  * directory, the checkout under verification. It starts and signals only the processes it started, by their handle.
  */
 public final class Native {
@@ -30,7 +31,8 @@ public final class Native {
     private static final String USAGE_ERROR_JSON =
             """
             {"type":"urn:gabier:error:usage-error","title":"Usage error",\
-            "detail":"Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file>)",\
+            "detail":"Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file>\s\
+            | rename [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>)",\
             "key":"usage-error","parameters":{"arguments":"--help"}}\
             """;
 
@@ -55,7 +57,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename included)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -215,6 +217,7 @@ public final class Native {
                 secondDaemonAndStaleSocket();
                 diagnosticsWithNoJdtls();
                 diagnosticsWithTheFakeServer();
+                renameWithTheFakeServer();
                 fakeServedRefusesAFolderThatIsNotEmpty();
             } finally {
                 for (Process process : started) {
@@ -459,6 +462,65 @@ public final class Native {
                     "a file outside the project is refused as a problem object, exit 2");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops");
+        }
+
+        /**
+         * {@code gabier rename} against the daemon served by the fake language server: the dry run writes nothing, the
+         * renames write the files of the project and list them with the diff, a refusal writes nothing.
+         */
+        private void renameWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("rename-project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            Path source = project.resolve("src/main/java/demo");
+            String greeter = "rename-project/src/main/java/demo/Greeter.java";
+            String original = Files.readString(source.resolve("Greeter.java"));
+
+            Run dryRun = gabier("rename", "--dry-run", "--token", greeter, "greet", "welcome");
+            expect(
+                    dryRun.exit() == 0
+                            && dryRun.err().isEmpty()
+                            && dryRun.out().lines().findFirst().orElse("").equals("dry run, nothing written")
+                            && dryRun.out().contains("modified " + source.resolve("Greeter.java"))
+                            && dryRun.out().contains("+    public String welcome(String name) {")
+                            && Files.readString(source.resolve("Greeter.java")).equals(original),
+                    "gabier rename --dry-run --token lists the files and the diff and writes nothing");
+
+            Run noSymbol = gabier("rename", greeter, "5", "1", "anything");
+            expect(
+                    noSymbol.exit() == 2
+                            && noSymbol.out().isEmpty()
+                            && noSymbol.err().contains("(language-server-no-such-symbol; ")
+                            && Files.readString(source.resolve("Greeter.java")).equals(original),
+                    "a rename where there is no symbol is refused as a problem object, exit 2, nothing written");
+            Run outside = gabier("rename", "outside/Elsewhere.java", "1", "1", "anything");
+            expect(
+                    outside.exit() == 2 && outside.err().contains("(language-server-file-outside-project; "),
+                    "a rename of a file outside the project is refused as a problem object, exit 2");
+
+            Run byPosition = gabier("rename", greeter, "6", "19", "welcome");
+            expect(
+                    byPosition.exit() == 0
+                            && byPosition.out().contains("modified " + source.resolve("Greeter.java"))
+                            && byPosition.out().contains("modified " + source.resolve("Main.java"))
+                            && Files.readString(source.resolve("Greeter.java")).contains("public String welcome(")
+                            && Files.readString(source.resolve("Main.java")).contains("greeter.welcome(\"world\")"),
+                    "gabier rename by position, from 1, writes the files that use the symbol and lists them");
+
+            Run type = gabier("--json", "rename", greeter, "3", "14", "Welcomer");
+            expect(
+                    type.exit() == 0
+                            && type.out().contains("\"renamed\":[{\"from\":\"" + source.resolve("Greeter.java")
+                                    + "\",\"to\":\"" + source.resolve("Welcomer.java") + "\"}]")
+                            && type.out().contains("\"diff\":\"--- ")
+                            && Files.exists(source.resolve("Welcomer.java"))
+                            && !Files.exists(source.resolve("Greeter.java")),
+                    "gabier --json rename of a type gives the files moved and the diff, and moves the file");
+            gabier("stop");
+            expect(ends(process), "the daemon served by the fake stops after the renames");
         }
 
         /** The daemon served by the fake writes the scenarios in its folder: it refuses one that holds anything. */

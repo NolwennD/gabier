@@ -82,7 +82,9 @@ class DaemonServerTest {
                 directory,
                 new FakeJavaLanguageServer(directory)
                         .scripted(Scenarios.FILE_WITH_AN_ERROR)
-                        .scripted(Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT));
+                        .scripted(Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT)
+                        .scripted(Scenarios.RENAME_METHOD)
+                        .scripted(Scenarios.RENAME_WHERE_THERE_IS_NO_SYMBOL));
     }
 
     private DaemonServer open() {
@@ -394,6 +396,54 @@ class DaemonServerTest {
                         .contains("\"key\":\"language-server-file-outside-project\"");
                 assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
             }
+        }
+
+        @Test
+        void renameAndRenameTokenAnswerWhatChangedAndWriteTheFilesUnlessItIsADryRun() throws IOException {
+            serving();
+            Scenarios.RENAME_METHOD.writeProject(directory);
+            var greeter = directory.resolve("src/main/java/demo/Greeter.java");
+
+            try (var client = connect(socket())) {
+                var dryRun = client.ask(renameRequest(greeter, true));
+
+                assertThat(dryRun).contains("\"modified\":[").contains("welcome");
+                assertThat(Files.readString(greeter)).contains("String greet(");
+
+                var byToken = client.ask(renameTokenRequest(greeter));
+
+                assertThat(byToken).contains("\"modified\":[");
+                assertThat(Files.readString(greeter)).contains("String welcome(");
+                assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
+            }
+        }
+
+        @Test
+        void aRenameWhereThereIsNoSymbolIsRefusedWithItsProblemObject() throws IOException {
+            serving();
+            Scenarios.RENAME_METHOD.writeProject(directory);
+            var greeter = directory.resolve("src/main/java/demo/Greeter.java");
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask("""
+                    {"jsonrpc":"2.0","id":4,"method":"rename","params":{"file":"%s","line":"4","column":"0",\
+                    "newName":"anything","dryRun":"false"}}
+                    """.formatted(greeter))).contains("\"key\":\"language-server-no-such-symbol\"");
+            }
+        }
+
+        private static String renameRequest(Path file, boolean dryRun) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"rename","params":{"file":"%s","line":"5","column":"18",\
+                "newName":"welcome","dryRun":"%s"}}
+                """.formatted(file, dryRun);
+        }
+
+        private static String renameTokenRequest(Path file) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"rename-token","params":{"file":"%s","token":"greet",\
+                "newName":"welcome","dryRun":"false"}}
+                """.formatted(file);
         }
 
         private static String diagnosticsRequest(Path file) {

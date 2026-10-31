@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
 import fr.craft.gabier.editing.fixtures.Scenarios;
+import fr.craft.gabier.protocol.ChangedFiles;
 import fr.craft.gabier.protocol.DaemonStatus;
 import fr.craft.gabier.protocol.FileDiagnostics;
 import fr.craft.gabier.protocol.JdtlsState;
@@ -203,6 +204,63 @@ class InstalledDaemonTest {
             System.out.println("the daemon answered: " + error);
 
             assertThat(daemon.status().jdtls()).isEqualTo(JdtlsState.READY);
+
+            daemon.stop();
+            daemon.assertNothingIsLeft();
+        }
+    }
+
+    private static String renameByPosition(Path file, String newName, boolean dryRun) {
+        return """
+            {"file":"%s","line":"5","column":"18","newName":"%s","dryRun":"%s"}\
+            """.formatted(file, newName, dryRun);
+    }
+
+    private static String renameByToken(Path file, String token, String newName) {
+        return """
+            {"file":"%s","token":"%s","newName":"%s","dryRun":"false"}\
+            """.formatted(file, token, newName);
+    }
+
+    private static ChangedFiles changedBy(String answer) {
+        var parsed = RpcResponse.parse(answer);
+        assertThat(parsed).as("the answer: %s", answer).isInstanceOf(RpcResponse.Success.class);
+
+        return ChangedFiles.of(((RpcResponse.Success) parsed).result());
+    }
+
+    @Test
+    void renamesASymbolOfAProjectOnTheRealJdtlsAndAnotherRenameSeesTheFirst() throws Exception {
+        var project = Files.createDirectory(directory.resolve("rename-project")).toRealPath();
+        Scenarios.RENAME_METHOD.writeProject(project);
+        EclipseProject.describe(project);
+        var greeter = project.resolve("src/main/java/demo/Greeter.java");
+        var main = project.resolve("src/main/java/demo/Main.java");
+        var original = Files.readString(greeter);
+        try (var daemon = new Daemon(project)) {
+            var dryRun = changedBy(daemon.ask("rename", renameByPosition(greeter, "welcome", true)));
+            daemon.remember();
+            assertThat(dryRun.modified()).containsExactlyInAnyOrder(greeter, main);
+            assertThat(dryRun.diff()).contains("+    public String welcome(String name) {");
+            assertThat(Files.readString(greeter)).as("a dry run writes nothing").isEqualTo(original);
+
+            var renamed = changedBy(daemon.ask("rename", renameByPosition(greeter, "welcome", false)));
+            assertThat(renamed.modified()).containsExactlyInAnyOrder(greeter, main);
+            assertThat(Files.readString(greeter)).contains("public String welcome(String name)");
+            assertThat(Files.readString(main)).contains("greeter.welcome(\"world\")");
+            System.out.println("the installed daemon renamed greet to welcome: " + renamed.modified());
+
+            // jdtls has learnt of the files the first rename wrote: the second one finds the new name.
+            var back = changedBy(daemon.ask("rename-token", renameByToken(greeter, "welcome", "greet")));
+            assertThat(back.modified()).containsExactlyInAnyOrder(greeter, main);
+            assertThat(Files.readString(greeter)).isEqualTo(original);
+
+            var none = daemon.ask(
+                    "rename",
+                    "{\"file\":\"%s\",\"line\":\"4\",\"column\":\"0\",\"newName\":\"x\",\"dryRun\":\"false\"}"
+                            .formatted(greeter));
+            assertThat(none).contains("\"key\":\"language-server-no-such-symbol\"");
+            assertThat(Files.readString(greeter)).isEqualTo(original);
 
             daemon.stop();
             daemon.assertNothingIsLeft();

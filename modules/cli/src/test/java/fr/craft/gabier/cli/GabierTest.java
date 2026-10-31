@@ -3,6 +3,7 @@ package fr.craft.gabier.cli;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import fr.craft.gabier.protocol.ChangedFiles;
 import fr.craft.gabier.protocol.FileDiagnostics;
 import fr.craft.gabier.protocol.JsonRpc;
 import fr.craft.gabier.protocol.Problem;
@@ -30,7 +31,8 @@ import org.junit.jupiter.api.io.TempDir;
 class GabierTest {
 
     private static final String USAGE_DETAIL =
-            "Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file>)";
+            "Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file> | rename"
+                    + " [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>)";
 
     @TempDir
     Path directory;
@@ -159,6 +161,54 @@ class GabierTest {
         void aFileWithoutTheDiagnosticsCommandIsAnUnknownUsage() {
             assertThat(run("A.java", "diagnostics")).isEqualTo(2);
             assertThat(err()).isEqualTo(usageText("A.java diagnostics"));
+        }
+
+        @Test
+        void aRenameThatNamesNeitherAPositionNorAnIdentifierCompletelyIsAnUnknownUsage() {
+            for (var arguments : List.of(
+                    List.of("rename"),
+                    List.of("rename", "A.java", "3", "5"),
+                    List.of("rename", "A.java", "3", "5", "name", "more"),
+                    List.of("rename", "--dry-run", "A.java", "3", "name"),
+                    List.of("rename", "--token", "A.java", "name"),
+                    List.of("rename", "--token", "A.java", "id", "name", "more"),
+                    List.of("rename", "--token", "A.java", "3", "5", "name"))) {
+                out.reset();
+                err.reset();
+
+                assertThat(run(arguments.toArray(String[]::new)))
+                        .as(arguments.toString())
+                        .isEqualTo(2);
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(usageText(String.join(" ", arguments)));
+            }
+        }
+
+        @Test
+        void aLineOrAColumnThatIsNotANumberFromOneIsAnUnknownUsage() {
+            for (var position : List.of(
+                    List.of("0", "5"),
+                    List.of("3", "0"),
+                    List.of("-1", "5"),
+                    List.of("three", "5"),
+                    List.of("3", "five"),
+                    List.of("3", "1.5"))) {
+                out.reset();
+                err.reset();
+
+                assertThat(run("rename", "A.java", position.get(0), position.get(1), "name"))
+                        .as(position.toString())
+                        .isEqualTo(2);
+                assertThat(out()).isEmpty();
+                assertThat(err())
+                        .isEqualTo(usageText("rename A.java " + position.get(0) + " " + position.get(1) + " name"));
+            }
+        }
+
+        @Test
+        void theDryRunAndTokenOptionsOfARenameAreNotOptionsOfAnotherCommand() {
+            assertThat(run("diagnostics", "--dry-run", "A.java")).isEqualTo(2);
+            assertThat(err()).isEqualTo(usageText("diagnostics --dry-run A.java"));
         }
     }
 
@@ -702,6 +752,256 @@ class GabierTest {
         @Test
         void saysNoDaemonIsRunningWithoutHanging() throws Exception {
             var code = CompletableFuture.supplyAsync(() -> runWithSocket("diagnostics", "/project/Main.java"))
+                    .get(10, TimeUnit.SECONDS);
+
+            assertThat(code).isEqualTo(2);
+            assertThat(err()).contains("(daemon-not-running; ");
+        }
+    }
+
+    @Nested
+    class Renaming {
+
+        private static final String BY_POSITION = """
+            {"jsonrpc":"2.0","id":1,"method":"rename","params":{"column":"17","dryRun":"%s","file":"%s",\
+            "line":"5","newName":"welcome"}}\
+            """;
+        private static final String BY_TOKEN = """
+            {"jsonrpc":"2.0","id":1,"method":"rename-token","params":{"dryRun":"%s","file":"%s",\
+            "newName":"welcome","token":"greet"}}\
+            """;
+        private static final ChangedFiles RENAMED_METHOD = new ChangedFiles(
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(Path.of("/project/Greeter.java"), Path.of("/project/Main.java")),
+                """
+                --- /project/Greeter.java
+                +++ /project/Greeter.java
+                @@ -1 +1 @@
+                -    public String greet(String name) {
+                +    public String welcome(String name) {
+                --- /project/Main.java
+                +++ /project/Main.java
+                @@ -1 +1 @@
+                -        System.out.println(greeter.greet("world"));
+                +        System.out.println(greeter.welcome("world"));
+                """);
+        private static final ChangedFiles RENAMED_TYPE = new ChangedFiles(
+                List.of(Path.of("/project/New.java")),
+                List.of(new ChangedFiles.Moved(Path.of("/project/Greeter.java"), Path.of("/project/Welcomer.java"))),
+                List.of(Path.of("/project/Gone.java")),
+                List.of(Path.of("/project/Main.java")),
+                "--- /project/Main.java\n+++ /project/Main.java\n");
+        private static final Problem NO_SYMBOL = new Problem(
+                "urn:gabier:error:language-server-no-such-symbol",
+                "No such symbol",
+                "There is no symbol at 4:0 of /project/Greeter.java",
+                "language-server-no-such-symbol",
+                Map.of("file", "/project/Greeter.java"),
+                ErrorStatus.BAD_REQUEST);
+
+        private Path socket() {
+            return directory.resolve("gabier.sock");
+        }
+
+        private int runWithSocket(String... args) {
+            return run(Map.of("GABIER_SOCKET", socket().toString()), args);
+        }
+
+        @Test
+        void asksTheDaemonToRenameTheSymbolAtAPositionGivenFromOneAndSendsItFromZero() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", RENAMED_METHOD.toJson()))) {
+                assertThat(runWithSocket("rename", "/project/Greeter.java", "6", "18", "welcome"))
+                        .isZero();
+
+                assertThat(daemon.requests())
+                        .containsExactly(BY_POSITION.formatted(false, Path.of("/project/Greeter.java")));
+            }
+        }
+
+        @Test
+        void asksTheDaemonToRenameTheSymbolAnIdentifierNamesWithTheTokenOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", RENAMED_METHOD.toJson()))) {
+                assertThat(runWithSocket("rename", "--token", "/project/Greeter.java", "greet", "welcome"))
+                        .isZero();
+
+                assertThat(daemon.requests())
+                        .containsExactly(BY_TOKEN.formatted(false, Path.of("/project/Greeter.java")));
+            }
+        }
+
+        @Test
+        void asksForADryRunWithTheDryRunOptionWhereverItIs() throws IOException {
+            for (var arguments : List.of(
+                    List.of("rename", "--dry-run", "/project/Greeter.java", "6", "18", "welcome"),
+                    List.of("rename", "/project/Greeter.java", "6", "18", "welcome", "--dry-run"))) {
+                try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", RENAMED_METHOD.toJson()))) {
+                    assertThat(runWithSocket(arguments.toArray(String[]::new))).isZero();
+
+                    assertThat(daemon.requests())
+                            .containsExactly(BY_POSITION.formatted(true, Path.of("/project/Greeter.java")));
+                }
+                Files.deleteIfExists(socket());
+            }
+        }
+
+        @Test
+        void asksForADryRunByTokenWithTheTwoOptionsInAnyOrder() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", RENAMED_METHOD.toJson()))) {
+                assertThat(runWithSocket("rename", "--token", "--dry-run", "/project/Greeter.java", "greet", "welcome"))
+                        .isZero();
+
+                assertThat(daemon.requests())
+                        .containsExactly(BY_TOKEN.formatted(true, Path.of("/project/Greeter.java")));
+            }
+        }
+
+        @Test
+        void sendsTheAbsolutePathOfARelativeFile() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", RENAMED_METHOD.toJson()))) {
+                assertThat(runWithSocket("rename", "src/Greeter.java", "6", "18", "welcome"))
+                        .isZero();
+
+                assertThat(daemon.requests())
+                        .containsExactly(BY_POSITION.formatted(
+                                false, Path.of("src/Greeter.java").toAbsolutePath()));
+            }
+        }
+
+        @Test
+        void listsTheFilesThatChangedThenShowsTheDiff() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", RENAMED_METHOD.toJson()))) {
+                assertThat(runWithSocket("rename", "/project/Greeter.java", "6", "18", "welcome"))
+                        .isZero();
+
+                assertThat(out().lines())
+                        .containsExactly(
+                                "modified /project/Greeter.java",
+                                "modified /project/Main.java",
+                                "",
+                                "--- /project/Greeter.java",
+                                "+++ /project/Greeter.java",
+                                "@@ -1 +1 @@",
+                                "-    public String greet(String name) {",
+                                "+    public String welcome(String name) {",
+                                "--- /project/Main.java",
+                                "+++ /project/Main.java",
+                                "@@ -1 +1 @@",
+                                "-        System.out.println(greeter.greet(\"world\"));",
+                                "+        System.out.println(greeter.welcome(\"world\"));");
+                assertThat(err()).isEmpty();
+            }
+        }
+
+        @Test
+        void listsTheFilesCreatedMovedAndDeletedToo() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", RENAMED_TYPE.toJson()))) {
+                assertThat(runWithSocket("rename", "/project/Greeter.java", "3", "14", "Welcomer"))
+                        .isZero();
+
+                assertThat(out().lines())
+                        .containsExactly(
+                                "modified /project/Main.java",
+                                "created /project/New.java",
+                                "renamed /project/Greeter.java -> /project/Welcomer.java",
+                                "deleted /project/Gone.java",
+                                "",
+                                "--- /project/Main.java",
+                                "+++ /project/Main.java");
+            }
+        }
+
+        @Test
+        void saysThatNothingWasWrittenForADryRun() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", RENAMED_METHOD.toJson()))) {
+                assertThat(runWithSocket("rename", "--dry-run", "/project/Greeter.java", "6", "18", "welcome"))
+                        .isZero();
+
+                assertThat(out().lines()).startsWith("dry run, nothing written", "modified /project/Greeter.java");
+            }
+        }
+
+        @Test
+        void printsNothingWhenNothingChanged() throws IOException {
+            var nothing = new ChangedFiles(List.of(), List.of(), List.of(), List.of(), "");
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", nothing.toJson()))) {
+                assertThat(runWithSocket("rename", "/project/Greeter.java", "6", "18", "welcome"))
+                        .isZero();
+
+                assertThat(out()).isEmpty();
+            }
+        }
+
+        @Test
+        void showsWhatATerminalWouldObeyInAFileNameOrADiffAsEscapes() throws IOException {
+            var hostile = new ChangedFiles(
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(Path.of("/project/a\u001b[2Jb.java")),
+                    "--- /project/a\u001b[2Jb.java\n+forged\u001b[2J\n");
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", hostile.toJson()))) {
+                assertThat(runWithSocket("rename", "/project/Greeter.java", "6", "18", "welcome"))
+                        .isZero();
+
+                assertThat(out().lines())
+                        .containsExactly(
+                                "modified /project/a\\u001b[2Jb.java",
+                                "",
+                                "--- /project/a\\u001b[2Jb.java",
+                                "+forged\\u001b[2J");
+            }
+        }
+
+        @Test
+        void givesTheResultAsJsonWithTheJsonOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", RENAMED_METHOD.toJson()))) {
+                assertThat(runWithSocket("--json", "rename", "--token", "/project/Greeter.java", "greet", "welcome"))
+                        .isZero();
+
+                assertThat(out()).isEqualTo(RENAMED_METHOD.toJson() + System.lineSeparator());
+                assertThat(err()).isEmpty();
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsItsProblemObjectWithTheExitCodeOfItsCategory() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", NO_SYMBOL))) {
+                assertThat(runWithSocket("rename", "/project/Greeter.java", "5", "1", "anything"))
+                        .isEqualTo(2);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(NO_SYMBOL.toText() + System.lineSeparator());
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsJsonWithTheJsonOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", NO_SYMBOL))) {
+                assertThat(runWithSocket("--json", "rename", "/project/Greeter.java", "5", "1", "anything"))
+                        .isEqualTo(2);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(NO_SYMBOL.toJson() + System.lineSeparator());
+            }
+        }
+
+        @Test
+        void reportsAResultThatIsNotAListOfChangedFilesAsAnInternalError() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", "{}"))) {
+                assertThat(runWithSocket("rename", "/project/Greeter.java", "6", "18", "welcome"))
+                        .isEqualTo(1);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).contains("(invalid-response)");
+            }
+        }
+
+        @Test
+        void saysNoDaemonIsRunningWithoutHanging() throws Exception {
+            var code = CompletableFuture.supplyAsync(
+                            () -> runWithSocket("rename", "/project/Greeter.java", "6", "18", "welcome"))
                     .get(10, TimeUnit.SECONDS);
 
             assertThat(code).isEqualTo(2);

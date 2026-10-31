@@ -17,9 +17,10 @@ import java.util.stream.Stream;
 
 /**
  * The daemon served by the fake language server, for the {@code native} stage of {@code bin/ci}: the same daemon as
- * {@link Main} (same sockets, same methods), with the fake of the core scripted by the diagnostics scenarios in place of
- * a jdtls. Its only argument is the folder of the project the scenarios play on: it writes their files there, so the
- * folder is new or empty, and a folder that holds anything is refused (its files would be overwritten).
+ * {@link Main} (same sockets, same methods), with the fake of the core scripted by the diagnostics and rename scenarios
+ * in place of a jdtls. Its only argument is the folder of the project the scenarios play on: it writes their files
+ * there, so the folder is new or empty, and a folder that holds anything is refused (its files would be overwritten). A
+ * rename writes the files of that folder, as the real one does.
  *
  * <p>It is its own distribution ({@code :daemon:installFakeServed}), never part of the one a user installs: the fake is
  * test code, and nothing a client sends can switch a daemon to it.
@@ -55,7 +56,11 @@ public final class FakeServedMain {
                 Scenarios.CLEAN_FILE,
                 Scenarios.FILE_WITH_AN_ERROR,
                 Scenarios.FILE_WITH_A_WARNING,
-                Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT);
+                Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT,
+                Scenarios.RENAME_METHOD,
+                Scenarios.RENAME_TYPE,
+                Scenarios.RENAME_WHERE_THERE_IS_NO_SYMBOL,
+                Scenarios.RENAME_OUTSIDE_THE_PROJECT);
         for (var scenario : scenarios) {
             scenario.writeProject(root);
             server.scripted(scenario);

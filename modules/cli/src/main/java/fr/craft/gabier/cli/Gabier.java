@@ -1,5 +1,6 @@
 package fr.craft.gabier.cli;
 
+import fr.craft.gabier.protocol.ChangedFiles;
 import fr.craft.gabier.protocol.DaemonStatus;
 import fr.craft.gabier.protocol.ExitCode;
 import fr.craft.gabier.protocol.FileDiagnostics;
@@ -13,6 +14,8 @@ import fr.craft.gabier.protocol.UserId;
 import fr.craft.gabier.shared.generation.ExcludeFromGeneratedCodeCoverage;
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -22,6 +25,9 @@ public final class Gabier {
     private static final String STATUS_COMMAND = "status";
     private static final String STOP_COMMAND = "stop";
     private static final String DIAGNOSTICS_COMMAND = "diagnostics";
+    private static final String RENAME_COMMAND = "rename";
+    private static final String DRY_RUN_OPTION = "--dry-run";
+    private static final String TOKEN_OPTION = "--token";
     private static final String JSON_OPTION = "--json";
 
     private Gabier() {}
@@ -60,6 +66,11 @@ public final class Gabier {
 
             return;
         }
+        if (!arguments.isEmpty() && arguments.getFirst().equals(RENAME_COMMAND)) {
+            rename(socket(environment), arguments, json, out);
+
+            return;
+        }
         var command = arguments.size() == 1 ? arguments.getFirst() : "";
         switch (command) {
             case VERSION_COMMAND -> out.println("gabier " + ProtocolVersion.CURRENT);
@@ -95,6 +106,75 @@ public final class Gabier {
                 .forEach(diagnosis -> out.println(TerminalText.neutralise(file + ":" + (diagnosis.line() + 1) + ":"
                         + (diagnosis.column() + 1) + ": " + diagnosis.severity().text() + ": "
                         + diagnosis.message())));
+    }
+
+    /**
+     * {@code rename [--dry-run] <file> <line> <column> <new-name>} or {@code rename [--dry-run] --token <file>
+     * <identifier> <new-name>}: the options may stand anywhere after the command. The position is from 1, as
+     * {@code diagnostics} shows it, and goes to the daemon from 0. The text lists the files that changed, then the
+     * diff, with the same neutralisation as every text that comes from the project; {@code --json} gives the result as
+     * the daemon gave it.
+     */
+    private static void rename(Path socket, List<String> arguments, boolean json, PrintStream out) {
+        var words = arguments.subList(1, arguments.size());
+        var dryRun = words.contains(DRY_RUN_OPTION);
+        var token = words.contains(TOKEN_OPTION);
+        var operands = words.stream()
+                .filter(word -> !word.equals(DRY_RUN_OPTION) && !word.equals(TOKEN_OPTION))
+                .toList();
+        var params = new HashMap<String, String>();
+        if (token && operands.size() == 3) {
+            params.put("file", Path.of(operands.get(0)).toAbsolutePath().toString());
+            params.put("token", operands.get(1));
+        } else if (!token && operands.size() == 4) {
+            params.put("file", Path.of(operands.get(0)).toAbsolutePath().toString());
+            params.put("line", zeroBased(arguments, operands.get(1)));
+            params.put("column", zeroBased(arguments, operands.get(2)));
+        } else {
+            throw UsageException.unsupportedArguments(arguments);
+        }
+        params.put("newName", operands.getLast());
+        params.put("dryRun", String.valueOf(dryRun));
+        var changed = ChangedFiles.of(ask(socket, token ? "rename-token" : RENAME_COMMAND, params, false)
+                .result());
+        if (json) {
+            out.println(changed.toJson());
+
+            return;
+        }
+        if (dryRun) {
+            out.println("dry run, nothing written");
+        }
+        changedText(changed).forEach(line -> out.println(TerminalText.neutralise(line)));
+    }
+
+    /** A position as the user counts it, from 1, as the daemon counts it, from 0. */
+    private static String zeroBased(List<String> arguments, String position) {
+        try {
+            int value = Integer.parseInt(position);
+            if (value >= 1) {
+                return String.valueOf(value - 1);
+            }
+        } catch (NumberFormatException notANumber) {
+            // The usage error below says it.
+        }
+
+        throw UsageException.unsupportedArguments(arguments);
+    }
+
+    /** One line per file changed, a blank line, then the diff; nothing for a result that holds nothing. */
+    private static List<String> changedText(ChangedFiles changed) {
+        var lines = new ArrayList<String>();
+        changed.modified().forEach(file -> lines.add("modified " + file));
+        changed.created().forEach(file -> lines.add("created " + file));
+        changed.renamed().forEach(moved -> lines.add("renamed " + moved.from() + " -> " + moved.to()));
+        changed.deleted().forEach(file -> lines.add("deleted " + file));
+        if (!changed.diff().isEmpty()) {
+            lines.add("");
+            changed.diff().lines().forEach(lines::add);
+        }
+
+        return lines;
     }
 
     private static void status(Path socket, boolean json, PrintStream out) {

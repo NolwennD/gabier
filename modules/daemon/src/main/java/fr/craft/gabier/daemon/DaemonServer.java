@@ -1,6 +1,8 @@
 package fr.craft.gabier.daemon;
 
 import fr.craft.gabier.editing.application.Diagnose;
+import fr.craft.gabier.editing.application.Rename;
+import fr.craft.gabier.editing.infrastructure.secondary.NioFileStore;
 import fr.craft.gabier.protocol.DaemonStatus;
 import fr.craft.gabier.protocol.JdtlsState;
 import fr.craft.gabier.protocol.ProtocolVersion;
@@ -49,11 +51,14 @@ final class DaemonServer implements AutoCloseable {
         this.listener = listener;
         this.project = project;
         var startedAt = nanoClock.getAsLong();
+        var rename = new Rename(project, new NioFileStore());
         // The method table: to add a method, add it here (.claude/skills/add-daemon-method/SKILL.md).
         handler = new RequestHandler(List.of(
                 new StatusMethod(() -> status(nanoClock, startedAt, pid)),
                 new StopMethod(this::requestStop),
-                new DiagnosticsMethod(new Diagnose(project))));
+                new DiagnosticsMethod(new Diagnose(project)),
+                new RenameMethod(rename),
+                new RenameTokenMethod(rename)));
     }
 
     /**

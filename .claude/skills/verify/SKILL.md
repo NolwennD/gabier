@@ -46,7 +46,8 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   (`SocketLocation`, in `protocol`: `GABIER_SOCKET`, else `$XDG_RUNTIME_DIR/gabier/gabier.sock`, else
   `/tmp/gabier-<uid>/gabier.sock`, at most 107 bytes), `DaemonServer` takes the socket (`SocketGuard`: private folder,
   stale socket removed, another daemon refused) and serves the clients with `Connection` (lines in, lines out) and
-  `RequestHandler` (the method table: `StatusMethod`, `StopMethod`, `DiagnosticsMethod`; adding one is
+  `RequestHandler` (the method table: `StatusMethod`, `StopMethod`, `DiagnosticsMethod`, `RenameMethod`,
+  `RenameTokenMethod`; adding one is
   `.claude/skills/add-daemon-method`). The daemon serves one project (`ServedProject`: its root, its language server and
   where that is): `Main` takes the folder from its argument, `GABIER_PROJECT` or the working directory, and builds
   `ProjectServer.jdtls`, which starts the real jdtls (`JdtlsLanguageServer`, launcher `GABIER_JDTLS`) at the first request
