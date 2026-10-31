@@ -20,7 +20,7 @@ A refusal is the problem object, exit code 2, and nothing is written:
   for `doubled(int)`), which would not compile. The same name with other parameter types is an overload and is accepted;
 - a file outside the project, a server that is not ready, a change set that cannot be applied to the file as it is.
 
-All of these are contract scenarios replayed on the real jdtls (`ScenarioReplayTest`).
+The refusals above, except the change set that cannot be applied, are contract scenarios replayed on the real jdtls (`ScenarioReplayTest`). That a name with other parameter types is accepted as an overload is tested on the fake language server only.
 
 ```text
 $ gabier extract-method --dry-run src/main/java/demo/Totals.java 6:9 6:47 printCount
