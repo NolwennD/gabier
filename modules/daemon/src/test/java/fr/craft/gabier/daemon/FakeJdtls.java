@@ -20,6 +20,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
+import org.eclipse.lsp4j.CodeAction;
+import org.eclipse.lsp4j.CodeActionParams;
+import org.eclipse.lsp4j.Command;
 import org.eclipse.lsp4j.Diagnostic;
 import org.eclipse.lsp4j.DidChangeConfigurationParams;
 import org.eclipse.lsp4j.DidChangeTextDocumentParams;
@@ -42,6 +45,7 @@ import org.eclipse.lsp4j.RenameParams;
 import org.eclipse.lsp4j.ServerCapabilities;
 import org.eclipse.lsp4j.WorkspaceEdit;
 import org.eclipse.lsp4j.jsonrpc.Launcher;
+import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.eclipse.lsp4j.jsonrpc.messages.Either3;
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification;
 import org.eclipse.lsp4j.launch.LSPLauncher;
@@ -107,6 +111,10 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private CompletableFuture<WorkspaceEdit> renameAnswer = new CompletableFuture<>();
     private final List<PrepareRenameParams> prepared = new CopyOnWriteArrayList<>();
     private final List<RenameParams> renamed = new CopyOnWriteArrayList<>();
+    private CompletableFuture<List<Either<Command, CodeAction>>> codeActionAnswer = new CompletableFuture<>();
+    private CompletableFuture<CodeAction> resolveAnswer = new CompletableFuture<>();
+    private final List<CodeActionParams> codeActionRequests = new CopyOnWriteArrayList<>();
+    private final List<CodeAction> resolveRequests = new CopyOnWriteArrayList<>();
     private final List<List<String>> registeredWatchers = new ArrayList<>();
     private final List<DidChangeWatchedFilesParams> watched = new CopyOnWriteArrayList<>();
 
@@ -212,6 +220,34 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     FakeJdtls renameAnswers(CompletableFuture<WorkspaceEdit> answer) {
         this.renameAnswer = answer;
         return this;
+    }
+
+    /**
+     * The answer to {@code textDocument/codeAction}, whatever the request: the actions, null or a failed future.
+     * Unscripted, the request never gets an answer.
+     */
+    FakeJdtls codeActionAnswers(CompletableFuture<List<Either<Command, CodeAction>>> answer) {
+        this.codeActionAnswer = answer;
+        return this;
+    }
+
+    /**
+     * The answer to {@code codeAction/resolve}, whatever the action: the action with its edit, null or a failed
+     * future. Unscripted, the request never gets an answer.
+     */
+    FakeJdtls resolveAnswers(CompletableFuture<CodeAction> answer) {
+        this.resolveAnswer = answer;
+        return this;
+    }
+
+    /** The {@code codeAction} requests received, in order. */
+    List<CodeActionParams> codeActionRequests() {
+        return codeActionRequests;
+    }
+
+    /** The {@code codeAction/resolve} requests received, in order. */
+    List<CodeAction> resolveRequests() {
+        return resolveRequests;
     }
 
     /** The {@code prepareRename} requests received, in order. */
@@ -515,6 +551,20 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                     received.add("rename " + named(params.getTextDocument().getUri()));
                     renamed.add(params);
                     return renameAnswer;
+                }
+
+                @Override
+                public CompletableFuture<List<Either<Command, CodeAction>>> codeAction(CodeActionParams params) {
+                    received.add("codeAction " + named(params.getTextDocument().getUri()));
+                    codeActionRequests.add(params);
+                    return codeActionAnswer;
+                }
+
+                @Override
+                public CompletableFuture<CodeAction> resolveCodeAction(CodeAction action) {
+                    received.add("resolveCodeAction");
+                    resolveRequests.add(action);
+                    return resolveAnswer;
                 }
 
                 @Override

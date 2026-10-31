@@ -146,6 +146,11 @@ class ProjectServerTest {
             return RENAMED;
         }
 
+        @Override
+        public Optional<ChangeSet> organizeImports(Path file) {
+            return Optional.of(RENAMED);
+        }
+
         /** jdtls was ready and is dead now: nobody asked it to end. */
         void dies() {
             failure = "it was killed";
@@ -217,10 +222,18 @@ class ProjectServerTest {
         }
 
         @Test
+        void anOrganizationOfTheImportsStartsItToo() {
+            assertThat(project.organizeImports(FILE)).contains(ScriptedServer.RENAMED);
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
         void keepsItForTheNextRequests() {
             project.diagnostics(FILE);
             project.diagnostics(FILE);
             project.rename(FILE, new Position(0, 0), "Other");
+            project.organizeImports(FILE);
 
             assertThat(starter.starts).hasValue(1);
         }

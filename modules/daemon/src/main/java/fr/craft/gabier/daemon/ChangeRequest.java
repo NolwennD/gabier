@@ -1,5 +1,6 @@
 package fr.craft.gabier.daemon;
 
+import fr.craft.gabier.editing.application.OrganizeImports;
 import fr.craft.gabier.editing.application.Rename;
 import fr.craft.gabier.editing.application.RenameTarget;
 import fr.craft.gabier.editing.domain.ChangeReport;
@@ -10,11 +11,11 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * What the two rename methods share: how their parameters are read (every refusal names the parameter, as an {@code
- * invalid-parameter}), and how the report of the core becomes the result of the protocol. The request carries the
- * parameters that the method declares, so none is checked for presence here.
+ * What the methods that change files share: how their parameters are read (every refusal names the parameter, as an
+ * {@code invalid-parameter}), and how the report of the core becomes the result of the protocol. The request carries
+ * the parameters that the method declares, so none is checked for presence here.
  */
-final class RenameRequest {
+final class ChangeRequest {
 
     static final String FILE = "file";
     static final String NEW_NAME = "newName";
@@ -23,7 +24,7 @@ final class RenameRequest {
     private final String method;
     private final Map<String, String> params;
 
-    RenameRequest(String method, Map<String, String> params) {
+    ChangeRequest(String method, Map<String, String> params) {
         this.method = method;
         this.params = params;
     }
@@ -64,6 +65,14 @@ final class RenameRequest {
     DaemonMethod.Outcome run(Rename rename, RenameTarget target) {
         String newName = text(NEW_NAME);
         ChangeReport report = dryRun() ? rename.dryRun(target, newName) : rename.apply(target, newName);
+
+        return DaemonMethod.Outcome.of(changed(report).toJson());
+    }
+
+    /** What organizing the imports of the file does, written unless the request is a dry run. */
+    DaemonMethod.Outcome run(OrganizeImports organize) {
+        Path file = file();
+        ChangeReport report = dryRun() ? organize.dryRun(file) : organize.apply(file);
 
         return DaemonMethod.Outcome.of(changed(report).toJson());
     }

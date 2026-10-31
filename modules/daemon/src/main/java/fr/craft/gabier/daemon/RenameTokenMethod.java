@@ -21,12 +21,12 @@ record RenameTokenMethod(Rename rename) implements DaemonMethod {
 
     @Override
     public Set<String> parameters() {
-        return Set.of(RenameRequest.FILE, TOKEN, RenameRequest.NEW_NAME, RenameRequest.DRY_RUN);
+        return Set.of(ChangeRequest.FILE, TOKEN, ChangeRequest.NEW_NAME, ChangeRequest.DRY_RUN);
     }
 
     @Override
     public Outcome call(Map<String, String> params) {
-        var request = new RenameRequest(name(), params);
+        var request = new ChangeRequest(name(), params);
         var target = new RenameTarget.Token(request.file(), request.token(TOKEN));
 
         return request.run(rename, target);

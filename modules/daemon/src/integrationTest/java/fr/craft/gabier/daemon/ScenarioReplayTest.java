@@ -22,6 +22,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaFileObject;
@@ -82,7 +83,9 @@ class ScenarioReplayTest {
 
     /** The requests the adapter implements. */
     private static boolean replayed(Scenario scenario) {
-        return scenario.request() instanceof Request.Diagnostics || scenario.request() instanceof Request.Rename;
+        return scenario.request() instanceof Request.Diagnostics
+                || scenario.request() instanceof Request.Rename
+                || scenario.request() instanceof Request.OrganizeImports;
     }
 
     /**
@@ -197,6 +200,25 @@ class ScenarioReplayTest {
                         .isEqualTo(renamed.changes());
                 compile(scenario, root, answer, differences);
             }
+            case Answer.Organized organized -> {
+                var answer = (Optional<?>) ask(server, request);
+                System.out.println(scenario.name() + ": jdtls answered " + answer);
+                differences
+                        .assertThat(answer)
+                        .as("%s: the change set jdtls answers", scenario.name())
+                        .isEqualTo(Optional.of(organized.changes()));
+                if (answer.isPresent()) {
+                    compile(scenario, root, (ChangeSet) answer.get(), differences);
+                }
+            }
+            case Answer.AlreadyOrganized _ -> {
+                var answer = (Optional<?>) ask(server, request);
+                System.out.println(scenario.name() + ": jdtls answered " + answer);
+                differences
+                        .assertThat(answer)
+                        .as("%s: jdtls has no edit to give", scenario.name())
+                        .isEmpty();
+            }
             case Answer.Refused refused -> {
                 LanguageServerException expected = request.refusal(refused.key());
                 try {
@@ -222,11 +244,12 @@ class ScenarioReplayTest {
         }
     }
 
-    /** The diagnostics, or the change set, that jdtls answers to the request. */
+    /** The diagnostics, the change set, or the change set that may be none, that jdtls answers to the request. */
     private static Object ask(JdtlsLanguageServer server, Request request) {
         return switch (request) {
             case Request.Diagnostics diagnostics -> server.diagnostics(diagnostics.file());
             case Request.Rename rename -> server.rename(rename.file(), rename.position(), rename.newName());
+            case Request.OrganizeImports organize -> server.organizeImports(organize.file());
         };
     }
 

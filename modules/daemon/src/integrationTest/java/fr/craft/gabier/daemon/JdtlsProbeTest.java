@@ -8,6 +8,7 @@ import fr.craft.gabier.editing.domain.Diagnostic.Severity;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -66,6 +67,7 @@ class JdtlsProbeTest {
             Path clean = checkEverySource(server, sources, projectRoot);
             checkBrokenCopy(server, clean);
             checkFileOutsideTheProject(server);
+            checkImportsOfTheProjectAreInOrder(server, projectRoot, modules);
         }
     }
 
@@ -134,6 +136,95 @@ class JdtlsProbeTest {
                     });
         } finally {
             Files.delete(broken);
+        }
+    }
+
+    /**
+     * Organizing the imports of every source of the project (main, test, fixtures, integration tests, the architecture
+     * tests) changes nothing: the imports are as the formatter keeps them (static first, one block in ASCII order, no
+     * star), which jdtls must agree with, or an agent that organizes the imports of a file would reorder what the
+     * project orders already. A probe that sees nothing must not pass: a copy of a main source and of a test source
+     * that uses static imports, each with an unused import added, must get an edit that removes it.
+     */
+    private static void checkImportsOfTheProjectAreInOrder(
+            JdtlsLanguageServer server, Path projectRoot, List<Path> modules) throws IOException {
+        List<Path> sources = new ArrayList<>();
+        List<Path> roots = new ArrayList<>(
+                modules.stream().map(module -> module.resolve("src")).toList());
+        roots.add(projectRoot.resolve("architecture/src"));
+        for (Path root : roots) {
+            try (Stream<Path> files = Files.walk(root)) {
+                files.filter(file -> file.getFileName().toString().endsWith(".java"))
+                        .filter(JdtlsProbeTest::isClassSource)
+                        // Left out: jdtls does not see the packages of the test fixtures from this source set ("not
+                        // accessible"), so it drops the imports it cannot resolve instead of keeping them.
+                        .filter(file -> !file.toString().contains("/src/fakeServed/"))
+                        .sorted()
+                        .forEach(sources::add);
+            }
+        }
+        List<String> changed = new ArrayList<>();
+        for (Path source : sources) {
+            server.organizeImports(source)
+                    .ifPresent(change -> changed.add(projectRoot.relativize(source) + ": " + change));
+        }
+        System.out.println("organized the imports of " + sources.size() + " sources of the project, " + changed.size()
+                + " would change");
+        assertThat(changed)
+                .as("the sources whose imports jdtls would change: the project orders them differently")
+                .isEmpty();
+
+        Path main = sources.stream()
+                .filter(source -> source.toString().contains("/src/main/"))
+                .filter(JdtlsProbeTest::hasImports)
+                .findFirst()
+                .orElseThrow();
+        Path test = sources.stream()
+                .filter(source -> source.toString().contains("/src/test/"))
+                .filter(JdtlsProbeTest::hasStaticImports)
+                .findFirst()
+                .orElseThrow();
+        checkUntidyCopy(server, main);
+        checkUntidyCopy(server, test);
+    }
+
+    private static boolean hasImports(Path source) {
+        return lines(source).anyMatch(line -> line.startsWith("import "));
+    }
+
+    private static boolean hasStaticImports(Path source) {
+        return lines(source).anyMatch(line -> line.startsWith("import static "));
+    }
+
+    private static Stream<String> lines(Path source) {
+        try {
+            return Files.readAllLines(source).stream();
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
+    }
+
+    /** A temporary copy of a source with an unused import before its first import: jdtls must offer to remove it. */
+    private static void checkUntidyCopy(JdtlsLanguageServer server, Path source) throws IOException {
+        String unused = "import java.util.concurrent.locks.StampedLock;\n";
+        String original = Files.readString(source);
+        String type = source.getFileName().toString().replace(".java", "");
+        String renamed = original.replaceAll("\\b" + Pattern.quote(type) + "\\b", BROKEN_TYPE);
+        int first = renamed.indexOf("import ");
+        Path copy = source.resolveSibling(BROKEN_TYPE + ".java");
+        Files.writeString(copy, renamed.substring(0, first) + unused + renamed.substring(first));
+        try {
+            var change = server.organizeImports(copy);
+            System.out.println(
+                    "copy of " + source.getFileName() + " with an unused import, as jdtls organizes it: " + change);
+            assertThat(change)
+                    .as("the organization of a copy of %s with an unused import", source.getFileName())
+                    .isPresent();
+            assertThat(change.orElseThrow().toString())
+                    .as("the edit that organizes a copy of %s", source.getFileName())
+                    .doesNotContain("StampedLock");
+        } finally {
+            Files.delete(copy);
         }
     }
 

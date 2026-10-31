@@ -203,7 +203,7 @@ final class JdtlsSession implements AutoCloseable {
         var initialize = new InitializeParams();
         initialize.setRootUri(settings.projectRoot().toUri().toString());
         initialize.setCapabilities(JdtlsCapabilities.forRefactoring());
-        initialize.setInitializationOptions(Map.of());
+        initialize.setInitializationOptions(Map.of("settings", JdtlsSettings.javaPreferences()));
         watch.await("the answer to initialize", () -> server.initialize(initialize));
         // Telling jdtls that the client is ready is part of the wait: writing to a jdtls that died throws.
         watch.await("the language/status notification of type ServiceReady", () -> {

@@ -2,6 +2,7 @@ package fr.craft.gabier.editing.domain;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * What gabier asks of a language server for Java, in its own terms: no protocol type crosses this port. It is the port
@@ -30,4 +31,14 @@ public interface JavaLanguageServer {
      *     the position or the name is not valid for it
      */
     ChangeSet rename(Path file, Position position, String newName);
+
+    /**
+     * What organizing the imports of a file changes: the missing imports are added, the unused ones removed, and the
+     * rest ordered as the server is configured to (for gabier, as the project keeps them, with no import collapsed into
+     * a star). Only the file itself is edited.
+     *
+     * @return the change set to apply, none when the imports are already as they should be
+     * @throws LanguageServerException if the server is not ready or the file is not in its project
+     */
+    Optional<ChangeSet> organizeImports(Path file);
 }

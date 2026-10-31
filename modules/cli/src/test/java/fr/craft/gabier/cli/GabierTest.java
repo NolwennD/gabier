@@ -33,7 +33,8 @@ class GabierTest {
 
     private static final String USAGE_DETAIL =
             "Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file> | rename"
-                    + " [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>)";
+                    + " [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>"
+                    + " | organize-imports [--dry-run] <file>)";
 
     @TempDir
     Path directory;
@@ -203,6 +204,25 @@ class GabierTest {
                 assertThat(out()).isEmpty();
                 assertThat(err())
                         .isEqualTo(usageText("rename A.java " + position.get(0) + " " + position.get(1) + " name"));
+            }
+        }
+
+        @Test
+        void organizeImportsWithoutExactlyOneFileIsAnUnknownUsage() {
+            for (var arguments : List.of(
+                    List.of("organize-imports"),
+                    List.of("organize-imports", "--dry-run"),
+                    List.of("organize-imports", "A.java", "B.java"),
+                    List.of("organize-imports", "--dry-run", "A.java", "B.java"),
+                    List.of("organize-imports", "--token", "A.java"))) {
+                out.reset();
+                err.reset();
+
+                assertThat(run(arguments.toArray(String[]::new)))
+                        .as(arguments.toString())
+                        .isEqualTo(2);
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(usageText(String.join(" ", arguments)));
             }
         }
 
@@ -983,6 +1003,195 @@ class GabierTest {
         void reportsAResultThatIsNotAListOfChangedFilesAsAnInternalError() throws IOException {
             try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", "{}"))) {
                 assertThat(runWithSocket("rename", "/project/Greeter.java", "6", "18", "welcome"))
+                        .isEqualTo(1);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).contains("(invalid-response)");
+            }
+        }
+    }
+
+    @Nested
+    class OrganizingImports {
+
+        private static final String REQUEST = """
+            {"jsonrpc":"2.0","id":1,"method":"organize-imports","params":{"dryRun":"%s","file":"%s"}}\
+            """;
+        private static final ChangedFiles ORGANIZED =
+                new ChangedFiles(List.of(), List.of(), List.of(), List.of(Path.of("/project/Untidy.java")), """
+                    --- /project/Untidy.java
+                    +++ /project/Untidy.java
+                    @@ -3,2 +3,2 @@
+                    -import java.util.Set;
+                    +import java.util.ArrayList;
+                    """);
+        private static final ChangedFiles NOTHING = new ChangedFiles(List.of(), List.of(), List.of(), List.of(), "");
+        private static final Problem OUTSIDE = new Problem(
+                "urn:gabier:error:language-server-file-outside-project",
+                "File outside project",
+                "The file /elsewhere/A.java is not in the project of the language server",
+                "language-server-file-outside-project",
+                Map.of("file", "/elsewhere/A.java"),
+                ErrorStatus.BAD_REQUEST);
+
+        private Path socket() {
+            return directory.resolve("gabier.sock");
+        }
+
+        private int runWithSocket(String... args) {
+            return run(Map.of("GABIER_SOCKET", socket().toString()), args);
+        }
+
+        @Test
+        void asksTheDaemonToOrganizeTheImportsOfTheFile() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", ORGANIZED.toJson()))) {
+                assertThat(runWithSocket("organize-imports", "/project/Untidy.java"))
+                        .isZero();
+
+                assertThat(daemon.requests())
+                        .containsExactly(REQUEST.formatted(false, Path.of("/project/Untidy.java")));
+            }
+        }
+
+        @Test
+        void sendsTheAbsolutePathOfARelativeFile() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", ORGANIZED.toJson()))) {
+                assertThat(runWithSocket("organize-imports", "src/Untidy.java")).isZero();
+
+                assertThat(daemon.requests())
+                        .containsExactly(REQUEST.formatted(
+                                false, Path.of("src/Untidy.java").toAbsolutePath()));
+            }
+        }
+
+        @Test
+        void asksForADryRunWithTheDryRunOptionWhereverItIs() throws IOException {
+            for (var arguments : List.of(
+                    List.of("organize-imports", "--dry-run", "/project/Untidy.java"),
+                    List.of("organize-imports", "/project/Untidy.java", "--dry-run"))) {
+                try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", ORGANIZED.toJson()))) {
+                    assertThat(runWithSocket(arguments.toArray(String[]::new))).isZero();
+
+                    assertThat(daemon.requests())
+                            .containsExactly(REQUEST.formatted(true, Path.of("/project/Untidy.java")));
+                }
+                Files.deleteIfExists(socket());
+            }
+        }
+
+        @Test
+        void listsTheFileThatChangedThenShowsTheDiff() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", ORGANIZED.toJson()))) {
+                assertThat(runWithSocket("organize-imports", "/project/Untidy.java"))
+                        .isZero();
+
+                assertThat(out().lines())
+                        .containsExactly(
+                                "modified /project/Untidy.java",
+                                "",
+                                "--- /project/Untidy.java",
+                                "+++ /project/Untidy.java",
+                                "@@ -3,2 +3,2 @@",
+                                "-import java.util.Set;",
+                                "+import java.util.ArrayList;");
+                assertThat(err()).isEmpty();
+            }
+        }
+
+        @Test
+        void saysThatNothingWasWrittenForADryRun() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", ORGANIZED.toJson()))) {
+                assertThat(runWithSocket("organize-imports", "--dry-run", "/project/Untidy.java"))
+                        .isZero();
+
+                assertThat(out().lines()).startsWith("dry run, nothing written", "modified /project/Untidy.java");
+            }
+        }
+
+        @Test
+        void saysThatThereIsNothingToChangeForAFileWhoseImportsAreInOrder() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", NOTHING.toJson()))) {
+                assertThat(runWithSocket("organize-imports", "/project/Tidy.java"))
+                        .isZero();
+
+                assertThat(out().lines()).containsExactly("nothing to change");
+                assertThat(err()).isEmpty();
+            }
+        }
+
+        @Test
+        void saysBothThatItIsADryRunAndThatThereIsNothingToChange() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", NOTHING.toJson()))) {
+                assertThat(runWithSocket("organize-imports", "--dry-run", "/project/Tidy.java"))
+                        .isZero();
+
+                assertThat(out().lines()).containsExactly("dry run, nothing written", "nothing to change");
+            }
+        }
+
+        @Test
+        void showsWhatATerminalWouldObeyInAFileNameOrADiffAsEscapes() throws IOException {
+            var hostile = new ChangedFiles(
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(Path.of("/project/a\u001b[2Jb.java")),
+                    "--- /project/a\u001b[2Jb.java\n+forged\u001b[2J\n");
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", hostile.toJson()))) {
+                assertThat(runWithSocket("organize-imports", "/project/Untidy.java"))
+                        .isZero();
+
+                assertThat(out().lines())
+                        .containsExactly(
+                                "modified /project/a\\u001b[2Jb.java",
+                                "",
+                                "--- /project/a\\u001b[2Jb.java",
+                                "+forged\\u001b[2J");
+            }
+        }
+
+        @Test
+        void givesTheResultAsJsonWithTheJsonOptionWhateverItHolds() throws IOException {
+            for (var result : List.of(ORGANIZED, NOTHING)) {
+                try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", result.toJson()))) {
+                    out.reset();
+
+                    assertThat(runWithSocket("--json", "organize-imports", "/project/Untidy.java"))
+                            .isZero();
+
+                    assertThat(out()).isEqualTo(result.toJson() + System.lineSeparator());
+                    assertThat(err()).isEmpty();
+                }
+                Files.deleteIfExists(socket());
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsItsProblemObjectWithTheExitCodeOfItsCategory() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", OUTSIDE))) {
+                assertThat(runWithSocket("organize-imports", "/elsewhere/A.java"))
+                        .isEqualTo(2);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(OUTSIDE.toText() + System.lineSeparator());
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsJsonWithTheJsonOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", OUTSIDE))) {
+                assertThat(runWithSocket("--json", "organize-imports", "/elsewhere/A.java"))
+                        .isEqualTo(2);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(OUTSIDE.toJson() + System.lineSeparator());
+            }
+        }
+
+        @Test
+        void reportsAResultThatIsNotAListOfChangedFilesAsAnInternalError() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", "{}"))) {
+                assertThat(runWithSocket("organize-imports", "/project/Untidy.java"))
                         .isEqualTo(1);
 
                 assertThat(out()).isEmpty();

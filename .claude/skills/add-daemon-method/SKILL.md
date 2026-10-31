@@ -39,7 +39,8 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    A method of the catalogue is a record around the use case of the core (`DiagnosticsMethod(Diagnose)`), which maps
    the domain types to the `protocol` ones; the positions stay 0-based in the protocol.
    A request has no optional parameter: an operation that can be asked in two ways is two methods (`rename`, by position,
-   and `rename-token`, by identifier), which share the reading of their parameters (`RenameRequest`) and answer the same
+   and `rename-token`, by identifier), which share the reading of their parameters (`ChangeRequest`, with
+   `organize-imports`, which takes a file and `dryRun` only) and answer the same
    `protocol` type (`ChangedFiles`, which every operation that changes files will answer). A flag is a parameter whose
    value is `true` or `false`, anything else being an `invalid-parameter`; a method of the catalogue that writes files
    takes `dryRun`.

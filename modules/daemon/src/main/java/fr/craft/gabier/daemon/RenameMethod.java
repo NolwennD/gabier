@@ -25,12 +25,12 @@ record RenameMethod(Rename rename) implements DaemonMethod {
 
     @Override
     public Set<String> parameters() {
-        return Set.of(RenameRequest.FILE, LINE, COLUMN, RenameRequest.NEW_NAME, RenameRequest.DRY_RUN);
+        return Set.of(ChangeRequest.FILE, LINE, COLUMN, ChangeRequest.NEW_NAME, ChangeRequest.DRY_RUN);
     }
 
     @Override
     public Outcome call(Map<String, String> params) {
-        var request = new RenameRequest(name(), params);
+        var request = new ChangeRequest(name(), params);
         var target = new RenameTarget.At(request.file(), new Position(request.number(LINE), request.number(COLUMN)));
 
         return request.run(rename, target);

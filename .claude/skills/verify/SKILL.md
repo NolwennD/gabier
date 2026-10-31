@@ -32,8 +32,11 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   until it is ready and ends its process tree on close (`JdtlsWatch`, `JdtlsClient`, `JdtlsLauncher`).
   `JdtlsLanguageServer` implements the port `JavaLanguageServer` on top of it (with `Diagnostics`, the store of what
   jdtls publishes, and `QuietWait`): it starts jdtls in the background and answers "not ready" until the start is over;
-  it implements `diagnostics` and `rename` (`RenameChanges` turns the `WorkspaceEdit` of jdtls into a change set;
-  `JdtlsRequests` tells a request jdtls declines from one that fails). jdtls does not watch the disk: it registers
+  it implements `diagnostics`, `rename` and `organizeImports` (the code action `source.organizeImports`, resolved when
+  jdtls does not give its edit; `WorkspaceEdits` turns the `WorkspaceEdit` of jdtls, as `documentChanges` or as `changes`,
+  into a change set; `JdtlsRequests` tells a request jdtls declines from one that fails). jdtls is started with the
+  `java.*` preferences of `JdtlsSettings.javaPreferences` (`initializationOptions.settings`): no star import, the order
+  of the project. jdtls does not watch the disk: it registers
   the globs it wants watched (`client/registerCapability`, only for a client that declares
   `workspace.didChangeWatchedFiles.dynamicRegistration`, `JdtlsCapabilities`), `WatchedFiles` keeps them with the state
   of the project folder, and before each request the adapter sends `workspace/didChangeWatchedFiles` for what changed
@@ -47,7 +50,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   `/tmp/gabier-<uid>/gabier.sock`, at most 107 bytes), `DaemonServer` takes the socket (`SocketGuard`: private folder,
   stale socket removed, another daemon refused) and serves the clients with `Connection` (lines in, lines out) and
   `RequestHandler` (the method table: `StatusMethod`, `StopMethod`, `DiagnosticsMethod`, `RenameMethod`,
-  `RenameTokenMethod`; adding one is
+  `RenameTokenMethod`, `OrganizeImportsMethod`; adding one is
   `.claude/skills/add-daemon-method`). The daemon serves one project (`ServedProject`: its root, its language server and
   where that is): `Main` takes the folder from its argument, `GABIER_PROJECT` or the working directory, and builds
   `ProjectServer.jdtls`, which starts the real jdtls (`JdtlsLanguageServer`, launcher `GABIER_JDTLS`) at the first request
@@ -81,12 +84,17 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
     for five seconds. No file may have an error; a file without any diagnostic, asked for alone, gets an empty list. A
     temporary broken source (`GabierProbeBroken.java`, deleted whatever happens) next to it must get its error, and a
     file outside the checkout is refused. It fails at once, with the exit code in the message, when jdtls exits, and at
-    once on a `language/status` of type `Error`; a timeout says what was awaited and for how long.
+    once on a `language/status` of type `Error`; a timeout says what was awaited and for how long. It then organizes
+    the imports of every source of the checkout (main, test, fixtures, integration tests, `architecture`; not the
+    `fakeServed` source set, whose fixtures jdtls cannot see): none may change, and a copy of a main source and of a test
+    source with an unused import added must get the edit that removes it.
   - `ScenarioReplayTest` replays the contract scenarios of the core (`Scenarios.all()`) that the adapter implements
     against a real jdtls started on each scenario's project (written in a temporary folder, with an Eclipse `.project`
     and `.classpath` that jdtls imports without network), and fails on any difference. The answer of a rename is
     compared exactly (jdtls merges the edits of a file, and the scenarios hold what it answered), must compile once
-    applied to a copy of the project, and no request may change the sources. How to add one:
+    applied to a copy of the project, and no request may change the sources. The organization of the imports is replayed
+    on a project that includes `Wide`, which imports 100 types of one package and 100 constants of one class: with the
+    default preferences of jdtls the replay fails (a star import, groups apart), which is what proves the settings. How to add one:
     `.claude/skills/add-scenario/SKILL.md`.
   - `InstalledDaemonTest` runs the installed daemon (`jdtlsProbe` depends on `:daemon:installDist`) on a small project
     (the scenario `FILE_WITH_AN_ERROR` and an Eclipse `.project`, `EclipseProject`), as a client on its socket: `status`

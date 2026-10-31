@@ -20,7 +20,8 @@ import java.util.stream.Stream;
  * stop} are run against it, with no daemon, with a stale socket and with a second daemon; {@code diagnostics} is run
  * against it (with no jdtls to start, so refused as a failed start, which {@code status} then shows) and against the
  * daemon served by the fake language server, {@code :daemon:installFakeServed}, so that no jdtls runs in this stage;
- * {@code rename} is run against the latter too (a dry run, a rename by token, by position and of a type, and refusals);
+ * {@code rename} is run against the latter too (a dry run, a rename by token, by position and of a type, and refusals),
+ * and so is {@code organize-imports} (a dry run, a file organized, a file in order, a refusal);
  * a request command with no daemon running starts {@code gabier-daemon} (found on the {@code PATH} or next to the cli;
  * not found, exiting at once), the next request uses it, and {@code stop} ends it. Runs in the current directory, the
  * checkout under verification. It starts and signals only the processes it started, by their handle, and the daemons
@@ -35,7 +36,8 @@ public final class Native {
             """
             {"type":"urn:gabier:error:usage-error","title":"Usage error",\
             "detail":"Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file>\s\
-            | rename [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>)",\
+            | rename [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>\s\
+            | organize-imports [--dry-run] <file>)",\
             "key":"usage-error","parameters":{"arguments":"--help"}}\
             """;
 
@@ -60,7 +62,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename included, the daemon started on demand)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename and organize-imports included, the daemon started on demand)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -226,6 +228,7 @@ public final class Native {
                 startsTheDaemonOnDemand();
                 diagnosticsWithTheFakeServer();
                 renameWithTheFakeServer();
+                organizeImportsWithTheFakeServer();
                 fakeServedRefusesAFolderThatIsNotEmpty();
             } finally {
                 for (Process process : started) {
@@ -540,6 +543,66 @@ public final class Native {
                     "gabier --json rename of a type gives the files moved and the diff, and moves the file");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after the renames");
+        }
+
+        /**
+         * {@code gabier organize-imports} against the daemon served by the fake language server: the dry run writes
+         * nothing, the file is organized and listed with the diff, a file in order says so, a refusal writes nothing.
+         */
+        private void organizeImportsWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("organize-project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            Path source = project.resolve("src/main/java/demo");
+            String untidy = "organize-project/src/main/java/demo/Untidy.java";
+            String original = Files.readString(source.resolve("Untidy.java"));
+
+            Run dryRun = gabier("organize-imports", "--dry-run", untidy);
+            expect(
+                    dryRun.exit() == 0
+                            && dryRun.err().isEmpty()
+                            && dryRun.out().lines().findFirst().orElse("").equals("dry run, nothing written")
+                            && dryRun.out().contains("modified " + source.resolve("Untidy.java"))
+                            && dryRun.out().contains("-import java.util.Set;")
+                            && dryRun.out().contains("+import java.util.ArrayList;")
+                            && Files.readString(source.resolve("Untidy.java")).equals(original),
+                    "gabier organize-imports --dry-run lists the file and the diff and writes nothing");
+
+            Run outside = gabier("organize-imports", "outside/Elsewhere.java");
+            expect(
+                    outside.exit() == 2
+                            && outside.out().isEmpty()
+                            && outside.err().contains("(language-server-file-outside-project; "),
+                    "organize-imports of a file outside the project is refused as a problem object, exit 2");
+
+            Run organized = gabier("organize-imports", untidy);
+            String text = Files.readString(source.resolve("Untidy.java"));
+            expect(
+                    organized.exit() == 0
+                            && organized.out().contains("modified " + source.resolve("Untidy.java"))
+                            && text.contains("import java.util.ArrayList;")
+                            && text.contains("import java.util.Collections;")
+                            && !text.contains("import java.util.Set;")
+                            && !text.contains(".*;"),
+                    "gabier organize-imports writes the file, with the missing imports added and the unused one removed");
+
+            String tidy = "organize-project/src/main/java/demo/Tidy.java";
+            Run inOrder = gabier("organize-imports", tidy);
+            expect(
+                    inOrder.exit() == 0 && inOrder.out().equals("nothing to change"),
+                    "gabier organize-imports of a file whose imports are in order says there is nothing to change");
+
+            Run json = gabier("--json", "organize-imports", tidy);
+            expect(
+                    json.exit() == 0
+                            && json.out()
+                                    .equals("{\"created\":[],\"renamed\":[],\"deleted\":[],\"modified\":[],\"diff\":\"\"}"),
+                    "gabier --json organize-imports gives the result as the daemon gave it");
+            gabier("stop");
+            expect(ends(process), "the daemon served by the fake stops after organizing the imports");
         }
 
         /** A {@code gabier-daemon} in the folder: a script with this body, which the cli finds and launches. */

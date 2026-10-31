@@ -5,7 +5,10 @@ repository does it with `gabier` (installed on the PATH by `mise run install`; t
 
 - `gabier diagnostics <file>` to see the errors of a Java file instead of waiting for a build;
 - `gabier rename` (position or `--token`, `--dry-run` first on a rename that crosses files) instead of editing every
-  occurrence by hand. A Java refactoring that gabier has a command for goes through it.
+  occurrence by hand;
+- `gabier organize-imports <file>` after adding or removing a usage, instead of editing the import lines by hand (it keeps
+  the order of the formatter and never writes a star import; run `gabier diagnostics <file>` first, a file whose imports
+  jdtls cannot resolve loses them). A Java refactoring that gabier has a command for goes through it.
 
 An operation gabier does not have yet is done as a text edit and becomes an issue (`.claude/rules/workflow.md`, step 4 of the
 development loop). The daemon serves one project: from a worktree, run the command in that worktree (the daemon of another

@@ -102,6 +102,11 @@ final class ProjectServer implements ServedProject {
     }
 
     @Override
+    public Optional<ChangeSet> organizeImports(Path file) {
+        return ready().organizeImports(file);
+    }
+
+    @Override
     public void close() throws IOException, InterruptedException {
         StartedLanguageServer server;
         synchronized (this) {

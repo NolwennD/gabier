@@ -3,12 +3,14 @@ package fr.craft.gabier.daemon;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.google.gson.Gson;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
@@ -98,6 +100,16 @@ class JdtlsSessionTest {
             try (JdtlsSession session = start()) {
                 assertThat(fake.initializeParams().getRootUri()).isEqualTo("file:///work/project");
                 assertThat(fake.initializeParams().getCapabilities()).isEqualTo(JdtlsCapabilities.forRefactoring());
+            }
+        }
+
+        @Test
+        void givesJdtlsItsJavaPreferencesAtInitialization() throws Exception {
+            fake.listsProjects(URI_A);
+
+            try (JdtlsSession session = start()) {
+                assertThat(fake.initializeParams().getInitializationOptions())
+                        .isEqualTo(new Gson().toJsonTree(Map.of("settings", JdtlsSettings.javaPreferences())));
             }
         }
 

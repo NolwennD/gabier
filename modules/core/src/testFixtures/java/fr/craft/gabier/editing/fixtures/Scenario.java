@@ -67,6 +67,9 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
         switch (answer) {
             case Answer.Diagnosed _ -> require(request instanceof Request.Diagnostics, "diagnosed", request);
             case Answer.Renamed _ -> require(request instanceof Request.Rename, "renamed", request);
+            case Answer.Organized _ -> require(request instanceof Request.OrganizeImports, "organized", request);
+            case Answer.AlreadyOrganized _ ->
+                require(request instanceof Request.OrganizeImports, "already organized", request);
             case Answer.Refused refused -> request.refusal(refused.key());
         }
     }
@@ -115,6 +118,29 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case NO_SUCH_SYMBOL, INVALID_NAME ->
                         throw new IllegalArgumentException("A request for diagnostics cannot get " + key);
+                };
+            }
+        }
+
+        /** The organization of the imports of a file. */
+        record OrganizeImports(Path file) implements Request {
+
+            public OrganizeImports {
+                Assert.notNull("file", file);
+            }
+
+            @Override
+            public OrganizeImports resolvedIn(Path root) {
+                return new OrganizeImports(resolve(root, file));
+            }
+
+            @Override
+            public LanguageServerException refusal(LanguageServerErrorKey key) {
+                return switch (key) {
+                    case NOT_READY -> LanguageServerException.notReady();
+                    case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
+                    case NO_SUCH_SYMBOL, INVALID_NAME ->
+                        throw new IllegalArgumentException("A request to organize imports cannot get " + key);
                 };
             }
         }
@@ -174,9 +200,13 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
 
             @Override
             public Renamed resolvedIn(Path root) {
-                return new Renamed(new ChangeSet(changes.changes().stream()
+                return new Renamed(resolvedIn(root, changes));
+            }
+
+            private static ChangeSet resolvedIn(Path root, ChangeSet changes) {
+                return new ChangeSet(changes.changes().stream()
                         .map(change -> resolve(root, change))
-                        .toList()));
+                        .toList());
             }
 
             private static FileChange resolve(Path root, FileChange change) {
@@ -187,6 +217,28 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                         new RenameFile(Scenario.resolve(root, rename.from()), Scenario.resolve(root, rename.to()));
                     case DeleteFile delete -> new DeleteFile(Scenario.resolve(root, delete.file()));
                 };
+            }
+        }
+
+        /** The change set that organizes the imports of a file: only edits of that file. */
+        record Organized(ChangeSet changes) implements Answer {
+
+            public Organized {
+                Assert.notNull("changes", changes);
+            }
+
+            @Override
+            public Organized resolvedIn(Path root) {
+                return new Organized(Renamed.resolvedIn(root, changes));
+            }
+        }
+
+        /** The imports of the file are as they should be: the server has no edit to give. */
+        record AlreadyOrganized() implements Answer {
+
+            @Override
+            public AlreadyOrganized resolvedIn(Path root) {
+                return this;
             }
         }
 

@@ -4,6 +4,7 @@ import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.Diagnostic.Severity;
 import fr.craft.gabier.editing.domain.FileChange;
+import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.protocol.JdtlsState;
@@ -23,6 +24,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
+import org.eclipse.lsp4j.CodeAction;
+import org.eclipse.lsp4j.CodeActionContext;
+import org.eclipse.lsp4j.CodeActionKind;
+import org.eclipse.lsp4j.CodeActionParams;
 import org.eclipse.lsp4j.DiagnosticSeverity;
 import org.eclipse.lsp4j.DidCloseTextDocumentParams;
 import org.eclipse.lsp4j.DidOpenTextDocumentParams;
@@ -32,6 +37,7 @@ import org.eclipse.lsp4j.PrepareRenameParams;
 import org.eclipse.lsp4j.RenameParams;
 import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.eclipse.lsp4j.TextDocumentItem;
+import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -51,8 +57,10 @@ import org.jspecify.annotations.Nullable;
  * tells it what changed, and waits until it has taken the changes in.
  *
  * <p>A rename is {@code textDocument/prepareRename} then {@code textDocument/rename}, and the {@code WorkspaceEdit}
- * that jdtls answers is turned into the change set of the domain by {@link RenameChanges}. The refusals of the port
- * are mapped from what jdtls really does (see {@code Scenarios} in the fixtures of the core).
+ * that jdtls answers is turned into the change set of the domain by {@link WorkspaceEdits}. The organization of the
+ * imports is the code action {@code source.organizeImports}, not the command {@code java.edit.organizeImports}, which
+ * pushes its edit to the client with {@code workspace/applyEdit}. The refusals of the port are mapped from what jdtls
+ * really does (see {@code Scenarios} in the fixtures of the core).
  *
  * <p>A file is in the project when it is under a folder jdtls imported. jdtls itself does not refuse the others: it
  * opens them as non-project files and warns that only syntax errors are reported, which is not an answer about the
@@ -185,7 +193,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
 
     /**
      * Asks jdtls whether the symbol can be renamed ({@code prepareRename}), then for the rename, and gives its edit in
-     * the terms of the domain ({@link RenameChanges}). jdtls reads the files as it knows them (nothing is opened), after
+     * the terms of the domain ({@link WorkspaceEdits}). jdtls reads the files as it knows them (nothing is opened), after
      * it has been told of the changes on disk. A
      * symbol that jdtls says it cannot rename is no symbol (jdtls answers so for a blank, a keyword, a position past
      * the text), and a name that jdtls declines is invalid for the symbol.
@@ -214,7 +222,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             var edit = watch.await(
                     "the rename of the symbol at " + position + " of " + path + " to " + newName,
                     () -> JdtlsRequests.unlessDeclined(service.rename(new RenameParams(document, at, newName))));
-            List<FileChange> changes = RenameChanges.of(
+            List<FileChange> changes = WorkspaceEdits.of(
                     edit.orElseThrow(() -> LanguageServerException.invalidName(path, position, newName)),
                     JdtlsLanguageServer::textOnDisk);
             if (changes.isEmpty()) {
@@ -226,6 +234,55 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             throw new JdtlsException(
                     "Interrupted while waiting for the rename of the symbol at " + position + " of " + path,
                     interrupted);
+        }
+    }
+
+    /**
+     * Asks jdtls for the {@code source.organizeImports} code action of the file, resolves it when its edit is not given
+     * (jdtls computes it at that point, the client declares {@code codeAction.resolveSupport} for {@code edit}), and
+     * gives the edit in the terms of the domain ({@link WorkspaceEdits}). jdtls reads the file as it knows it (nothing is
+     * opened), after it has been told of the changes on disk. It has no edit for a file whose imports are as the
+     * preferences of {@link JdtlsSettings#javaPreferences} want them: that is not a refusal, the answer is none.
+     *
+     * @throws LanguageServerException if jdtls is not ready or the file is not in its project
+     * @throws JdtlsException if jdtls dies or does not answer in time
+     */
+    @Override
+    public synchronized Optional<ChangeSet> organizeImports(Path file) {
+        JdtlsSession session = ready();
+        Path path = normalized(file);
+        textInProject(session, path);
+        var params = new CodeActionParams(
+                new TextDocumentIdentifier(path.toUri().toString()),
+                new org.eclipse.lsp4j.Range(new org.eclipse.lsp4j.Position(0, 0), new org.eclipse.lsp4j.Position(0, 0)),
+                new CodeActionContext(List.of(), List.of(CodeActionKind.SourceOrganizeImports)));
+        var service = session.server().getTextDocumentService();
+        JdtlsWatch watch = session.newWatch();
+        try {
+            takeInChangesOnDisk(session, watch);
+            var offered = watch.await(
+                    "the organization of the imports of " + path,
+                    () -> JdtlsRequests.unlessDeclined(service.codeAction(params)));
+            Optional<CodeAction> action = offered.stream()
+                    .flatMap(List::stream)
+                    .filter(Either::isRight)
+                    .map(Either::getRight)
+                    .findFirst();
+            if (action.isPresent() && action.get().getEdit() == null) {
+                var unresolved = action.get();
+                action = watch.await(
+                        "the edit of the organization of the imports of " + path,
+                        () -> JdtlsRequests.unlessDeclined(service.resolveCodeAction(unresolved)));
+            }
+            List<FileChange> changes = action.map(CodeAction::getEdit)
+                    .map(edit -> WorkspaceEdits.of(edit, JdtlsLanguageServer::textOnDisk))
+                    .orElse(List.of());
+
+            return changes.isEmpty() ? Optional.empty() : Optional.of(new ChangeSet(changes));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException(
+                    "Interrupted while waiting for the organization of the imports of " + path, interrupted);
         }
     }
 

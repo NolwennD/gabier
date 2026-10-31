@@ -16,12 +16,14 @@ import fr.craft.gabier.editing.infrastructure.secondary.NioFileStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -121,7 +123,21 @@ class ScenariosTest {
                         "rename-where-there-is-no-symbol",
                         "rename-to-an-invalid-name",
                         "rename-while-the-server-imports",
-                        "rename-a-file-outside-the-project");
+                        "rename-a-file-outside-the-project",
+                        "organize-imports-of-a-file",
+                        "organize-imports-of-a-file-in-order",
+                        "organize-imports-keeps-explicit-imports",
+                        "organize-imports-while-the-server-imports",
+                        "organize-imports-of-a-file-outside-the-project");
+    }
+
+    @Test
+    void refusesForEachReasonOfThePortOnAnOrganizeImports() {
+        assertThat(answeredWith(Answer.Refused.class).stream()
+                        .filter(scenario -> scenario.request() instanceof Request.OrganizeImports)
+                        .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.NOT_READY, LanguageServerErrorKey.FILE_OUTSIDE_PROJECT);
     }
 
     @Test
@@ -297,5 +313,90 @@ class ScenariosTest {
     @Test
     void namesEveryScenarioOnce() {
         assertThat(new HashSet<>(ALL.stream().map(Scenario::name).toList())).hasSameSizeAs(ALL);
+    }
+
+    /** The import lines of a source, from the first to the last, blank lines between them included. */
+    private static List<String> importBlock(String source) {
+        List<String> lines = List.of(source.split("\n", -1));
+        int first = IntStream.range(0, lines.size())
+                .filter(index -> lines.get(index).startsWith("import "))
+                .findFirst()
+                .orElseThrow();
+        int last = IntStream.range(0, lines.size())
+                .filter(index -> lines.get(index).startsWith("import "))
+                .max()
+                .orElseThrow();
+
+        return lines.subList(first, last + 1);
+    }
+
+    /**
+     * The block the project keeps (open-java-format, Checkstyle {@code AvoidStarImport}): the static imports in ASCII
+     * order, a blank line, then all the others in ASCII order, with no group of its own for {@code java} or {@code org}.
+     */
+    private static List<String> inTheOrderOfTheProject(List<String> block) {
+        List<String> statics = block.stream()
+                .filter(line -> line.startsWith("import static "))
+                .sorted()
+                .toList();
+        List<String> others = block.stream()
+                .filter(line -> line.startsWith("import ") && !line.startsWith("import static "))
+                .sorted()
+                .toList();
+        List<String> ordered = new ArrayList<>(statics);
+        if (!statics.isEmpty() && !others.isEmpty()) {
+            ordered.add("");
+        }
+        ordered.addAll(others);
+
+        return ordered;
+    }
+
+    @Test
+    void leavesTheImportsOfAnOrganizedFileInTheOrderOfTheProjectWithoutAnyStar(@TempDir Path directory)
+            throws IOException {
+        for (Scenario scenario : answeredWith(Answer.Organized.class)) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.Organized) inside.answer()).changes());
+
+            List<String> block = importBlock(Files.readString(inside.request().file()));
+            assertThat(block).as(scenario.name()).isEqualTo(inTheOrderOfTheProject(block));
+            assertThat(block).as(scenario.name()).noneMatch(line -> line.endsWith(".*;"));
+        }
+    }
+
+    @Test
+    void startsTheFilesThatNeedNothingInTheOrderOfTheProjectWithoutAnyStar() {
+        for (Scenario scenario : answeredWith(Answer.AlreadyOrganized.class)) {
+            List<String> block =
+                    importBlock(scenario.files().get(scenario.request().file()));
+
+            assertThat(block).as(scenario.name()).isNotEmpty().isEqualTo(inTheOrderOfTheProject(block));
+            assertThat(block).as(scenario.name()).noneMatch(line -> line.endsWith(".*;"));
+        }
+    }
+
+    @Test
+    void changesTheImportsOfTheUntidyFileThatTheOrganizeScenarioAsksAbout() {
+        Scenario untidy = Scenarios.ORGANIZE_IMPORTS;
+        List<String> before = importBlock(untidy.files().get(untidy.request().file()));
+
+        assertThat(before).isNotEqualTo(inTheOrderOfTheProject(before));
+    }
+
+    @Test
+    void importsMoreThanTheDefaultThresholdOfOnePackageAndOfOneTypeInTheFileThatMustStayExplicit() {
+        Scenario wide = Scenarios.ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS;
+        List<String> block = importBlock(wide.files().get(wide.request().file()));
+
+        // jdtls collapses 99 imports of one package into a star by default
+        // (java.sources.organizeImports.starThreshold).
+        assertThat(block.stream().filter(line -> line.startsWith("import demo.many.")))
+                .hasSizeGreaterThan(99);
+        assertThat(block.stream().filter(line -> line.startsWith("import static demo.many.Constants.")))
+                .hasSizeGreaterThan(99);
     }
 }

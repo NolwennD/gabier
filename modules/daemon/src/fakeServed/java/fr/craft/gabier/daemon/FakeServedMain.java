@@ -60,7 +60,10 @@ public final class FakeServedMain {
                 Scenarios.RENAME_METHOD,
                 Scenarios.RENAME_TYPE,
                 Scenarios.RENAME_WHERE_THERE_IS_NO_SYMBOL,
-                Scenarios.RENAME_OUTSIDE_THE_PROJECT);
+                Scenarios.RENAME_OUTSIDE_THE_PROJECT,
+                Scenarios.ORGANIZE_IMPORTS,
+                Scenarios.ORGANIZE_IMPORTS_IN_ORDER,
+                Scenarios.ORGANIZE_IMPORTS_OUTSIDE_THE_PROJECT);
         for (var scenario : scenarios) {
             scenario.writeProject(root);
             server.scripted(scenario);
@@ -110,6 +113,11 @@ public final class FakeServedMain {
         @Override
         public ChangeSet rename(Path file, Position position, String newName) {
             return server.rename(file, position, newName);
+        }
+
+        @Override
+        public Optional<ChangeSet> organizeImports(Path file) {
+            return server.organizeImports(file);
         }
 
         @Override

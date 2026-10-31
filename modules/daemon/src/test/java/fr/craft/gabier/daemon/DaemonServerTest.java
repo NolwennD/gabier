@@ -84,7 +84,9 @@ class DaemonServerTest {
                         .scripted(Scenarios.FILE_WITH_AN_ERROR)
                         .scripted(Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT)
                         .scripted(Scenarios.RENAME_METHOD)
-                        .scripted(Scenarios.RENAME_WHERE_THERE_IS_NO_SYMBOL));
+                        .scripted(Scenarios.RENAME_WHERE_THERE_IS_NO_SYMBOL)
+                        .scripted(Scenarios.ORGANIZE_IMPORTS)
+                        .scripted(Scenarios.ORGANIZE_IMPORTS_IN_ORDER));
     }
 
     private DaemonServer open() {
@@ -416,6 +418,34 @@ class DaemonServerTest {
                 assertThat(Files.readString(greeter)).contains("String welcome(");
                 assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
             }
+        }
+
+        @Test
+        void organizeImportsAnswersWhatChangedAndWritesTheFileUnlessItIsADryRun() throws IOException {
+            serving();
+            Scenarios.ORGANIZE_IMPORTS.writeProject(directory);
+            var untidy = directory.resolve("src/main/java/demo/Untidy.java");
+            var tidy = directory.resolve("src/main/java/demo/Tidy.java");
+
+            try (var client = connect(socket())) {
+                var dryRun = client.ask(organizeImportsRequest(untidy, true));
+
+                assertThat(dryRun).contains("\"modified\":[").contains("ArrayList");
+                assertThat(Files.readString(untidy)).contains("import java.util.Set;");
+
+                var done = client.ask(organizeImportsRequest(untidy, false));
+
+                assertThat(done).contains("\"modified\":[");
+                assertThat(Files.readString(untidy)).doesNotContain("import java.util.Set;");
+                assertThat(client.ask(organizeImportsRequest(tidy, false))).contains("\"modified\":[]");
+                assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
+            }
+        }
+
+        private static String organizeImportsRequest(Path file, boolean dryRun) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"organize-imports","params":{"file":"%s","dryRun":"%s"}}
+                """.formatted(file, dryRun);
         }
 
         @Test

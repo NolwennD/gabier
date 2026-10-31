@@ -37,9 +37,9 @@ can come anywhere on the command line).
 
 ```text
 $ gabier --help
-Usage error: Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file> | rename [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>) (usage-error; arguments=--help)
+Usage error: Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file> | rename [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name> | organize-imports [--dry-run] <file>) (usage-error; arguments=--help)
 $ gabier --json --help
-{"type":"urn:gabier:error:usage-error","title":"Usage error","detail":"Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file> | rename [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>)","key":"usage-error","parameters":{"arguments":"--help"}}
+{"type":"urn:gabier:error:usage-error","title":"Usage error","detail":"Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file> | rename [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name> | organize-imports [--dry-run] <file>)","key":"usage-error","parameters":{"arguments":"--help"}}
 ```
 
 The JSON object follows the data model of [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) (problem details)
@@ -50,11 +50,11 @@ know is reported as the generic `internal-server-error`, without its message, it
 
 ### The daemon
 
-One daemon runs per user. `gabier diagnostics` and `gabier rename` **start it when nothing answers on the socket**, so an
+One daemon runs per user. `gabier diagnostics`, `gabier rename` and `gabier organize-imports` **start it when nothing answers on the socket**, so an
 agent runs them in a project folder and gets the answer; `gabier status` and `gabier stop` never start one (see below).
 It can also be started by hand, with `gabier-daemon` from the installed distribution (`./gradlew :daemon:installDist`,
 then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until `gabier stop` or a SIGTERM; it
-answers `status`, `stop`, `diagnostics`, `rename` and `rename-token`, and nothing else yet.
+answers `status`, `stop`, `diagnostics`, `rename`, `rename-token` and `organize-imports`, and nothing else yet.
 
 **Installing both by name.** `mise run install` builds the native cli and the daemon of the checkout it is run in and
 links `gabier` and `gabier-daemon` into `~/.local/bin` (`GABIER_BIN_DIR` or the argument of `scripts/install.sh` names
@@ -64,7 +64,7 @@ tools should come from, and again after a change. A file that is not a link is n
 GraalVM 25 of `./gradlew :cli:nativeCompile` and a JDK for the daemon's start script (`JAVA_HOME`, else `java` on the
 `PATH`).
 
-**Starting on demand.** A request command (`diagnostics`, `rename`) first connects to the socket: a daemon that answers is
+**Starting on demand.** A request command (`diagnostics`, `rename`, `organize-imports`) first connects to the socket: a daemon that answers is
 used, never started a second time. Otherwise the cli launches `gabier-daemon` as a process, found **next to the binary
 of the cli** (a distribution that ships the two together), else on the **`PATH`**: a native image cannot call into the
 daemon, and the two are installed by name. The daemon starts in the cli's working directory with the cli's environment,
@@ -193,6 +193,45 @@ modified /work/demo/src/main/java/demo/Main.java
 
 The daemon's methods are `rename` (parameters `file`, `line`, `column`, `newName`, `dryRun`) and `rename-token`
 (`file`, `token`, `newName`, `dryRun`); `dryRun` is `true` or `false`, and line and column are numbers from 0.
+
+`gabier organize-imports <file>` fixes the imports of a Java file instead of editing the import lines by hand: it adds the
+missing ones, removes the unused ones and orders the rest, by asking jdtls (the code action `source.organizeImports`) and
+writing its answer. **It keeps the imports as the project keeps them**: no import is ever collapsed into a star
+(`import java.util.*;`), and the order is the one of the formatter and of Checkstyle, the static imports first, a blank
+line, then every other import in one block in ASCII order (`java`, `javax` and `org` are not groups of their own), so
+that organizing a file of this repository whose imports are in order changes nothing. It is jdtls configured, not
+corrected after the fact: the daemon starts it with `java.sources.organizeImports.starThreshold` and
+`staticStarThreshold` at the largest `int` (jdtls collapses 99 imports of one package by default) and
+`java.completion.importOrder` as `["#", ""]` (the static group, then everything else; the default `java`, `javax`,
+`org`, `com` puts a blank line between groups), in `JdtlsSettings.javaPreferences`. `--dry-run` (anywhere after the
+command) writes nothing and shows what would change. The answer is that of `rename`, for the one file: the text lists
+`modified <file>` and the unified diff, preceded by `dry run, nothing written` for a dry run, and says `nothing to
+change` for a file whose imports are already in order; with `--json` the result is the same `ChangedFiles` object, empty
+for such a file. A refusal is the problem object, exit code 2, and nothing is written: a server that is not ready, a file
+outside the project, a change set that cannot be applied to the file as it is.
+
+```text
+$ gabier organize-imports --dry-run src/main/java/demo/Untidy.java
+dry run, nothing written
+modified /work/demo/src/main/java/demo/Untidy.java
+
+--- /work/demo/src/main/java/demo/Untidy.java
++++ /work/demo/src/main/java/demo/Untidy.java
+@@ ... @@
+-import java.util.Set;
+...
++import java.util.ArrayList;
++import java.util.Collections;
+...
+$ gabier organize-imports src/main/java/demo/Tidy.java
+nothing to change
+```
+
+A type that two packages declare (`List`, `Date`) and that the file uses without importing it is **not** imported, and
+jdtls does not say so: the file is left with that name unresolved, and `gabier diagnostics` shows it. A file whose
+imports jdtls cannot resolve (a class of a source set it has no classpath for) loses them: organize the imports of files
+jdtls sees without errors (`gabier diagnostics` first). The daemon method is `organize-imports` (parameters `file`,
+`dryRun`).
 
 `gabier stop` returns once the daemon has removed its socket and hung up. With no daemon, or with a socket file that
 nobody answers on, `status` and `stop` do not wait and do not start one: they report `daemon-not-running` at once, with

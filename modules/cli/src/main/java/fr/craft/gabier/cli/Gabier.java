@@ -27,6 +27,7 @@ public final class Gabier {
     private static final String STOP_COMMAND = "stop";
     private static final String DIAGNOSTICS_COMMAND = "diagnostics";
     private static final String RENAME_COMMAND = "rename";
+    private static final String ORGANIZE_IMPORTS_COMMAND = "organize-imports";
     private static final String DRY_RUN_OPTION = "--dry-run";
     private static final String TOKEN_OPTION = "--token";
     private static final String JSON_OPTION = "--json";
@@ -69,6 +70,11 @@ public final class Gabier {
         }
         if (!arguments.isEmpty() && arguments.getFirst().equals(RENAME_COMMAND)) {
             rename(starting(environment), arguments, json, out);
+
+            return;
+        }
+        if (!arguments.isEmpty() && arguments.getFirst().equals(ORGANIZE_IMPORTS_COMMAND)) {
+            organizeImports(starting(environment), arguments, json, out);
 
             return;
         }
@@ -156,6 +162,39 @@ public final class Gabier {
         params.put("dryRun", String.valueOf(dryRun));
         var changed = ChangedFiles.of(ask(daemon, token ? "rename-token" : RENAME_COMMAND, params, false)
                 .result());
+        print(changed, dryRun, json, out);
+    }
+
+    /**
+     * {@code organize-imports [--dry-run] <file>}: the option may stand anywhere after the command. It answers as {@code
+     * rename} does, and says {@code nothing to change} (as text) for a file whose imports are already in order.
+     */
+    private static void organizeImports(
+            Supplier<DaemonClient> daemon, List<String> arguments, boolean json, PrintStream out) {
+        var words = arguments.subList(1, arguments.size());
+        var dryRun = words.contains(DRY_RUN_OPTION);
+        var operands =
+                words.stream().filter(word -> !word.equals(DRY_RUN_OPTION)).toList();
+        if (operands.size() != 1) {
+            throw UsageException.unsupportedArguments(arguments);
+        }
+        var params = Map.of(
+                "file", Path.of(operands.getFirst()).toAbsolutePath().toString(), "dryRun", String.valueOf(dryRun));
+        var changed = ChangedFiles.of(
+                ask(daemon, ORGANIZE_IMPORTS_COMMAND, params, false).result());
+        if (!json && changedText(changed).isEmpty()) {
+            if (dryRun) {
+                out.println("dry run, nothing written");
+            }
+            out.println("nothing to change");
+
+            return;
+        }
+        print(changed, dryRun, json, out);
+    }
+
+    /** The result of the daemon as it gave it with {@code --json}; else the dry run said, then {@link #changedText}. */
+    private static void print(ChangedFiles changed, boolean dryRun, boolean json, PrintStream out) {
         if (json) {
             out.println(changed.toJson());
 

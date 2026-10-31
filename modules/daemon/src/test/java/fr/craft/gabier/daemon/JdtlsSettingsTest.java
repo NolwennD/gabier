@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class JdtlsSettingsTest {
@@ -38,5 +39,26 @@ class JdtlsSettingsTest {
         expected.add(Path.of("/work/project/modules/b"));
 
         assertThat(settings.expectedProjects()).containsExactly(Path.of("/work/project/modules/a"));
+    }
+
+    @Test
+    void neverCollapsesImportsToAStarAndOrdersThemAsTheProjectDoes() {
+        // The Checkstyle of the project bans star imports; its formatter keeps the static imports first, then one
+        // block of all the others, in ASCII order. "#" is the group of the static imports, "" the one of everything
+        // else.
+        assertThat(JdtlsSettings.javaPreferences())
+                .isEqualTo(Map.of(
+                        "java",
+                        Map.of(
+                                "sources",
+                                Map.of(
+                                        "organizeImports",
+                                        Map.of(
+                                                "starThreshold",
+                                                Integer.MAX_VALUE,
+                                                "staticStarThreshold",
+                                                Integer.MAX_VALUE)),
+                                "completion",
+                                Map.of("importOrder", List.of("#", "")))));
     }
 }

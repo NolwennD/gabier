@@ -79,6 +79,22 @@ class ScenarioTest {
     }
 
     @Test
+    void rejectsAnOrganizedAnswerForAnotherRequestAndAnotherAnswerForOrganizingImports() {
+        Request.Rename rename = new Request.Rename(FILE, POSITION, "B");
+        Request.OrganizeImports organize = new Request.OrganizeImports(FILE);
+        ChangeSet changes = set(new CreateFile(FILE));
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(rename, new Answer.Organized(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(rename, new Answer.AlreadyOrganized()));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(organize, new Answer.Renamed(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(organize, new Answer.Diagnosed(List.of())));
+    }
+
+    @Test
     void rejectsARefusalThatTheRequestCannotGet() {
         Request.Diagnostics diagnostics = new Request.Diagnostics(FILE);
 
@@ -108,11 +124,27 @@ class ScenarioTest {
     }
 
     @Test
+    void buildsTheRefusalOfAnOrganizeImportsRequest() {
+        Request.OrganizeImports organize = new Request.OrganizeImports(FILE);
+
+        assertThat(organize.refusal(LanguageServerErrorKey.NOT_READY).key())
+                .isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(organize.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
+                .isEqualTo(Map.of("file", FILE.toString()));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> organize.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> organize.refusal(LanguageServerErrorKey.INVALID_NAME));
+    }
+
+    @Test
     void resolvesTheRequestAgainstARoot() {
         assertThat(new Request.Diagnostics(FILE).resolvedIn(ROOT))
                 .isEqualTo(new Request.Diagnostics(Path.of("/project/src/A.java")));
         assertThat(new Request.Rename(FILE, POSITION, "B").resolvedIn(ROOT))
                 .isEqualTo(new Request.Rename(Path.of("/project/src/A.java"), POSITION, "B"));
+        assertThat(new Request.OrganizeImports(FILE).resolvedIn(ROOT))
+                .isEqualTo(new Request.OrganizeImports(Path.of("/project/src/A.java")));
     }
 
     @Test
@@ -141,11 +173,23 @@ class ScenarioTest {
     }
 
     @Test
+    void resolvesTheChangesOfAnOrganizedAnswerAgainstARoot() {
+        TextEdit edit = new TextEdit(new Range(POSITION, POSITION), "import a.B;\n");
+
+        Answer resolved = new Answer.Organized(set(new EditFile(FILE, List.of(edit)))).resolvedIn(ROOT);
+
+        assertThat(resolved)
+                .isEqualTo(new Answer.Organized(set(new EditFile(Path.of("/project/src/A.java"), List.of(edit)))));
+    }
+
+    @Test
     void leavesTheOtherAnswersAsTheyAre() {
         Answer diagnosed =
                 new Answer.Diagnosed(List.of(new Diagnostic(Diagnostic.Severity.ERROR, POSITION, "Type mismatch")));
         Answer refused = new Answer.Refused(LanguageServerErrorKey.NOT_READY);
+        Answer alreadyOrganized = new Answer.AlreadyOrganized();
 
+        assertThat(alreadyOrganized.resolvedIn(ROOT)).isEqualTo(alreadyOrganized);
         assertThat(diagnosed.resolvedIn(ROOT)).isEqualTo(diagnosed);
         assertThat(refused.resolvedIn(ROOT)).isEqualTo(refused);
     }

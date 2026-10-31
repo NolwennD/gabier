@@ -15,6 +15,7 @@ import fr.craft.gabier.editing.fixtures.Scenario.Answer;
 import fr.craft.gabier.editing.fixtures.Scenario.Request;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +25,8 @@ class FakeJavaLanguageServerTest {
     private static final Path MAIN = ROOT.resolve("src/main/java/demo/Main.java");
     private static final Path GREETER = ROOT.resolve("src/main/java/demo/Greeter.java");
     private static final Path BROKEN = ROOT.resolve("src/main/java/demo/Broken.java");
+    private static final Path UNTIDY = ROOT.resolve("src/main/java/demo/Untidy.java");
+    private static final Path TIDY = ROOT.resolve("src/main/java/demo/Tidy.java");
 
     private FakeJavaLanguageServer server;
 
@@ -61,6 +64,44 @@ class FakeJavaLanguageServerTest {
                         List.of(new TextEdit(
                                 new Range(new Position(6, 15), new Position(7, 22)),
                                 "text = greeting + \", \" + name;\n        return text"))));
+    }
+
+    @Test
+    void answersTheChangeSetOfAnOrganizeImportsScenarioWithPathsUnderItsRoot() {
+        server.scripted(Scenarios.ORGANIZE_IMPORTS);
+
+        Optional<ChangeSet> changes = server.organizeImports(UNTIDY);
+
+        assertThat(changes)
+                .contains(((Answer.Organized)
+                                Scenarios.ORGANIZE_IMPORTS.inside(ROOT).answer())
+                        .changes());
+        assertThat(changes.orElseThrow().changes())
+                .singleElement()
+                .isInstanceOfSatisfying(
+                        FileChange.EditFile.class,
+                        edit -> assertThat(edit.file()).isEqualTo(UNTIDY));
+    }
+
+    @Test
+    void answersNothingForAFileWhoseImportsAreInOrder() {
+        server.scripted(Scenarios.ORGANIZE_IMPORTS_IN_ORDER);
+
+        assertThat(server.organizeImports(TIDY)).isEmpty();
+    }
+
+    @Test
+    void throwsTheRefusalOfAnOrganizeImportsScenario() {
+        server.scripted(Scenarios.ORGANIZE_IMPORTS_WHILE_THE_SERVER_IMPORTS)
+                .scripted(Scenarios.ORGANIZE_IMPORTS_OUTSIDE_THE_PROJECT);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.organizeImports(UNTIDY))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.organizeImports(Path.of("/outside/Elsewhere.java")))
+                .satisfies(exception ->
+                        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
     }
 
     @Test

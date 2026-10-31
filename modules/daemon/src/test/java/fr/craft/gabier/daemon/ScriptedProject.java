@@ -134,6 +134,11 @@ final class ScriptedProject implements ServedProject {
     }
 
     @Override
+    public Optional<ChangeSet> organizeImports(Path file) {
+        return server.organizeImports(file);
+    }
+
+    @Override
     public void close() throws InterruptedException {
         closes.incrementAndGet();
         closed.countDown();

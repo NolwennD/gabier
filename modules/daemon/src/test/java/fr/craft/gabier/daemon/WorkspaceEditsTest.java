@@ -13,6 +13,7 @@ import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.TextEdit;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,7 +29,7 @@ import org.junit.jupiter.api.Test;
  * The answer of jdtls to a rename in the terms of the domain: what is dropped, what is clamped, what is refused. The
  * answers are made by hand, as jdtls sends them; no jdtls is started.
  */
-class RenameChangesTest {
+class WorkspaceEditsTest {
 
     private static final Path GREETER = Path.of("/project/Greeter.java");
     private static final Path WELCOMER = Path.of("/project/Welcomer.java");
@@ -37,7 +38,7 @@ class RenameChangesTest {
     private Map<Path, String> disk = Map.of(GREETER, "class Greeter {\n    int x;\n}\n");
 
     private List<FileChange> of(WorkspaceEdit edit) {
-        return RenameChanges.of(edit, file -> Optional.ofNullable(disk.get(file)));
+        return WorkspaceEdits.of(edit, file -> Optional.ofNullable(disk.get(file)));
     }
 
     private static WorkspaceEdit workspaceEdit(Either<TextDocumentEdit, ResourceOperation>... changes) {
@@ -116,18 +117,45 @@ class RenameChangesTest {
     }
 
     @Test
-    void refusesAnAnswerThatGivesItsEditsAsChanges() {
-        var edit = new WorkspaceEdit(Map.of(
-                GREETER.toUri().toString(),
-                List.of(new org.eclipse.lsp4j.TextEdit(
-                        new org.eclipse.lsp4j.Range(
-                                new org.eclipse.lsp4j.Position(0, 6), new org.eclipse.lsp4j.Position(0, 13)),
-                        "new"))));
+    void convertsAnAnswerThatGivesItsEditsAsChanges() {
+        var edit = new WorkspaceEdit(Map.of(GREETER.toUri().toString(), List.of(lsp(0, 6, 0, 13), lsp(1, 4, 1, 5))));
 
-        assertThatThrownBy(() -> of(edit))
-                .isInstanceOf(JdtlsException.class)
-                .hasMessageContaining("changes")
-                .hasMessageContaining("documentChanges");
+        assertThat(of(edit)).containsExactly(new EditFile(GREETER, List.of(domain(0, 6, 0, 13), domain(1, 4, 1, 5))));
+    }
+
+    @Test
+    void keepsTheFilesOfChangesInTheOrderOfTheAnswerAndDropsThoseWithNoEdit() {
+        var changes = new LinkedHashMap<String, List<org.eclipse.lsp4j.TextEdit>>();
+        changes.put(WELCOMER.toUri().toString(), List.of(lsp(0, 0, 0, 1)));
+        changes.put(Path.of("/project/Empty.java").toUri().toString(), List.of());
+        changes.put(GREETER.toUri().toString(), List.of(lsp(0, 6, 0, 13)));
+
+        assertThat(of(new WorkspaceEdit(changes)))
+                .containsExactly(
+                        new EditFile(WELCOMER, List.of(domain(0, 0, 0, 1))),
+                        new EditFile(GREETER, List.of(domain(0, 6, 0, 13))));
+    }
+
+    @Test
+    void clampsTheEditsGivenAsChangesLikeTheOthers() {
+        var edit = new WorkspaceEdit(Map.of(GREETER.toUri().toString(), List.of(lsp(0, 6, 0, 99))));
+
+        assertThat(of(edit)).containsExactly(new EditFile(GREETER, List.of(domain(0, 6, 0, 15))));
+    }
+
+    @Test
+    void refusesChangesToSomethingThatIsNotAFile() {
+        var edit = new WorkspaceEdit(Map.of("jdt://contents/java.base/String.class", List.of(lsp(0, 0, 0, 1))));
+
+        assertThatThrownBy(() -> of(edit)).isInstanceOf(JdtlsException.class).hasMessageContaining("not a file");
+    }
+
+    @Test
+    void prefersTheDocumentChangesWhenTheAnswerGivesBoth() {
+        var edit = workspaceEdit(edits(GREETER, lsp(0, 6, 0, 13)));
+        edit.setChanges(Map.of(WELCOMER.toUri().toString(), List.of(lsp(0, 0, 0, 1))));
+
+        assertThat(of(edit)).containsExactly(new EditFile(GREETER, List.of(domain(0, 6, 0, 13))));
     }
 
     @Test

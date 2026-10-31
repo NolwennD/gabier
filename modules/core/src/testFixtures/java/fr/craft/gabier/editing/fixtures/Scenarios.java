@@ -16,6 +16,8 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * The catalogue of the contract scenarios: every answer the core relies on from a language server for Java. The
@@ -51,6 +53,12 @@ import java.util.Map;
  *       {@link Sequel} is two scenarios in a row with the disk changed between them ({@link #sequels()}): a type
  *       renamed, the change set applied (the file moved), then renamed back; and a file edited between two requests
  *       for its diagnostics. The replay changes the disk as an agent does and gets the answer for the new text.
+ *   <li>the organization of the imports of a file ({@link #ORGANIZE_IMPORTS}): jdtls answers one edit of the file, from
+ *       its first import to its last, or none when the imports are already as it is configured to write them ({@link
+ *       #ORGANIZE_IMPORTS_IN_ORDER}). What it writes is decided by two preferences it is started with (see {@code
+ *       JdtlsSettings.javaPreferences}): with its defaults it would put a blank line between its groups of imports and
+ *       collapse a hundred imports of one package into a star ({@link #ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS}). A type
+ *       that two packages declare and that a file uses without importing it is left unresolved, without a word.
  * </ul>
  *
  * <p>The fake answers from the request alone: it does not check that the files a test wrote are the ones of the
@@ -66,6 +74,12 @@ public final class Scenarios {
     private static final Path BROKEN = Path.of("src/main/java/demo/Broken.java");
     private static final Path SLOPPY = Path.of("src/main/java/demo/Sloppy.java");
     private static final Path ELSEWHERE = Path.of("../outside/Elsewhere.java");
+    private static final Path UNTIDY = Path.of("src/main/java/demo/Untidy.java");
+    private static final Path TIDY = Path.of("src/main/java/demo/Tidy.java");
+    private static final Path WIDE = Path.of("src/main/java/demo/Wide.java");
+
+    /** How many types of one package, and constants of one class, {@code Wide} imports one by one: over the 99 of jdtls. */
+    private static final int MANY = 100;
 
     private static final String GREETER_SOURCE = """
         package demo;
@@ -111,7 +125,55 @@ public final class Scenarios {
         }
         """;
 
+    /**
+     * The imports in every wrong way: one unused ({@code Set}), two missing ({@code ArrayList}, {@code Collections}),
+     * and the rest out of order, with static imports among the others.
+     */
+    private static final String UNTIDY_SOURCE = """
+        package demo;
+
+        import java.util.Set;
+        import static java.util.Map.entry;
+        import java.util.Map;
+        import org.w3c.dom.Node;
+        import java.io.File;
+        import javax.swing.JButton;
+        import java.util.List;
+        import static java.util.stream.Collectors.toList;
+
+        public class Untidy {
+            List<String> names = Collections.emptyList();
+            ArrayList<String> more = new ArrayList<>();
+            Map<String, String> pairs = Map.ofEntries(entry("a", "b"));
+            Node node;
+            File file;
+            JButton button;
+            Object all = names.stream().collect(toList());
+        }
+        """;
+
+    /** Imports as the project keeps them: static first, a blank line, then one block in ASCII order. */
+    private static final String TIDY_SOURCE = """
+        package demo;
+
+        import static java.util.Map.entry;
+
+        import java.util.List;
+        import java.util.Map;
+
+        public class Tidy {
+            List<String> names = List.of("a");
+            Map<String, String> pairs = Map.ofEntries(entry("a", "b"));
+        }
+        """;
+
     private static final Map<Path, String> PROJECT = Map.of(GREETER, GREETER_SOURCE, MAIN, MAIN_SOURCE);
+
+    /**
+     * {@code Untidy}, {@code Tidy} and {@code Wide}, with the types and the constants {@code Wide} imports: the project
+     * of the scenarios about imports.
+     */
+    private static final Map<Path, String> IMPORTS_PROJECT = importsProject();
 
     /** The project after {@link #RENAME_TYPE}: the type is {@code Welcomer}, in its own file, and {@code Main} uses it. */
     private static final Map<Path, String> RENAMED_PROJECT = Map.of(
@@ -214,6 +276,62 @@ public final class Scenarios {
             new Request.Rename(GREETER, new Position(6, 15), "1st"),
             new Answer.Refused(LanguageServerErrorKey.INVALID_NAME));
 
+    /**
+     * {@code Untidy}: {@code Set} is removed, {@code ArrayList} and {@code Collections} are added, and the imports come
+     * out as the project keeps them (the static imports, a blank line, then one block in ASCII order, {@code java} and
+     * {@code javax} and {@code org} not apart), none as a star. jdtls answers one edit, from the first import to the
+     * last, which it settles by two preferences (see {@code JdtlsSettings.javaPreferences}).
+     */
+    public static final Scenario ORGANIZE_IMPORTS = new Scenario(
+            "organize-imports-of-a-file",
+            IMPORTS_PROJECT,
+            new Request.OrganizeImports(UNTIDY),
+            new Answer.Organized(new ChangeSet(List.of(edits(UNTIDY, replace(2, 0, 9, 49, """
+                import static java.util.Map.entry;
+                import static java.util.stream.Collectors.toList;
+
+                import java.io.File;
+                import java.util.ArrayList;
+                import java.util.Collections;
+                import java.util.List;
+                import java.util.Map;
+                import javax.swing.JButton;
+                import org.w3c.dom.Node;\
+                """))))));
+
+    /** {@code Tidy}: its imports are as the project keeps them, jdtls has no edit to give. */
+    public static final Scenario ORGANIZE_IMPORTS_IN_ORDER = new Scenario(
+            "organize-imports-of-a-file-in-order",
+            IMPORTS_PROJECT,
+            new Request.OrganizeImports(TIDY),
+            new Answer.AlreadyOrganized());
+
+    /**
+     * {@code Wide} imports {@value #MANY} types of one package and as many constants of one class, one by one: jdtls
+     * collapses them into {@code import demo.many.*;} and {@code import static demo.many.Constants.*;} with its default
+     * thresholds (99, {@code java.sources.organizeImports.starThreshold} and {@code staticStarThreshold}), so with them
+     * this scenario fails. The project bans star imports, and the answer is that nothing changes.
+     */
+    public static final Scenario ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS = new Scenario(
+            "organize-imports-keeps-explicit-imports",
+            IMPORTS_PROJECT,
+            new Request.OrganizeImports(WIDE),
+            new Answer.AlreadyOrganized());
+
+    /** The project is still being imported: the server cannot say what organizing the imports changes. */
+    public static final Scenario ORGANIZE_IMPORTS_WHILE_THE_SERVER_IMPORTS = new Scenario(
+            "organize-imports-while-the-server-imports",
+            IMPORTS_PROJECT,
+            new Request.OrganizeImports(UNTIDY),
+            new Answer.Refused(LanguageServerErrorKey.NOT_READY));
+
+    /** A file that is not in the project the server was started on. */
+    public static final Scenario ORGANIZE_IMPORTS_OUTSIDE_THE_PROJECT = new Scenario(
+            "organize-imports-of-a-file-outside-the-project",
+            IMPORTS_PROJECT,
+            new Request.OrganizeImports(ELSEWHERE),
+            new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+
     /** The project is still being imported: the server cannot say what a rename changes. */
     public static final Scenario RENAME_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "rename-while-the-server-imports",
@@ -275,7 +393,12 @@ public final class Scenarios {
                 RENAME_WHERE_THERE_IS_NO_SYMBOL,
                 RENAME_TO_AN_INVALID_NAME,
                 RENAME_WHILE_THE_SERVER_IMPORTS,
-                RENAME_OUTSIDE_THE_PROJECT);
+                RENAME_OUTSIDE_THE_PROJECT,
+                ORGANIZE_IMPORTS,
+                ORGANIZE_IMPORTS_IN_ORDER,
+                ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS,
+                ORGANIZE_IMPORTS_WHILE_THE_SERVER_IMPORTS,
+                ORGANIZE_IMPORTS_OUTSIDE_THE_PROJECT);
     }
 
     /** The sequels of the catalogue: scenarios in a row, with the files changed on disk between them. */
@@ -290,6 +413,51 @@ public final class Scenarios {
         files.put(SLOPPY, SLOPPY_SOURCE);
 
         return files;
+    }
+
+    /** The project of the scenarios about imports: {@code Wide}'s types and constants are generated, not typed. */
+    private static Map<Path, String> importsProject() {
+        Map<Path, String> files = new HashMap<>();
+        files.put(UNTIDY, UNTIDY_SOURCE);
+        files.put(TIDY, TIDY_SOURCE);
+        files.put(WIDE, wideSource());
+        for (int index = 0; index < MANY; index++) {
+            String type = "T%03d".formatted(index);
+            files.put(
+                    Path.of("src/main/java/demo/many/" + type + ".java"),
+                    "package demo.many;\n\npublic class " + type + " {}\n");
+        }
+        files.put(Path.of("src/main/java/demo/many/Constants.java"), constantsSource());
+
+        return files;
+    }
+
+    /** A class of {@value #MANY} constants: {@code C000} to {@code C099}. */
+    private static String constantsSource() {
+        String fields = IntStream.range(0, MANY)
+                .mapToObj(index -> "    public static final int C%03d = %d;\n".formatted(index, index))
+                .collect(Collectors.joining());
+
+        return "package demo.many;\n\npublic class Constants {\n" + fields + "}\n";
+    }
+
+    /** A class that uses each of them, with its imports as the project keeps them: nothing to organize. */
+    private static String wideSource() {
+        String statics = IntStream.range(0, MANY)
+                .mapToObj(index -> "import static demo.many.Constants.C%03d;\n".formatted(index))
+                .collect(Collectors.joining());
+        String types = IntStream.range(0, MANY)
+                .mapToObj(index -> "import demo.many.T%03d;\n".formatted(index))
+                .collect(Collectors.joining());
+        String constants = IntStream.range(0, MANY)
+                .mapToObj(index -> "        C%03d,\n".formatted(index))
+                .collect(Collectors.joining());
+        String fields = IntStream.range(0, MANY)
+                .mapToObj(index -> "    T%03d t%03d;\n".formatted(index, index))
+                .collect(Collectors.joining());
+
+        return "package demo;\n\n" + statics + "\n" + types + "\npublic class Wide {\n    int[] constants = {\n"
+                + constants + "    };\n" + fields + "}\n";
     }
 
     private static Map<Path, String> withBrokenAs(String source) {

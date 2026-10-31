@@ -3,6 +3,7 @@ package fr.craft.gabier.daemon;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.google.gson.JsonPrimitive;
 import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.Diagnostic.Severity;
@@ -20,9 +21,14 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Stream;
+import org.eclipse.lsp4j.CodeAction;
+import org.eclipse.lsp4j.CodeActionKind;
+import org.eclipse.lsp4j.CodeActionParams;
+import org.eclipse.lsp4j.Command;
 import org.eclipse.lsp4j.DiagnosticSeverity;
 import org.eclipse.lsp4j.MarkupContent;
 import org.eclipse.lsp4j.PrepareRenameDefaultBehavior;
@@ -1004,6 +1010,310 @@ class JdtlsLanguageServerTest {
                 assertThatThrownBy(() -> server.rename(greeter, new Position(1, 10), "hello"))
                         .isInstanceOf(JdtlsException.class)
                         .hasMessageContaining("Interrupted while waiting for the rename");
+                assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+
+        private <T> CompletableFuture<T> declined(String message) {
+            return CompletableFuture.failedFuture(
+                    new ResponseErrorException(new ResponseError(ResponseErrorCode.InvalidRequest, message, null)));
+        }
+    }
+
+    @Nested
+    class OrganizingImports {
+
+        private Path greeter;
+
+        @BeforeEach
+        void writeTheSources() throws IOException {
+            greeter = write(
+                    "src/main/java/demo/Greeter.java",
+                    "package demo;\n\n"
+                            + "import java.util.Set;\n"
+                            + "import java.util.List;\n\n"
+                            + "class Greeter {\n"
+                            + "    List<String> names;\n"
+                            + "}\n");
+        }
+
+        private CompletableFuture<List<Either<Command, CodeAction>>> offers(CodeAction action) {
+            return CompletableFuture.completedFuture(List.of(Either.forRight(action)));
+        }
+
+        /** What jdtls offers first: the action, with its data and no edit yet. */
+        private CodeAction lazyAction() {
+            var action = new CodeAction("Organize imports");
+            action.setKind(CodeActionKind.SourceOrganizeImports);
+            action.setData("jdtls-data");
+            return action;
+        }
+
+        /** The action once resolved: its edit is given as {@code changes}, as jdtls gives it. */
+        private CodeAction resolvedAction(TextEdit... edits) {
+            var action = lazyAction();
+            action.setEdit(new WorkspaceEdit(Map.of(greeter.toUri().toString(), List.of(edits))));
+            return action;
+        }
+
+        private TextEdit removeSet() {
+            return new TextEdit(
+                    new Range(new org.eclipse.lsp4j.Position(2, 0), new org.eclipse.lsp4j.Position(3, 0)), "");
+        }
+
+        private ChangeSet removalOfSet() {
+            return new ChangeSet(List.of(new FileChange.EditFile(
+                    greeter,
+                    List.of(new fr.craft.gabier.editing.domain.TextEdit(
+                            new fr.craft.gabier.editing.domain.Range(new Position(2, 0), new Position(3, 0)), "")))));
+        }
+
+        @Test
+        void asksForTheOrganizeImportsActionOfTheFileAloneThenResolvesItAndAnswersInTheTermsOfTheDomain()
+                throws Exception {
+            fake.codeActionAnswers(offers(lazyAction()))
+                    .resolveAnswers(CompletableFuture.completedFuture(resolvedAction(removeSet())));
+
+            try (var server = started()) {
+                assertThat(server.organizeImports(greeter)).contains(removalOfSet());
+
+                assertThat(fake.codeActionRequests()).hasSize(1);
+                CodeActionParams request = fake.codeActionRequests().getFirst();
+                assertThat(request.getTextDocument().getUri())
+                        .isEqualTo(greeter.toUri().toString());
+                assertThat(request.getContext().getOnly()).containsExactly("source.organizeImports");
+                assertThat(request.getContext().getDiagnostics()).isEmpty();
+                assertThat(fake.resolveRequests()).hasSize(1);
+                assertThat(fake.resolveRequests().getFirst().getData()).isEqualTo(new JsonPrimitive("jdtls-data"));
+                assertThat(fake.received()).containsExactly("codeAction Greeter.java", "resolveCodeAction");
+            }
+        }
+
+        @Test
+        void usesTheEditOfTheActionWhenJdtlsGivesItWithoutBeingAskedToResolve() throws Exception {
+            fake.codeActionAnswers(offers(resolvedAction(removeSet())));
+
+            try (var server = started()) {
+                assertThat(server.organizeImports(greeter)).contains(removalOfSet());
+                assertThat(fake.resolveRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void answersNothingWhenTheResolvedActionHasNoEdit() throws Exception {
+            // What jdtls answers for a file whose imports are as they should be.
+            fake.codeActionAnswers(offers(lazyAction()))
+                    .resolveAnswers(CompletableFuture.completedFuture(lazyAction()));
+
+            try (var server = started()) {
+                assertThat(server.organizeImports(greeter)).isEmpty();
+            }
+        }
+
+        @Test
+        void answersNothingWhenTheEditChangesNothing() throws Exception {
+            fake.codeActionAnswers(offers(resolvedAction()));
+
+            try (var server = started()) {
+                assertThat(server.organizeImports(greeter)).isEmpty();
+            }
+        }
+
+        @Test
+        void answersNothingWhenJdtlsResolvesNothing() throws Exception {
+            fake.codeActionAnswers(offers(lazyAction())).resolveAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertThat(server.organizeImports(greeter)).isEmpty();
+            }
+        }
+
+        @Test
+        void answersNothingWhenJdtlsOffersNoAction() throws Exception {
+            fake.codeActionAnswers(CompletableFuture.completedFuture(List.of()));
+
+            try (var server = started()) {
+                assertThat(server.organizeImports(greeter)).isEmpty();
+                assertThat(fake.resolveRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void answersNothingWhenJdtlsOffersNothingAtAll() throws Exception {
+            fake.codeActionAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertThat(server.organizeImports(greeter)).isEmpty();
+            }
+        }
+
+        @Test
+        void answersNothingWhenJdtlsOffersACommandInsteadOfAnAction() throws Exception {
+            fake.codeActionAnswers(CompletableFuture.completedFuture(
+                    List.of(Either.forLeft(new Command("Organize imports", "java.edit.organizeImports")))));
+
+            try (var server = started()) {
+                assertThat(server.organizeImports(greeter)).isEmpty();
+                assertThat(fake.resolveRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void answersNothingWhenJdtlsDeclinesTheRequest() throws Exception {
+            fake.codeActionAnswers(declined("nothing to organize"));
+
+            try (var server = started()) {
+                assertThat(server.organizeImports(greeter)).isEmpty();
+            }
+        }
+
+        @Test
+        void clampsThePositionsOfTheEditToTheTextOfTheFileAsItIsOnDisk() throws Exception {
+            var past = new TextEdit(
+                    new Range(new org.eclipse.lsp4j.Position(2, 0), new org.eclipse.lsp4j.Position(99, 0)), "");
+            fake.codeActionAnswers(offers(resolvedAction(past)));
+
+            try (var server = started()) {
+                // The text ends with a newline: its last line, the empty one, is line 8.
+                assertThat(server.organizeImports(greeter))
+                        .contains(new ChangeSet(List.of(new FileChange.EditFile(
+                                greeter,
+                                List.of(new fr.craft.gabier.editing.domain.TextEdit(
+                                        new fr.craft.gabier.editing.domain.Range(
+                                                new Position(2, 0), new Position(8, 0)),
+                                        ""))))));
+            }
+        }
+
+        @Test
+        void tellsJdtlsOfTheFilesEditedSinceTheLastRequestBeforeAskingForTheAction() throws Exception {
+            fake.registersWatchersFor("**/*.java").codeActionAnswers(offers(resolvedAction(removeSet())));
+
+            try (var server = started()) {
+                Files.writeString(greeter, Files.readString(greeter) + "// edited\n");
+
+                server.organizeImports(greeter);
+
+                assertThat(fake.received())
+                        .containsExactly(
+                                "didChangeWatchedFiles",
+                                "acknowledged .gabier-changes-taken-1",
+                                "codeAction Greeter.java");
+                assertThat(fake.watched().getFirst().getChanges())
+                        .extracting(change -> change.getType() + " " + change.getUri())
+                        .containsExactly(
+                                "Changed " + greeter.toUri(),
+                                "Deleted "
+                                        + root.resolve(".gabier-changes-taken-1")
+                                                .toUri());
+            }
+        }
+
+        @Test
+        void opensNothing() throws Exception {
+            fake.codeActionAnswers(offers(resolvedAction(removeSet())));
+
+            try (var server = started()) {
+                server.organizeImports(greeter);
+
+                assertThat(fake.opened()).isEmpty();
+            }
+        }
+
+        @Test
+        void putsThePathOfTheFileInItsNormalFormInTheRequest() throws Exception {
+            fake.codeActionAnswers(offers(resolvedAction(removeSet())));
+            var spelled = root.resolve("src/main/../main/java/demo/./Greeter.java");
+
+            try (var server = started()) {
+                server.organizeImports(spelled);
+
+                assertThat(fake.codeActionRequests()
+                                .getFirst()
+                                .getTextDocument()
+                                .getUri())
+                        .isEqualTo(greeter.toUri().toString());
+            }
+        }
+
+        @Test
+        void refusesAFileOutsideTheProjectWithoutAskingJdtls() throws Exception {
+            Path outside = root.resolveSibling("outside").resolve("Elsewhere.java");
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.organizeImports(outside))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT);
+                            assertThat(refusal.parameters()).containsEntry("file", outside.toString());
+                        });
+                assertThat(fake.codeActionRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesAsNotReadyWhileJdtlsIsStillImporting() throws Exception {
+            fake.neverAnswersInitialize();
+
+            try (var server = start()) {
+                assertThatThrownBy(() -> server.organizeImports(greeter))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+                assertThat(fake.codeActionRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
+            var failure = new CompletableFuture<List<Either<Command, CodeAction>>>();
+            failure.completeExceptionally(new IllegalStateException("the model is broken"));
+            fake.codeActionAnswers(failure);
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.organizeImports(greeter))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("waiting for the organization of the imports of " + greeter)
+                        .hasMessageContaining("Internal error");
+            }
+        }
+
+        @Test
+        void failsWhenJdtlsDoesNotAnswerInTime() throws Exception {
+            // No answer is scripted.
+            try (var server = start(Duration.ofSeconds(1))) {
+                server.awaitStarted();
+
+                assertThatThrownBy(() -> server.organizeImports(greeter))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Timed out")
+                        .hasMessageContaining("the organization of the imports");
+            }
+        }
+
+        @Test
+        void failsWhenJdtlsDoesNotResolveTheActionInTime() throws Exception {
+            fake.codeActionAnswers(offers(lazyAction()));
+
+            try (var server = start(Duration.ofSeconds(1))) {
+                server.awaitStarted();
+
+                assertThatThrownBy(() -> server.organizeImports(greeter))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Timed out")
+                        .hasMessageContaining("the edit of the organization of the imports");
+            }
+        }
+
+        @Test
+        void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
+            fake.codeActionAnswers(offers(resolvedAction(removeSet())));
+
+            try (var server = started()) {
+                Thread.currentThread().interrupt();
+
+                assertThatThrownBy(() -> server.organizeImports(greeter))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Interrupted while waiting for the organization of the imports");
                 assertThat(Thread.interrupted()).isTrue();
             }
         }

@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * A hand-written fake of {@link JavaLanguageServer}, for the tests of the core and of the modules above it: no
@@ -76,6 +77,17 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
         Request request = new Request.Rename(file, position, newName).resolvedIn(root);
 
         return ((Answer.Renamed) answerTo(request)).changes();
+    }
+
+    @Override
+    public Optional<ChangeSet> organizeImports(Path file) {
+        Request request = new Request.OrganizeImports(file).resolvedIn(root);
+
+        return switch (answerTo(request)) {
+            case Answer.Organized organized -> Optional.of(organized.changes());
+            case Answer.AlreadyOrganized _ -> Optional.empty();
+            default -> throw new AssertionError("An organize imports request got a different kind of answer");
+        };
     }
 
     /** The scripted answer to the request, or the refusal it scripted, thrown. */

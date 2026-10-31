@@ -22,7 +22,9 @@ import org.eclipse.lsp4j.WorkspaceEditCapabilities;
  * puts the move of a file in the edit of a rename (the file of a renamed type) only for a client that declares all
  * three resource operations, create, rename and delete. It registers the files it wants watched, and so learns of the
  * edits made on disk, only for a client that declares the dynamic registration of {@code
- * workspace/didChangeWatchedFiles}.
+ * workspace/didChangeWatchedFiles}. It offers the code action {@code source.organizeImports}, which computes its edit
+ * only when it is resolved, to a client that declares the kind among its literals and {@code resolveSupport} for {@code
+ * edit}; the preferences that decide what it writes are {@link JdtlsSettings#javaPreferences}, not capabilities.
  */
 final class JdtlsCapabilities {
 
