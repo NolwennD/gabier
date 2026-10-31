@@ -1,12 +1,11 @@
 # `gabier extract-variable` refuses what jdtls refuses, with the right reason
 
 Opened: 31-10-2026 20:40
-Depends on: 31-10-2026-2051-readme-lists-the-capabilities-and-points-to-docs (the README claim it fixes moves to docs/commands/extract-variable.md).
 
 Found in the review of `gabier-extracts-a-variable`. An agent that selects a statement or a `void` call gets an internal
 error instead of the refusal `language-server-not-an-expression`: `JdtlsLanguageServer.java:271-276` turns a
 `RefactorEdit(edit=null, errorMessage=...)` of jdtls into a `JdtlsException` ("without an edit"), and the test
-`failsWhenJdtlsGivesNoEdit` pins it. The README (`README.md:243`) already claims the refusal for a statement and a `void`
+`failsWhenJdtlsGivesNoEdit` pins it. The documentation (`docs/commands/extract-variable.md`) already claims the refusal for a statement and a `void`
 call; only a `return` keyword is scripted and replayed.
 
 Done when:
@@ -16,4 +15,4 @@ Done when:
 - [ ] A name equal to the one jdtls proposes (`string`) is replayed on the real jdtls (today only on the fake).
 - [ ] A name that collides with an existing local (`name` in `greet(String name)`) is replayed on the real jdtls, and the
       resolution says which refusal comes back (`invalid-name` or another one).
-- [ ] The README says only what the scenarios prove. `bin/ci` green, coverage 100%.
+- [ ] The page `docs/commands/extract-variable.md` says only what the scenarios prove. `bin/ci` green, coverage 100%.

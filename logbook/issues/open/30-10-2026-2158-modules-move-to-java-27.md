@@ -21,6 +21,6 @@ Done when:
   (or, if that cannot be shown, say so);
 - Error Prone, NullAway, Checkstyle, JaCoCo, the native image and jdtls (its own JDK) all run on the release 27 build; what
   does not is listed with its reason and left on 25 only if there is one;
-- `.claude/rules/quality.md` and the README say the release; `bin/ci` green, the `native` and `jdtls` stages run.
+- `.claude/rules/quality.md` and `AGENTS.md` say the release; `bin/ci` green, the `native` and `jdtls` stages run.
 
 Run it alone: it edits the build of every module.

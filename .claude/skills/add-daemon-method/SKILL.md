@@ -60,7 +60,9 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    answers (`DaemonLauncher`); an administrative command that must not start one (`status`, `stop`) takes
    `waiting(environment)`. Its output is text by default and the result with `--json`, a refusal of the daemon printed as its problem object with the exit code
    of its category (`DaemonRefusal`). Test it in `GabierTest` against `ScriptedDaemon` (a real socket, scripted answers).
-   Update the "Command line" section of the README and the usage text of `UsageException`. A file given on the command
+   Document it: a page `docs/commands/<command>.md` (modelled on the existing ones: usage, example in text and `--json`,
+   refusals, the daemon method and its parameters), one line in the "Capabilities" list of the README that links to it,
+   and a row in the table of methods of `docs/protocol.md`. Then update the usage text of `UsageException`. A file given on the command
    line is sent as an absolute path (the daemon's working directory is not the cli's), and a position is shown from 1
    in the text and kept from 0 with `--json`.
 6. **Prove it end to end**: add the command to `Daemon.check` in `bin/ci.d/40-native`, which runs the native `gabier`

@@ -8,7 +8,7 @@ have): jdtls reports `The package fr.craft.gabier.editing is not accessible` and
 imports (`FakeJavaLanguageServer`, `Scenario`, `Scenarios`). Case 2: a type that two packages declare (`List` and `Date`
 with no import): jdtls sends `java.action.organizeImports.chooseImports` to the client, which gabier does not answer, so
 the type is silently left unimported (`ArrayList` plus `Date`: `ArrayList` is added, `Date` stays unresolved, no message).
-The README warns about both, the probe skips that source set. Reproduce case 1: remove the `/src/fakeServed/` filter of
+`docs/commands/organize-imports.md` warns about both, the probe skips that source set. Reproduce case 1: remove the `/src/fakeServed/` filter of
 `JdtlsProbeTest.checkImportsOfTheProjectAreInOrder`.
 
 Done when:
@@ -18,5 +18,5 @@ Done when:
       shows it, red first.
 - [ ] A type declared in two packages is not silently skipped: the answer names the candidates (the command
       `java.action.organizeImports.chooseImports` is answered, or the refusal lists them). Same proof.
-- [ ] The README warnings are replaced by the behaviour; the `fakeServed` filter of the probe is removed or justified.
+- [ ] The warnings of `docs/commands/organize-imports.md` are replaced by the behaviour; the `fakeServed` filter of the probe is removed or justified.
 - [ ] `bin/ci` green, coverage 100%.

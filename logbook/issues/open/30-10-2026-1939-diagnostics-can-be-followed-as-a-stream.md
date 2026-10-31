@@ -25,7 +25,7 @@ Done when:
 - `gabier diagnostics --watch <file>` writes each event as soon as it comes (flushed per line), in text and with
   `--json`; it ends cleanly, no stack trace, on SIGTERM and when the daemon goes away; tested in `GabierTest` against
   `ScriptedDaemon`, and against the native binary in `bin/ci.d/40-native`;
-- the README ("Command line") and the skill `add-daemon-method` say how a method answers more than once;
+- `docs/protocol.md` and the skill `add-daemon-method` say how a method answers more than once;
 - `bin/ci` green, coverage 100%.
 
 Depends on: 30-10-2026-1937-the-daemon-answers-diagnostics-of-a-file (the method, the type of a diagnostic and the line

@@ -1,8 +1,15 @@
 package fr.craft.gabier.protocol;
 
 /**
- * The exit code of the program, which a script reads: success, a request that gabier refused (a usage error included,
- * kept at 2 as it has always been), and an internal error. Documented in the README, so stable.
+ * The exit code of the program, which a script reads. The codes are stable, for {@code gabier} and for
+ * {@code gabier-daemon}, and derived from the problem:
+ *
+ * <ul>
+ *   <li>0: success;
+ *   <li>1: internal error, gabier failed (a bug, or the environment), the request was not at fault;
+ *   <li>2: request refused, a usage error (kept at 2 as it has always been), no daemon running, a socket path too long,
+ *       any refusal of a request.
+ * </ul>
  */
 public enum ExitCode {
     SUCCESS(0),

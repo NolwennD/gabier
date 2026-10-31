@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build the native cli and the daemon of this checkout, and link `gabier` and `gabier-daemon` into a folder of the PATH,
 # so that an agent calls them by name in any project. The cli starts the daemon it finds next to itself, else on the PATH
-# (README, "The daemon"). The links point into this checkout: run it from the checkout the tools should come from, and
+# (docs/daemon.md). The links point into this checkout: run it from the checkout the tools should come from, and
 # again after a change. An existing link is replaced; a file that is not a link is never touched.
 # Usage: scripts/install.sh [<folder>]    (default: $GABIER_BIN_DIR, else ~/.local/bin)
 set -eu

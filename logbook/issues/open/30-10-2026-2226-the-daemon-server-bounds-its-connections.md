@@ -15,7 +15,7 @@ Found in the review of the batch `a-line-over-the-limit-is-refused`, `uptime-doe
 - `DaemonServer.java:235`: the delete after a failed `restrict` is not scoped to our file: another process that unlinks
   our socket, then a second daemon binding the path, has its socket removed by `deleteIfExists`; a regular file put there
   meanwhile too. Compare the file key taken just after `bind` with the one at cleanup time;
-- `LineReader.java:52` counts a `\r` in the limit while the Javadoc and the README say the line break is not counted:
+- `LineReader.java:52` counts a `\r` in the limit while the Javadoc and `docs/protocol.md` say the line break is not counted:
   1,048,576 bytes followed by `\r\n` are refused, the same followed by `\n` are read;
 - `SocketGuard` lost `final` only so that tests can subclass it: an interface with a default implementation, or a
   function passed to `open`, keeps the production code final;
@@ -26,7 +26,7 @@ Found in the review of the batch `a-line-over-the-limit-is-refused`, `uptime-doe
 Done when:
 - the number of simultaneous connections is capped and a connection that sends nothing for a stated time is closed; a
   test with a cap of 2 (a third is refused or waits, the limit stated) and a client that goes quiet, shown on a real
-  socket; the values are stated in the README;
+  socket; the values are stated in `docs/protocol.md`;
 - a `bind` that fails closes the listener and leaves the file of the other daemon alone, a test each;
 - the cleanup after a failed `restrict` deletes our socket only (file key), a test with a socket replaced meanwhile;
 - the limit counts the line without its break, `\r\n` included, or the wording says what is counted, with a test on the
