@@ -69,7 +69,8 @@ used, never started a second time. Otherwise the cli launches `gabier-daemon` as
 of the cli** (a distribution that ships the two together), else on the **`PATH`**: a native image cannot call into the
 daemon, and the two are installed by name. The daemon starts in the cli's working directory with the cli's environment,
 so it serves the project the daemon rules below give (`GABIER_PROJECT`, else the current folder; `GABIER_SOCKET`,
-`GABIER_JDTLS` reach it too). It runs on after the command, detached (no input), and its standard output and error go to
+`GABIER_JDTLS` reach it too). It runs on after the command (no input; it stays in the process group of the cli, so a
+Ctrl-C of the terminal during a later command also stops it), and its standard output and error go to
 a log next to the socket, `<socket>.log` (`gabier.sock.log`; private to the user, replaced at each start, in the
 socket's folder, which the cli creates private if it is missing). The cli waits until the socket accepts a connection,
 **20 seconds** at most (the daemon binds first; jdtls starts later, at the first request, and that wait is the one

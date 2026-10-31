@@ -8,6 +8,8 @@ set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 folder=${1:-${GABIER_BIN_DIR:-$HOME/.local/bin}}
+mkdir -p "$folder"
+folder=$(cd "$folder" && pwd)
 
 cd "$root"
 ./gradlew :cli:nativeCompile :daemon:installDist --console=plain
@@ -21,14 +23,15 @@ for built in "$cli" "$daemon"; do
   fi
 done
 
-mkdir -p "$folder"
-for pair in "gabier:$cli" "gabier-daemon:$daemon"; do
-  name=${pair%%:*}
-  target=${pair#*:}
+for name in gabier gabier-daemon; do
   if [ -e "$folder/$name" ] && [ ! -L "$folder/$name" ]; then
     echo "install: $folder/$name exists and is not a link: not replaced" >&2
     exit 1
   fi
+done
+for pair in "gabier:$cli" "gabier-daemon:$daemon"; do
+  name=${pair%%:*}
+  target=${pair#*:}
   ln -sfn "$target" "$folder/$name"
   echo "linked $folder/$name -> $target"
 done
