@@ -26,3 +26,16 @@ Done when:
 - `bin/ci` green, coverage 100%.
 
 Depends on: 30-10-2026-2143-jdtls-restarts-and-says-when-the-import-is-done (same module, same files).
+
+## Resolution
+
+Merged as `6146e77`.
+
+Checked by the worker's final `bin/ci --all` on the branch of the batch (log kept by the worker): format 5s, build 2s, test 74s (cli 71, core 259, daemon 366, protocol 320, shared 236, architecture 19, 0 failures), native 7s (cached build), jdtls 184s (real jdtls). `InstalledDaemonTest.close()` remembers the processes first, sends SIGTERM, then kills what it saw; `awaitJava()` waits for the java process of jdtls; shown by a test made to throw right after the first answer with jdtls ready (the remembered pid was gone, no daemon left; the throw was removed). `FakeServedMain.refusal(Path)` returns an `Optional`, a dangling link is refused as not a folder (four tests). `Main` writes `jdtls: ` plus `TerminalText.neutralise(line)` on standard error (red without the call); `JdtlsClient` declares `language/eventNotification`. README and skill `verify` updated.
+
+Review (one pass): suggestions on `InstalledDaemonTest` (an assertion after the no-build answer, the polling of the exit log line): issue `the-jdtls-session-tests-pin-what-they-claim`.
+
+Tokens:
+- worker: 804170 for the whole batch (notifications 345758 and 458412, the second run after the review; the second figure may already include the first), shared by the five issues
+- reviewer: 106756 (the first reviewer was stopped on the user's order and gave no figure; its work was redone), shared by the five issues
+- supervisor: shared across the lifecycle batch, see the first issue
