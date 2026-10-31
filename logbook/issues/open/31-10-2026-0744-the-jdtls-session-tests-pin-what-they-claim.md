@@ -1,7 +1,6 @@
 # The tests of the jdtls session pin what they claim
 
 Opened: 31-10-2026 07:44
-Depends on: jdtls-restarts-and-says-when-the-import-is-done (same module, `daemon`, same files).
 
 Findings of the review of the jdtls lifecycle batch: tests that pass for the wrong reason, or that depend on timing,
 and a lock held too long. All in `modules/daemon`.
@@ -17,3 +16,6 @@ Done when:
   one that checks the log line `jdtls exited with code ` polls for it (the line is written after `isAlive()` turns false);
 - `ProjectServer.started()` does not hold its monitor while it ends a failed jdtls that is not dead, so that `close()`
   is not blocked by it (a test with a failed server whose end blocks, and a `close()` that returns).
+- the `@ExcludeFromGeneratedCodeCoverage` of `DaemonServer.stopReading` (a connection that ends between the snapshot and
+  the half-close) is challenged: a test that places the close there, or a reason the review accepts, written in the
+  resolution.
