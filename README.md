@@ -18,6 +18,7 @@ in [The daemon](docs/daemon.md). The daemon starts by itself at the first comman
 - [`gabier organize-imports <file>`](docs/commands/organize-imports.md): add the missing imports, remove the unused
   ones and order the rest, never with a star import.
 - [`gabier extract-variable`](docs/commands/extract-variable.md): turn an expression into a local variable.
+- [`gabier help [<command>]`](docs/commands/help.md): list the commands, or explain one (usage, example, refusals).
 - [`gabier status` and `gabier stop`](docs/commands/status-and-stop.md): see what the daemon serves, and stop it.
 
 ## Reference

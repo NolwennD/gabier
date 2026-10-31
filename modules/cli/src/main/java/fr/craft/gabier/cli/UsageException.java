@@ -13,10 +13,15 @@ final class UsageException extends GeneratorException {
     /** The arguments given, the {@code --json} option not included. */
     static UsageException unsupportedArguments(List<String> arguments) {
         return new UsageException(GeneratorException.badRequest(CliErrorKey.USAGE)
-                .message("Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file>"
-                        + " | rename [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>"
-                        + " | organize-imports [--dry-run] <file>"
-                        + " | extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>)")
+                .message("Unsupported arguments; run gabier help for the commands, "
+                        + "and gabier help <command> for the usage of one")
                 .addParameter("arguments", String.join(" ", arguments)));
+    }
+
+    /** {@code gabier help <command>} for a word that names no command; {@code known} lists the ones that exist. */
+    static UsageException unknownCommand(String command, String known) {
+        return new UsageException(GeneratorException.badRequest(CliErrorKey.USAGE)
+                .message("Unknown command; the commands are " + known)
+                .addParameter("command", command));
     }
 }

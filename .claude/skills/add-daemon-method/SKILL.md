@@ -62,7 +62,12 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    of its category (`DaemonRefusal`). Test it in `GabierTest` against `ScriptedDaemon` (a real socket, scripted answers).
    Document it: a page `docs/commands/<command>.md` (modelled on the existing ones: usage, example in text and `--json`,
    refusals, the daemon method and its parameters), one line in the "Capabilities" list of the README that links to it,
-   and a row in the table of methods of `docs/protocol.md`. Then update the usage text of `UsageException`. A file given on the command
+   and a row in the table of methods of `docs/protocol.md`. Then give the command its **help text**, once, as a constant of the enum `Command` (`modules/cli`): its name, a one-line
+   summary, the usage (one line per form), an example of a call and its answer, and its refusals (`<key>: <meaning>`).
+   `Gabier.execute` switches on that enum, so a command that is in it and not handled does not compile, and `CommandTest`
+   fails on a command without one of the five. `gabier help` and `gabier help <command>` print it, and `UsageException`
+   points to them: nothing else lists the commands, so the usage text is not edited. A command that does not talk to the
+   daemon (`help`) takes no `DaemonClient` and has no row in `docs/protocol.md`. A file given on the command
    line is sent as an absolute path (the daemon's working directory is not the cli's), and a position is shown from 1
    in the text and kept from 0 with `--json`.
 6. **Prove it end to end**: add the command to `Daemon.check` in `bin/ci.d/40-native`, which runs the native `gabier`

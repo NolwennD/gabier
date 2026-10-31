@@ -18,17 +18,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 public final class Gabier {
 
     private static final String VERSION_COMMAND = "--version";
-    private static final String STATUS_COMMAND = "status";
-    private static final String STOP_COMMAND = "stop";
-    private static final String DIAGNOSTICS_COMMAND = "diagnostics";
-    private static final String RENAME_COMMAND = "rename";
-    private static final String ORGANIZE_IMPORTS_COMMAND = "organize-imports";
-    private static final String EXTRACT_VARIABLE_COMMAND = "extract-variable";
+    private static final String HELP_OPTION = "--help";
+    private static final String SHORT_HELP_OPTION = "-h";
     private static final String DRY_RUN_OPTION = "--dry-run";
     private static final String TOKEN_OPTION = "--token";
     private static final String JSON_OPTION = "--json";
@@ -64,33 +61,71 @@ public final class Gabier {
 
     private static void execute(
             List<String> arguments, Map<String, String> environment, boolean json, PrintStream out) {
-        if (arguments.size() == 2 && arguments.getFirst().equals(DIAGNOSTICS_COMMAND)) {
-            diagnostics(starting(environment), arguments.getLast(), json, out);
+        var command = arguments.isEmpty() ? Optional.<Command>empty() : Command.named(arguments.getFirst());
+        if (command.isEmpty()) {
+            standalone(arguments, json, out);
 
             return;
         }
-        if (!arguments.isEmpty() && arguments.getFirst().equals(RENAME_COMMAND)) {
-            rename(starting(environment), arguments, json, out);
+        // A switch expression: the compiler refuses a command of the enum that is not handled here.
+        Runnable action = switch (command.get()) {
+            case DIAGNOSTICS ->
+                () -> diagnostics(starting(environment), exactly(arguments, 2).getLast(), json, out);
+            case RENAME -> () -> rename(starting(environment), arguments, json, out);
+            case ORGANIZE_IMPORTS -> () -> organizeImports(starting(environment), arguments, json, out);
+            case EXTRACT_VARIABLE -> () -> extractVariable(starting(environment), arguments, json, out);
+            case STATUS -> () -> status(waiting(environment, arguments), json, out);
+            case STOP -> () -> stop(waiting(environment, arguments), json, out);
+            case HELP -> () -> help(arguments, json, out);
+        };
+        action.run();
+    }
+
+    /** The arguments that name no command: {@code --version}, {@code --help} and {@code -h}, alone, else a usage error. */
+    private static void standalone(List<String> arguments, boolean json, PrintStream out) {
+        if (arguments.size() == 1) {
+            switch (arguments.getFirst()) {
+                case VERSION_COMMAND -> {
+                    out.println("gabier " + ProtocolVersion.CURRENT);
+
+                    return;
+                }
+                case HELP_OPTION, SHORT_HELP_OPTION -> {
+                    out.println(HelpText.index(json));
+
+                    return;
+                }
+                default -> {
+                    // A usage error, below.
+                }
+            }
+        }
+
+        throw UsageException.unsupportedArguments(arguments);
+    }
+
+    /**
+     * {@code help} lists the commands, {@code help <command>} explains one. It never talks to the daemon, and starts none:
+     * the text is the one of {@link Command}.
+     */
+    private static void help(List<String> arguments, boolean json, PrintStream out) {
+        if (arguments.size() == 1) {
+            out.println(HelpText.index(json));
 
             return;
         }
-        if (!arguments.isEmpty() && arguments.getFirst().equals(ORGANIZE_IMPORTS_COMMAND)) {
-            organizeImports(starting(environment), arguments, json, out);
+        var name = exactly(arguments, 2).getLast();
+        var command = Command.named(name).orElseThrow(() -> UsageException.unknownCommand(name, HelpText.names()));
+        out.println(HelpText.of(command, json));
+    }
 
-            return;
+    /** The arguments, when there are that many (the command included); else a usage error. */
+    private static List<String> exactly(List<String> arguments, int count) {
+        if (arguments.size() != count) {
+            throw UsageException.unsupportedArguments(arguments);
         }
-        if (!arguments.isEmpty() && arguments.getFirst().equals(EXTRACT_VARIABLE_COMMAND)) {
-            extractVariable(starting(environment), arguments, json, out);
 
-            return;
-        }
-        var command = arguments.size() == 1 ? arguments.getFirst() : "";
-        switch (command) {
-            case VERSION_COMMAND -> out.println("gabier " + ProtocolVersion.CURRENT);
-            case STATUS_COMMAND -> status(waiting(environment), json, out);
-            case STOP_COMMAND -> stop(waiting(environment), json, out);
-            default -> throw UsageException.unsupportedArguments(arguments);
-        }
+        return arguments;
     }
 
     private static Path socket(Map<String, String> environment) {
@@ -108,8 +143,12 @@ public final class Gabier {
         return () -> launcher.connect(socket);
     }
 
-    /** The way to the daemon of {@code status} and {@code stop}: it answers or it is not running, and none is started. */
-    private static Supplier<DaemonClient> waiting(Map<String, String> environment) {
+    /**
+     * The way to the daemon of {@code status} and {@code stop}, which take no argument: it answers or it is not running,
+     * and none is started.
+     */
+    private static Supplier<DaemonClient> waiting(Map<String, String> environment, List<String> arguments) {
+        exactly(arguments, 1);
         var socket = socket(environment);
 
         return () -> DaemonClient.connect(socket);
@@ -125,7 +164,7 @@ public final class Gabier {
      */
     private static void diagnostics(Supplier<DaemonClient> daemon, String file, boolean json, PrintStream out) {
         var absolute = Path.of(file).toAbsolutePath();
-        var result = ask(daemon, DIAGNOSTICS_COMMAND, Map.of("file", absolute.toString()), false);
+        var result = ask(daemon, Command.DIAGNOSTICS.commandName(), Map.of("file", absolute.toString()), false);
         var diagnostics = FileDiagnostics.of(result.result());
         if (json) {
             out.println(diagnostics.toJson());
@@ -166,7 +205,7 @@ public final class Gabier {
         }
         params.put("newName", operands.getLast());
         params.put("dryRun", String.valueOf(dryRun));
-        var changed = ChangedFiles.of(ask(daemon, token ? "rename-token" : RENAME_COMMAND, params, false)
+        var changed = ChangedFiles.of(ask(daemon, token ? "rename-token" : Command.RENAME.commandName(), params, false)
                 .result());
         print(changed, dryRun, json, out);
     }
@@ -186,8 +225,8 @@ public final class Gabier {
         }
         var params = Map.of(
                 "file", Path.of(operands.getFirst()).toAbsolutePath().toString(), "dryRun", String.valueOf(dryRun));
-        var changed = ChangedFiles.of(
-                ask(daemon, ORGANIZE_IMPORTS_COMMAND, params, false).result());
+        var changed = ChangedFiles.of(ask(daemon, Command.ORGANIZE_IMPORTS.commandName(), params, false)
+                .result());
         if (!json && changedText(changed).isEmpty()) {
             if (dryRun) {
                 out.println("dry run, nothing written");
@@ -224,8 +263,8 @@ public final class Gabier {
         params.put("endColumn", end.getLast());
         params.put("name", operands.getLast());
         params.put("dryRun", String.valueOf(dryRun));
-        var changed = ChangedFiles.of(
-                ask(daemon, EXTRACT_VARIABLE_COMMAND, params, false).result());
+        var changed = ChangedFiles.of(ask(daemon, Command.EXTRACT_VARIABLE.commandName(), params, false)
+                .result());
         print(changed, dryRun, json, out);
     }
 
@@ -282,7 +321,7 @@ public final class Gabier {
     }
 
     private static void status(Supplier<DaemonClient> daemon, boolean json, PrintStream out) {
-        var result = ask(daemon, STATUS_COMMAND, false);
+        var result = ask(daemon, Command.STATUS.commandName(), false);
         var status = DaemonStatus.of(result.result());
         out.println(json ? status.toJson() : statusText(status));
     }
@@ -299,7 +338,7 @@ public final class Gabier {
     }
 
     private static void stop(Supplier<DaemonClient> daemon, boolean json, PrintStream out) {
-        ask(daemon, STOP_COMMAND, true);
+        ask(daemon, Command.STOP.commandName(), true);
         out.println(json ? "{\"stopped\":true}" : "gabier-daemon stopped");
     }
 

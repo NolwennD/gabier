@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
 /** JSON, by hand: the cli native image has no third-party library. */
-final class Json {
+public final class Json {
 
     private Json() {}
 

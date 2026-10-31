@@ -6,11 +6,13 @@ standard error, never on the standard output: one line of text by default, one l
 can come anywhere on the command line).
 
 ```text
-$ gabier --help
-Usage error: Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file> | rename [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name> | organize-imports [--dry-run] <file> | extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>) (usage-error; arguments=--help)
-$ gabier --json --help
-{"type":"urn:gabier:error:usage-error","title":"Usage error","detail":"Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file> | rename [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name> | organize-imports [--dry-run] <file> | extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>)","key":"usage-error","parameters":{"arguments":"--help"}}
+$ gabier --bogus
+Usage error: Unsupported arguments; run gabier help for the commands, and gabier help <command> for the usage of one (usage-error; arguments=--bogus)
+$ gabier --json --bogus
+{"type":"urn:gabier:error:usage-error","title":"Usage error","detail":"Unsupported arguments; run gabier help for the commands, and gabier help <command> for the usage of one","key":"usage-error","parameters":{"arguments":"--bogus"}}
 ```
+
+`gabier help` lists the commands and `gabier help <command>` explains one: see [help](commands/help.md).
 
 The JSON object follows the data model of [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) (problem details)
 without its HTTP side: `type` (a URI that is not meant to be resolved, `urn:gabier:error:<key>`), `title`, `detail`,

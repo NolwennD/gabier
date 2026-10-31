@@ -32,7 +32,8 @@ there is no second, smaller bound.
 ## Methods
 
 All the parameters of a method are required; a value is a string (`dryRun` is `true` or `false`, the lines and columns
-are numbers from 0). The page of each command says what it does.
+are numbers from 0). The page of each command says what it does. `help` has no row: it is answered by the cli alone and never reaches the
+daemon ([help](commands/help.md)).
 
 | Method             | Parameters                                                                  | Command                                                    |
 | ------------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------- |

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import fr.craft.gabier.protocol.ChangedFiles;
 import fr.craft.gabier.protocol.FileDiagnostics;
+import fr.craft.gabier.protocol.Json;
 import fr.craft.gabier.protocol.JsonRpc;
 import fr.craft.gabier.protocol.Problem;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -31,11 +33,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 class GabierTest {
 
-    private static final String USAGE_DETAIL =
-            "Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file> | rename"
-                    + " [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>"
-                    + " | organize-imports [--dry-run] <file>"
-                    + " | extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>)";
+    private static final String USAGE_DETAIL = "Unsupported arguments; run gabier help for the commands, "
+            + "and gabier help <command> for the usage of one";
 
     @TempDir
     Path directory;
@@ -101,21 +100,21 @@ class GabierTest {
 
         @Test
         void unknownArgumentPrintsTheUsageOnTheStandardError() {
-            run("--help");
+            run("--bogus");
 
-            assertThat(err()).isEqualTo(usageText("--help"));
+            assertThat(err()).isEqualTo(usageText("--bogus"));
         }
 
         @Test
         void unknownArgumentPrintsNothingOnTheStandardOutput() {
-            run("--help");
+            run("--bogus");
 
             assertThat(out()).isEmpty();
         }
 
         @Test
         void unknownArgumentExitsWithStatusTwo() {
-            assertThat(run("--help")).isEqualTo(2);
+            assertThat(run("--bogus")).isEqualTo(2);
         }
 
         @Test
@@ -127,16 +126,16 @@ class GabierTest {
 
         @Test
         void versionFollowedByAnotherArgumentIsAnUnknownUsage() {
-            assertThat(run("--version", "--help")).isEqualTo(2);
+            assertThat(run("--version", "--bogus")).isEqualTo(2);
             assertThat(out()).isEmpty();
-            assertThat(err()).isEqualTo(usageText("--version --help"));
+            assertThat(err()).isEqualTo(usageText("--version --bogus"));
         }
 
         @Test
         void unknownArgumentFollowedByVersionIsAnUnknownUsage() {
-            assertThat(run("--help", "--version")).isEqualTo(2);
+            assertThat(run("--bogus", "--version")).isEqualTo(2);
             assertThat(out()).isEmpty();
-            assertThat(err()).isEqualTo(usageText("--help --version"));
+            assertThat(err()).isEqualTo(usageText("--bogus --version"));
         }
 
         @Test
@@ -279,27 +278,190 @@ class GabierTest {
     }
 
     @Nested
+    class Help {
+
+        private static final List<String> COMMANDS =
+                List.of("diagnostics", "rename", "organize-imports", "extract-variable", "status", "stop", "help");
+
+        private static Map<String, Object> object(Object json) {
+            var members = new LinkedHashMap<String, Object>();
+            ((Map<?, ?>) json).forEach((name, value) -> members.put((String) name, value));
+
+            return members;
+        }
+
+        private static List<Map<String, Object>> objects(Object json) {
+            return ((List<?>) json).stream().map(Help::object).toList();
+        }
+
+        private static List<String> strings(Object json) {
+            return ((List<?>) json).stream().map(String.class::cast).toList();
+        }
+
+        @Test
+        void helpHelpDashDashHelpAndDashHListTheCommandsOnTheStandardOutputWithExitZero() {
+            for (var spelling : List.of("help", "--help", "-h")) {
+                out.reset();
+                err.reset();
+
+                assertThat(run(spelling)).as(spelling).isZero();
+
+                assertThat(err()).as(spelling).isEmpty();
+                assertThat(out().lines().map(String::strip).map(line -> line.split(" ")[0]))
+                        .as(spelling)
+                        .containsAll(COMMANDS);
+            }
+        }
+
+        @Test
+        void theListGivesOneLineAndTheProtocolVersionPointerToHelpOfACommand() {
+            run("help");
+
+            assertThat(out())
+                    .contains("gabier help <command>")
+                    .contains("diagnostics ")
+                    .contains("the errors and warnings of a Java file");
+        }
+
+        @Test
+        void theListAsJsonIsAnObjectWithEveryCommand() {
+            assertThat(run("--json", "help")).isZero();
+
+            assertThat(out().lines()).hasSize(1);
+            assertThat(err()).isEmpty();
+            var commands = objects(object(Json.parse(out())).get("commands"));
+            assertThat(commands)
+                    .extracting(command -> (String) command.get("name"))
+                    .containsExactlyElementsOf(COMMANDS);
+            assertThat(commands)
+                    .allSatisfy(command -> assertThat(command)
+                            .containsOnlyKeys("name", "summary", "usage")
+                            .allSatisfy(
+                                    (key, value) -> assertThat((String) value).isNotBlank()));
+        }
+
+        @Test
+        void dashDashHelpAsJsonIsTheSameObject() {
+            run("help", "--json");
+            var help = out();
+            out.reset();
+
+            run("--json", "-h");
+
+            assertThat(out()).isEqualTo(help);
+        }
+
+        @Test
+        void helpOfACommandGivesTheUsageAnExampleAndTheRefusals() {
+            assertThat(run("help", "rename")).isZero();
+
+            assertThat(err()).isEmpty();
+            assertThat(out())
+                    .contains("gabier [--json] rename [--dry-run] <file> <line> <column> <new-name>")
+                    .contains("gabier [--json] rename [--dry-run] --token <file> <identifier> <new-name>")
+                    .contains("Example")
+                    .contains("$ gabier rename --dry-run src/main/java/demo/Greeter.java 6 19 welcome")
+                    .contains("Refusals")
+                    .contains("language-server-invalid-name");
+        }
+
+        @Test
+        void helpOfEveryCommandIsAvailable() {
+            for (var command : COMMANDS) {
+                out.reset();
+
+                assertThat(run("help", command)).as(command).isZero();
+
+                assertThat(out()).as(command).contains("gabier [--json] " + command);
+            }
+        }
+
+        @Test
+        void helpOfACommandAsJsonIsAnObjectWithItsFields() {
+            assertThat(run("help", "--json", "extract-variable")).isZero();
+
+            var help = object(Json.parse(out()));
+            assertThat(help).containsOnlyKeys("name", "summary", "usage", "example", "refusals");
+            assertThat(help.get("name")).isEqualTo("extract-variable");
+            assertThat((String) help.get("usage")).contains("extract-variable [--dry-run] <file>");
+            assertThat((String) help.get("example")).startsWith("$ gabier extract-variable");
+            assertThat(strings(help.get("refusals")))
+                    .anySatisfy(refusal -> assertThat(refusal).startsWith("language-server-not-an-expression"));
+        }
+
+        @Test
+        void helpOfAnUnknownCommandIsAUsageErrorThatListsTheKnownOnes() {
+            assertThat(run("help", "frobnicate")).isEqualTo(2);
+
+            assertThat(out()).isEmpty();
+            assertThat(err())
+                    .startsWith("Usage error: Unknown command; the commands are diagnostics, rename, organize-imports,"
+                            + " extract-variable, status, stop, help (usage-error; command=frobnicate)");
+        }
+
+        @Test
+        void helpOfAnUnknownCommandAsJsonIsTheProblemObject() {
+            assertThat(run("--json", "help", "frobnicate")).isEqualTo(2);
+
+            assertThat(err())
+                    .startsWith("{\"type\":\"urn:gabier:error:usage-error\"")
+                    .contains("\"parameters\":{\"command\":\"frobnicate\"}");
+        }
+
+        @Test
+        void helpOfTwoCommandsIsAUsageError() {
+            assertThat(run("help", "rename", "stop")).isEqualTo(2);
+
+            assertThat(err()).isEqualTo(usageText("help rename stop"));
+        }
+
+        @Test
+        void dashDashHelpFollowedByAnotherArgumentIsAUsageError() {
+            assertThat(run("--help", "rename")).isEqualTo(2);
+
+            assertThat(err()).isEqualTo(usageText("--help rename"));
+        }
+
+        @Test
+        void helpNeverStartsADaemonNorOpensTheSocket() throws IOException {
+            var marker = directory.resolve("started");
+            var bin = directory.resolve("bin");
+            FakeDaemonScripts.install(bin, "echo started > '" + marker + "'");
+            var socket = directory.resolve("gabier.sock");
+            var environment = Map.of("GABIER_SOCKET", socket.toString(), "PATH", bin.toString());
+
+            assertThat(run(environment, "help")).isZero();
+            assertThat(run(environment, "help", "diagnostics")).isZero();
+            assertThat(run(environment, "--help")).isZero();
+            assertThat(run(environment, "-h")).isZero();
+
+            assertThat(marker).doesNotExist();
+            assertThat(socket).doesNotExist();
+        }
+    }
+
+    @Nested
     class JsonOption {
 
         @Test
         void aUsageErrorIsTheProblemObjectOnTheStandardError() {
-            assertThat(run("--json", "--help")).isEqualTo(2);
+            assertThat(run("--json", "--bogus")).isEqualTo(2);
 
-            assertThat(err()).isEqualTo(usageJson("--help"));
+            assertThat(err()).isEqualTo(usageJson("--bogus"));
         }
 
         @Test
         void aUsageErrorPrintsNothingOnTheStandardOutput() {
-            run("--json", "--help");
+            run("--json", "--bogus");
 
             assertThat(out()).isEmpty();
         }
 
         @Test
         void canComeAfterTheOtherArguments() {
-            assertThat(run("--help", "--json")).isEqualTo(2);
+            assertThat(run("--bogus", "--json")).isEqualTo(2);
 
-            assertThat(err()).isEqualTo(usageJson("--help"));
+            assertThat(err()).isEqualTo(usageJson("--bogus"));
         }
 
         @Test
