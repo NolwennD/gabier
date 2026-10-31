@@ -15,7 +15,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
+import org.eclipse.lsp4j.DidChangeWatchedFilesParams;
 import org.eclipse.lsp4j.ExecuteCommandParams;
+import org.eclipse.lsp4j.FileEvent;
 import org.eclipse.lsp4j.InitializeParams;
 import org.eclipse.lsp4j.InitializedParams;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
@@ -46,6 +48,7 @@ final class JdtlsSession implements AutoCloseable {
     private final Path data;
     private final Consumer<String> log;
     private final JdtlsClient client;
+    private final WatchedFiles watched;
     private final LanguageServer server;
     private final JdtlsWatch watch;
     private final Future<Void> listening;
@@ -60,12 +63,14 @@ final class JdtlsSession implements AutoCloseable {
             Path data,
             JdtlsConnection connection,
             Consumer<String> log,
-            Consumer<PublishDiagnosticsParams> diagnostics) {
+            Consumer<PublishDiagnosticsParams> diagnostics,
+            WatchedFiles watched) {
         this.settings = settings;
+        this.watched = watched;
         this.process = connection.process();
         this.data = data;
         this.log = log;
-        this.client = new JdtlsClient(log, diagnostics);
+        this.client = new JdtlsClient(log, diagnostics, watched::register, watched::unregister);
         var launcher = LSPLauncher.createClientLauncher(client, connection.fromJdtls(), connection.toJdtls());
         this.listening = launcher.startListening();
         this.server = launcher.getRemoteProxy();
@@ -94,6 +99,8 @@ final class JdtlsSession implements AutoCloseable {
             Consumer<String> log,
             Consumer<PublishDiagnosticsParams> diagnostics)
             throws IOException, InterruptedException {
+        // The state of the disk that jdtls starts from, before it reads anything.
+        WatchedFiles watched = WatchedFiles.of(settings.projectRoot());
         Path data = Files.createTempDirectory(DATA_DIRECTORY_PREFIX);
         JdtlsConnection connection;
         try {
@@ -102,7 +109,7 @@ final class JdtlsSession implements AutoCloseable {
             delete(data);
             throw failure;
         }
-        var session = new JdtlsSession(settings, data, connection, log, diagnostics);
+        var session = new JdtlsSession(settings, data, connection, log, diagnostics, watched);
         log.accept("jdtls started, pid " + session.pid() + ", data " + data);
         session.recordTheTree();
         try {
@@ -174,6 +181,22 @@ final class JdtlsSession implements AutoCloseable {
      */
     JdtlsWatch newWatch() {
         return new JdtlsWatch(process, client.error(), settings.timeout());
+    }
+
+    /** The folder jdtls was started on. */
+    Path projectRoot() {
+        return settings.projectRoot();
+    }
+
+    /** The files jdtls asked to have watched that changed on disk since it was last told ({@link WatchedFiles}). */
+    List<FileEvent> changesOnDisk() {
+        return watched.changes();
+    }
+
+    /** Tells jdtls of changes on disk, as it asked to be. A notification: the answer to it is not a message. */
+    void tell(List<FileEvent> changes) {
+        log.accept("jdtls told of the changes on disk: " + changes);
+        server.getWorkspaceService().didChangeWatchedFiles(new DidChangeWatchedFilesParams(changes));
     }
 
     private void awaitReady() throws InterruptedException {

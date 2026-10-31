@@ -46,6 +46,11 @@ import java.util.Map;
  *       not one small edit per occurrence. The replay compares the answer to the scenario exactly, and the project
  *       with jdtls' answer applied to a copy must compile. The order of the changes counts, as it does in the
  *       application: the edits of a renamed type come first, the move of its file last, under its old path.
+ *   <li>files changed on disk between two requests: jdtls reads a file once, and learns of what changes only if the
+ *       client tells it ({@code workspace/didChangeWatchedFiles}, which it asks for by registering its watchers). A
+ *       {@link Sequel} is two scenarios in a row with the disk changed between them ({@link #sequels()}): a type
+ *       renamed, the change set applied (the file moved), then renamed back; and a file edited between two requests
+ *       for its diagnostics. The replay changes the disk as an agent does and gets the answer for the new text.
  * </ul>
  *
  * <p>The fake answers from the request alone: it does not check that the files a test wrote are the ones of the
@@ -107,6 +112,10 @@ public final class Scenarios {
         """;
 
     private static final Map<Path, String> PROJECT = Map.of(GREETER, GREETER_SOURCE, MAIN, MAIN_SOURCE);
+
+    /** The project after {@link #RENAME_TYPE}: the type is {@code Welcomer}, in its own file, and {@code Main} uses it. */
+    private static final Map<Path, String> RENAMED_PROJECT = Map.of(
+            WELCOMER, GREETER_SOURCE.replace("Greeter", "Welcomer"), MAIN, MAIN_SOURCE.replace("Greeter", "Welcomer"));
 
     /** A file without a problem: no diagnostic. */
     public static final Scenario CLEAN_FILE = new Scenario(
@@ -219,6 +228,36 @@ public final class Scenarios {
             new Request.Rename(ELSEWHERE, new Position(0, 0), "anything"),
             new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
 
+    /**
+     * {@code Welcomer} renamed back to {@code Greeter}, once the files of {@link #RENAME_TYPE} are on disk: the first
+     * rename with the names swapped, which jdtls only gives if it has learnt that the file was moved and its text
+     * edited.
+     */
+    public static final Scenario RENAME_THE_TYPE_BACK = new Scenario(
+            "rename-the-type-back",
+            RENAMED_PROJECT,
+            new Request.Rename(WELCOMER, new Position(2, 13), "Greeter"),
+            new Answer.Renamed(new ChangeSet(List.of(
+                    edits(MAIN, replace(4, 8, 4, 39, "Greeter greeter = new Greeter")),
+                    edits(WELCOMER, replace(2, 13, 21, "Greeter")),
+                    new RenameFile(WELCOMER, GREETER)))));
+
+    /** {@code Broken} after its error was edited into another one: the diagnostic is the one of the new text. */
+    public static final Scenario FILE_WITH_ANOTHER_ERROR = new Scenario(
+            "diagnostics-of-a-file-with-another-error",
+            withBrokenAs(BROKEN_SOURCE.replace("\"forty-two\"", "true")),
+            new Request.Diagnostics(BROKEN),
+            new Answer.Diagnosed(List.of(new Diagnostic(
+                    Severity.ERROR, new Position(4, 15), "Type mismatch: cannot convert from boolean to int"))));
+
+    /** A type renamed, the change set applied to the disk, then the type renamed back. */
+    public static final Sequel RENAME_AFTER_A_RENAME =
+            new Sequel("rename-after-a-rename", RENAME_TYPE, RENAME_THE_TYPE_BACK);
+
+    /** The error of a file edited on disk between two requests for its diagnostics. */
+    public static final Sequel DIAGNOSTICS_AFTER_AN_EDIT =
+            new Sequel("diagnostics-after-an-edit", FILE_WITH_AN_ERROR, FILE_WITH_ANOTHER_ERROR);
+
     private Scenarios() {}
 
     /** Every scenario of the catalogue. */
@@ -239,11 +278,23 @@ public final class Scenarios {
                 RENAME_OUTSIDE_THE_PROJECT);
     }
 
+    /** The sequels of the catalogue: scenarios in a row, with the files changed on disk between them. */
+    public static List<Sequel> sequels() {
+        return List.of(RENAME_AFTER_A_RENAME, DIAGNOSTICS_AFTER_AN_EDIT);
+    }
+
     /** The project with the two files that have something to report, so that their scenarios share one project. */
     private static Map<Path, String> withProblems() {
         Map<Path, String> files = new HashMap<>(PROJECT);
         files.put(BROKEN, BROKEN_SOURCE);
         files.put(SLOPPY, SLOPPY_SOURCE);
+
+        return files;
+    }
+
+    private static Map<Path, String> withBrokenAs(String source) {
+        Map<Path, String> files = withProblems();
+        files.put(BROKEN, source);
 
         return files;
     }

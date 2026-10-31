@@ -1,5 +1,7 @@
 package fr.craft.gabier.daemon;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import java.io.IOException;
 import java.nio.channels.Channels;
 import java.nio.channels.Pipe;
@@ -26,6 +28,7 @@ import org.eclipse.lsp4j.DidCloseTextDocumentParams;
 import org.eclipse.lsp4j.DidOpenTextDocumentParams;
 import org.eclipse.lsp4j.DidSaveTextDocumentParams;
 import org.eclipse.lsp4j.ExecuteCommandParams;
+import org.eclipse.lsp4j.FileChangeType;
 import org.eclipse.lsp4j.InitializeParams;
 import org.eclipse.lsp4j.InitializeResult;
 import org.eclipse.lsp4j.InitializedParams;
@@ -33,6 +36,8 @@ import org.eclipse.lsp4j.PrepareRenameDefaultBehavior;
 import org.eclipse.lsp4j.PrepareRenameParams;
 import org.eclipse.lsp4j.PrepareRenameResult;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
+import org.eclipse.lsp4j.Registration;
+import org.eclipse.lsp4j.RegistrationParams;
 import org.eclipse.lsp4j.RenameParams;
 import org.eclipse.lsp4j.ServerCapabilities;
 import org.eclipse.lsp4j.WorkspaceEdit;
@@ -66,6 +71,8 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         NEVER_ANSWERS
     }
 
+    private static final String METHOD = "workspace/didChangeWatchedFiles";
+
     /** The command of the child process that stands in for the jdtls process. */
     private String[] child = {"sleep", "300"};
 
@@ -87,6 +94,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private final CountDownLatch exited = new CountDownLatch(1);
     private final List<String> commands = new CopyOnWriteArrayList<>();
     private boolean answersNothingToProjects;
+    private boolean acknowledgesChanges = true;
     private String publishesOnInitialized = "";
     private final Map<String, List<List<Diagnostic>>> publicationsOnOpen = new ConcurrentHashMap<>();
     private Duration pauseBetweenPublications = Duration.ZERO;
@@ -97,6 +105,8 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private CompletableFuture<WorkspaceEdit> renameAnswer = new CompletableFuture<>();
     private final List<PrepareRenameParams> prepared = new CopyOnWriteArrayList<>();
     private final List<RenameParams> renamed = new CopyOnWriteArrayList<>();
+    private final List<List<String>> registeredWatchers = new ArrayList<>();
+    private final List<DidChangeWatchedFilesParams> watched = new CopyOnWriteArrayList<>();
 
     private volatile Process process;
     private volatile Path data;
@@ -210,6 +220,27 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /** The {@code rename} requests received, in order. */
     List<RenameParams> renamed() {
         return renamed;
+    }
+
+    /**
+     * Registers these globs to be watched ({@code client/registerCapability} for {@code workspace/didChangeWatchedFiles},
+     * as jdtls does) once it is ready, in a registration of its own for each call: the start does not end before the
+     * client has answered it.
+     */
+    FakeJdtls registersWatchersFor(String... globs) {
+        registeredWatchers.add(List.of(globs));
+        return this;
+    }
+
+    /** The deletions of {@code workspace/didChangeWatchedFiles} are not acknowledged by a publication of diagnostics. */
+    FakeJdtls neverAcknowledgesChanges() {
+        this.acknowledgesChanges = false;
+        return this;
+    }
+
+    /** The {@code workspace/didChangeWatchedFiles} notifications received, in order. */
+    List<DidChangeWatchedFilesParams> watched() {
+        return watched;
     }
 
     /** What {@code java.project.getAll} answers, in turn; the last answer is repeated. */
@@ -370,8 +401,36 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
             if (!publishesOnInitialized.isEmpty()) {
                 client.publishDiagnostics(new PublishDiagnosticsParams(publishesOnInitialized, List.of()));
             }
+            if (registeredWatchers.isEmpty()) {
+                sendStatus();
+            } else {
+                // The answer to a registration arrives on the thread that is handling this notification.
+                Thread.ofVirtual().start(() -> {
+                    registerWatchers();
+                    sendStatus();
+                });
+            }
+        }
+
+        private void sendStatus() {
             if (!status.isEmpty()) {
                 client.status(new JdtlsClient.Status(status, status));
+            }
+        }
+
+        private void registerWatchers() {
+            for (int registration = 0; registration < registeredWatchers.size(); registration++) {
+                var watchers = new JsonArray();
+                for (String glob : registeredWatchers.get(registration)) {
+                    var watcher = new JsonObject();
+                    watcher.addProperty("globPattern", glob);
+                    watchers.add(watcher);
+                }
+                var options = new JsonObject();
+                options.add("watchers", watchers);
+                client.registerCapability(new RegistrationParams(
+                                List.of(new Registration("watchers-" + registration, METHOD, options))))
+                        .join();
             }
         }
 
@@ -455,7 +514,15 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                 public void didChangeConfiguration(DidChangeConfigurationParams params) {}
 
                 @Override
-                public void didChangeWatchedFiles(DidChangeWatchedFilesParams params) {}
+                public void didChangeWatchedFiles(DidChangeWatchedFilesParams params) {
+                    watched.add(params);
+                    // As jdtls does for a deletion, handled after the events before it: that is its acknowledgment.
+                    params.getChanges().stream()
+                            .filter(change -> acknowledgesChanges)
+                            .filter(change -> change.getType() == FileChangeType.Deleted)
+                            .forEach(change -> client.publishDiagnostics(
+                                    new PublishDiagnosticsParams(change.getUri(), List.of())));
+                }
             };
         }
     }

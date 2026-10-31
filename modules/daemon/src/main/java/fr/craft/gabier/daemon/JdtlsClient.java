@@ -5,7 +5,11 @@ import java.util.function.Consumer;
 import org.eclipse.lsp4j.MessageActionItem;
 import org.eclipse.lsp4j.MessageParams;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
+import org.eclipse.lsp4j.Registration;
+import org.eclipse.lsp4j.RegistrationParams;
 import org.eclipse.lsp4j.ShowMessageRequestParams;
+import org.eclipse.lsp4j.Unregistration;
+import org.eclipse.lsp4j.UnregistrationParams;
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification;
 import org.eclipse.lsp4j.services.LanguageClient;
 
@@ -31,16 +35,26 @@ final class JdtlsClient implements LanguageClient {
 
     private final Consumer<String> log;
     private final Consumer<PublishDiagnosticsParams> diagnostics;
+    private final Consumer<Registration> registrations;
+    private final Consumer<Unregistration> unregistrations;
 
     /**
      * Listens to what jdtls tells the client.
      *
      * @param log receives a line for each status of jdtls worth telling
      * @param diagnostics receives every publication of diagnostics, from the first message of jdtls on
+     * @param registrations receives each capability jdtls registers
+     * @param unregistrations receives each capability jdtls unregisters
      */
-    JdtlsClient(Consumer<String> log, Consumer<PublishDiagnosticsParams> diagnostics) {
+    JdtlsClient(
+            Consumer<String> log,
+            Consumer<PublishDiagnosticsParams> diagnostics,
+            Consumer<Registration> registrations,
+            Consumer<Unregistration> unregistrations) {
         this.log = log;
         this.diagnostics = diagnostics;
+        this.registrations = registrations;
+        this.unregistrations = unregistrations;
     }
 
     CompletableFuture<Void> serviceReady() {
@@ -76,6 +90,19 @@ final class JdtlsClient implements LanguageClient {
     @Override
     public void publishDiagnostics(PublishDiagnosticsParams publication) {
         diagnostics.accept(publication);
+    }
+
+    /** jdtls registers the files it wants watched once it is ready, see {@link WatchedFiles}. */
+    @Override
+    public CompletableFuture<Void> registerCapability(RegistrationParams params) {
+        params.getRegistrations().forEach(registrations);
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletableFuture<Void> unregisterCapability(UnregistrationParams params) {
+        params.getUnregisterations().forEach(unregistrations);
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override

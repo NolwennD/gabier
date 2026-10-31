@@ -119,7 +119,7 @@ record SelfCheck(@Nullable String daemonModule, @Nullable String position) {
         try {
             machinery
                     .endpointOf()
-                    .apply(new JdtlsClient(heard::add, publication -> {}))
+                    .apply(new JdtlsClient(heard::add, publication -> {}, registration -> {}, unregistration -> {}))
                     .notify("language/status", STATUS);
             if (heard.isEmpty()) {
                 problems.add("The notification language/status did not reach the jdtls client");

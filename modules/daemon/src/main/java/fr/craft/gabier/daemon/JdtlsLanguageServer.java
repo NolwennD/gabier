@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,8 @@ import java.util.function.Consumer;
 import org.eclipse.lsp4j.DiagnosticSeverity;
 import org.eclipse.lsp4j.DidCloseTextDocumentParams;
 import org.eclipse.lsp4j.DidOpenTextDocumentParams;
+import org.eclipse.lsp4j.FileChangeType;
+import org.eclipse.lsp4j.FileEvent;
 import org.eclipse.lsp4j.PrepareRenameParams;
 import org.eclipse.lsp4j.RenameParams;
 import org.eclipse.lsp4j.TextDocumentIdentifier;
@@ -42,6 +45,11 @@ import org.jspecify.annotations.Nullable;
  * answers the latest publication. It closes the file afterwards, so that the next request reads it from disk again. It
  * asks one thing at a time.
  *
+ * <p>jdtls does not watch the disk: a file edited, created, moved or deleted between two requests (by the agent, or
+ * from the change set of a rename) is a file jdtls has not learnt of. It registers the files it wants watched, and
+ * wants {@code workspace/didChangeWatchedFiles} for them (see {@link WatchedFiles}): before each request the adapter
+ * tells it what changed, and waits until it has taken the changes in.
+ *
  * <p>A rename is {@code textDocument/prepareRename} then {@code textDocument/rename}, and the {@code WorkspaceEdit}
  * that jdtls answers is turned into the change set of the domain by {@link RenameChanges}. The refusals of the port
  * are mapped from what jdtls really does (see {@code Scenarios} in the fixtures of the core).
@@ -57,6 +65,9 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * probe the publications of the opened files came within this pause of each other.
      */
     static final Duration QUIET = Duration.ofSeconds(5);
+
+    /** The file of the last event told to jdtls: it does not exist, see {@link #takeInChangesOnDisk}. */
+    private static final String BARRIER = ".gabier-changes-taken";
 
     private final Diagnostics diagnostics;
     private final Duration quiet;
@@ -147,6 +158,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         }
         JdtlsWatch watch = session.newWatch();
         try {
+            takeInChangesOnDisk(session, watch);
             var publications = open(session, texts);
             for (var publication : publications.entrySet()) {
                 watch.await("the diagnostics of " + publication.getKey(), publication::getValue);
@@ -165,7 +177,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
 
     /**
      * Asks jdtls whether the symbol can be renamed ({@code prepareRename}), then for the rename, and gives its edit in
-     * the terms of the domain ({@link RenameChanges}). jdtls reads the files as it knows them: nothing is opened. A
+     * the terms of the domain ({@link RenameChanges}). jdtls reads the files as it knows them (nothing is opened), after
+     * it has been told of the changes on disk. A
      * symbol that jdtls says it cannot rename is no symbol (jdtls answers so for a blank, a keyword, a position past
      * the text), and a name that jdtls declines is invalid for the symbol.
      *
@@ -183,6 +196,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         var service = session.server().getTextDocumentService();
         JdtlsWatch watch = session.newWatch();
         try {
+            takeInChangesOnDisk(session, watch);
             var renamable = watch.await(
                     "whether the symbol at " + position + " of " + path + " can be renamed",
                     () -> JdtlsRequests.unlessDeclined(service.prepareRename(new PrepareRenameParams(document, at))));
@@ -205,6 +219,25 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                     "Interrupted while waiting for the rename of the symbol at " + position + " of " + path,
                     interrupted);
         }
+    }
+
+    /**
+     * Tells jdtls of the files that changed on disk since it was last told, and waits until it has taken them in. jdtls
+     * queues the events and handles them on a thread of its own, one after the other, so a request sent right after
+     * would be answered for the files as they were. The wait ends on the last event, which is a deletion of a file that
+     * does not exist: for a deletion jdtls publishes empty diagnostics of the file, as the events are handled, and
+     * that publication is the acknowledgment (a request of jdtls has none).
+     */
+    private void takeInChangesOnDisk(JdtlsSession session, JdtlsWatch watch) throws InterruptedException {
+        List<FileEvent> changes = session.changesOnDisk();
+        if (changes.isEmpty()) {
+            return;
+        }
+        Path barrier = session.projectRoot().resolve(BARRIER);
+        List<FileEvent> events = new ArrayList<>(changes);
+        events.add(new FileEvent(barrier.toUri().toString(), FileChangeType.Deleted));
+        var taken = diagnostics.open(barrier, () -> session.tell(events));
+        watch.await("jdtls to take in the changes on disk of " + changes.size() + " files", () -> taken);
     }
 
     /** Asks jdtls to shut down, or ends its start when it is not over, and deletes what the session made. */

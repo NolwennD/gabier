@@ -7,7 +7,11 @@ import java.util.List;
 import java.util.Map;
 import org.eclipse.lsp4j.MessageParams;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
+import org.eclipse.lsp4j.Registration;
+import org.eclipse.lsp4j.RegistrationParams;
 import org.eclipse.lsp4j.ShowMessageRequestParams;
+import org.eclipse.lsp4j.Unregistration;
+import org.eclipse.lsp4j.UnregistrationParams;
 import org.eclipse.lsp4j.jsonrpc.services.ServiceEndpoints;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +20,30 @@ class JdtlsClientTest {
 
     private final List<String> log = new ArrayList<>();
     private final List<PublishDiagnosticsParams> published = new ArrayList<>();
-    private final JdtlsClient client = new JdtlsClient(log::add, published::add);
+    private final List<Registration> registered = new ArrayList<>();
+    private final List<Unregistration> unregistered = new ArrayList<>();
+    private final JdtlsClient client = new JdtlsClient(log::add, published::add, registered::add, unregistered::add);
+
+    @Test
+    void handsEachRegistrationOfJdtlsOverAndAnswersIt() {
+        var first = new Registration("1", "workspace/didChangeWatchedFiles", "options");
+        var second = new Registration("2", "workspace/symbol", "options");
+
+        var answer = client.registerCapability(new RegistrationParams(List.of(first, second)));
+
+        assertThat(registered).containsExactly(first, second);
+        assertThat(answer).isCompleted();
+    }
+
+    @Test
+    void handsEachUnregistrationOfJdtlsOverAndAnswersIt() {
+        var unregistration = new Unregistration("1", "workspace/didChangeWatchedFiles");
+
+        var answer = client.unregisterCapability(new UnregistrationParams(List.of(unregistration)));
+
+        assertThat(unregistered).containsExactly(unregistration);
+        assertThat(answer).isCompleted();
+    }
 
     @Test
     void anErrorStatusFailsTheWaitWithItsMessage() {

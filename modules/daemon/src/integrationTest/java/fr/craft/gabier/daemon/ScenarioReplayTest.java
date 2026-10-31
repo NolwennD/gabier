@@ -11,6 +11,7 @@ import fr.craft.gabier.editing.fixtures.Scenario;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
 import fr.craft.gabier.editing.fixtures.Scenario.Request;
 import fr.craft.gabier.editing.fixtures.Scenarios;
+import fr.craft.gabier.editing.fixtures.Sequel;
 import fr.craft.gabier.editing.infrastructure.secondary.NioFileStore;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -63,9 +64,18 @@ class ScenarioReplayTest {
         assertThat(projects).as("the scenarios to replay").isNotEmpty();
         System.out.println("scenarios not replayed (the adapter does not implement their request yet): " + left);
 
+        Map<Map<Path, String>, List<Sequel>> sequels = new LinkedHashMap<>();
+        for (Sequel sequel : Scenarios.sequels()) {
+            assertThat(projects)
+                    .as("the project of " + sequel.name())
+                    .containsKey(sequel.first().files());
+            sequels.computeIfAbsent(sequel.first().files(), files -> new ArrayList<>())
+                    .add(sequel);
+        }
+
         var differences = new SoftAssertions();
-        for (List<Scenario> project : projects.values()) {
-            replay(project, differences);
+        for (var project : projects.entrySet()) {
+            replay(project.getValue(), sequels.getOrDefault(project.getKey(), List.of()), differences);
         }
         differences.assertAll();
     }
@@ -75,8 +85,12 @@ class ScenarioReplayTest {
         return scenario.request() instanceof Request.Diagnostics || scenario.request() instanceof Request.Rename;
     }
 
-    /** Starts jdtls on the project the scenarios share, and replays them: first those that need it still importing. */
-    private static void replay(List<Scenario> scenarios, SoftAssertions differences) throws Exception {
+    /**
+     * Starts jdtls on the project the scenarios share, and replays them: first those that need it still importing, then
+     * the sequels, which change the files on disk and so come last.
+     */
+    private static void replay(List<Scenario> scenarios, List<Sequel> sequels, SoftAssertions differences)
+            throws Exception {
         Path root = Files.createTempDirectory("gabier-scenarios-").toRealPath();
         try {
             scenarios.getFirst().writeProject(root);
@@ -95,16 +109,67 @@ class ScenarioReplayTest {
                         replay(scenario.inside(root), root, server, differences);
                     }
                 }
+                for (Sequel sequel : sequels) {
+                    replay(sequel, root, server, differences);
+                }
             }
         } finally {
             delete(root);
         }
     }
 
+    /**
+     * The first scenario, then the files change on disk as an agent changes them, then the second scenario on the same
+     * jdtls: it answers for the new text only if it was told of the change. The project is first put back as the first
+     * scenario writes it, which is a change on disk too. A rename is applied as the application of the core does; the
+     * disk must then hold the files the second scenario expects, and an edit is written.
+     */
+    private static void replay(Sequel sequel, Path root, JdtlsLanguageServer server, SoftAssertions differences)
+            throws IOException {
+        Scenario first = sequel.first().inside(root);
+        Scenario second = sequel.second().inside(root);
+        bringTo(root, first.files());
+        replay(first, root, server, differences);
+        if (first.answer() instanceof Answer.Renamed renamed) {
+            new ChangeApplier(new NioFileStore()).apply(renamed.changes());
+            differences
+                    .assertThat(sources(root))
+                    .as("%s: the project once the change set of the first scenario is applied", sequel.name())
+                    .isEqualTo(second.files());
+        } else {
+            bringTo(root, second.files());
+        }
+        replay(second, root, server, differences);
+    }
+
     private static void replay(Scenario scenario, Path root, JdtlsLanguageServer server, SoftAssertions differences)
             throws IOException {
         replayAnswer(scenario, root, server, differences);
         assertUntouched(scenario, root, differences);
+    }
+
+    /** Writes the files of the project, and deletes the sources that are not part of it. */
+    private static void bringTo(Path root, Map<Path, String> files) throws IOException {
+        for (Path source : sources(root).keySet()) {
+            if (!files.containsKey(source)) {
+                Files.delete(source);
+            }
+        }
+        for (var file : files.entrySet()) {
+            Files.createDirectories(file.getKey().getParent());
+            Files.writeString(file.getKey(), file.getValue());
+        }
+    }
+
+    /** The sources of the project, by path, as they are on disk. */
+    private static Map<Path, String> sources(Path root) throws IOException {
+        Map<Path, String> found = new TreeMap<>();
+        try (var files = Files.walk(root.resolve("src"))) {
+            for (Path file : files.filter(Files::isRegularFile).toList()) {
+                found.put(file, Files.readString(file));
+            }
+        }
+        return found;
     }
 
     private static boolean needsJdtlsToImport(Scenario scenario) {
@@ -167,14 +232,8 @@ class ScenarioReplayTest {
 
     /** Asking changes nothing: the files of the project are the ones the scenario wrote, and no other source is there. */
     private static void assertUntouched(Scenario scenario, Path root, SoftAssertions differences) throws IOException {
-        Map<Path, String> found = new TreeMap<>();
-        try (var files = Files.walk(root.resolve("src"))) {
-            for (Path file : files.filter(Files::isRegularFile).toList()) {
-                found.put(file, Files.readString(file));
-            }
-        }
         differences
-                .assertThat(found)
+                .assertThat(sources(root))
                 .as("%s: the sources of %s after the request", scenario.name(), root)
                 .isEqualTo(scenario.files());
     }

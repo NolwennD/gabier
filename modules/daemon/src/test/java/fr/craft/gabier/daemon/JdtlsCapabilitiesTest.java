@@ -25,6 +25,13 @@ class JdtlsCapabilitiesTest {
     }
 
     @Test
+    void letsJdtlsRegisterTheFilesItWantsWatchedSoThatItLearnsOfTheEditsMadeOnDisk() {
+        // Without it jdtls registers no watcher: it reads a file once and never again.
+        assertThat(capabilities.getWorkspace().getDidChangeWatchedFiles().getDynamicRegistration())
+                .isTrue();
+    }
+
+    @Test
     void asksForTheRangeOfTheSymbolBeforeARename() {
         assertThat(capabilities.getTextDocument().getRename().getPrepareSupport())
                 .isTrue();

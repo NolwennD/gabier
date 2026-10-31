@@ -58,5 +58,13 @@ request the adapter already implements adds its replay for free.
 8. **A request the adapter does not implement yet** is not replayed: the ticket that adds the request to the adapter
    extends `replayed` in `ScenarioReplayTest`, makes `ask` and `replay` call it, and runs this skill for each scenario
    that was waiting.
-9. **Update `Scenarios`'s Javadoc** if the scenario settles a point that was listed as unchecked, then run `bin/ci`
+9. **Files that change on disk between two requests** are a `Sequel` (`Scenarios.sequels()`, not `Scenarios.all()`): two
+   scenarios, the second written for the project as it is once the disk has changed (the first's answer applied to its
+   files when it is a rename, the edit of a file otherwise). Write both scenarios as above (the second's `files` are the
+   project after the change, its answer is what jdtls must say for the new text), add them to `Scenarios.sequels()` and
+   to `SequelsTest`, which checks that applying the first's change set to the first's files gives the second's files. The
+   replay (`ScenarioReplayTest.replay(Sequel, ...)`) runs the sequels last on the jdtls of their project, puts the files
+   back as the first writes them, replays the first, changes the disk, then replays the second: jdtls answers for the new
+   text only because the adapter tells it of the changes (`WatchedFiles`, `JdtlsLanguageServer.takeInChangesOnDisk`).
+10. **Update `Scenarios`'s Javadoc** if the scenario settles a point that was listed as unchecked, then run `bin/ci`
    (the replay is the `jdtls` stage: it runs when a file under `modules/` changed).

@@ -13,6 +13,7 @@ import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -289,6 +290,125 @@ class JdtlsLanguageServerTest {
                         .isInstanceOf(JdtlsException.class)
                         .hasMessageContaining("Interrupted while waiting for the diagnostics of [" + clean + "]");
                 assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+    }
+
+    /** What jdtls is told of the files edited on disk between two requests, as it asked to be (it registers globs). */
+    @Nested
+    class ChangesOnDisk {
+
+        private static final String BARRIER = ".gabier-changes-taken";
+
+        private List<String> told() {
+            return fake.watched().stream()
+                    .flatMap(params -> params.getChanges().stream())
+                    .map(change -> change.getType() + " " + root.relativize(Path.of(URI.create(change.getUri()))))
+                    .toList();
+        }
+
+        @BeforeEach
+        void watchTheSources() {
+            fake.registersWatchersFor("**/*.java").publishesOnOpen(clean, List.of());
+        }
+
+        @Test
+        void tellsJdtlsOfAFileEditedSinceTheLastRequestBeforeOpeningIt() throws Exception {
+            try (var server = started()) {
+                server.diagnostics(clean);
+                Files.writeString(clean, "class Clean { int edited; }\n");
+
+                server.diagnostics(clean);
+
+                assertThat(told()).containsExactly("Changed src/main/java/demo/Clean.java", "Deleted " + BARRIER);
+            }
+        }
+
+        @Test
+        void tellsJdtlsOfAFileCreatedAndOfAFileDeleted() throws Exception {
+            try (var server = started()) {
+                write("src/main/java/demo/Created.java", "class Created {}\n");
+                Files.delete(broken);
+
+                server.diagnostics(clean);
+
+                assertThat(told())
+                        .containsExactly(
+                                "Created src/main/java/demo/Created.java",
+                                "Deleted src/main/java/demo/Broken.java",
+                                "Deleted " + BARRIER);
+            }
+        }
+
+        @Test
+        void tellsJdtlsOnlyOnceOfAChange() throws Exception {
+            try (var server = started()) {
+                Files.writeString(clean, "class Clean { int edited; }\n");
+                server.diagnostics(clean);
+
+                server.diagnostics(clean);
+
+                assertThat(fake.watched()).hasSize(1);
+            }
+        }
+
+        @Test
+        void tellsJdtlsNothingWhenNothingChanged() throws Exception {
+            try (var server = started()) {
+                server.diagnostics(clean);
+
+                assertThat(fake.watched()).isEmpty();
+            }
+        }
+
+        @Test
+        void tellsJdtlsOfAFileEditedWhileItImportedWithTheFirstRequest() throws Exception {
+            try (var server = start()) {
+                Files.writeString(clean, "class Clean { int edited; }\n");
+                server.awaitStarted();
+
+                server.diagnostics(clean);
+
+                assertThat(told()).containsExactly("Changed src/main/java/demo/Clean.java", "Deleted " + BARRIER);
+            }
+        }
+
+        @Test
+        void tellsJdtlsNothingOfAFileItDoesNotWatch() throws Exception {
+            try (var server = started()) {
+                write("notes.txt", "a note\n");
+
+                server.diagnostics(clean);
+
+                assertThat(fake.watched()).isEmpty();
+            }
+        }
+
+        @Test
+        void waitsForJdtlsToTakeTheChangesInBeforeItAsksForTheDiagnostics() throws Exception {
+            try (var server = started()) {
+                Files.writeString(clean, "class Clean { int edited; }\n");
+
+                server.diagnostics(clean);
+
+                // The notification is handled, so acknowledged, before the file is opened.
+                assertThat(fake.watched()).hasSize(1);
+                assertThat(fake.opened()).hasSize(1);
+            }
+        }
+
+        @Test
+        void failsWhenJdtlsDoesNotAcknowledgeTheChanges() throws Exception {
+            fake.neverAcknowledgesChanges();
+
+            try (var server = start(Duration.ofSeconds(2))) {
+                server.awaitStarted();
+                Files.writeString(clean, "class Clean { int edited; }\n");
+
+                assertThatThrownBy(() -> server.diagnostics(clean))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Timed out")
+                        .hasMessageContaining("take in the changes on disk");
             }
         }
     }
@@ -596,6 +716,27 @@ class JdtlsLanguageServerTest {
                 assertThat(fake.renamed()).hasSize(1);
                 assertThat(fake.renamed().getFirst().getNewName()).isEqualTo("hello");
                 assertThat(fake.renamed().getFirst().getPosition()).isEqualTo(new org.eclipse.lsp4j.Position(1, 10));
+            }
+        }
+
+        @Test
+        void tellsJdtlsOfTheFilesEditedSinceTheLastRequestBeforeAskingWhetherTheSymbolCanBeRenamed() throws Exception {
+            fake.registersWatchersFor("**/*.java")
+                    .prepareRenameAnswers(renamable())
+                    .renameAnswers(CompletableFuture.completedFuture(edit(editsOf(greeter, replace(1, 9, 14, "hi")))));
+
+            try (var server = started()) {
+                Files.writeString(greeter, "class Greeter {\n    void greet() {}\n    int other;\n}\n");
+
+                server.rename(greeter, new Position(1, 10), "hi");
+
+                assertThat(fake.watched()).hasSize(1);
+                assertThat(fake.watched().getFirst().getChanges())
+                        .extracting(change -> change.getType() + " " + change.getUri())
+                        .containsExactly(
+                                "Changed " + greeter.toUri(),
+                                "Deleted "
+                                        + root.resolve(".gabier-changes-taken").toUri());
             }
         }
 

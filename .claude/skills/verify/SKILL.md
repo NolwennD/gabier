@@ -33,7 +33,11 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   `JdtlsLanguageServer` implements the port `JavaLanguageServer` on top of it (with `Diagnostics`, the store of what
   jdtls publishes, and `QuietWait`): it starts jdtls in the background and answers "not ready" until the start is over;
   it implements `diagnostics` and `rename` (`RenameChanges` turns the `WorkspaceEdit` of jdtls into a change set;
-  `JdtlsRequests` tells a request jdtls declines from one that fails). Its unit tests (`modules/daemon/src/test`, run by `:daemon:test`)
+  `JdtlsRequests` tells a request jdtls declines from one that fails). jdtls does not watch the disk: it registers
+  the globs it wants watched (`client/registerCapability`, only for a client that declares
+  `workspace.didChangeWatchedFiles.dynamicRegistration`, `JdtlsCapabilities`), `WatchedFiles` keeps them with the state
+  of the project folder, and before each request the adapter sends `workspace/didChangeWatchedFiles` for what changed
+  and waits for jdtls to take it in (`FakeJdtls.registersWatchersFor`, `watched()`). Its unit tests (`modules/daemon/src/test`, run by `:daemon:test`)
   use `FakeJdtls`: a language server in the test process over pipes, with a `sleep` or `sh` child process standing in
   for the jdtls process. No jdtls is started. The daemon depends on the domain of the core (`requires
   fr.craft.gabier.core`): it is the composition root, and the architecture rule on the contexts exempts it only for the
