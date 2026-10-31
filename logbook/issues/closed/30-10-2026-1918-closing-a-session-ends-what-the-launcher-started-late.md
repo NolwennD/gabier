@@ -18,3 +18,16 @@ Done when:
 - the test of the orphan destroys what it started in a `finally`;
 - the javadoc says what the code does and fits 120 columns;
 - `bin/ci` green, coverage 100%.
+
+## Resolution
+
+Merged as `dac89b0`.
+
+Checked by the worker's final `bin/ci --all` on the branch of the batch (log kept by the worker): format 5s, build 2s, test 74s (cli 71, core 259, daemon 366, protocol 320, shared 236, architecture 19, 0 failures), native 7s (cached build), jdtls 184s (real jdtls). The session records the process tree at process start, every `treeInterval` (250 ms in production, 20 ms in tests) on a daemon thread, and once more at close; the Javadoc says what is not seen (a process that lives less than one interval and whose launcher dies). Tests, red first for their own reason: `endsWhatALauncherStartedBeforeItDiedDuringTheStart` (`sh -c "sleep 300 & sleep 1; exit 3"`, initialize never answered) and `endsWhatALauncherStartedAfterTheSessionWasReady`.
+
+Review (one pass): nothing reported on this issue.
+
+Tokens:
+- worker: 804170 for the whole batch (notifications 345758 and 458412, the second run after the review; the second figure may already include the first), shared by the five issues
+- reviewer: 106756 (the first reviewer was stopped on the user's order and gave no figure; its work was redone), shared by the five issues
+- supervisor: shared across the lifecycle batch, see the first issue
