@@ -131,7 +131,15 @@ class ScenarioTest {
                         .refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT)
                         .parameters())
                 .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(diagnostics.refusal(LanguageServerErrorKey.FILE_MISSING).key())
+                .isEqualTo(LanguageServerErrorKey.FILE_MISSING);
+        assertThat(diagnostics.refusal(LanguageServerErrorKey.NOT_A_FILE).key())
+                .isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
         assertThat(rename.refusal(LanguageServerErrorKey.NOT_READY).key()).isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(rename.refusal(LanguageServerErrorKey.FILE_MISSING).key())
+                .isEqualTo(LanguageServerErrorKey.FILE_MISSING);
+        assertThat(rename.refusal(LanguageServerErrorKey.NOT_A_FILE).key())
+                .isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
         assertThat(rename.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
                 .isEqualTo(Map.of("file", FILE.toString()));
         assertThat(rename.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL).parameters())
@@ -147,6 +155,10 @@ class ScenarioTest {
         Request.ExtractVariable extract = new Request.ExtractVariable(FILE, SELECTION, "1st");
 
         assertThat(extract.refusal(LanguageServerErrorKey.NOT_READY).key()).isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(extract.refusal(LanguageServerErrorKey.FILE_MISSING).key())
+                .isEqualTo(LanguageServerErrorKey.FILE_MISSING);
+        assertThat(extract.refusal(LanguageServerErrorKey.NOT_A_FILE).key())
+                .isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
         assertThat(extract.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
                 .isEqualTo(Map.of("file", FILE.toString()));
         assertThat(extract.refusal(LanguageServerErrorKey.NOT_AN_EXPRESSION).parameters())
@@ -166,6 +178,10 @@ class ScenarioTest {
                 .isEqualTo(LanguageServerErrorKey.NOT_READY);
         assertThat(organize.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
                 .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(organize.refusal(LanguageServerErrorKey.FILE_MISSING).key())
+                .isEqualTo(LanguageServerErrorKey.FILE_MISSING);
+        assertThat(organize.refusal(LanguageServerErrorKey.NOT_A_FILE).key())
+                .isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> organize.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
         assertThatExceptionOfType(IllegalArgumentException.class)

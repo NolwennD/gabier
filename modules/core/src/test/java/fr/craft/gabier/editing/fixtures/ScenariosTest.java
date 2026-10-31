@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.IntStream;
@@ -117,6 +118,8 @@ class ScenariosTest {
                         "diagnostics-of-a-file-with-a-warning",
                         "diagnostics-while-the-server-imports",
                         "diagnostics-of-a-file-outside-the-project",
+                        "diagnostics-of-a-file-that-does-not-exist",
+                        "diagnostics-of-a-folder",
                         "rename-a-local-variable",
                         "rename-a-field",
                         "rename-a-method",
@@ -187,16 +190,25 @@ class ScenariosTest {
     }
 
     @Test
-    void asksAboutAFileOfTheProjectExceptWhenTheFileIsOutsideIt() {
+    void asksAboutAFileOfTheProjectExceptWhenTheFileIsOutsideItMissingOrAFolder() {
         for (Scenario scenario : ALL) {
             Path file = scenario.request().file();
-            boolean outside = scenario.answer() instanceof Answer.Refused refused
-                    && refused.key() == LanguageServerErrorKey.FILE_OUTSIDE_PROJECT;
+            Optional<LanguageServerErrorKey> refusal =
+                    scenario.answer() instanceof Answer.Refused refused ? Optional.of(refused.key()) : Optional.empty();
 
-            if (outside) {
+            if (refusal.equals(Optional.of(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT))) {
                 assertThat(file.normalize().startsWith(".."))
                         .as(scenario.name())
                         .isTrue();
+            } else if (refusal.equals(Optional.of(LanguageServerErrorKey.FILE_MISSING))) {
+                assertThat(file.normalize().startsWith(".."))
+                        .as(scenario.name())
+                        .isFalse();
+                assertThat(scenario.files()).as(scenario.name()).doesNotContainKey(file);
+            } else if (refusal.equals(Optional.of(LanguageServerErrorKey.NOT_A_FILE))) {
+                assertThat(scenario.files().keySet())
+                        .as(scenario.name())
+                        .anyMatch(source -> source.startsWith(file) && !source.equals(file));
             } else {
                 assertThat(scenario.files()).as(scenario.name()).containsKey(file);
             }

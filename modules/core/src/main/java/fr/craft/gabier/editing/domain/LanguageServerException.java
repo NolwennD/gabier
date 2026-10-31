@@ -52,6 +52,20 @@ public final class LanguageServerException extends GeneratorException {
                 .addParameter("file", file.toString()));
     }
 
+    /** The file is under the project but there is nothing at its path. */
+    public static LanguageServerException fileMissing(Path file) {
+        return new LanguageServerException(GeneratorException.badRequest(LanguageServerErrorKey.FILE_MISSING)
+                .message("The file " + file + " does not exist")
+                .addParameter("file", file.toString()));
+    }
+
+    /** The path is under the project but it is a folder, not a source file. */
+    public static LanguageServerException notAFile(Path file) {
+        return new LanguageServerException(GeneratorException.badRequest(LanguageServerErrorKey.NOT_A_FILE)
+                .message(file + " is not a file")
+                .addParameter("file", file.toString()));
+    }
+
     private static GeneratorExceptionBuilder positioned(LanguageServerErrorKey key, Path file, Position position) {
         return GeneratorException.badRequest(key)
                 .addParameter("file", file.toString())

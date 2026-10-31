@@ -5,8 +5,9 @@ problem, `file:line:column: severity: message`, the file as typed and the line a
 compiler show them (severity: `error`, `warning`, `information` or `hint`), and nothing when the file is clean. The exit
 code is 0 whenever the daemon answered, whatever the problems: the reader reads the list. With `--json`, the result is
 `{"diagnostics":[{"severity":"error","line":4,"column":15,"message":"..."}]}`, an empty list for a clean file, with the
-positions **from 0** as the protocol and the domain count them. A refusal (the file is outside the project, the server
-is not ready) is the problem object, exit code 2. The cli sends the absolute path of the file to the daemon, as typed otherwise, and the daemon alone cleans it: `.` and
+positions **from 0** as the protocol and the domain count them. A refusal (the file is outside the project, `language-server-file-outside-project`; a path under the project where
+there is no file, `language-server-file-missing`; a folder, `language-server-not-a-file`; the server is not ready) is the
+problem object, exit code 2. The cli sends the absolute path of the file to the daemon, as typed otherwise, and the daemon alone cleans it: `.` and
 `..` are collapsed **lexically** and no symbolic link is followed. So with `src` a link to `/other/src`,
 `gabier diagnostics src/../Foo.java` asks for `./Foo.java`, where a shell would open `/other/Foo.java`; type the path
 you mean. This is chosen: the folders of the projects are matched as paths, not as files, so resolving the links in the

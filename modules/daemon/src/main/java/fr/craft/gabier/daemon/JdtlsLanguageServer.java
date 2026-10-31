@@ -498,15 +498,22 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                 "jdtls is not running any more: it exited with code " + session.exitValue() + " after it was ready");
     }
 
-    /** The text of a file of the project; the file is registered to await its publication before it is opened. */
+    /**
+     * The text of a file of the project.
+     *
+     * @throws LanguageServerException if the file is outside the project, does not exist or is a folder
+     */
     private static String textInProject(JdtlsSession session, Path file) {
         if (session.projects().stream().noneMatch(file::startsWith)) {
             throw LanguageServerException.fileOutsideProject(file);
         }
+        if (Files.isDirectory(file)) {
+            throw LanguageServerException.notAFile(file);
+        }
         try {
             return Files.readString(file);
         } catch (NoSuchFileException missing) {
-            throw LanguageServerException.fileOutsideProject(file);
+            throw LanguageServerException.fileMissing(file);
         } catch (IOException failure) {
             throw new UncheckedIOException(failure);
         }

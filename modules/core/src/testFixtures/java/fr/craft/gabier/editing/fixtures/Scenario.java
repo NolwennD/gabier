@@ -118,6 +118,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
+                    case FILE_MISSING -> LanguageServerException.fileMissing(file);
+                    case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NO_SUCH_SYMBOL, INVALID_NAME, NOT_AN_EXPRESSION ->
                         throw new IllegalArgumentException("A request for diagnostics cannot get " + key);
                 };
@@ -141,6 +143,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
+                    case FILE_MISSING -> LanguageServerException.fileMissing(file);
+                    case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NO_SUCH_SYMBOL, INVALID_NAME, NOT_AN_EXPRESSION ->
                         throw new IllegalArgumentException("A request to organize imports cannot get " + key);
                 };
@@ -166,6 +170,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
+                    case FILE_MISSING -> LanguageServerException.fileMissing(file);
+                    case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NO_SUCH_SYMBOL -> LanguageServerException.noSuchSymbol(file, position);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, position, newName);
                     case NOT_AN_EXPRESSION -> throw new IllegalArgumentException("A rename cannot get " + key);
@@ -192,6 +198,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
+                    case FILE_MISSING -> LanguageServerException.fileMissing(file);
+                    case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NOT_AN_EXPRESSION -> LanguageServerException.notAnExpression(file, selection);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, selection.start(), name);
                     case NO_SUCH_SYMBOL ->

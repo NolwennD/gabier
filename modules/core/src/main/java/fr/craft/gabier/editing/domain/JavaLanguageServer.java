@@ -19,7 +19,7 @@ public interface JavaLanguageServer {
      * The problems of a source file, as the server sees the project.
      *
      * @return the diagnostics, none when the file is clean
-     * @throws LanguageServerException if the server is not ready or the file is not in its project
+     * @throws LanguageServerException if the server is not ready or the file is not a file of its project (outside it, missing or a folder)
      */
     List<Diagnostic> diagnostics(Path file);
 
@@ -27,7 +27,7 @@ public interface JavaLanguageServer {
      * What renaming the symbol at a position to a new name changes, in the whole project.
      *
      * @return the change set to apply, which may create, edit and move files
-     * @throws LanguageServerException if the server is not ready, the file is not in its project, there is no symbol at
+     * @throws LanguageServerException if the server is not ready, the file is not a file of its project (outside it, missing or a folder), there is no symbol at
      *     the position or the name is not valid for it
      */
     ChangeSet rename(Path file, Position position, String newName);
@@ -39,7 +39,7 @@ public interface JavaLanguageServer {
      *
      * @param selection the expression, from its first character to the end of its last
      * @return the change set to apply
-     * @throws LanguageServerException if the server is not ready, the file is not in its project, the selection is not
+     * @throws LanguageServerException if the server is not ready, the file is not a file of its project (outside it, missing or a folder), the selection is not
      *     an expression that can be extracted or the name is not valid for the variable
      */
     ChangeSet extractVariable(Path file, Range selection, String name);
@@ -50,7 +50,7 @@ public interface JavaLanguageServer {
      * a star). Only the file itself is edited.
      *
      * @return the change set to apply, none when the imports are already as they should be
-     * @throws LanguageServerException if the server is not ready or the file is not in its project
+     * @throws LanguageServerException if the server is not ready or the file is not a file of its project (outside it, missing or a folder)
      */
     Optional<ChangeSet> organizeImports(Path file);
 }

@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Stream;
@@ -510,25 +511,39 @@ class JdtlsLanguageServerTest {
         }
 
         @Test
-        void refusesAFileThatDoesNotExistAsNotBeingInTheProject() throws Exception {
+        void refusesAFileThatDoesNotExistAsMissing() throws Exception {
             Path missing = root.resolve("src/main/java/demo/Missing.java");
 
             try (var server = started()) {
                 assertThatThrownBy(() -> server.diagnostics(missing))
-                        .isInstanceOfSatisfying(
-                                LanguageServerException.class,
-                                refusal -> assertThat(refusal.key())
-                                        .isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.FILE_MISSING);
+                            assertThat(refusal.parameters()).containsEntry("file", missing.toString());
+                        });
+                assertThat(fake.opened()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesAFolderOfTheProjectAsNotBeingAFile() throws Exception {
+            Path folder = root.resolve("src/main/java/demo");
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.diagnostics(folder))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
+                            assertThat(refusal.parameters()).containsEntry("file", folder.toString());
+                        });
                 assertThat(fake.opened()).isEmpty();
             }
         }
 
         @Test
         void failsWhenTheFileCannotBeReadAtAll() throws Exception {
-            Path folder = root.resolve("src/main/java/demo");
+            Files.setPosixFilePermissions(clean, Set.of());
 
             try (var server = started()) {
-                assertThatThrownBy(() -> server.diagnostics(folder)).isInstanceOf(UncheckedIOException.class);
+                assertThatThrownBy(() -> server.diagnostics(clean)).isInstanceOf(UncheckedIOException.class);
             }
         }
 

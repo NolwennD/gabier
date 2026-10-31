@@ -79,6 +79,28 @@ class DiagnoseTest {
     }
 
     @Test
+    void reportsAFileThatDoesNotExistAsMissing() {
+        server.scripted(Scenarios.DIAGNOSTICS_OF_A_MISSING_FILE);
+        Path missing = fileOf(Scenarios.DIAGNOSTICS_OF_A_MISSING_FILE);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> diagnose.diagnose(missing))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.FILE_MISSING))
+                .withMessage("The file " + missing + " does not exist");
+    }
+
+    @Test
+    void reportsAFolderAsNotBeingAFile() {
+        server.scripted(Scenarios.DIAGNOSTICS_OF_A_FOLDER);
+        Path folder = fileOf(Scenarios.DIAGNOSTICS_OF_A_FOLDER);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> diagnose.diagnose(folder))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_A_FILE))
+                .withMessage(folder + " is not a file");
+    }
+
+    @Test
     void rejectsAMissingServer() {
         assertThatExceptionOfType(MissingMandatoryValueException.class)
                 .isThrownBy(() -> new Diagnose(null))

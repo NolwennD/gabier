@@ -33,6 +33,9 @@ import java.util.stream.IntStream;
  *   <li>a file outside the project: jdtls does not refuse it, it opens it as a non-project file and warns that only
  *       syntax errors are reported. The adapter refuses it ({@link #DIAGNOSTICS_OUTSIDE_THE_PROJECT}, {@link
  *       #RENAME_OUTSIDE_THE_PROJECT}) because it is not under a folder jdtls imported, before asking;
+ *   <li>a path under the project with no file ({@link #DIAGNOSTICS_OF_A_MISSING_FILE}) and a folder ({@link
+ *       #DIAGNOSTICS_OF_A_FOLDER}): the adapter refuses them before asking, as it does for a file outside the project,
+ *       with a reason of their own (the file is missing, the path is not a file);
  *   <li>the refusal while the project is imported ({@link #DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS}, {@link
  *       #RENAME_WHILE_THE_SERVER_IMPORTS}) is the answer of the adapter to a request made while jdtls is still
  *       starting; the replay asks at once, before the import is over, which takes seconds;
@@ -73,6 +76,8 @@ public final class Scenarios {
     private static final Path MAIN = Path.of("src/main/java/demo/Main.java");
     private static final Path BROKEN = Path.of("src/main/java/demo/Broken.java");
     private static final Path SLOPPY = Path.of("src/main/java/demo/Sloppy.java");
+    private static final Path MISSING = Path.of("src/main/java/demo/Missing.java");
+    private static final Path FOLDER = Path.of("src/main/java/demo");
     private static final Path ELSEWHERE = Path.of("../outside/Elsewhere.java");
     private static final Path UNTIDY = Path.of("src/main/java/demo/Untidy.java");
     private static final Path TIDY = Path.of("src/main/java/demo/Tidy.java");
@@ -212,6 +217,20 @@ public final class Scenarios {
             PROJECT,
             new Request.Diagnostics(ELSEWHERE),
             new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+
+    /** A path under the project where there is no file: the file is missing, which is not being outside the project. */
+    public static final Scenario DIAGNOSTICS_OF_A_MISSING_FILE = new Scenario(
+            "diagnostics-of-a-file-that-does-not-exist",
+            PROJECT,
+            new Request.Diagnostics(MISSING),
+            new Answer.Refused(LanguageServerErrorKey.FILE_MISSING));
+
+    /** A folder of the project: it is not a file, whatever its name. */
+    public static final Scenario DIAGNOSTICS_OF_A_FOLDER = new Scenario(
+            "diagnostics-of-a-folder",
+            PROJECT,
+            new Request.Diagnostics(FOLDER),
+            new Answer.Refused(LanguageServerErrorKey.NOT_A_FILE));
 
     /**
      * {@code message}, declared and used in the same method: jdtls answers one edit, from the declaration to the use,
@@ -428,6 +447,8 @@ public final class Scenarios {
                 FILE_WITH_A_WARNING,
                 DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS,
                 DIAGNOSTICS_OUTSIDE_THE_PROJECT,
+                DIAGNOSTICS_OF_A_MISSING_FILE,
+                DIAGNOSTICS_OF_A_FOLDER,
                 RENAME_LOCAL_VARIABLE,
                 RENAME_FIELD,
                 RENAME_METHOD,

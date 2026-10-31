@@ -16,10 +16,12 @@ class LanguageServerExceptionTest {
     void givesTheKeyThatReportsAreMappedFrom() {
         assertThat(Arrays.stream(LanguageServerErrorKey.values()).map(LanguageServerErrorKey::get))
                 .containsExactly(
+                        "language-server-file-missing",
                         "language-server-file-outside-project",
                         "language-server-invalid-name",
                         "language-server-no-such-symbol",
                         "language-server-not-an-expression",
+                        "language-server-not-a-file",
                         "language-server-not-ready");
     }
 
@@ -75,5 +77,25 @@ class LanguageServerExceptionTest {
         assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
         assertThat(exception.parameters()).isEqualTo(Map.of("file", FILE.toString()));
         assertThat(exception).hasMessage("The file " + FILE + " is not in the project of the language server");
+    }
+
+    @Test
+    void saysWhichFileDoesNotExist() {
+        LanguageServerException exception = LanguageServerException.fileMissing(FILE);
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.FILE_MISSING);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters()).isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(exception).hasMessage("The file " + FILE + " does not exist");
+    }
+
+    @Test
+    void saysWhichPathIsNotAFile() {
+        LanguageServerException exception = LanguageServerException.notAFile(FILE);
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters()).isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(exception).hasMessage(FILE + " is not a file");
     }
 }
