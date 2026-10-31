@@ -1,6 +1,7 @@
 # `gabier extract-variable` refuses what jdtls refuses, with the right reason
 
 Opened: 31-10-2026 20:40
+Depends on: 31-10-2026-2051-readme-lists-the-capabilities-and-points-to-docs (the README claim it fixes moves to docs/commands/extract-variable.md).
 
 Found in the review of `gabier-extracts-a-variable`. An agent that selects a statement or a `void` call gets an internal
 error instead of the refusal `language-server-not-an-expression`: `JdtlsLanguageServer.java:271-276` turns a
