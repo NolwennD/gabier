@@ -94,7 +94,9 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private final CountDownLatch exited = new CountDownLatch(1);
     private final List<String> commands = new CopyOnWriteArrayList<>();
     private boolean answersNothingToProjects;
-    private boolean acknowledgesChanges = true;
+    private volatile boolean acknowledgesChanges = true;
+    private volatile Duration acknowledgmentDelay = Duration.ZERO;
+    private final List<String> received = new CopyOnWriteArrayList<>();
     private String publishesOnInitialized = "";
     private final Map<String, List<List<Diagnostic>>> publicationsOnOpen = new ConcurrentHashMap<>();
     private Duration pauseBetweenPublications = Duration.ZERO;
@@ -236,6 +238,34 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     FakeJdtls neverAcknowledgesChanges() {
         this.acknowledgesChanges = false;
         return this;
+    }
+
+    /** The acknowledgments are given again from now on (after {@link #neverAcknowledgesChanges}). */
+    FakeJdtls acknowledgesChangesFromNow() {
+        this.acknowledgesChanges = true;
+        return this;
+    }
+
+    /**
+     * The acknowledgments of the changes come this long after the notification, on a thread of their own: jdtls handles
+     * the events on a thread of its own, so a request sent in the meantime is not behind them.
+     */
+    FakeJdtls delaysAcknowledgments(Duration delay) {
+        this.acknowledgmentDelay = delay;
+        return this;
+    }
+
+    /**
+     * What the fake received and sent about files, in the order it happened: {@code didChangeWatchedFiles},
+     * {@code acknowledged <file>} (the publication that answers a deletion), {@code didOpen <file>},
+     * {@code prepareRename <file>} and {@code rename <file>}, a file by its name.
+     */
+    List<String> received() {
+        return received;
+    }
+
+    private static String named(String uri) {
+        return Path.of(java.net.URI.create(uri)).getFileName().toString();
     }
 
     /** The {@code workspace/didChangeWatchedFiles} notifications received, in order. */
@@ -459,6 +489,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                 @Override
                 public void didOpen(DidOpenTextDocumentParams params) {
                     String uri = params.getTextDocument().getUri();
+                    received.add("didOpen " + named(uri));
                     opened.add(new Opened(uri, params.getTextDocument().getText()));
                     var stages = publicationsOnOpen.getOrDefault(uri, List.of());
                     for (int stage = 0; stage < stages.size(); stage++) {
@@ -473,12 +504,15 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                 public CompletableFuture<
                                 Either3<org.eclipse.lsp4j.Range, PrepareRenameResult, PrepareRenameDefaultBehavior>>
                         prepareRename(PrepareRenameParams params) {
+                    received.add(
+                            "prepareRename " + named(params.getTextDocument().getUri()));
                     prepared.add(params);
                     return prepareRenameAnswer;
                 }
 
                 @Override
                 public CompletableFuture<WorkspaceEdit> rename(RenameParams params) {
+                    received.add("rename " + named(params.getTextDocument().getUri()));
                     renamed.add(params);
                     return renameAnswer;
                 }
@@ -515,13 +549,29 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
 
                 @Override
                 public void didChangeWatchedFiles(DidChangeWatchedFilesParams params) {
+                    received.add("didChangeWatchedFiles");
                     watched.add(params);
                     // As jdtls does for a deletion, handled after the events before it: that is its acknowledgment.
-                    params.getChanges().stream()
+                    List<String> deleted = params.getChanges().stream()
                             .filter(change -> acknowledgesChanges)
                             .filter(change -> change.getType() == FileChangeType.Deleted)
-                            .forEach(change -> client.publishDiagnostics(
-                                    new PublishDiagnosticsParams(change.getUri(), List.of())));
+                            .map(change -> change.getUri())
+                            .toList();
+                    if (acknowledgmentDelay.isZero()) {
+                        acknowledge(deleted);
+                    } else {
+                        Thread.ofVirtual().start(() -> {
+                            LockSupport.parkNanos(acknowledgmentDelay.toNanos());
+                            acknowledge(deleted);
+                        });
+                    }
+                }
+
+                private void acknowledge(List<String> uris) {
+                    for (String uri : uris) {
+                        received.add("acknowledged " + named(uri));
+                        client.publishDiagnostics(new PublishDiagnosticsParams(uri, List.of()));
+                    }
                 }
             };
         }

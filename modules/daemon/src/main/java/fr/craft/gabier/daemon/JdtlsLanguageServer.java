@@ -66,13 +66,21 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      */
     static final Duration QUIET = Duration.ofSeconds(5);
 
-    /** The file of the last event told to jdtls: it does not exist, see {@link #takeInChangesOnDisk}. */
-    private static final String BARRIER = ".gabier-changes-taken";
+    /**
+     * The start of the name of the file of the last event told to jdtls (a batch number follows): it does not exist,
+     * see {@link #takeInChangesOnDisk}.
+     */
+    private static final String BARRIER = ".gabier-changes-taken-";
 
     private final Diagnostics diagnostics;
     private final Duration quiet;
     private final CompletableFuture<JdtlsSession> starting;
     private final Thread starter;
+
+    /** The changes on disk jdtls has not acknowledged yet: they are told again by the next request. */
+    private final List<FileEvent> untaken = new ArrayList<>();
+
+    private int batches;
 
     private JdtlsLanguageServer(
             Diagnostics diagnostics, Duration quiet, CompletableFuture<JdtlsSession> starting, Thread starter) {
@@ -227,17 +235,22 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * would be answered for the files as they were. The wait ends on the last event, which is a deletion of a file that
      * does not exist: for a deletion jdtls publishes empty diagnostics of the file, as the events are handled, and
      * that publication is the acknowledgment (a request of jdtls has none).
+     *
+     * <p>The events stay in {@link #untaken} until that wait has ended: when it times out (jdtls is busy), the retry
+     * tells them again and waits again, and does not ask jdtls while they may still be queued. Each batch ends with a
+     * file of its own, so that a late acknowledgment of the earlier batch is not taken for the one of the retry.
      */
     private void takeInChangesOnDisk(JdtlsSession session, JdtlsWatch watch) throws InterruptedException {
-        List<FileEvent> changes = session.changesOnDisk();
-        if (changes.isEmpty()) {
+        untaken.addAll(session.changesOnDisk());
+        if (untaken.isEmpty()) {
             return;
         }
-        Path barrier = session.projectRoot().resolve(BARRIER);
-        List<FileEvent> events = new ArrayList<>(changes);
+        Path barrier = session.projectRoot().resolve(BARRIER + ++batches);
+        List<FileEvent> events = new ArrayList<>(untaken);
         events.add(new FileEvent(barrier.toUri().toString(), FileChangeType.Deleted));
         var taken = diagnostics.open(barrier, () -> session.tell(events));
-        watch.await("jdtls to take in the changes on disk of " + changes.size() + " files", () -> taken);
+        watch.await("jdtls to take in the changes on disk of " + untaken.size() + " files", () -> taken);
+        untaken.clear();
     }
 
     /** Asks jdtls to shut down, or ends its start when it is not over, and deletes what the session made. */

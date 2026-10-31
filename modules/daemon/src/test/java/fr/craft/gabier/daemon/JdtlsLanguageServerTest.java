@@ -298,7 +298,8 @@ class JdtlsLanguageServerTest {
     @Nested
     class ChangesOnDisk {
 
-        private static final String BARRIER = ".gabier-changes-taken";
+        private static final String BARRIER = ".gabier-changes-taken-1";
+        private static final String SECOND_BARRIER = ".gabier-changes-taken-2";
 
         private List<String> told() {
             return fake.watched().stream()
@@ -317,10 +318,13 @@ class JdtlsLanguageServerTest {
             try (var server = started()) {
                 server.diagnostics(clean);
                 Files.writeString(clean, "class Clean { int edited; }\n");
+                int before = fake.received().size();
 
                 server.diagnostics(clean);
 
                 assertThat(told()).containsExactly("Changed src/main/java/demo/Clean.java", "Deleted " + BARRIER);
+                assertThat(fake.received().subList(before, before + 3))
+                        .containsExactly("didChangeWatchedFiles", "acknowledged " + BARRIER, "didOpen Clean.java");
             }
         }
 
@@ -386,14 +390,58 @@ class JdtlsLanguageServerTest {
 
         @Test
         void waitsForJdtlsToTakeTheChangesInBeforeItAsksForTheDiagnostics() throws Exception {
+            fake.delaysAcknowledgments(Duration.ofMillis(300));
+
             try (var server = started()) {
                 Files.writeString(clean, "class Clean { int edited; }\n");
 
                 server.diagnostics(clean);
 
-                // The notification is handled, so acknowledged, before the file is opened.
-                assertThat(fake.watched()).hasSize(1);
-                assertThat(fake.opened()).hasSize(1);
+                // jdtls handles the events on a thread of its own: the file is opened once it has acknowledged them.
+                assertThat(fake.received())
+                        .startsWith("didChangeWatchedFiles", "acknowledged " + BARRIER, "didOpen Clean.java");
+            }
+        }
+
+        @Test
+        void aRetryAfterATimedOutWaitStillWaitsForJdtlsToTakeTheEarlierChangesIn() throws Exception {
+            fake.neverAcknowledgesChanges();
+
+            try (var server = start(Duration.ofSeconds(2))) {
+                server.awaitStarted();
+                Files.writeString(clean, "class Clean { int edited; }\n");
+                assertThatThrownBy(() -> server.diagnostics(clean)).hasMessageContaining("Timed out");
+                fake.acknowledgesChangesFromNow().delaysAcknowledgments(Duration.ofMillis(300));
+
+                server.diagnostics(clean);
+
+                assertThat(fake.received())
+                        .startsWith(
+                                "didChangeWatchedFiles",
+                                "didChangeWatchedFiles",
+                                "acknowledged " + SECOND_BARRIER,
+                                "didOpen Clean.java");
+                assertThat(fake.watched().getLast().getChanges())
+                        .extracting(change ->
+                                change.getType() + " " + root.relativize(Path.of(URI.create(change.getUri()))))
+                        .containsExactly("Changed src/main/java/demo/Clean.java", "Deleted " + SECOND_BARRIER);
+            }
+        }
+
+        @Test
+        void tellsJdtlsOnlyOnceOfAChangeItHasAcknowledgedEvenAfterATimedOutWait() throws Exception {
+            fake.neverAcknowledgesChanges();
+
+            try (var server = start(Duration.ofSeconds(2))) {
+                server.awaitStarted();
+                Files.writeString(clean, "class Clean { int edited; }\n");
+                assertThatThrownBy(() -> server.diagnostics(clean)).hasMessageContaining("Timed out");
+                fake.acknowledgesChangesFromNow();
+                server.diagnostics(clean);
+
+                server.diagnostics(clean);
+
+                assertThat(fake.watched()).hasSize(2);
             }
         }
 
@@ -730,13 +778,20 @@ class JdtlsLanguageServerTest {
 
                 server.rename(greeter, new Position(1, 10), "hi");
 
+                assertThat(fake.received())
+                        .containsExactly(
+                                "didChangeWatchedFiles",
+                                "acknowledged .gabier-changes-taken-1",
+                                "prepareRename Greeter.java",
+                                "rename Greeter.java");
                 assertThat(fake.watched()).hasSize(1);
                 assertThat(fake.watched().getFirst().getChanges())
                         .extracting(change -> change.getType() + " " + change.getUri())
                         .containsExactly(
                                 "Changed " + greeter.toUri(),
                                 "Deleted "
-                                        + root.resolve(".gabier-changes-taken").toUri());
+                                        + root.resolve(".gabier-changes-taken-1")
+                                                .toUri());
             }
         }
 
