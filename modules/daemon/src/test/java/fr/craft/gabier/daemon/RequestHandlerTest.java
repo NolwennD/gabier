@@ -12,6 +12,7 @@ import fr.craft.gabier.shared.error.domain.GeneratorException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -411,7 +412,7 @@ class RequestHandlerTest {
 
         @Override
         public Set<String> parameters() {
-            return Set.of("beta", "alpha");
+            return new LinkedHashSet<>(List.of("beta", "alpha"));
         }
 
         @Override
