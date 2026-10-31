@@ -50,7 +50,6 @@ import org.eclipse.lsp4j.jsonrpc.messages.Either3;
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification;
 import org.eclipse.lsp4j.launch.LSPLauncher;
 import org.eclipse.lsp4j.services.LanguageClient;
-import org.eclipse.lsp4j.services.LanguageServer;
 import org.eclipse.lsp4j.services.TextDocumentService;
 import org.eclipse.lsp4j.services.WorkspaceService;
 
@@ -115,6 +114,8 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private CompletableFuture<CodeAction> resolveAnswer = new CompletableFuture<>();
     private final List<CodeActionParams> codeActionRequests = new CopyOnWriteArrayList<>();
     private final List<CodeAction> resolveRequests = new CopyOnWriteArrayList<>();
+    private CompletableFuture<JdtlsServer.RefactorEdit> refactorEditAnswer = new CompletableFuture<>();
+    private final List<JdtlsServer.RefactorEditParams> refactorEditRequests = new CopyOnWriteArrayList<>();
     private final List<List<String>> registeredWatchers = new ArrayList<>();
     private final List<DidChangeWatchedFilesParams> watched = new CopyOnWriteArrayList<>();
 
@@ -240,6 +241,20 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         return this;
     }
 
+    /**
+     * The answer to {@code java/getRefactorEdit}, whatever the request: the edit and the rename to run after it, null or
+     * a failed future (a refusal). Unscripted, the request never gets an answer.
+     */
+    FakeJdtls refactorEditAnswers(CompletableFuture<JdtlsServer.RefactorEdit> answer) {
+        this.refactorEditAnswer = answer;
+        return this;
+    }
+
+    /** The {@code java/getRefactorEdit} requests received, in order. */
+    List<JdtlsServer.RefactorEditParams> refactorEditRequests() {
+        return refactorEditRequests;
+    }
+
     /** The {@code codeAction} requests received, in order. */
     List<CodeActionParams> codeActionRequests() {
         return codeActionRequests;
@@ -294,7 +309,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /**
      * What the fake received and sent about files, in the order it happened: {@code didChangeWatchedFiles},
      * {@code acknowledged <file>} (the publication that answers a deletion), {@code didOpen <file>},
-     * {@code prepareRename <file>} and {@code rename <file>}, a file by its name.
+     * {@code prepareRename <file>}, {@code rename <file>} and {@code getRefactorEdit <file>}, a file by its name.
      */
     List<String> received() {
         return received;
@@ -449,7 +464,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         }
     }
 
-    private final class Server implements LanguageServer {
+    private final class Server implements JdtlsServer {
 
         @Override
         public CompletableFuture<InitializeResult> initialize(InitializeParams params) {
@@ -498,6 +513,14 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                                 List.of(new Registration("watchers-" + registration, METHOD, options))))
                         .join();
             }
+        }
+
+        @Override
+        public CompletableFuture<RefactorEdit> getRefactorEdit(RefactorEditParams params) {
+            received.add("getRefactorEdit "
+                    + named(params.context().getTextDocument().getUri()));
+            refactorEditRequests.add(params);
+            return refactorEditAnswer;
         }
 
         @Override

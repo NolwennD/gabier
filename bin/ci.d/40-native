@@ -21,7 +21,8 @@ import java.util.stream.Stream;
  * against it (with no jdtls to start, so refused as a failed start, which {@code status} then shows) and against the
  * daemon served by the fake language server, {@code :daemon:installFakeServed}, so that no jdtls runs in this stage;
  * {@code rename} is run against the latter too (a dry run, a rename by token, by position and of a type, and refusals),
- * and so is {@code organize-imports} (a dry run, a file organized, a file in order, a refusal);
+ * and so are {@code organize-imports} (a dry run, a file organized, a file in order, a refusal) and {@code
+ * extract-variable} (a dry run, a variable extracted under the name given, refusals);
  * a request command with no daemon running starts {@code gabier-daemon} (found on the {@code PATH} or next to the cli;
  * not found, exiting at once), the next request uses it, and {@code stop} ends it. Runs in the current directory, the
  * checkout under verification. It starts and signals only the processes it started, by their handle, and the daemons
@@ -37,7 +38,8 @@ public final class Native {
             {"type":"urn:gabier:error:usage-error","title":"Usage error",\
             "detail":"Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file>\s\
             | rename [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>\s\
-            | organize-imports [--dry-run] <file>)",\
+            | organize-imports [--dry-run] <file>\s\
+            | extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>)",\
             "key":"usage-error","parameters":{"arguments":"--help"}}\
             """;
 
@@ -62,7 +64,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename and organize-imports included, the daemon started on demand)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports and extract-variable included, the daemon started on demand)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -229,6 +231,7 @@ public final class Native {
                 diagnosticsWithTheFakeServer();
                 renameWithTheFakeServer();
                 organizeImportsWithTheFakeServer();
+                extractVariableWithTheFakeServer();
                 fakeServedRefusesAFolderThatIsNotEmpty();
             } finally {
                 for (Process process : started) {
@@ -603,6 +606,70 @@ public final class Native {
                     "gabier --json organize-imports gives the result as the daemon gave it");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after organizing the imports");
+        }
+
+        /**
+         * {@code gabier extract-variable} against the daemon served by the fake language server: the dry run writes
+         * nothing, the variable is declared under the name given and used in place of the expression, a selection that
+         * is not an expression and a name that is not valid are refused as problem objects and write nothing.
+         */
+        private void extractVariableWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("extract-project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            Path greeter = project.resolve("src/main/java/demo/Greeter.java");
+            String file = "extract-project/src/main/java/demo/Greeter.java";
+            String original = Files.readString(greeter);
+
+            Run dryRun = gabier("extract-variable", "--dry-run", file, "7:26", "7:48", "joined");
+            expect(
+                    dryRun.exit() == 0
+                            && dryRun.err().isEmpty()
+                            && dryRun.out().lines().findFirst().orElse("").equals("dry run, nothing written")
+                            && dryRun.out().contains("modified " + greeter)
+                            && dryRun.out().contains("+        String joined = greeting + \", \" + name;")
+                            && dryRun.out().contains("+        String message = joined;")
+                            && Files.readString(greeter).equals(original),
+                    "gabier extract-variable --dry-run lists the file and the diff and writes nothing");
+
+            Run notAnExpression = gabier("extract-variable", file, "8:9", "8:15", "joined");
+            expect(
+                    notAnExpression.exit() == 2
+                            && notAnExpression.out().isEmpty()
+                            && notAnExpression.err().contains("(language-server-not-an-expression; ")
+                            && Files.readString(greeter).equals(original),
+                    "extract-variable of a selection that is not an expression is refused as a problem object, exit 2");
+
+            Run invalidName = gabier("extract-variable", file, "7:26", "7:48", "1st");
+            expect(
+                    invalidName.exit() == 2
+                            && invalidName.out().isEmpty()
+                            && invalidName.err().contains("(language-server-invalid-name; ")
+                            && Files.readString(greeter).equals(original),
+                    "extract-variable to a name that is not an identifier is refused as a problem object, exit 2");
+
+            Run json = gabier("--json", "extract-variable", "--dry-run", file, "7:26", "7:48", "joined");
+            expect(
+                    json.exit() == 0
+                            && json.out()
+                                    .startsWith("{\"created\":[],\"renamed\":[],\"deleted\":[],\"modified\":[\""
+                                            + greeter + "\"],\"diff\":\"")
+                            && Files.readString(greeter).equals(original),
+                    "gabier --json extract-variable gives the result as the daemon gave it");
+
+            Run extracted = gabier("extract-variable", file, "7:26", "7:48", "joined");
+            String text = Files.readString(greeter);
+            expect(
+                    extracted.exit() == 0
+                            && extracted.out().contains("modified " + greeter)
+                            && text.contains(
+                                    "        String joined = greeting + \", \" + name;\n        String message = joined;\n"),
+                    "gabier extract-variable writes the file, with the variable declared under the name given");
+            gabier("stop");
+            expect(ends(process), "the daemon served by the fake stops after the extractions");
         }
 
         /** A {@code gabier-daemon} in the folder: a script with this body, which the cli finds and launches. */

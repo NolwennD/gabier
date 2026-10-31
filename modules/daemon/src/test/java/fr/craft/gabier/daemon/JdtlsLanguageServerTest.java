@@ -11,6 +11,7 @@ import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
+import fr.craft.gabier.editing.domain.SourceText;
 import fr.craft.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -1321,6 +1322,490 @@ class JdtlsLanguageServerTest {
         private <T> CompletableFuture<T> declined(String message) {
             return CompletableFuture.failedFuture(
                     new ResponseErrorException(new ResponseError(ResponseErrorCode.InvalidRequest, message, null)));
+        }
+    }
+
+    /**
+     * The extraction of a variable: jdtls proposes the variable with a name of its own and says where it is, the adapter
+     * has the variable renamed to the name asked for on the text the edit gives, and answers one edit on the file as it
+     * is on disk.
+     */
+    @Nested
+    class ExtractingAVariable {
+
+        private static final String ORIGINAL = """
+            class Greeter {
+                String greet(String name) {
+                    return "Hello, " + name;
+                }
+            }
+            """;
+
+        /** The text once jdtls' edit is applied: the variable carries the name jdtls proposed. */
+        private static final String PROPOSED = """
+            class Greeter {
+                String greet(String name) {
+                    String string = "Hello, " + name;
+                    return string;
+                }
+            }
+            """;
+
+        private static final String NAMED = """
+            class Greeter {
+                String greet(String name) {
+                    String text = "Hello, " + name;
+                    return text;
+                }
+            }
+            """;
+
+        private final fr.craft.gabier.editing.domain.Range selection =
+                new fr.craft.gabier.editing.domain.Range(new Position(2, 15), new Position(2, 31));
+        private Path greeter;
+
+        @BeforeEach
+        void writeTheSources() throws IOException {
+            greeter = write("src/main/java/demo/Greeter.java", ORIGINAL);
+        }
+
+        private CompletableFuture<JdtlsServer.RefactorEdit> proposal(WorkspaceEdit edit) {
+            var where = new JdtlsServer.RenamePosition(
+                    greeter.toUri().toString(), PROPOSED.indexOf("string"), "string".length());
+            var follow = new JdtlsServer.FollowUp("java.action.rename", List.of(where));
+
+            return CompletableFuture.completedFuture(new JdtlsServer.RefactorEdit(edit, follow, null));
+        }
+
+        private static org.eclipse.lsp4j.Position at(int line, int column) {
+            return new org.eclipse.lsp4j.Position(line, column);
+        }
+
+        private static WorkspaceEdit edit(TextDocumentEdit... edits) {
+            return new WorkspaceEdit(Arrays.stream(edits)
+                    .map(Either::<TextDocumentEdit, ResourceOperation>forLeft)
+                    .toList());
+        }
+
+        private static TextDocumentEdit editsOf(Path file, TextEdit... edits) {
+            return new TextDocumentEdit(
+                    new VersionedTextDocumentIdentifier(file.toUri().toString(), 1),
+                    Arrays.stream(edits)
+                            .map(Either::<TextEdit, SnippetTextEdit>forLeft)
+                            .toList());
+        }
+
+        /** What jdtls answers: the declaration is inserted before the statement, the expression is replaced. */
+        private WorkspaceEdit declaresString() {
+            return edit(editsOf(
+                    greeter,
+                    new TextEdit(new Range(at(2, 8), at(2, 8)), "String string = \"Hello, \" + name;\n        "),
+                    new TextEdit(new Range(at(2, 15), at(2, 31)), "string")));
+        }
+
+        /** What jdtls answers to the rename, for the text it was given. */
+        private WorkspaceEdit renamesToText() {
+            return edit(editsOf(
+                    greeter,
+                    new TextEdit(new Range(at(2, 15), at(2, 21)), "text"),
+                    new TextEdit(new Range(at(3, 15), at(3, 21)), "text")));
+        }
+
+        private WorkspaceEdit editsAnotherFile() throws IOException {
+            Path other = write("src/main/java/demo/Other.java", "class Other {}\n");
+
+            return edit(editsOf(other, new TextEdit(new Range(at(0, 0), at(0, 0)), "// x\n")));
+        }
+
+        /** jdtls proposes the variable, and publishes for the text it is given. */
+        private void scriptTheExtraction() {
+            fake.refactorEditAnswers(proposal(declaresString()))
+                    .publishesOnOpen(greeter, List.of())
+                    .renameAnswers(CompletableFuture.completedFuture(renamesToText()));
+        }
+
+        private static String applied(String text, ChangeSet changes) {
+            var edit = (FileChange.EditFile) changes.changes().getFirst();
+
+            return SourceText.edited(edit.file(), text, edit.edits());
+        }
+
+        private <T> CompletableFuture<T> declined() {
+            return CompletableFuture.failedFuture(new ResponseErrorException(
+                    new ResponseError(ResponseErrorCode.InvalidRequest, "Cannot do it here.", null)));
+        }
+
+        @Test
+        void asksJdtlsForTheExtractionOfTheSelectionAsGiven() throws Exception {
+            scriptTheExtraction();
+
+            try (var server = started()) {
+                server.extractVariable(greeter, selection, "text");
+
+                assertThat(fake.refactorEditRequests()).hasSize(1);
+                var request = fake.refactorEditRequests().getFirst();
+                assertThat(request.command()).isEqualTo("extractVariable");
+                assertThat(request.context().getTextDocument().getUri())
+                        .isEqualTo(greeter.toUri().toString());
+                assertThat(request.context().getRange()).isEqualTo(new Range(at(2, 15), at(2, 31)));
+                assertThat(request.context().getContext().getDiagnostics()).isEmpty();
+            }
+        }
+
+        @Test
+        void renamesTheVariableToTheNameAskedForOnTheTextThatJdtlsGaveNotOnTheOneOnDisk() throws Exception {
+            scriptTheExtraction();
+
+            try (var server = started()) {
+                server.extractVariable(greeter, selection, "text");
+
+                assertThat(fake.opened())
+                        .containsExactly(new FakeJdtls.Opened(greeter.toUri().toString(), PROPOSED));
+                assertThat(fake.renamed()).hasSize(1);
+                assertThat(fake.renamed().getFirst().getTextDocument().getUri())
+                        .isEqualTo(greeter.toUri().toString());
+                assertThat(fake.renamed().getFirst().getPosition()).isEqualTo(at(2, 15));
+                assertThat(fake.renamed().getFirst().getNewName()).isEqualTo("text");
+                assertThat(fake.received())
+                        .containsExactly("getRefactorEdit Greeter.java", "didOpen Greeter.java", "rename Greeter.java");
+            }
+        }
+
+        @Test
+        void closesTheTextItOpenedAndWritesNothing() throws Exception {
+            scriptTheExtraction();
+
+            try (var server = started()) {
+                server.extractVariable(greeter, selection, "text");
+
+                assertThat(fake.closed(1)).containsExactly(greeter.toUri().toString());
+                assertThat(greeter).hasContent(ORIGINAL);
+            }
+        }
+
+        @Test
+        void answersOneEditOfTheFileAsItIsOnDiskWithTheNameAskedFor() throws Exception {
+            scriptTheExtraction();
+
+            try (var server = started()) {
+                ChangeSet changes = server.extractVariable(greeter, selection, "text");
+
+                var edit = new fr.craft.gabier.editing.domain.TextEdit(
+                        new fr.craft.gabier.editing.domain.Range(new Position(2, 8), new Position(2, 31)),
+                        "String text = \"Hello, \" + name;\n        return text");
+                assertThat(changes).isEqualTo(new ChangeSet(List.of(new FileChange.EditFile(greeter, List.of(edit)))));
+                assertThat(applied(ORIGINAL, changes)).isEqualTo(NAMED);
+            }
+        }
+
+        @Test
+        void keepsTheNameJdtlsProposedWhenThatIsTheNameAskedForWithoutRenamingAnything() throws Exception {
+            fake.refactorEditAnswers(proposal(declaresString()));
+
+            try (var server = started()) {
+                ChangeSet changes = server.extractVariable(greeter, selection, "string");
+
+                assertThat(applied(ORIGINAL, changes)).isEqualTo(PROPOSED);
+                assertThat(fake.opened()).isEmpty();
+                assertThat(fake.renamed()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesASelectionJdtlsHasNoExtractionFor() throws Exception {
+            fake.refactorEditAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION);
+                            assertThat(refusal.parameters())
+                                    .containsEntry("file", greeter.toString())
+                                    .containsEntry("line", "2")
+                                    .containsEntry("column", "15")
+                                    .containsEntry("endLine", "2")
+                                    .containsEntry("endColumn", "31");
+                        });
+                assertThat(fake.opened()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesASelectionJdtlsDeclines() throws Exception {
+            fake.refactorEditAnswers(declined());
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal ->
+                                        assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+            }
+        }
+
+        @Test
+        void refusesANameJdtlsDeclinesForTheVariableAndClosesTheText() throws Exception {
+            fake.refactorEditAnswers(proposal(declaresString()))
+                    .publishesOnOpen(greeter, List.of())
+                    .renameAnswers(declined());
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "1st"))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME);
+                            assertThat(refusal.parameters())
+                                    .containsEntry("name", "1st")
+                                    .containsEntry("line", "2")
+                                    .containsEntry("column", "15");
+                        });
+                assertThat(fake.closed(1)).containsExactly(greeter.toUri().toString());
+                assertThat(greeter).hasContent(ORIGINAL);
+            }
+        }
+
+        @Test
+        void takesTheAbsenceOfAnEditForTheRenameForAnInvalidName() throws Exception {
+            fake.refactorEditAnswers(proposal(declaresString()))
+                    .publishesOnOpen(greeter, List.of())
+                    .renameAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "1st"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME));
+            }
+        }
+
+        @Test
+        void failsWhenJdtlsGivesNoEdit() throws Exception {
+            var where = new JdtlsServer.RenamePosition(greeter.toUri().toString(), 0, 1);
+            var follow = new JdtlsServer.FollowUp("java.action.rename", List.of(where));
+            fake.refactorEditAnswers(
+                    CompletableFuture.completedFuture(new JdtlsServer.RefactorEdit(null, follow, "nothing to do")));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("without an edit")
+                        .hasMessageContaining("nothing to do");
+            }
+        }
+
+        @Test
+        void failsWhenJdtlsDoesNotSayWhereTheNameIs() throws Exception {
+            fake.refactorEditAnswers(
+                    CompletableFuture.completedFuture(new JdtlsServer.RefactorEdit(declaresString(), null, null)));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("did not say where its name is");
+            }
+        }
+
+        @Test
+        void failsWhenTheCommandOfJdtlsHasNoPosition() throws Exception {
+            var follow = new JdtlsServer.FollowUp("java.action.rename", List.of());
+            fake.refactorEditAnswers(
+                    CompletableFuture.completedFuture(new JdtlsServer.RefactorEdit(declaresString(), follow, null)));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("did not say where its name is");
+            }
+        }
+
+        @Test
+        void failsWhenTheExtractionEditsAnotherFile() throws Exception {
+            fake.refactorEditAnswers(proposal(editsAnotherFile()));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("does more than edit " + greeter);
+            }
+        }
+
+        @Test
+        void failsWhenTheExtractionDoesMoreThanEditTheFile() throws Exception {
+            var create = new org.eclipse.lsp4j.CreateFile(
+                    root.resolve("New.java").toUri().toString());
+            fake.refactorEditAnswers(proposal(new WorkspaceEdit(List.of(Either.forRight(create)))));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("does more than edit " + greeter);
+            }
+        }
+
+        @Test
+        void failsWhenTheRenameEditsAnotherFile() throws Exception {
+            fake.refactorEditAnswers(proposal(declaresString()))
+                    .publishesOnOpen(greeter, List.of())
+                    .renameAnswers(CompletableFuture.completedFuture(editsAnotherFile()));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("does more than edit " + greeter);
+                assertThat(fake.closed(1)).containsExactly(greeter.toUri().toString());
+            }
+        }
+
+        @Test
+        void clampsThePositionsOfTheRenameToTheTextItIsAbout() throws Exception {
+            // The edit of the second line ends past it, as the protocol allows: "        return string;" has 22
+            // columns.
+            var edit = edit(editsOf(
+                    greeter,
+                    new TextEdit(new Range(at(2, 15), at(2, 21)), "text"),
+                    new TextEdit(new Range(at(3, 15), at(3, 99)), "text;")));
+            fake.refactorEditAnswers(proposal(declaresString()))
+                    .publishesOnOpen(greeter, List.of())
+                    .renameAnswers(CompletableFuture.completedFuture(edit));
+
+            try (var server = started()) {
+                ChangeSet changes = server.extractVariable(greeter, selection, "text");
+
+                assertThat(applied(ORIGINAL, changes)).isEqualTo(NAMED);
+            }
+        }
+
+        @Test
+        void tellsJdtlsOfTheFilesEditedSinceTheLastRequestBeforeAskingForTheExtraction() throws Exception {
+            fake.registersWatchersFor("**/*.java");
+            scriptTheExtraction();
+
+            try (var server = started()) {
+                Files.writeString(greeter, ORIGINAL + "// edited\n");
+
+                server.extractVariable(greeter, selection, "text");
+
+                assertThat(fake.received())
+                        .containsExactly(
+                                "didChangeWatchedFiles",
+                                "acknowledged .gabier-changes-taken-1",
+                                "getRefactorEdit Greeter.java",
+                                "didOpen Greeter.java",
+                                "rename Greeter.java");
+            }
+        }
+
+        @Test
+        void putsThePathOfTheFileInItsNormalFormInTheRequests() throws Exception {
+            scriptTheExtraction();
+            var spelled = root.resolve("src/main/../main/java/demo/./Greeter.java");
+
+            try (var server = started()) {
+                server.extractVariable(spelled, selection, "text");
+
+                assertThat(fake.refactorEditRequests()
+                                .getFirst()
+                                .context()
+                                .getTextDocument()
+                                .getUri())
+                        .isEqualTo(greeter.toUri().toString());
+                assertThat(fake.opened().getFirst().uri())
+                        .isEqualTo(greeter.toUri().toString());
+            }
+        }
+
+        @Test
+        void refusesAFileOutsideTheProjectWithoutAskingJdtls() throws Exception {
+            Path outside = root.resolveSibling("outside").resolve("Elsewhere.java");
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(outside, selection, "text"))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT);
+                            assertThat(refusal.parameters()).containsEntry("file", outside.toString());
+                        });
+                assertThat(fake.refactorEditRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesAsNotReadyWhileJdtlsIsStillImporting() throws Exception {
+            fake.neverAnswersInitialize();
+
+            try (var server = start()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+                assertThat(fake.refactorEditRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
+            fake.refactorEditAnswers(CompletableFuture.failedFuture(new IllegalStateException("the model is broken")));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("waiting for the extraction of the expression at")
+                        .hasMessageContaining("Internal error");
+            }
+        }
+
+        @Test
+        void failsWhenJdtlsDoesNotAnswerTheExtractionInTime() throws Exception {
+            // No answer is scripted.
+            try (var server = start(Duration.ofSeconds(1))) {
+                server.awaitStarted();
+
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Timed out")
+                        .hasMessageContaining("the extraction of the expression");
+            }
+        }
+
+        @Test
+        void failsAndClosesTheTextWhenJdtlsDoesNotTakeItInInTime() throws Exception {
+            fake.refactorEditAnswers(proposal(declaresString()));
+
+            try (var server = start(Duration.ofSeconds(1))) {
+                server.awaitStarted();
+
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Timed out")
+                        .hasMessageContaining("take in the extracted variable");
+                assertThat(fake.closed(1)).containsExactly(greeter.toUri().toString());
+            }
+        }
+
+        @Test
+        void failsWhenJdtlsDoesNotAnswerTheRenameInTime() throws Exception {
+            fake.refactorEditAnswers(proposal(declaresString())).publishesOnOpen(greeter, List.of());
+
+            try (var server = start(Duration.ofSeconds(1))) {
+                server.awaitStarted();
+
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Timed out")
+                        .hasMessageContaining("the rename of the extracted variable");
+            }
+        }
+
+        @Test
+        void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
+            scriptTheExtraction();
+
+            try (var server = started()) {
+                Thread.currentThread().interrupt();
+
+                assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Interrupted while waiting for the extraction");
+                assertThat(Thread.interrupted()).isTrue();
+            }
         }
     }
 }

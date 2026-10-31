@@ -29,6 +29,15 @@ public final class LanguageServerException extends GeneratorException {
                 .message("There is no symbol at " + format(position) + " in " + file));
     }
 
+    /** The selection is not an expression the server can act on (nothing selected, a statement, a type, a void call). */
+    public static LanguageServerException notAnExpression(Path file, Range selection) {
+        return new LanguageServerException(positioned(LanguageServerErrorKey.NOT_AN_EXPRESSION, file, selection.start())
+                .message("The selection " + format(selection.start()) + "-" + format(selection.end()) + " of " + file
+                        + " is not an expression")
+                .addParameter("endLine", String.valueOf(selection.end().line()))
+                .addParameter("endColumn", String.valueOf(selection.end().column())));
+    }
+
     /** The server does not accept the name for the symbol at the position. */
     public static LanguageServerException invalidName(Path file, Position position, String name) {
         return new LanguageServerException(positioned(LanguageServerErrorKey.INVALID_NAME, file, position)

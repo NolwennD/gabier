@@ -33,6 +33,18 @@ public interface JavaLanguageServer {
     ChangeSet rename(Path file, Position position, String newName);
 
     /**
+     * What extracting the expression of a selection into a new local variable changes: the expression is replaced by the
+     * variable, which is declared before the statement that holds the expression and carries the given name, not one the
+     * server would propose. Only the file itself is edited.
+     *
+     * @param selection the expression, from its first character to the end of its last
+     * @return the change set to apply
+     * @throws LanguageServerException if the server is not ready, the file is not in its project, the selection is not
+     *     an expression that can be extracted or the name is not valid for the variable
+     */
+    ChangeSet extractVariable(Path file, Range selection, String name);
+
+    /**
      * What organizing the imports of a file changes: the missing imports are added, the unused ones removed, and the
      * rest ordered as the server is configured to (for gabier, as the project keeps them, with no import collapsed into
      * a star). Only the file itself is edited.

@@ -34,7 +34,8 @@ class GabierTest {
     private static final String USAGE_DETAIL =
             "Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file> | rename"
                     + " [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>"
-                    + " | organize-imports [--dry-run] <file>)";
+                    + " | organize-imports [--dry-run] <file>"
+                    + " | extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>)";
 
     @TempDir
     Path directory;
@@ -223,6 +224,50 @@ class GabierTest {
                         .isEqualTo(2);
                 assertThat(out()).isEmpty();
                 assertThat(err()).isEqualTo(usageText(String.join(" ", arguments)));
+            }
+        }
+
+        @Test
+        void extractVariableWithoutAFileTwoPositionsAndANameIsAnUnknownUsage() {
+            for (var arguments : List.of(
+                    List.of("extract-variable"),
+                    List.of("extract-variable", "--dry-run"),
+                    List.of("extract-variable", "A.java", "3:4", "3:9"),
+                    List.of("extract-variable", "A.java", "3:4", "3:9", "name", "more"),
+                    List.of("extract-variable", "--token", "A.java", "3:4", "3:9", "name"))) {
+                out.reset();
+                err.reset();
+
+                assertThat(run(arguments.toArray(String[]::new)))
+                        .as(arguments.toString())
+                        .isEqualTo(2);
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(usageText(String.join(" ", arguments)));
+            }
+        }
+
+        @Test
+        void extractVariableWithAPositionThatIsNotLineColonColumnFromOneIsAnUnknownUsage() {
+            for (var positions : List.of(
+                    List.of("3", "3:9"),
+                    List.of("3:4", "9"),
+                    List.of("3:4:5", "3:9"),
+                    List.of("0:4", "3:9"),
+                    List.of("3:0", "3:9"),
+                    List.of("3:4", "-3:9"),
+                    List.of("three:4", "3:9"),
+                    List.of("3:4", "3:nine"),
+                    List.of("3:4", "3:1.5"))) {
+                out.reset();
+                err.reset();
+
+                assertThat(run("extract-variable", "A.java", positions.get(0), positions.get(1), "name"))
+                        .as(positions.toString())
+                        .isEqualTo(2);
+                assertThat(out()).isEmpty();
+                assertThat(err())
+                        .isEqualTo(usageText(
+                                "extract-variable A.java " + positions.get(0) + " " + positions.get(1) + " name"));
             }
         }
 
@@ -1192,6 +1237,189 @@ class GabierTest {
         void reportsAResultThatIsNotAListOfChangedFilesAsAnInternalError() throws IOException {
             try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", "{}"))) {
                 assertThat(runWithSocket("organize-imports", "/project/Untidy.java"))
+                        .isEqualTo(1);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).contains("(invalid-response)");
+            }
+        }
+    }
+
+    @Nested
+    class ExtractingAVariable {
+
+        private static final String REQUEST = """
+            {"jsonrpc":"2.0","id":1,"method":"extract-variable","params":{"dryRun":"%s","endColumn":"%s","endLine":"%s",\
+            "file":"%s","name":"%s","startColumn":"%s","startLine":"%s"}}\
+            """;
+        private static final ChangedFiles EXTRACTED =
+                new ChangedFiles(List.of(), List.of(), List.of(), List.of(Path.of("/project/Greeter.java")), """
+                    --- /project/Greeter.java
+                    +++ /project/Greeter.java
+                    @@ -7,2 +7,3 @@
+                    -        String message = greeting + ", " + name;
+                    +        String joined = greeting + ", " + name;
+                    +        String message = joined;
+                    """);
+        private static final Problem NOT_AN_EXPRESSION = new Problem(
+                "urn:gabier:error:language-server-not-an-expression",
+                "Not an expression",
+                "The selection 8:9-8:15 of /project/Greeter.java is not an expression",
+                "language-server-not-an-expression",
+                Map.of("file", "/project/Greeter.java"),
+                ErrorStatus.BAD_REQUEST);
+
+        private Path socket() {
+            return directory.resolve("gabier.sock");
+        }
+
+        private int runWithSocket(String... args) {
+            return run(Map.of("GABIER_SOCKET", socket().toString()), args);
+        }
+
+        @Test
+        void asksTheDaemonToExtractTheSelectionCountedFromOneAsItIsShownAndSendsItFromZero() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", EXTRACTED.toJson()))) {
+                assertThat(runWithSocket("extract-variable", "/project/Greeter.java", "7:26", "7:48", "joined"))
+                        .isZero();
+
+                assertThat(daemon.requests())
+                        .containsExactly(
+                                REQUEST.formatted(false, 47, 6, Path.of("/project/Greeter.java"), "joined", 25, 6));
+            }
+        }
+
+        @Test
+        void takesASelectionOverSeveralLines() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", EXTRACTED.toJson()))) {
+                assertThat(runWithSocket("extract-variable", "/project/Greeter.java", "7:26", "9:3", "joined"))
+                        .isZero();
+
+                assertThat(daemon.requests())
+                        .containsExactly(
+                                REQUEST.formatted(false, 2, 8, Path.of("/project/Greeter.java"), "joined", 25, 6));
+            }
+        }
+
+        @Test
+        void sendsTheAbsolutePathOfARelativeFile() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", EXTRACTED.toJson()))) {
+                assertThat(runWithSocket("extract-variable", "src/Greeter.java", "7:26", "7:48", "joined"))
+                        .isZero();
+
+                assertThat(daemon.requests())
+                        .containsExactly(REQUEST.formatted(
+                                false, 47, 6, Path.of("src/Greeter.java").toAbsolutePath(), "joined", 25, 6));
+            }
+        }
+
+        @Test
+        void asksForADryRunWithTheDryRunOptionWhereverItIs() throws IOException {
+            for (var arguments : List.of(
+                    List.of("extract-variable", "--dry-run", "/project/Greeter.java", "7:26", "7:48", "joined"),
+                    List.of("extract-variable", "/project/Greeter.java", "7:26", "7:48", "joined", "--dry-run"))) {
+                try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", EXTRACTED.toJson()))) {
+                    assertThat(runWithSocket(arguments.toArray(String[]::new))).isZero();
+
+                    assertThat(daemon.requests())
+                            .containsExactly(
+                                    REQUEST.formatted(true, 47, 6, Path.of("/project/Greeter.java"), "joined", 25, 6));
+                }
+                Files.deleteIfExists(socket());
+            }
+        }
+
+        @Test
+        void listsTheFileThatChangedThenShowsTheDiff() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", EXTRACTED.toJson()))) {
+                assertThat(runWithSocket("extract-variable", "/project/Greeter.java", "7:26", "7:48", "joined"))
+                        .isZero();
+
+                assertThat(out().lines())
+                        .containsExactly(
+                                "modified /project/Greeter.java",
+                                "",
+                                "--- /project/Greeter.java",
+                                "+++ /project/Greeter.java",
+                                "@@ -7,2 +7,3 @@",
+                                "-        String message = greeting + \", \" + name;",
+                                "+        String joined = greeting + \", \" + name;",
+                                "+        String message = joined;");
+                assertThat(err()).isEmpty();
+            }
+        }
+
+        @Test
+        void saysThatNothingWasWrittenForADryRun() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", EXTRACTED.toJson()))) {
+                assertThat(runWithSocket(
+                                "extract-variable", "--dry-run", "/project/Greeter.java", "7:26", "7:48", "joined"))
+                        .isZero();
+
+                assertThat(out().lines()).startsWith("dry run, nothing written", "modified /project/Greeter.java");
+            }
+        }
+
+        @Test
+        void givesTheResultAsJsonWithTheJsonOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", EXTRACTED.toJson()))) {
+                assertThat(runWithSocket(
+                                "--json", "extract-variable", "/project/Greeter.java", "7:26", "7:48", "joined"))
+                        .isZero();
+
+                assertThat(out()).isEqualTo(EXTRACTED.toJson() + System.lineSeparator());
+                assertThat(err()).isEmpty();
+            }
+        }
+
+        @Test
+        void showsWhatATerminalWouldObeyInAFileNameOrADiffAsEscapes() throws IOException {
+            var hostile = new ChangedFiles(
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(Path.of("/project/a\u001b[2Jb.java")),
+                    "--- /project/a\u001b[2Jb.java\n+forged\u001b[2J\n");
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", hostile.toJson()))) {
+                assertThat(runWithSocket("extract-variable", "/project/Greeter.java", "7:26", "7:48", "joined"))
+                        .isZero();
+
+                assertThat(out().lines())
+                        .containsExactly(
+                                "modified /project/a\\u001b[2Jb.java",
+                                "",
+                                "--- /project/a\\u001b[2Jb.java",
+                                "+forged\\u001b[2J");
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsItsProblemObjectWithTheExitCodeOfItsCategory() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", NOT_AN_EXPRESSION))) {
+                assertThat(runWithSocket("extract-variable", "/project/Greeter.java", "8:9", "8:15", "joined"))
+                        .isEqualTo(2);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(NOT_AN_EXPRESSION.toText() + System.lineSeparator());
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsJsonWithTheJsonOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", NOT_AN_EXPRESSION))) {
+                assertThat(runWithSocket(
+                                "--json", "extract-variable", "/project/Greeter.java", "8:9", "8:15", "joined"))
+                        .isEqualTo(2);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(NOT_AN_EXPRESSION.toJson() + System.lineSeparator());
+            }
+        }
+
+        @Test
+        void reportsAResultThatIsNotAListOfChangedFilesAsAnInternalError() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", "{}"))) {
+                assertThat(runWithSocket("extract-variable", "/project/Greeter.java", "7:26", "7:48", "joined"))
                         .isEqualTo(1);
 
                 assertThat(out()).isEmpty();

@@ -84,6 +84,40 @@ class FakeJavaLanguageServerTest {
     }
 
     @Test
+    void answersTheChangeSetOfAnExtractVariableScenarioWithPathsUnderItsRoot() {
+        server.scripted(Scenarios.EXTRACT_VARIABLE);
+
+        ChangeSet changes =
+                server.extractVariable(GREETER, new Range(new Position(6, 25), new Position(6, 47)), "joined");
+
+        assertThat(changes)
+                .isEqualTo(((Answer.Extracted)
+                                Scenarios.EXTRACT_VARIABLE.inside(ROOT).answer())
+                        .changes());
+        assertThat(changes.changes())
+                .singleElement()
+                .isInstanceOfSatisfying(
+                        FileChange.EditFile.class,
+                        edit -> assertThat(edit.file()).isEqualTo(GREETER));
+    }
+
+    @Test
+    void throwsTheRefusalOfAnExtractVariableScenario() {
+        server.scripted(Scenarios.EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION)
+                .scripted(Scenarios.EXTRACT_VARIABLE_TO_AN_INVALID_NAME);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() ->
+                        server.extractVariable(GREETER, new Range(new Position(7, 8), new Position(7, 14)), "joined"))
+                .satisfies(
+                        exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() ->
+                        server.extractVariable(GREETER, new Range(new Position(6, 25), new Position(6, 47)), "1st"))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME));
+    }
+
+    @Test
     void answersNothingForAFileWhoseImportsAreInOrder() {
         server.scripted(Scenarios.ORGANIZE_IMPORTS_IN_ORDER);
 

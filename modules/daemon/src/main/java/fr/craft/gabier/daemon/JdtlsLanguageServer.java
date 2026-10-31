@@ -7,6 +7,9 @@ import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
+import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.SourceText;
+import fr.craft.gabier.editing.domain.TextEdit;
 import fr.craft.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -37,6 +40,7 @@ import org.eclipse.lsp4j.PrepareRenameParams;
 import org.eclipse.lsp4j.RenameParams;
 import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.eclipse.lsp4j.TextDocumentItem;
+import org.eclipse.lsp4j.WorkspaceEdit;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.jspecify.annotations.Nullable;
 
@@ -235,6 +239,127 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                     "Interrupted while waiting for the rename of the symbol at " + position + " of " + path,
                     interrupted);
         }
+    }
+
+    /**
+     * Extracts the expression of the selection into a local variable named as asked. jdtls cannot take the name: it
+     * guesses one when it computes the refactoring ({@code java/getRefactorEdit}, command {@code extractVariable}, the
+     * refactoring that the code action {@code refactor.extract.variable} stands for) and says where that name is in the
+     * text the edit gives, for the client to rename it. So the edit is applied in memory, the text it gives is
+     * opened in jdtls (never written to disk) and the variable is renamed with {@code textDocument/rename}, which is
+     * what a client does after the edit. The two edits are folded into one on the text as it is on disk
+     * ({@link SourceText#replacing}), so that the answer shows the final name only.
+     *
+     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, there is no expression to
+     *     extract in the selection or jdtls declines the name
+     * @throws JdtlsException if jdtls dies, does not answer in time or answers what the adapter cannot apply
+     */
+    @Override
+    public synchronized ChangeSet extractVariable(Path file, Range selection, String name) {
+        JdtlsSession session = ready();
+        Path path = normalized(file);
+        String original = textInProject(session, path);
+        var document = new TextDocumentIdentifier(path.toUri().toString());
+        var refactoring = new JdtlsServer.RefactorEditParams(
+                "extractVariable", new CodeActionParams(document, lsp(selection), new CodeActionContext(List.of())));
+        JdtlsWatch watch = session.newWatch();
+        try {
+            takeInChangesOnDisk(session, watch);
+            var proposal = watch.await(
+                    "the extraction of the expression at " + selection + " of " + path,
+                    () -> JdtlsRequests.unlessDeclined(session.server().getRefactorEdit(refactoring)));
+            var refactor = proposal.orElseThrow(() -> LanguageServerException.notAnExpression(path, selection));
+            var proposed = refactor.edit();
+            if (proposed == null) {
+                throw new JdtlsException("jdtls answered the extraction without an edit: " + refactor);
+            }
+            String extracted = SourceText.edited(path, original, editsOf(path, proposed, original));
+            var introduced = introducedName(refactor, extracted);
+            String named = extracted;
+            if (!introduced.text().equals(name)) {
+                var position = SourceText.positionAt(extracted, introduced.offset());
+                named = SourceText.edited(
+                        path, extracted, renamed(session, watch, path, extracted, position, name, selection));
+            }
+
+            return new ChangeSet(
+                    List.of(new FileChange.EditFile(path, List.of(SourceText.replacing(original, named)))));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException(
+                    "Interrupted while waiting for the extraction of the expression at " + selection + " of " + path,
+                    interrupted);
+        }
+    }
+
+    /** The name jdtls introduced, and where it is in the text after the edit. */
+    private record Introduced(int offset, String text) {}
+
+    private static Introduced introducedName(JdtlsServer.RefactorEdit refactor, String extracted) {
+        var follow = refactor.command();
+        if (follow == null || follow.arguments().isEmpty()) {
+            throw new JdtlsException("jdtls extracted the variable but did not say where its name is: " + refactor);
+        }
+        var where = follow.arguments().getFirst();
+
+        return new Introduced(where.offset(), extracted.substring(where.offset(), where.offset() + where.length()));
+    }
+
+    /**
+     * The edits of the one file the extraction is about, as they are given: the edit of jdtls is made of this file only.
+     */
+    private static List<TextEdit> editsOf(Path path, WorkspaceEdit edit, String text) {
+        List<FileChange> changes =
+                WorkspaceEdits.of(edit, other -> other.equals(path) ? Optional.of(text) : Optional.empty());
+
+        return changes.stream()
+                .map(change -> {
+                    if (change instanceof FileChange.EditFile edits
+                            && edits.file().equals(path)) {
+                        return edits.edits();
+                    }
+                    throw new JdtlsException(
+                            "jdtls answered an extraction that does more than edit " + path + ": " + change);
+                })
+                .flatMap(List::stream)
+                .toList();
+    }
+
+    /** Renames the variable on the text jdtls has been given, opened for the time of the request. */
+    private List<TextEdit> renamed(
+            JdtlsSession session,
+            JdtlsWatch watch,
+            Path path,
+            String text,
+            Position where,
+            String name,
+            Range selection)
+            throws InterruptedException {
+        var service = session.server().getTextDocumentService();
+        try {
+            var publication = open(session, Map.of(path, text)).get(path);
+            watch.await("jdtls to take in the extracted variable in " + path, () -> publication);
+            var edit = watch.await(
+                    "the rename of the extracted variable at " + where + " of " + path + " to " + name,
+                    () -> JdtlsRequests.unlessDeclined(service.rename(new RenameParams(
+                            new TextDocumentIdentifier(path.toUri().toString()),
+                            new org.eclipse.lsp4j.Position(where.line(), where.column()),
+                            name))));
+
+            return editsOf(
+                    path,
+                    edit.orElseThrow(() -> LanguageServerException.invalidName(path, selection.start(), name)),
+                    text);
+        } finally {
+            close(session, List.of(path));
+        }
+    }
+
+    private static org.eclipse.lsp4j.Range lsp(Range range) {
+        return new org.eclipse.lsp4j.Range(
+                new org.eclipse.lsp4j.Position(
+                        range.start().line(), range.start().column()),
+                new org.eclipse.lsp4j.Position(range.end().line(), range.end().column()));
     }
 
     /**

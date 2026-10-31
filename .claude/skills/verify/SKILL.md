@@ -32,9 +32,12 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   until it is ready and ends its process tree on close (`JdtlsWatch`, `JdtlsClient`, `JdtlsLauncher`).
   `JdtlsLanguageServer` implements the port `JavaLanguageServer` on top of it (with `Diagnostics`, the store of what
   jdtls publishes, and `QuietWait`): it starts jdtls in the background and answers "not ready" until the start is over;
-  it implements `diagnostics`, `rename` and `organizeImports` (the code action `source.organizeImports`, resolved when
+  it implements `diagnostics`, `rename`, `organizeImports` (the code action `source.organizeImports`, resolved when
   jdtls does not give its edit; `WorkspaceEdits` turns the `WorkspaceEdit` of jdtls, as `documentChanges` or as `changes`,
-  into a change set; `JdtlsRequests` tells a request jdtls declines from one that fails). jdtls is started with the
+  into a change set; `JdtlsRequests` tells a request jdtls declines from one that fails) and `extractVariable` (jdtls
+  cannot take the name: `java/getRefactorEdit`, from the interface `JdtlsServer`, gives the edit with a name of its own and
+  where it is; the adapter applies the edit in memory with `SourceText`, opens that text in jdtls for the time of a
+  `textDocument/rename` to the name asked for, and answers one edit on the file as it is on disk). jdtls is started with the
   `java.*` preferences of `JdtlsSettings.javaPreferences` (`initializationOptions.settings`): no star import, the order
   of the project. jdtls does not watch the disk: it registers
   the globs it wants watched (`client/registerCapability`, only for a client that declares
@@ -50,7 +53,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   `/tmp/gabier-<uid>/gabier.sock`, at most 107 bytes), `DaemonServer` takes the socket (`SocketGuard`: private folder,
   stale socket removed, another daemon refused) and serves the clients with `Connection` (lines in, lines out) and
   `RequestHandler` (the method table: `StatusMethod`, `StopMethod`, `DiagnosticsMethod`, `RenameMethod`,
-  `RenameTokenMethod`, `OrganizeImportsMethod`; adding one is
+  `RenameTokenMethod`, `OrganizeImportsMethod`, `ExtractVariableMethod`; adding one is
   `.claude/skills/add-daemon-method`). The daemon serves one project (`ServedProject`: its root, its language server and
   where that is): `Main` takes the folder from its argument, `GABIER_PROJECT` or the working directory, and builds
   `ProjectServer.jdtls`, which starts the real jdtls (`JdtlsLanguageServer`, launcher `GABIER_JDTLS`) at the first request

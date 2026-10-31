@@ -22,7 +22,6 @@ import org.eclipse.lsp4j.InitializeParams;
 import org.eclipse.lsp4j.InitializedParams;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
 import org.eclipse.lsp4j.launch.LSPLauncher;
-import org.eclipse.lsp4j.services.LanguageServer;
 
 /**
  * A jdtls that is ready: started on a project root with a data folder of its own, initialized, and done with importing
@@ -49,7 +48,7 @@ final class JdtlsSession implements AutoCloseable {
     private final Consumer<String> log;
     private final JdtlsClient client;
     private final WatchedFiles watched;
-    private final LanguageServer server;
+    private final JdtlsServer server;
     private final JdtlsWatch watch;
     private final Future<Void> listening;
     private List<Path> projects = List.of();
@@ -71,7 +70,12 @@ final class JdtlsSession implements AutoCloseable {
         this.data = data;
         this.log = log;
         this.client = new JdtlsClient(log, diagnostics, watched::register, watched::unregister);
-        var launcher = LSPLauncher.createClientLauncher(client, connection.fromJdtls(), connection.toJdtls());
+        var launcher = new LSPLauncher.Builder<JdtlsServer>()
+                .setLocalService(client)
+                .setRemoteInterface(JdtlsServer.class)
+                .setInput(connection.fromJdtls())
+                .setOutput(connection.toJdtls())
+                .create();
         this.listening = launcher.startListening();
         this.server = launcher.getRemoteProxy();
         this.watch = new JdtlsWatch(process, client.error(), settings.timeout());
@@ -171,7 +175,7 @@ final class JdtlsSession implements AutoCloseable {
     }
 
     /** The raw language server, for whoever keeps talking to jdtls. */
-    LanguageServer server() {
+    JdtlsServer server() {
         return server;
     }
 

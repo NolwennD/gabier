@@ -15,7 +15,8 @@ final class UsageException extends GeneratorException {
         return new UsageException(GeneratorException.badRequest(CliErrorKey.USAGE)
                 .message("Unsupported arguments; usage: gabier [--json] (--version | status | stop | diagnostics <file>"
                         + " | rename [--dry-run] (<file> <line> <column> | --token <file> <identifier>) <new-name>"
-                        + " | organize-imports [--dry-run] <file>)")
+                        + " | organize-imports [--dry-run] <file>"
+                        + " | extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>)")
                 .addParameter("arguments", String.join(" ", arguments)));
     }
 }

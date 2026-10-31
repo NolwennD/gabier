@@ -86,7 +86,9 @@ class DaemonServerTest {
                         .scripted(Scenarios.RENAME_METHOD)
                         .scripted(Scenarios.RENAME_WHERE_THERE_IS_NO_SYMBOL)
                         .scripted(Scenarios.ORGANIZE_IMPORTS)
-                        .scripted(Scenarios.ORGANIZE_IMPORTS_IN_ORDER));
+                        .scripted(Scenarios.ORGANIZE_IMPORTS_IN_ORDER)
+                        .scripted(Scenarios.EXTRACT_VARIABLE)
+                        .scripted(Scenarios.EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION));
     }
 
     private DaemonServer open() {
@@ -446,6 +448,46 @@ class DaemonServerTest {
             return """
                 {"jsonrpc":"2.0","id":3,"method":"organize-imports","params":{"file":"%s","dryRun":"%s"}}
                 """.formatted(file, dryRun);
+        }
+
+        @Test
+        void extractVariableAnswersWhatChangedAndWritesTheFileUnlessItIsADryRun() throws IOException {
+            serving();
+            Scenarios.EXTRACT_VARIABLE.writeProject(directory);
+            var greeter = directory.resolve("src/main/java/demo/Greeter.java");
+
+            try (var client = connect(socket())) {
+                var dryRun = client.ask(extractVariableRequest(greeter, "6", "25", "6", "47", true));
+
+                assertThat(dryRun).contains("\"modified\":[").contains("String joined");
+                assertThat(Files.readString(greeter)).doesNotContain("joined");
+
+                var done = client.ask(extractVariableRequest(greeter, "6", "25", "6", "47", false));
+
+                assertThat(done).contains("\"modified\":[");
+                assertThat(Files.readString(greeter)).contains("String joined = greeting");
+            }
+        }
+
+        @Test
+        void aSelectionThatIsNotAnExpressionIsRefusedWithItsProblemObject() throws IOException {
+            serving();
+            Scenarios.EXTRACT_VARIABLE.writeProject(directory);
+            var greeter = directory.resolve("src/main/java/demo/Greeter.java");
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask(extractVariableRequest(greeter, "7", "8", "7", "14", false)))
+                        .contains("\"key\":\"language-server-not-an-expression\"");
+                assertThat(Files.readString(greeter)).doesNotContain("joined");
+            }
+        }
+
+        private static String extractVariableRequest(
+                Path file, String startLine, String startColumn, String endLine, String endColumn, boolean dryRun) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"extract-variable","params":{"file":"%s","startLine":"%s",\
+                "startColumn":"%s","endLine":"%s","endColumn":"%s","name":"joined","dryRun":"%s"}}
+                """.formatted(file, startLine, startColumn, endLine, endColumn, dryRun);
         }
 
         @Test

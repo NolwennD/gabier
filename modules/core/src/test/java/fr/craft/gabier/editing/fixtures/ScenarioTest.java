@@ -31,6 +31,7 @@ class ScenarioTest {
     private static final Path FILE = Path.of("src/A.java");
     private static final Map<Path, String> FILES = Map.of(FILE, "class A {}\n");
     private static final Position POSITION = new Position(0, 6);
+    private static final Range SELECTION = new Range(POSITION, new Position(0, 7));
 
     private static Scenario scenario(Request request, Answer answer) {
         return new Scenario("a-scenario", FILES, request, answer);
@@ -95,6 +96,20 @@ class ScenarioTest {
     }
 
     @Test
+    void rejectsAnExtractedAnswerForAnotherRequestAndAnotherAnswerForExtractingAVariable() {
+        Request.Rename rename = new Request.Rename(FILE, POSITION, "B");
+        Request.ExtractVariable extract = new Request.ExtractVariable(FILE, SELECTION, "b");
+        ChangeSet changes = set(new CreateFile(FILE));
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(rename, new Answer.Extracted(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(extract, new Answer.Renamed(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(extract, new Answer.AlreadyOrganized()));
+    }
+
+    @Test
     void rejectsARefusalThatTheRequestCannotGet() {
         Request.Diagnostics diagnostics = new Request.Diagnostics(FILE);
 
@@ -102,6 +117,8 @@ class ScenarioTest {
                 .isThrownBy(() -> scenario(diagnostics, new Answer.Refused(LanguageServerErrorKey.NO_SUCH_SYMBOL)));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> scenario(diagnostics, new Answer.Refused(LanguageServerErrorKey.INVALID_NAME)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(diagnostics, new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION)));
     }
 
     @Test
@@ -121,6 +138,24 @@ class ScenarioTest {
                 .isEqualTo(Map.of("file", FILE.toString(), "line", "0", "column", "6"));
         LanguageServerException invalidName = rename.refusal(LanguageServerErrorKey.INVALID_NAME);
         assertThat(invalidName.parameters()).containsEntry("name", "1st");
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> rename.refusal(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+    }
+
+    @Test
+    void buildsTheRefusalOfAnExtractVariableRequest() {
+        Request.ExtractVariable extract = new Request.ExtractVariable(FILE, SELECTION, "1st");
+
+        assertThat(extract.refusal(LanguageServerErrorKey.NOT_READY).key()).isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(extract.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
+                .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(extract.refusal(LanguageServerErrorKey.NOT_AN_EXPRESSION).parameters())
+                .isEqualTo(
+                        Map.of("file", FILE.toString(), "line", "0", "column", "6", "endLine", "0", "endColumn", "7"));
+        assertThat(extract.refusal(LanguageServerErrorKey.INVALID_NAME).parameters())
+                .isEqualTo(Map.of("file", FILE.toString(), "line", "0", "column", "6", "name", "1st"));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
     }
 
     @Test
@@ -135,6 +170,8 @@ class ScenarioTest {
                 .isThrownBy(() -> organize.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> organize.refusal(LanguageServerErrorKey.INVALID_NAME));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> organize.refusal(LanguageServerErrorKey.NOT_AN_EXPRESSION));
     }
 
     @Test
@@ -145,6 +182,8 @@ class ScenarioTest {
                 .isEqualTo(new Request.Rename(Path.of("/project/src/A.java"), POSITION, "B"));
         assertThat(new Request.OrganizeImports(FILE).resolvedIn(ROOT))
                 .isEqualTo(new Request.OrganizeImports(Path.of("/project/src/A.java")));
+        assertThat(new Request.ExtractVariable(FILE, SELECTION, "b").resolvedIn(ROOT))
+                .isEqualTo(new Request.ExtractVariable(Path.of("/project/src/A.java"), SELECTION, "b"));
     }
 
     @Test
@@ -180,6 +219,16 @@ class ScenarioTest {
 
         assertThat(resolved)
                 .isEqualTo(new Answer.Organized(set(new EditFile(Path.of("/project/src/A.java"), List.of(edit)))));
+    }
+
+    @Test
+    void resolvesTheChangesOfAnExtractedAnswerAgainstARoot() {
+        TextEdit edit = new TextEdit(new Range(POSITION, POSITION), "int b = 1;\n");
+
+        Answer resolved = new Answer.Extracted(set(new EditFile(FILE, List.of(edit)))).resolvedIn(ROOT);
+
+        assertThat(resolved)
+                .isEqualTo(new Answer.Extracted(set(new EditFile(Path.of("/project/src/A.java"), List.of(edit)))));
     }
 
     @Test

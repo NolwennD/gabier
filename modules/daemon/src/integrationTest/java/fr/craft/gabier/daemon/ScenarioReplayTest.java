@@ -85,7 +85,8 @@ class ScenarioReplayTest {
     private static boolean replayed(Scenario scenario) {
         return scenario.request() instanceof Request.Diagnostics
                 || scenario.request() instanceof Request.Rename
-                || scenario.request() instanceof Request.OrganizeImports;
+                || scenario.request() instanceof Request.OrganizeImports
+                || scenario.request() instanceof Request.ExtractVariable;
     }
 
     /**
@@ -200,6 +201,15 @@ class ScenarioReplayTest {
                         .isEqualTo(renamed.changes());
                 compile(scenario, root, answer, differences);
             }
+            case Answer.Extracted extracted -> {
+                var answer = (ChangeSet) ask(server, request);
+                System.out.println(scenario.name() + ": jdtls answered " + answer);
+                differences
+                        .assertThat(answer)
+                        .as("%s: the change set jdtls answers", scenario.name())
+                        .isEqualTo(extracted.changes());
+                compile(scenario, root, answer, differences);
+            }
             case Answer.Organized organized -> {
                 var answer = (Optional<?>) ask(server, request);
                 System.out.println(scenario.name() + ": jdtls answered " + answer);
@@ -250,6 +260,8 @@ class ScenarioReplayTest {
             case Request.Diagnostics diagnostics -> server.diagnostics(diagnostics.file());
             case Request.Rename rename -> server.rename(rename.file(), rename.position(), rename.newName());
             case Request.OrganizeImports organize -> server.organizeImports(organize.file());
+            case Request.ExtractVariable extract ->
+                server.extractVariable(extract.file(), extract.selection(), extract.name());
         };
     }
 

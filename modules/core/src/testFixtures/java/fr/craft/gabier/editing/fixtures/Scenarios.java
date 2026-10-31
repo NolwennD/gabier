@@ -332,6 +332,48 @@ public final class Scenarios {
             new Request.OrganizeImports(ELSEWHERE),
             new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
 
+    /**
+     * {@code greeting + ", " + name} in {@code greet}, extracted as {@code joined}: the variable is declared where the
+     * expression was, and the expression is replaced by its name. jdtls proposes a name of its own and expects the
+     * client to rename it (see {@code JdtlsLanguageServer}); the answer holds the one edit from the declaration to the
+     * end of the statement that results of both, so {@code joined} is the name the caller gave.
+     */
+    public static final Scenario EXTRACT_VARIABLE = new Scenario(
+            "extract-a-variable",
+            PROJECT,
+            new Request.ExtractVariable(GREETER, new Range(new Position(6, 25), new Position(6, 47)), "joined"),
+            new Answer.Extracted(new ChangeSet(List.of(edits(
+                    GREETER,
+                    replace(6, 15, 6, 47, "joined = greeting + \", \" + name;\n        String message = joined"))))));
+
+    /** The keyword {@code return}: a selection that is no expression, which jdtls offers no extraction for. */
+    public static final Scenario EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION = new Scenario(
+            "extract-a-variable-from-something-that-is-not-an-expression",
+            PROJECT,
+            new Request.ExtractVariable(GREETER, new Range(new Position(7, 8), new Position(7, 14)), "joined"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+
+    /** A name that begins with a digit is not an identifier: jdtls declines the rename that gives the name. */
+    public static final Scenario EXTRACT_VARIABLE_TO_AN_INVALID_NAME = new Scenario(
+            "extract-a-variable-to-an-invalid-name",
+            PROJECT,
+            new Request.ExtractVariable(GREETER, new Range(new Position(6, 25), new Position(6, 47)), "1st"),
+            new Answer.Refused(LanguageServerErrorKey.INVALID_NAME));
+
+    /** The project is still being imported: the server cannot say what an extraction changes. */
+    public static final Scenario EXTRACT_VARIABLE_WHILE_THE_SERVER_IMPORTS = new Scenario(
+            "extract-a-variable-while-the-server-imports",
+            PROJECT,
+            new Request.ExtractVariable(GREETER, new Range(new Position(6, 25), new Position(6, 47)), "joined"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_READY));
+
+    /** A file that is not in the project the server was started on. */
+    public static final Scenario EXTRACT_VARIABLE_OUTSIDE_THE_PROJECT = new Scenario(
+            "extract-a-variable-of-a-file-outside-the-project",
+            PROJECT,
+            new Request.ExtractVariable(ELSEWHERE, new Range(new Position(0, 0), new Position(0, 1)), "joined"),
+            new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+
     /** The project is still being imported: the server cannot say what a rename changes. */
     public static final Scenario RENAME_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "rename-while-the-server-imports",
@@ -398,7 +440,12 @@ public final class Scenarios {
                 ORGANIZE_IMPORTS_IN_ORDER,
                 ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS,
                 ORGANIZE_IMPORTS_WHILE_THE_SERVER_IMPORTS,
-                ORGANIZE_IMPORTS_OUTSIDE_THE_PROJECT);
+                ORGANIZE_IMPORTS_OUTSIDE_THE_PROJECT,
+                EXTRACT_VARIABLE,
+                EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION,
+                EXTRACT_VARIABLE_TO_AN_INVALID_NAME,
+                EXTRACT_VARIABLE_WHILE_THE_SERVER_IMPORTS,
+                EXTRACT_VARIABLE_OUTSIDE_THE_PROJECT);
     }
 
     /** The sequels of the catalogue: scenarios in a row, with the files changed on disk between them. */

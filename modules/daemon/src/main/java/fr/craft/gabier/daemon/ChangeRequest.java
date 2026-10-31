@@ -1,9 +1,11 @@
 package fr.craft.gabier.daemon;
 
+import fr.craft.gabier.editing.application.ExtractVariable;
 import fr.craft.gabier.editing.application.OrganizeImports;
 import fr.craft.gabier.editing.application.Rename;
 import fr.craft.gabier.editing.application.RenameTarget;
 import fr.craft.gabier.editing.domain.ChangeReport;
+import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.protocol.ChangedFiles;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -19,6 +21,7 @@ final class ChangeRequest {
 
     static final String FILE = "file";
     static final String NEW_NAME = "newName";
+    static final String NAME = "name";
     static final String DRY_RUN = "dryRun";
 
     private final String method;
@@ -65,6 +68,15 @@ final class ChangeRequest {
     DaemonMethod.Outcome run(Rename rename, RenameTarget target) {
         String newName = text(NEW_NAME);
         ChangeReport report = dryRun() ? rename.dryRun(target, newName) : rename.apply(target, newName);
+
+        return DaemonMethod.Outcome.of(changed(report).toJson());
+    }
+
+    /** What extracting the expression of the selection into a variable does, written unless the request is a dry run. */
+    DaemonMethod.Outcome run(ExtractVariable extract, Range selection) {
+        Path file = file();
+        String name = token(NAME);
+        ChangeReport report = dryRun() ? extract.dryRun(file, selection, name) : extract.apply(file, selection, name);
 
         return DaemonMethod.Outcome.of(changed(report).toJson());
     }

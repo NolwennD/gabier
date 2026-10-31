@@ -3,6 +3,7 @@ package fr.craft.gabier.daemon;
 import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.Position;
+import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.fixtures.FakeJavaLanguageServer;
 import fr.craft.gabier.editing.fixtures.Scenario;
 import fr.craft.gabier.editing.fixtures.Scenarios;
@@ -63,7 +64,11 @@ public final class FakeServedMain {
                 Scenarios.RENAME_OUTSIDE_THE_PROJECT,
                 Scenarios.ORGANIZE_IMPORTS,
                 Scenarios.ORGANIZE_IMPORTS_IN_ORDER,
-                Scenarios.ORGANIZE_IMPORTS_OUTSIDE_THE_PROJECT);
+                Scenarios.ORGANIZE_IMPORTS_OUTSIDE_THE_PROJECT,
+                Scenarios.EXTRACT_VARIABLE,
+                Scenarios.EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION,
+                Scenarios.EXTRACT_VARIABLE_TO_AN_INVALID_NAME,
+                Scenarios.EXTRACT_VARIABLE_OUTSIDE_THE_PROJECT);
         for (var scenario : scenarios) {
             scenario.writeProject(root);
             server.scripted(scenario);
@@ -113,6 +118,11 @@ public final class FakeServedMain {
         @Override
         public ChangeSet rename(Path file, Position position, String newName) {
             return server.rename(file, position, newName);
+        }
+
+        @Override
+        public ChangeSet extractVariable(Path file, Range selection, String name) {
+            return server.extractVariable(file, selection, name);
         }
 
         @Override

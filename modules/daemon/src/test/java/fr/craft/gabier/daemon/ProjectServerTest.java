@@ -10,6 +10,7 @@ import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
+import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.protocol.JdtlsState;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
 import java.io.IOException;
@@ -147,6 +148,11 @@ class ProjectServerTest {
         }
 
         @Override
+        public ChangeSet extractVariable(Path file, Range selection, String name) {
+            return RENAMED;
+        }
+
+        @Override
         public Optional<ChangeSet> organizeImports(Path file) {
             return Optional.of(RENAMED);
         }
@@ -229,11 +235,20 @@ class ProjectServerTest {
         }
 
         @Test
+        void anExtractionOfAVariableStartsItToo() {
+            assertThat(project.extractVariable(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x"))
+                    .isEqualTo(ScriptedServer.RENAMED);
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
         void keepsItForTheNextRequests() {
             project.diagnostics(FILE);
             project.diagnostics(FILE);
             project.rename(FILE, new Position(0, 0), "Other");
             project.organizeImports(FILE);
+            project.extractVariable(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x");
 
             assertThat(starter.starts).hasValue(1);
         }

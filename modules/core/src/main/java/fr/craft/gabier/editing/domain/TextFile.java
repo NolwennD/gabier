@@ -97,14 +97,19 @@ record TextFile(String text, boolean bom) {
 
         for (int at = text.indexOf(word); at >= 0; at = text.indexOf(word, at + 1)) {
             if (isWholeWord(at, at + word.length())) {
-                LineIndex index = new LineIndex(text);
-                int line = index.lineOf(at);
-
-                return Optional.of(new Position(line, at - index.start(line)));
+                return Optional.of(positionAt(at));
             }
         }
 
         return Optional.empty();
+    }
+
+    /** Where an offset of the text is: a point of a line, or the end of the text. */
+    Position positionAt(int offset) {
+        LineIndex index = new LineIndex(text);
+        int line = index.lineOf(offset);
+
+        return new Position(line, offset - index.start(line));
     }
 
     private boolean isWholeWord(int start, int end) {

@@ -4,6 +4,7 @@ import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.editing.domain.Position;
+import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.protocol.JdtlsState;
 import java.nio.file.Path;
 import java.util.List;
@@ -131,6 +132,11 @@ final class ScriptedProject implements ServedProject {
     @Override
     public ChangeSet rename(Path file, Position position, String newName) {
         return server.rename(file, position, newName);
+    }
+
+    @Override
+    public ChangeSet extractVariable(Path file, Range selection, String name) {
+        return server.extractVariable(file, selection, name);
     }
 
     @Override

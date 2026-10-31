@@ -28,6 +28,7 @@ public final class Gabier {
     private static final String DIAGNOSTICS_COMMAND = "diagnostics";
     private static final String RENAME_COMMAND = "rename";
     private static final String ORGANIZE_IMPORTS_COMMAND = "organize-imports";
+    private static final String EXTRACT_VARIABLE_COMMAND = "extract-variable";
     private static final String DRY_RUN_OPTION = "--dry-run";
     private static final String TOKEN_OPTION = "--token";
     private static final String JSON_OPTION = "--json";
@@ -75,6 +76,11 @@ public final class Gabier {
         }
         if (!arguments.isEmpty() && arguments.getFirst().equals(ORGANIZE_IMPORTS_COMMAND)) {
             organizeImports(starting(environment), arguments, json, out);
+
+            return;
+        }
+        if (!arguments.isEmpty() && arguments.getFirst().equals(EXTRACT_VARIABLE_COMMAND)) {
+            extractVariable(starting(environment), arguments, json, out);
 
             return;
         }
@@ -191,6 +197,46 @@ public final class Gabier {
             return;
         }
         print(changed, dryRun, json, out);
+    }
+
+    /**
+     * {@code extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>}: the option may stand anywhere
+     * after the command. The selection is the expression to extract, from its first character to the position just
+     * after its last (the end is excluded), each position from 1 as {@code diagnostics} shows it; the daemon gets them
+     * from 0. It answers as {@code rename} does.
+     */
+    private static void extractVariable(
+            Supplier<DaemonClient> daemon, List<String> arguments, boolean json, PrintStream out) {
+        var words = arguments.subList(1, arguments.size());
+        var dryRun = words.contains(DRY_RUN_OPTION);
+        var operands =
+                words.stream().filter(word -> !word.equals(DRY_RUN_OPTION)).toList();
+        if (operands.size() != 4) {
+            throw UsageException.unsupportedArguments(arguments);
+        }
+        var start = lineAndColumn(arguments, operands.get(1));
+        var end = lineAndColumn(arguments, operands.get(2));
+        var params = new HashMap<String, String>();
+        params.put("file", Path.of(operands.getFirst()).toAbsolutePath().toString());
+        params.put("startLine", start.getFirst());
+        params.put("startColumn", start.getLast());
+        params.put("endLine", end.getFirst());
+        params.put("endColumn", end.getLast());
+        params.put("name", operands.getLast());
+        params.put("dryRun", String.valueOf(dryRun));
+        var changed = ChangedFiles.of(
+                ask(daemon, EXTRACT_VARIABLE_COMMAND, params, false).result());
+        print(changed, dryRun, json, out);
+    }
+
+    /** {@code line:column} as the user counts it, from 1, as the line and the column the daemon counts, from 0. */
+    private static List<String> lineAndColumn(List<String> arguments, String position) {
+        var parts = position.split(":", -1);
+        if (parts.length != 2) {
+            throw UsageException.unsupportedArguments(arguments);
+        }
+
+        return List.of(zeroBased(arguments, parts[0]), zeroBased(arguments, parts[1]));
     }
 
     /** The result of the daemon as it gave it with {@code --json}; else the dry run said, then {@link #changedText}. */

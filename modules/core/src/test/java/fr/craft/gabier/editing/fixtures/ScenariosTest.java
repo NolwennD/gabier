@@ -9,6 +9,7 @@ import fr.craft.gabier.editing.domain.FileChange.EditFile;
 import fr.craft.gabier.editing.domain.FileChange.RenameFile;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.Position;
+import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.TextEdit;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
 import fr.craft.gabier.editing.fixtures.Scenario.Request;
@@ -128,7 +129,12 @@ class ScenariosTest {
                         "organize-imports-of-a-file-in-order",
                         "organize-imports-keeps-explicit-imports",
                         "organize-imports-while-the-server-imports",
-                        "organize-imports-of-a-file-outside-the-project");
+                        "organize-imports-of-a-file-outside-the-project",
+                        "extract-a-variable",
+                        "extract-a-variable-from-something-that-is-not-an-expression",
+                        "extract-a-variable-to-an-invalid-name",
+                        "extract-a-variable-while-the-server-imports",
+                        "extract-a-variable-of-a-file-outside-the-project");
     }
 
     @Test
@@ -145,7 +151,23 @@ class ScenariosTest {
         assertThat(answeredWith(Answer.Refused.class).stream()
                         .filter(scenario -> scenario.request() instanceof Request.Rename)
                         .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
-                .containsExactlyInAnyOrder(LanguageServerErrorKey.values());
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
+                        LanguageServerErrorKey.INVALID_NAME,
+                        LanguageServerErrorKey.NO_SUCH_SYMBOL,
+                        LanguageServerErrorKey.NOT_READY);
+    }
+
+    @Test
+    void refusesForEachReasonOfThePortOnAnExtractVariable() {
+        assertThat(answeredWith(Answer.Refused.class).stream()
+                        .filter(scenario -> scenario.request() instanceof Request.ExtractVariable)
+                        .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
+                        LanguageServerErrorKey.INVALID_NAME,
+                        LanguageServerErrorKey.NOT_AN_EXPRESSION,
+                        LanguageServerErrorKey.NOT_READY);
     }
 
     @Test
@@ -366,6 +388,31 @@ class ScenariosTest {
             assertThat(block).as(scenario.name()).isEqualTo(inTheOrderOfTheProject(block));
             assertThat(block).as(scenario.name()).noneMatch(line -> line.endsWith(".*;"));
         }
+    }
+
+    @Test
+    void declaresTheNameAskedForAndUsesItInPlaceOfTheSelectedExpression(@TempDir Path directory) throws IOException {
+        for (Scenario scenario : answeredWith(Answer.Extracted.class)) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+            var request = (Request.ExtractVariable) inside.request();
+            String expression = selected(Files.readString(request.file()), request.selection());
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.Extracted) inside.answer()).changes());
+
+            assertThat(Files.readString(request.file()))
+                    .as(scenario.name())
+                    .contains(" " + request.name() + " = " + expression + ";")
+                    .contains(" = " + request.name() + ";");
+        }
+    }
+
+    /** The text of a range inside one line. */
+    private static String selected(String text, Range range) {
+        String line = text.lines().toList().get(range.start().line());
+
+        return line.substring(range.start().column(), range.end().column());
     }
 
     @Test

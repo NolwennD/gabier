@@ -4,6 +4,7 @@ import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.editing.domain.Position;
+import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
 import fr.craft.gabier.editing.fixtures.Scenario.Request;
 import fr.craft.gabier.shared.error.domain.Assert;
@@ -77,6 +78,13 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
         Request request = new Request.Rename(file, position, newName).resolvedIn(root);
 
         return ((Answer.Renamed) answerTo(request)).changes();
+    }
+
+    @Override
+    public ChangeSet extractVariable(Path file, Range selection, String name) {
+        Request request = new Request.ExtractVariable(file, selection, name).resolvedIn(root);
+
+        return ((Answer.Extracted) answerTo(request)).changes();
     }
 
     @Override

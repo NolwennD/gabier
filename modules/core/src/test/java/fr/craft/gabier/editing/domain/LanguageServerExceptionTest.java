@@ -19,6 +19,7 @@ class LanguageServerExceptionTest {
                         "language-server-file-outside-project",
                         "language-server-invalid-name",
                         "language-server-no-such-symbol",
+                        "language-server-not-an-expression",
                         "language-server-not-ready");
     }
 
@@ -40,6 +41,19 @@ class LanguageServerExceptionTest {
         assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
         assertThat(exception.parameters()).isEqualTo(Map.of("file", FILE.toString(), "line", "4", "column", "7"));
         assertThat(exception).hasMessage("There is no symbol at 4:7 in " + FILE);
+    }
+
+    @Test
+    void saysWhichSelectionIsNotAnExpression() {
+        LanguageServerException exception =
+                LanguageServerException.notAnExpression(FILE, new Range(new Position(4, 7), new Position(5, 2)));
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters())
+                .isEqualTo(
+                        Map.of("file", FILE.toString(), "line", "4", "column", "7", "endLine", "5", "endColumn", "2"));
+        assertThat(exception).hasMessage("The selection 4:7-5:2 of " + FILE + " is not an expression");
     }
 
     @Test
