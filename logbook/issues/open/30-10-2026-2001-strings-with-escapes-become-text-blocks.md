@@ -1,16 +1,15 @@
 # Concatenated strings with escapes become text blocks
 
 Opened: 30-10-2026 20:01
-On hold: it waits for gabier to run a jdtls code action itself (dogfooding, decision of the user of 30-10-2026: no throwaway
-driver in any language); the daemon chain (parameters, diagnostics, jdtls on demand) and a command for code actions come first.
+Depends on: 01-11-2026-2230-gabier-cleans-up-a-file.md
 
 `.claude/rules/domain.md` ("Modern Java") asks for text blocks wherever a string spans several lines or escapes special
 characters. The code written before has about thirty concatenations with `\"` or `\n` (JSON messages and fixtures of the
 tests above all). One pass rewrites them, through jdtls and not by text editing (`.claude/rules/workflow.md`): its quick
 assist "Convert to text block" is a code action, and the cleanup `stringConcatToTextBlock` is the same rewrite over a
-file. The pass is done with gabier itself (`.claude/rules/workflow.md`, dogfooding), by the command that runs a jdtls
-code action on a range or a file, not by a script. The first check is that jdtls really offers the action on the
-sites; if it does not, say so and stop.
+file. The pass is done with gabier itself (`.claude/rules/workflow.md`, dogfooding), by
+`gabier cleanup <file> stringConcatToTextBlock`, not by a script. The first check is that jdtls really offers the action
+on the sites; if it does not, say so and stop.
 
 What the first check found (a worker, with a throwaway Python driver that is gone): jdtls lists the code action
 `kind=quickassist title='Convert String concatenation to Text Block'` on `ProblemTest.java:102` when the range is inside
@@ -26,8 +25,7 @@ Done when:
 - every concatenation of literals with an escaped quote or a `\n` in the main and test code is a text block, or stays
   and says why in the resolution (a single line, an escape that is the point of the test); the list of the sites found
   by a search is in the resolution;
-- text that is compared or written on one line (one JSON object per line on the socket) is unchanged to the byte: a
-  line that was joined keeps its `\` continuation, a trailing space its `\s`; the tests still pass without being
-  edited, and no assertion is weakened;
+- the tests still pass without being edited, and no assertion is weakened (they prove that the text compared or written
+  on one line is unchanged);
 - no site is rewritten by hand when jdtls offers the action;
 - `bin/ci` green, Checkstyle included.
