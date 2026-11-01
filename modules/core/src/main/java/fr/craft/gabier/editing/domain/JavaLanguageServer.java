@@ -57,6 +57,18 @@ public interface JavaLanguageServer {
     ChangeSet extractMethod(Path file, Range selection, String name);
 
     /**
+     * What making the nested type that encloses a position a top-level type in a file of its own changes: the file is
+     * created in the package of the type, named after it, and the references and the imports of the project are
+     * updated. A type that uses the instance of the class that encloses it gets a field and a constructor parameter of
+     * that class.
+     *
+     * @return the change set to apply, which creates a file and edits the others
+     * @throws LanguageServerException if the server is not ready, the file is not a file of its project (outside it,
+     *     missing or a folder) or the type cannot be moved (there is none at the position, it is a top-level type)
+     */
+    ChangeSet moveTypeToFile(Path file, Position position);
+
+    /**
      * What organizing the imports of a file changes: the missing imports are added, the unused ones removed, and the
      * rest ordered as the server is configured to (for gabier, as the project keeps them, with no import collapsed into
      * a star). Only the file itself is edited.

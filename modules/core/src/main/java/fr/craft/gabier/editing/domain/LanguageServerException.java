@@ -55,6 +55,17 @@ public final class LanguageServerException extends GeneratorException {
                 .addParameter("endColumn", String.valueOf(selection.end().column())));
     }
 
+    /**
+     * The server cannot move to a file of its own the type at the position: there is no type there, it is a top-level
+     * type, or the file of its name exists in its package (the server does not tell which).
+     */
+    public static LanguageServerException notMovable(Path file, Position position) {
+        return new LanguageServerException(positioned(LanguageServerErrorKey.NOT_MOVABLE, file, position)
+                .message("No nested type at " + format(position) + " in " + file
+                        + " can be moved to a file of its own: the position is outside any type, the type is a"
+                        + " top-level type, or a file of its name exists in its package"));
+    }
+
     /** The server does not accept the name for the symbol at the position. */
     public static LanguageServerException invalidName(Path file, Position position, String name) {
         return new LanguageServerException(positioned(LanguageServerErrorKey.INVALID_NAME, file, position)

@@ -113,6 +113,20 @@ class ScenarioTest {
     }
 
     @Test
+    void rejectsAMovedAnswerForAnotherRequestAndAnotherAnswerForMovingAType() {
+        Request.Rename rename = new Request.Rename(FILE, POSITION, "B");
+        Request.MoveTypeToFile move = new Request.MoveTypeToFile(FILE, POSITION);
+        ChangeSet changes = set(new CreateFile(FILE));
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(rename, new Answer.Moved(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(move, new Answer.Renamed(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(move, new Answer.Extracted(changes)));
+    }
+
+    @Test
     void rejectsARefusalThatTheRequestCannotGet() {
         Request.Diagnostics diagnostics = new Request.Diagnostics(FILE);
 
@@ -218,6 +232,31 @@ class ScenarioTest {
     }
 
     @Test
+    void buildsTheRefusalOfAMoveTypeToFileRequest() {
+        Request.MoveTypeToFile move = new Request.MoveTypeToFile(FILE, POSITION);
+
+        assertThat(move.refusal(LanguageServerErrorKey.NOT_READY).key()).isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(move.refusal(LanguageServerErrorKey.FILE_MISSING).key())
+                .isEqualTo(LanguageServerErrorKey.FILE_MISSING);
+        assertThat(move.refusal(LanguageServerErrorKey.NOT_A_FILE).key()).isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
+        assertThat(move.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
+                .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(move.refusal(LanguageServerErrorKey.NOT_MOVABLE).parameters())
+                .isEqualTo(Map.of("file", FILE.toString(), "line", "0", "column", "6"));
+        for (var key : List.of(
+                LanguageServerErrorKey.NO_SUCH_SYMBOL,
+                LanguageServerErrorKey.INVALID_NAME,
+                LanguageServerErrorKey.NOT_AN_EXPRESSION,
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
+                LanguageServerErrorKey.UNRESOLVED_IMPORTS)) {
+            assertThatExceptionOfType(IllegalArgumentException.class)
+                    .as(key.toString())
+                    .isThrownBy(() -> move.refusal(key));
+        }
+    }
+
+    @Test
     void buildsTheRefusalOfAnOrganizeImportsRequest() {
         Request.OrganizeImports organize = new Request.OrganizeImports(FILE);
 
@@ -257,6 +296,8 @@ class ScenarioTest {
                 .isEqualTo(new Request.ExtractVariable(Path.of("/project/src/A.java"), SELECTION, "b"));
         assertThat(new Request.ExtractMethod(FILE, SELECTION, "b").resolvedIn(ROOT))
                 .isEqualTo(new Request.ExtractMethod(Path.of("/project/src/A.java"), SELECTION, "b"));
+        assertThat(new Request.MoveTypeToFile(FILE, POSITION).resolvedIn(ROOT))
+                .isEqualTo(new Request.MoveTypeToFile(Path.of("/project/src/A.java"), POSITION));
     }
 
     @Test
@@ -282,6 +323,20 @@ class ScenarioTest {
                         new EditFile(Path.of("/project/src/A.java"), List.of(edit)),
                         new RenameFile(Path.of("/project/src/A.java"), Path.of("/project/src/C.java")),
                         new DeleteFile(Path.of("/project/src/D.java")))));
+    }
+
+    @Test
+    void resolvesTheChangesOfAMovedAnswerAgainstARoot() {
+        TextEdit edit = new TextEdit(new Range(POSITION, POSITION), "class B {}");
+
+        Answer resolved = new Answer.Moved(
+                        set(new CreateFile(Path.of("src/B.java")), new EditFile(Path.of("src/B.java"), List.of(edit))))
+                .resolvedIn(ROOT);
+
+        assertThat(resolved)
+                .isEqualTo(new Answer.Moved(set(
+                        new CreateFile(Path.of("/project/src/B.java")),
+                        new EditFile(Path.of("/project/src/B.java"), List.of(edit)))));
     }
 
     @Test

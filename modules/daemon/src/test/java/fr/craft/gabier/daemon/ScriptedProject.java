@@ -145,6 +145,11 @@ final class ScriptedProject implements ServedProject {
     }
 
     @Override
+    public ChangeSet moveTypeToFile(Path file, Position position) {
+        return server.moveTypeToFile(file, position);
+    }
+
+    @Override
     public Optional<ChangeSet> organizeImports(Path file) {
         return server.organizeImports(file);
     }

@@ -2,10 +2,12 @@ package fr.craft.gabier.daemon;
 
 import fr.craft.gabier.editing.application.ExtractMethod;
 import fr.craft.gabier.editing.application.ExtractVariable;
+import fr.craft.gabier.editing.application.MoveTypeToFile;
 import fr.craft.gabier.editing.application.OrganizeImports;
 import fr.craft.gabier.editing.application.Rename;
 import fr.craft.gabier.editing.application.RenameTarget;
 import fr.craft.gabier.editing.domain.ChangeReport;
+import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.protocol.ChangedFiles;
 import java.nio.file.InvalidPathException;
@@ -91,6 +93,14 @@ final class ChangeRequest {
         Path file = file();
         String name = token(NAME);
         ChangeReport report = dryRun() ? extract.dryRun(file, selection, name) : extract.apply(file, selection, name);
+
+        return DaemonMethod.Outcome.of(changed(report).toJson());
+    }
+
+    /** What moving the type at the position to a file of its own does, written unless the request is a dry run. */
+    DaemonMethod.Outcome run(MoveTypeToFile move, Position position) {
+        Path file = file();
+        ChangeReport report = dryRun() ? move.dryRun(file, position) : move.apply(file, position);
 
         return DaemonMethod.Outcome.of(changed(report).toJson());
     }

@@ -51,10 +51,16 @@ final class HelpText {
         if (json) {
             return "{\"name\":" + Json.quote(command.commandName()) + ",\"summary\":" + Json.quote(command.summary())
                     + ",\"usage\":" + Json.quote(command.usage()) + ",\"example\":" + Json.quote(command.example())
+                    + (command.notes().isEmpty() ? "" : ",\"notes\":" + Json.quote(command.notes()))
                     + ",\"refusals\":["
                     + command.refusals().stream().map(Json::quote).collect(Collectors.joining(","))
                     + "]}";
         }
+        var notes = command.notes().isEmpty() ? "" : """
+            Notes:
+            %s
+
+            """.formatted(indented(command.notes()));
 
         return """
             %s
@@ -65,12 +71,13 @@ final class HelpText {
             Example:
             %s
 
-            Refusals (a problem object on the standard error, exit code 2):
+            %sRefusals (a problem object on the standard error, exit code 2):
             %s\
             """.formatted(
                         capitalised(command.summary()),
                         indented(command.usage()),
                         indented(command.example()),
+                        notes,
                         indented(String.join("\n", command.refusals())));
     }
 

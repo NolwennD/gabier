@@ -90,7 +90,9 @@ class DaemonServerTest {
                         .scripted(Scenarios.EXTRACT_VARIABLE)
                         .scripted(Scenarios.EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION)
                         .scripted(Scenarios.EXTRACT_METHOD_THAT_USES_A_LOCAL_VARIABLE)
-                        .scripted(Scenarios.EXTRACT_METHOD_FROM_HALF_A_STATEMENT));
+                        .scripted(Scenarios.EXTRACT_METHOD_FROM_HALF_A_STATEMENT)
+                        .scripted(Scenarios.MOVE_A_STATIC_NESTED_TYPE)
+                        .scripted(Scenarios.MOVE_A_TOP_LEVEL_TYPE));
     }
 
     private DaemonServer open() {
@@ -536,6 +538,48 @@ class DaemonServerTest {
                 {"jsonrpc":"2.0","id":3,"method":"extract-method","params":{"file":"%s","startLine":"%s",\
                 "startColumn":"%s","endLine":"%s","endColumn":"%s","name":"%s","dryRun":"%s"}}
                 """.formatted(file, startLine, startColumn, endLine, endColumn, name, dryRun);
+        }
+
+        @Test
+        void moveTypeToFileAnswersWhatWasCreatedAndChangedAndWritesTheFilesUnlessItIsADryRun() throws IOException {
+            serving();
+            Scenarios.MOVE_A_STATIC_NESTED_TYPE.writeProject(directory);
+            var shapes = directory.resolve("src/main/java/demo/Shapes.java");
+            var circle = directory.resolve("src/main/java/demo/Circle.java");
+
+            try (var client = connect(socket())) {
+                var dryRun = client.ask(moveTypeToFileRequest(shapes, "5", "24", true));
+
+                assertThat(dryRun).contains("\"created\":[").contains("Circle.java");
+                assertThat(circle).doesNotExist();
+
+                var done = client.ask(moveTypeToFileRequest(shapes, "5", "24", false));
+
+                assertThat(done).contains("\"created\":[").contains("\"modified\":[");
+                assertThat(circle).content().startsWith("package demo;").contains("public class Circle {");
+                assertThat(Files.readString(shapes)).doesNotContain("class Circle");
+            }
+        }
+
+        @Test
+        void aTypeThatCannotBeMovedIsRefusedWithItsProblemObjectAndNothingIsWritten() throws IOException {
+            serving();
+            Scenarios.MOVE_A_TOP_LEVEL_TYPE.writeProject(directory);
+            var shapes = directory.resolve("src/main/java/demo/Shapes.java");
+            var before = Files.readString(shapes);
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask(moveTypeToFileRequest(shapes, "2", "13", false)))
+                        .contains("\"key\":\"language-server-not-movable\"");
+                assertThat(Files.readString(shapes)).isEqualTo(before);
+            }
+        }
+
+        private static String moveTypeToFileRequest(Path file, String line, String column, boolean dryRun) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"move-type-to-file","params":{"file":"%s","line":"%s",\
+                "column":"%s","dryRun":"%s"}}
+                """.formatted(file, line, column, dryRun);
         }
 
         @Test

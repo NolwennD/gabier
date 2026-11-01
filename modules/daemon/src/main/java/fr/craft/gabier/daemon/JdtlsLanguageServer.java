@@ -506,6 +506,49 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     }
 
     /**
+     * Makes a top-level type of the nested type that encloses the position, with {@code java/move} and the move kind
+     * {@code moveTypeToNewFile}.
+     *
+     * @throws LanguageServerException if jdtls is not ready, the file is not in its project or jdtls cannot move the
+     *     type
+     * @throws JdtlsException if jdtls dies, does not answer in time or answers what the adapter cannot apply
+     */
+    @Override
+    public synchronized ChangeSet moveTypeToFile(Path file, Position position) {
+        JdtlsSession session = ready();
+        Path path = normalized(file);
+        textInProject(session, path);
+        var at = new org.eclipse.lsp4j.Position(position.line(), position.column());
+        var context = new CodeActionParams(
+                new TextDocumentIdentifier(path.toUri().toString()),
+                new org.eclipse.lsp4j.Range(at, at),
+                new CodeActionContext(List.of()));
+        var move = new JdtlsServer.MoveParams("moveTypeToNewFile", context, true);
+        JdtlsWatch watch = session.newWatch();
+        try {
+            takeInChangesOnDisk(session, watch);
+            var proposal = watch.await(
+                    "the move of the type at " + position + " of " + path,
+                    () -> JdtlsRequests.unlessDeclined(session.server().move(move)));
+            var refactor = proposal.orElseThrow(() -> LanguageServerException.notMovable(path, position));
+            var edit = refactor.edit();
+            if (edit == null) {
+                throw LanguageServerException.notMovable(path, position);
+            }
+            List<FileChange> changes = WorkspaceEdits.of(edit, JdtlsLanguageServer::textOnDisk);
+            if (changes.isEmpty()) {
+                throw LanguageServerException.notMovable(path, position);
+            }
+
+            return new ChangeSet(changes);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException(
+                    "Interrupted while waiting for the move of the type at " + position + " of " + path, interrupted);
+        }
+    }
+
+    /**
      * Asks jdtls for the {@code source.organizeImports} code action of the file, resolves it when its edit is not given
      * (jdtls computes it at that point, the client declares {@code codeAction.resolveSupport} for {@code edit}), and
      * gives the edit in the terms of the domain ({@link WorkspaceEdits}). jdtls reads the file as it knows it (nothing is

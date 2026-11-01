@@ -105,6 +105,35 @@ enum Command {
                     "language-server-not-a-file: the path is a folder",
                     "editing-stale-edit: the change cannot be applied to the file as it is",
                     "language-server-not-ready: the Java language server is not ready")),
+    MOVE_TYPE_TO_FILE(
+            "move-type-to-file",
+            "make a nested type a top-level type in a file of its own",
+            "gabier [--json] move-type-to-file [--dry-run] <file> <line>:<column>",
+            """
+            $ gabier move-type-to-file --dry-run src/main/java/demo/Shapes.java 6:25
+            dry run, nothing written
+            modified /work/demo/src/main/java/demo/app/Drawing.java
+            modified /work/demo/src/main/java/demo/Shapes.java
+            modified /work/demo/src/main/java/demo/Circle.java
+            created /work/demo/src/main/java/demo/Circle.java
+            ...\
+            """,
+            """
+            The position is inside the type to move: the innermost type that encloses it moves.
+            An inner class that uses its outer instance gets a field and a constructor parameter of the outer type.
+            A JUnit @Nested test class can then no longer be instantiated by JUnit.
+            To avoid it, first make the class independent of the outer instance,
+            for example by having it extend the shared base class, then move it.\
+            """,
+            requestRefusals(
+                    "language-server-not-movable: no nested type can be moved at the position (outside any type, a"
+                            + " top-level type, or a file of the name of the type exists in its package)",
+                    "language-server-file-outside-project: the file is not in the project the daemon serves",
+                    "language-server-file-missing: the path is under the project and no file is there",
+                    "language-server-not-a-file: the path is a folder",
+                    "editing-file-exists: the file to create appeared since the language server answered",
+                    "editing-stale-edit: the change cannot be applied to the files as they are",
+                    "language-server-not-ready: the Java language server is not ready")),
     STATUS(
             "status",
             "the project the daemon serves, and where jdtls is",
@@ -132,13 +161,19 @@ enum Command {
     private final String summary;
     private final String usage;
     private final String example;
+    private final String notes;
     private final List<String> refusals;
 
     Command(String commandName, String summary, String usage, String example, List<String> refusals) {
+        this(commandName, summary, usage, example, "", refusals);
+    }
+
+    Command(String commandName, String summary, String usage, String example, String notes, List<String> refusals) {
         this.commandName = commandName;
         this.summary = summary;
         this.usage = usage;
         this.example = example;
+        this.notes = notes;
         this.refusals = refusals;
     }
 
@@ -186,6 +221,11 @@ enum Command {
     /** An example of a call and of its answer, the call on a line that starts with {@code $ }. */
     String example() {
         return example;
+    }
+
+    /** What a person must know before running the command, none (empty) for most of them. */
+    String notes() {
+        return notes;
     }
 
     /** The refusals of the command, each as the key of its problem, a colon and what it means. */

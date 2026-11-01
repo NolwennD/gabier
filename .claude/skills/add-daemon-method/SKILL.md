@@ -59,7 +59,9 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    file changes:
    - a constant of the enum `Command`, with the **help text** written once: its name, a one-line summary, the usage (one
      line per form), an example of a call and its answer, and its refusals (`<key>: <meaning>`), in the order `gabier help`
-     lists them. `CommandTest` fails on a command without one of the five. `gabier help`, `gabier help <command>` and
+     lists them. `CommandTest` fails on a command without one of the five. A warning to read before the call goes in the
+     optional **notes** (the constructor with six arguments; `move-type-to-file` is the model), printed by `help` between
+     the example and the refusals and added to the JSON of `help` when there are some. `gabier help`, `gabier help <command>` and
      `gabier <command> --help` (handled once, in the dispatch of `Gabier`, for every command) print it, and
      `UsageException` points to them: nothing else lists the commands, so the usage text is not edited. The refusals are
      the keys of the `## Refusals` section of the command's page (below): `CommandRefusalsTest` fails when they differ.

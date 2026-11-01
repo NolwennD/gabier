@@ -95,6 +95,13 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
     }
 
     @Override
+    public ChangeSet moveTypeToFile(Path file, Position position) {
+        Request request = new Request.MoveTypeToFile(file, position).resolvedIn(root);
+
+        return ((Answer.Moved) answerTo(request)).changes();
+    }
+
+    @Override
     public Optional<ChangeSet> organizeImports(Path file) {
         Request request = new Request.OrganizeImports(file).resolvedIn(root);
 

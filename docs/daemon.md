@@ -1,10 +1,10 @@
 # The daemon
 
-One daemon runs per user. `gabier diagnostics`, `gabier rename`, `gabier organize-imports`, `gabier extract-variable` and `gabier extract-method` **start it when nothing answers on the socket**, so an
+One daemon runs per user. `gabier diagnostics`, `gabier rename`, `gabier organize-imports`, `gabier extract-variable`, `gabier extract-method` and `gabier move-type-to-file` **start it when nothing answers on the socket**, so an
 agent runs them in a project folder and gets the answer; `gabier status` and `gabier stop` never start one (see [status and stop](commands/status-and-stop.md)).
 It can also be started by hand, with `gabier-daemon` from the installed distribution (`./gradlew :daemon:installDist`,
 then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until `gabier stop` or a SIGTERM; it
-answers `status`, `stop`, `diagnostics`, `rename`, `rename-token`, `organize-imports`, `extract-variable` and `extract-method`, and nothing else yet.
+answers `status`, `stop`, `diagnostics`, `rename`, `rename-token`, `organize-imports`, `extract-variable`, `extract-method` and `move-type-to-file`, and nothing else yet.
 
 **Installing both by name.** `mise run install` builds the native cli and the daemon of the checkout it is run in and
 links `gabier` and `gabier-daemon` into `~/.local/bin` (`GABIER_BIN_DIR` or the argument of `scripts/install.sh` names
@@ -14,7 +14,7 @@ tools should come from, and again after a change. A file that is not a link is n
 GraalVM 25 of `./gradlew :cli:nativeCompile` and a JDK for the daemon's start script (`JAVA_HOME`, else `java` on the
 `PATH`).
 
-**Starting on demand.** A request command (`diagnostics`, `rename`, `organize-imports`, `extract-variable`, `extract-method`) first connects to the socket: a daemon that answers is
+**Starting on demand.** A request command (`diagnostics`, `rename`, `organize-imports`, `extract-variable`, `extract-method`, `move-type-to-file`) first connects to the socket: a daemon that answers is
 used, never started a second time. Otherwise the cli launches `gabier-daemon` as a process, found **next to the binary
 of the cli** (a distribution that ships the two together), else on the **`PATH`**: a native image cannot call into the
 daemon, and the two are installed by name. The daemon starts in the cli's working directory with the cli's environment,

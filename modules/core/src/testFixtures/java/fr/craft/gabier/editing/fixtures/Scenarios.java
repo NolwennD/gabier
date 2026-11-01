@@ -23,7 +23,8 @@ import java.util.stream.IntStream;
  * The catalogue of the contract scenarios: every answer the core relies on from a language server for Java. The
  * project is two small classes of a package {@code demo}: a {@code Greeter} with a field, a method and a local
  * variable, and a {@code Main} that uses it; and, for the problems to report, a {@code Broken} (an error) and a {@code
- * Sloppy} (a warning). All the positions are 0-based ({@code line}, {@code column}) as in {@link Position}; every path
+ * Sloppy} (a warning); for the moves of a type, a {@code Shapes} with nested types and a {@code Drawing} that uses one
+ * of them from the package {@code demo.app}. All the positions are 0-based ({@code line}, {@code column}) as in {@link Position}; every path
  * is relative to the root of the project.
  *
  * <p>The scenarios are replayed against a real jdtls by {@code ScenarioReplayTest} (module {@code daemon}, {@code
@@ -68,6 +69,19 @@ import java.util.stream.IntStream;
  *       parameters: it answers an edit that leaves two methods of one signature. The adapter refuses it, from the
  *       methods that jdtls lists for the text ({@code textDocument/documentSymbol}), as {@code invalid-name} ({@link
  *       #EXTRACT_METHOD_TO_A_NAME_IN_USE});
+ *   <li>the move of a nested type to a file of its own: {@code java/move} with the move kind {@code moveTypeToNewFile}
+ *       answers the edits of the files that refer to the type, of the outer class, the creation of the new file
+ *       (because the client declares the resource operations) and the edit that gives it its text ({@link
+ *       #MOVE_A_STATIC_NESTED_TYPE}); the type that encloses the position is the one that moves, a position in a
+ *       method of it included ({@link #MOVE_THE_TYPE_THAT_ENCLOSES_A_POSITION_IN_ITS_METHOD}). An inner class that
+ *       uses the outer instance gets a field and a constructor parameter of the outer type, and the field it reads
+ *       loses its {@code private} ({@link #MOVE_AN_INNER_TYPE_THAT_USES_THE_OUTER_INSTANCE}); one that does not is moved
+ *       as it is ({@link #MOVE_AN_INNER_TYPE_THAT_DOES_NOT_USE_THE_OUTER_INSTANCE}). jdtls refuses with a message and
+ *       no edit a position outside any type, a top-level type and a type whose file exists in the package ({@code A
+ *       compilation unit named 'X.java' already exists}): one refusal for gabier, {@code not-movable}, which does not
+ *       tell them apart ({@link #MOVE_A_TYPE_FROM_A_POSITION_OUTSIDE_ANY_TYPE}, {@link #MOVE_A_TOP_LEVEL_TYPE}, {@link
+ *       #MOVE_A_TYPE_TO_A_FILE_THAT_EXISTS}). Nothing is overwritten because jdtls refuses before it computes an edit;
+ *       the new file has no line break at its end;
  *   <li>files changed on disk between two requests: jdtls reads a file once, and learns of what changes only if the
  *       client tells it ({@code workspace/didChangeWatchedFiles}, which it asks for by registering its watchers). A
  *       {@link Sequel} is two scenarios in a row with the disk changed between them ({@link #sequels()}): a type
@@ -107,6 +121,11 @@ public final class Scenarios {
     private static final Path WIDE = Path.of("src/main/java/demo/Wide.java");
     private static final Path TWICE = Path.of("src/main/java/demo/Twice.java");
     private static final Path TOTALS = Path.of("src/main/java/demo/Totals.java");
+    private static final Path SHAPES = Path.of("src/main/java/demo/Shapes.java");
+    private static final Path DRAWING = Path.of("src/main/java/demo/app/Drawing.java");
+    private static final Path CIRCLE = Path.of("src/main/java/demo/Circle.java");
+    private static final Path SQUARE = Path.of("src/main/java/demo/Square.java");
+    private static final Path LABEL = Path.of("src/main/java/demo/Label.java");
 
     /** How many types of one package, and constants of one class, {@code Wide} imports one by one: over the 99 of jdtls. */
     private static final int MANY = 100;
@@ -175,6 +194,61 @@ public final class Scenarios {
         }
         """;
 
+    /**
+     * What the moves of a type are asked on: a static nested class ({@code Circle}), an inner class that does not use the
+     * instance of {@code Shapes} ({@code Square}), one that does ({@code Label}), and a static nested class named like a
+     * type of the package ({@code Totals}), whose file exists. Nothing else refers to it but {@link #DRAWING_SOURCE}.
+     */
+    private static final String SHAPES_SOURCE = """
+        package demo;
+
+        public class Shapes {
+            private final String unit = "cm";
+
+            public static class Circle {
+                public double area(double radius) {
+                    return radius * radius * 3;
+                }
+            }
+
+            public class Square {
+                public double area(double side) {
+                    return side * side;
+                }
+            }
+
+            public class Label {
+                public String show() {
+                    return "unit: " + unit;
+                }
+            }
+
+            public static class Totals {
+                public int count() {
+                    return 0;
+                }
+            }
+
+            public Circle circle() {
+                return new Circle();
+            }
+        }
+        """;
+
+    /** A user of {@code Shapes.Circle} in another package: its imports change when the type moves. */
+    private static final String DRAWING_SOURCE = """
+        package demo.app;
+
+        import demo.Shapes;
+
+        public class Drawing {
+            public double circleArea(Shapes shapes) {
+                Shapes.Circle circle = shapes.circle();
+                return circle.area(2);
+            }
+        }
+        """;
+
     private static final String BROKEN_SOURCE = """
         package demo;
 
@@ -237,8 +311,17 @@ public final class Scenarios {
         }
         """;
 
-    private static final Map<Path, String> PROJECT =
-            Map.of(GREETER, GREETER_SOURCE, MAIN, MAIN_SOURCE, TOTALS, TOTALS_SOURCE);
+    private static final Map<Path, String> PROJECT = Map.of(
+            GREETER,
+            GREETER_SOURCE,
+            MAIN,
+            MAIN_SOURCE,
+            TOTALS,
+            TOTALS_SOURCE,
+            SHAPES,
+            SHAPES_SOURCE,
+            DRAWING,
+            DRAWING_SOURCE);
 
     /**
      * {@code Untidy}, {@code Tidy} and {@code Wide}, with the types and the constants {@code Wide} imports: the project
@@ -268,7 +351,11 @@ public final class Scenarios {
             MAIN,
             MAIN_SOURCE.replace("Greeter", "Welcomer"),
             TOTALS,
-            TOTALS_SOURCE);
+            TOTALS_SOURCE,
+            SHAPES,
+            SHAPES_SOURCE,
+            DRAWING,
+            DRAWING_SOURCE);
 
     /** A file without a problem: no diagnostic. */
     public static final Scenario CLEAN_FILE = new Scenario(
@@ -624,6 +711,178 @@ public final class Scenarios {
             new Request.ExtractMethod(ELSEWHERE, new Range(new Position(0, 0), new Position(0, 1)), "anything"),
             new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
 
+    /**
+     * {@code Shapes.Circle}, a static nested class, from its name. jdtls creates {@code Circle.java} in the package, takes
+     * the type out of {@code Shapes} (the edit reaches the next members, which it repeats) and updates {@code Drawing},
+     * which imported {@code Shapes} and now imports {@code Circle} as well. The new file has no line break at its end.
+     */
+    public static final Scenario MOVE_A_STATIC_NESTED_TYPE = new Scenario(
+            "move-a-static-nested-type",
+            PROJECT,
+            new Request.MoveTypeToFile(SHAPES, new Position(5, 24)),
+            new Answer.Moved(new ChangeSet(List.of(
+                    edits(DRAWING, replace(2, 0, 6, 21, """
+                        import demo.Circle;
+                        import demo.Shapes;
+
+                        public class Drawing {
+                            public double circleArea(Shapes shapes) {
+                                Circle\
+                        """)),
+                    edits(SHAPES, replace(5, 4, 30, 25, """
+                        public class Square {
+                                public double area(double side) {
+                                    return side * side;
+                                }
+                            }
+
+                            public class Label {
+                                public String show() {
+                                    return "unit: " + unit;
+                                }
+                            }
+
+                            public static class Totals {
+                                public int count() {
+                                    return 0;
+                                }
+                            }
+
+                            public Circle circle() {
+                                return new Circle\
+                        """)),
+                    new FileChange.CreateFile(CIRCLE),
+                    edits(CIRCLE, replace(0, 0, 0, 0, """
+                        package demo;
+
+                        public class Circle {
+                            public double area(double radius) {
+                                return radius * radius * 3;
+                            }
+                        }\
+                        """))))));
+
+    /**
+     * {@code Shapes.Square}, an inner class that does not use the instance of {@code Shapes}: it becomes a plain top-level
+     * class, with no field and no constructor parameter.
+     */
+    public static final Scenario MOVE_AN_INNER_TYPE_THAT_DOES_NOT_USE_THE_OUTER_INSTANCE = new Scenario(
+            "move-an-inner-type-that-does-not-use-the-outer-instance",
+            PROJECT,
+            new Request.MoveTypeToFile(SHAPES, new Position(11, 17)),
+            new Answer.Moved(new ChangeSet(List.of(
+                    edits(SHAPES, replace(11, 4, 17, 4, """
+                        \
+                        """)),
+                    new FileChange.CreateFile(SQUARE),
+                    edits(SQUARE, replace(0, 0, 0, 0, """
+                        package demo;
+
+                        public class Square {
+                            public double area(double side) {
+                                return side * side;
+                            }
+                        }\
+                        """))))));
+
+    /**
+     * {@code Shapes.Label}, an inner class that reads a field of the instance of {@code Shapes}: the new class gets a
+     * field of type {@code Shapes} and a constructor that takes it (with the empty Javadoc of the templates of jdtls), the
+     * field it reads is no longer private, and every {@code new Label()} of the project would get the outer instance.
+     */
+    public static final Scenario MOVE_AN_INNER_TYPE_THAT_USES_THE_OUTER_INSTANCE = new Scenario(
+            "move-an-inner-type-that-uses-the-outer-instance",
+            PROJECT,
+            new Request.MoveTypeToFile(SHAPES, new Position(17, 17)),
+            new Answer.Moved(new ChangeSet(List.of(
+                    edits(SHAPES, replace(3, 4, 23, 4, """
+                        final String unit = "cm";
+
+                            public static class Circle {
+                                public double area(double radius) {
+                                    return radius * radius * 3;
+                                }
+                            }
+
+                            public class Square {
+                                public double area(double side) {
+                                    return side * side;
+                                }
+                            }
+
+                            \
+                        """)),
+                    new FileChange.CreateFile(LABEL),
+                    edits(LABEL, replace(0, 0, 0, 0, """
+                        package demo;
+
+                        public class Label {
+                            /**
+                             *
+                             */
+                            private final Shapes shapes;
+
+                            /**
+                             * @param shapes
+                             */
+                            Label(Shapes shapes) {
+                                this.shapes = shapes;
+                            }
+
+                            public String show() {
+                                return "unit: " + this.shapes.unit;
+                            }
+                        }\
+                        """))))));
+
+    /** A position inside a method of {@code Circle}: the type that encloses it is the one that moves, as for its name. */
+    public static final Scenario MOVE_THE_TYPE_THAT_ENCLOSES_A_POSITION_IN_ITS_METHOD = new Scenario(
+            "move-the-type-that-encloses-a-position-in-its-method",
+            PROJECT,
+            new Request.MoveTypeToFile(SHAPES, new Position(7, 15)),
+            MOVE_A_STATIC_NESTED_TYPE.answer());
+
+    /** The {@code package} line is in no type: jdtls answers that no type is selected. */
+    public static final Scenario MOVE_A_TYPE_FROM_A_POSITION_OUTSIDE_ANY_TYPE = new Scenario(
+            "move-a-type-from-a-position-outside-any-type",
+            PROJECT,
+            new Request.MoveTypeToFile(SHAPES, new Position(0, 3)),
+            new Answer.Refused(LanguageServerErrorKey.NOT_MOVABLE));
+
+    /**
+     * {@code Shapes}, a top-level type, is already in a file of its name: jdtls refuses (a compilation unit {@code
+     * Shapes.java} already exists in the package).
+     */
+    public static final Scenario MOVE_A_TOP_LEVEL_TYPE = new Scenario(
+            "move-a-top-level-type",
+            PROJECT,
+            new Request.MoveTypeToFile(SHAPES, new Position(2, 13)),
+            new Answer.Refused(LanguageServerErrorKey.NOT_MOVABLE));
+
+    /**
+     * {@code Shapes.Totals}, whose name is that of a type of the package that has its file: jdtls refuses (a compilation
+     * unit {@code Totals.java} already exists in the package) and nothing is overwritten.
+     */
+    public static final Scenario MOVE_A_TYPE_TO_A_FILE_THAT_EXISTS = new Scenario(
+            "move-a-type-to-a-file-that-exists",
+            PROJECT,
+            new Request.MoveTypeToFile(SHAPES, new Position(23, 24)),
+            new Answer.Refused(LanguageServerErrorKey.NOT_MOVABLE));
+
+    /** The project is still being imported: the server cannot say what a move changes. */
+    public static final Scenario MOVE_A_TYPE_WHILE_THE_SERVER_IMPORTS = new Scenario(
+            "move-a-type-while-the-server-imports",
+            PROJECT,
+            new Request.MoveTypeToFile(SHAPES, new Position(5, 24)),
+            new Answer.Refused(LanguageServerErrorKey.NOT_READY));
+
+    /** A file that is not in the project the server was started on. */
+    public static final Scenario MOVE_A_TYPE_OUTSIDE_THE_PROJECT = new Scenario(
+            "move-a-type-of-a-file-outside-the-project",
+            PROJECT,
+            new Request.MoveTypeToFile(ELSEWHERE, new Position(0, 0)),
+            new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+
     /** The project is still being imported: the server cannot say what a rename changes. */
     public static final Scenario RENAME_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "rename-while-the-server-imports",
@@ -711,7 +970,16 @@ public final class Scenarios {
                 EXTRACT_METHOD_TO_AN_INVALID_NAME,
                 EXTRACT_METHOD_TO_A_NAME_IN_USE,
                 EXTRACT_METHOD_WHILE_THE_SERVER_IMPORTS,
-                EXTRACT_METHOD_OUTSIDE_THE_PROJECT);
+                EXTRACT_METHOD_OUTSIDE_THE_PROJECT,
+                MOVE_A_STATIC_NESTED_TYPE,
+                MOVE_AN_INNER_TYPE_THAT_DOES_NOT_USE_THE_OUTER_INSTANCE,
+                MOVE_AN_INNER_TYPE_THAT_USES_THE_OUTER_INSTANCE,
+                MOVE_THE_TYPE_THAT_ENCLOSES_A_POSITION_IN_ITS_METHOD,
+                MOVE_A_TYPE_FROM_A_POSITION_OUTSIDE_ANY_TYPE,
+                MOVE_A_TOP_LEVEL_TYPE,
+                MOVE_A_TYPE_TO_A_FILE_THAT_EXISTS,
+                MOVE_A_TYPE_WHILE_THE_SERVER_IMPORTS,
+                MOVE_A_TYPE_OUTSIDE_THE_PROJECT);
     }
 
     /** The sequels of the catalogue: scenarios in a row, with the files changed on disk between them. */

@@ -113,6 +113,11 @@ final class ProjectServer implements ServedProject {
     }
 
     @Override
+    public ChangeSet moveTypeToFile(Path file, Position position) {
+        return ready().moveTypeToFile(file, position);
+    }
+
+    @Override
     public Optional<ChangeSet> organizeImports(Path file) {
         return ready().organizeImports(file);
     }

@@ -151,7 +151,16 @@ class ScenariosTest {
                         "extract-a-method-to-an-invalid-name",
                         "extract-a-method-to-a-name-in-use",
                         "extract-a-method-while-the-server-imports",
-                        "extract-a-method-of-a-file-outside-the-project");
+                        "extract-a-method-of-a-file-outside-the-project",
+                        "move-a-static-nested-type",
+                        "move-an-inner-type-that-does-not-use-the-outer-instance",
+                        "move-an-inner-type-that-uses-the-outer-instance",
+                        "move-the-type-that-encloses-a-position-in-its-method",
+                        "move-a-type-from-a-position-outside-any-type",
+                        "move-a-top-level-type",
+                        "move-a-type-to-a-file-that-exists",
+                        "move-a-type-while-the-server-imports",
+                        "move-a-type-of-a-file-outside-the-project");
     }
 
     @Test
@@ -203,6 +212,19 @@ class ScenariosTest {
                         LanguageServerErrorKey.INVALID_NAME,
                         LanguageServerErrorKey.NOT_EXTRACTABLE,
                         LanguageServerErrorKey.NOT_EXTRACTABLE,
+                        LanguageServerErrorKey.NOT_READY);
+    }
+
+    @Test
+    void refusesForEachReasonOfThePortOnAMoveOfAType() {
+        assertThat(answeredWith(Answer.Refused.class).stream()
+                        .filter(scenario -> scenario.request() instanceof Request.MoveTypeToFile)
+                        .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
+                        LanguageServerErrorKey.NOT_MOVABLE,
+                        LanguageServerErrorKey.NOT_MOVABLE,
+                        LanguageServerErrorKey.NOT_MOVABLE,
                         LanguageServerErrorKey.NOT_READY);
     }
 
@@ -475,6 +497,65 @@ class ScenariosTest {
                     .as(scenario.name())
                     .containsPattern("\\b" + request.name() + "\\([a-z]*\\);")
                     .containsPattern("private \\w+(\\[\\])? " + request.name() + "\\(");
+        }
+    }
+
+    @Test
+    void createsTheFileOfTheMovedTypeInItsPackageAndTakesTheTypeOutOfItsSource(@TempDir Path directory)
+            throws IOException {
+        List<Scenario> moves = answeredWith(Answer.Moved.class);
+        assertThat(moves).hasSize(4);
+        for (Scenario scenario : moves) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+            var request = (Request.MoveTypeToFile) inside.request();
+            Path created = ((FileChange.CreateFile) ((Answer.Moved) inside.answer())
+                            .changes().changes().stream()
+                                    .filter(FileChange.CreateFile.class::isInstance)
+                                    .findFirst()
+                                    .orElseThrow())
+                    .file();
+            String type = created.getFileName().toString().replace(".java", "");
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.Moved) inside.answer()).changes());
+
+            assertThat(created.getParent())
+                    .as(scenario.name())
+                    .isEqualTo(request.file().getParent());
+            assertThat(Files.readString(created))
+                    .as(scenario.name())
+                    .startsWith("package demo;\n\npublic class " + type + " {")
+                    .endsWith("}");
+            assertThat(Files.readString(request.file())).as(scenario.name()).doesNotContain("class " + type + " {");
+        }
+    }
+
+    @Test
+    void startsEveryMoveInTheTypeItMoves() {
+        for (Scenario scenario : answeredWith(Answer.Moved.class)) {
+            var request = (Request.MoveTypeToFile) scenario.request();
+            String type = ((FileChange.CreateFile) ((Answer.Moved) scenario.answer())
+                            .changes().changes().stream()
+                                    .filter(FileChange.CreateFile.class::isInstance)
+                                    .findFirst()
+                                    .orElseThrow())
+                    .file()
+                    .getFileName()
+                    .toString()
+                    .replace(".java", "");
+            String[] lines = scenario.files().get(request.file()).split("\n", -1);
+            int declaration = IntStream.range(0, lines.length)
+                    .filter(line -> lines[line].matches(".* class " + type + " \\{"))
+                    .findFirst()
+                    .orElseThrow();
+            int end = IntStream.range(declaration, lines.length)
+                    .filter(line ->
+                            lines[line].equals(lines[declaration].substring(0, lines[declaration].indexOf('p')) + "}"))
+                    .findFirst()
+                    .orElseThrow();
+
+            assertThat(request.position().line()).as(scenario.name()).isBetween(declaration, end);
         }
     }
 

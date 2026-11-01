@@ -13,6 +13,7 @@ final class Capabilities {
             case ORGANIZE_IMPORTS -> new OrganizeImports();
             case EXTRACT_VARIABLE -> new ExtractVariable();
             case EXTRACT_METHOD -> new ExtractMethod();
+            case MOVE_TYPE_TO_FILE -> new MoveTypeToFile();
             case STATUS -> new Status();
             case STOP -> new Stop();
             case HELP -> new Help();

@@ -11,8 +11,11 @@ repository does it with `gabier` (installed on the PATH by `mise run install`; t
   jdtls cannot resolve loses them);
 - `gabier extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>` to turn an expression into a local
   variable, and `gabier extract-method [--dry-run] <file> <line>:<column> <line>:<column> <name>` to turn statements, or an
-  expression, into a method (1-based positions, end excluded). A Java refactoring that gabier has a command for goes
-  through it.
+  expression, into a method (1-based positions, end excluded);
+- `gabier move-type-to-file [--dry-run] <file> <line>:<column>` to make a nested type a top-level type in a file of its
+  own (1-based; the innermost type that encloses the position; an inner class that uses its outer instance gets a field and
+  a constructor parameter, which a JUnit `@Nested` class cannot take: see its help). A Java refactoring that gabier has a
+  command for goes through it.
 
 An operation gabier does not have yet is done as a text edit and becomes an issue (`.claude/rules/workflow.md`, step 4 of the
 development loop). The daemon serves one project, and there is one socket per user: two worktrees would share a daemon

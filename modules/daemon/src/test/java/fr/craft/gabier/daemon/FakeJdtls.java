@@ -128,6 +128,8 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private final List<CodeAction> resolveRequests = new CopyOnWriteArrayList<>();
     private CompletableFuture<JdtlsServer.RefactorEdit> refactorEditAnswer = new CompletableFuture<>();
     private final List<JdtlsServer.RefactorEditParams> refactorEditRequests = new CopyOnWriteArrayList<>();
+    private CompletableFuture<JdtlsServer.RefactorEdit> moveAnswer = new CompletableFuture<>();
+    private final List<JdtlsServer.MoveParams> moveRequests = new CopyOnWriteArrayList<>();
     private final List<List<String>> registeredWatchers = new ArrayList<>();
     private final List<DidChangeWatchedFilesParams> watched = new CopyOnWriteArrayList<>();
 
@@ -273,6 +275,20 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         return this;
     }
 
+    /**
+     * The answer to {@code java/move}, whatever the request: the edit, null or a failed future (a refusal). Unscripted,
+     * the request never gets an answer.
+     */
+    FakeJdtls moveAnswers(CompletableFuture<JdtlsServer.RefactorEdit> answer) {
+        this.moveAnswer = answer;
+        return this;
+    }
+
+    /** The {@code java/move} requests received, in order. */
+    List<JdtlsServer.MoveParams> moveRequests() {
+        return moveRequests;
+    }
+
     /** The {@code java/getRefactorEdit} requests received, in order. */
     List<JdtlsServer.RefactorEditParams> refactorEditRequests() {
         return refactorEditRequests;
@@ -348,7 +364,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /**
      * What the fake received and sent about files, in the order it happened: {@code didChangeWatchedFiles},
      * {@code acknowledged <file>} (the publication that answers a deletion), {@code didOpen <file>},
-     * {@code prepareRename <file>}, {@code rename <file>} and {@code getRefactorEdit <file>}, a file by its name.
+     * {@code prepareRename <file>}, {@code rename <file>}, {@code getRefactorEdit <file>} and {@code move <file>}, a file by its name.
      */
     List<String> received() {
         return received;
@@ -560,6 +576,13 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                     + named(params.context().getTextDocument().getUri()));
             refactorEditRequests.add(params);
             return refactorEditAnswer;
+        }
+
+        @Override
+        public CompletableFuture<RefactorEdit> move(MoveParams params) {
+            received.add("move " + named(params.params().getTextDocument().getUri()));
+            moveRequests.add(params);
+            return moveAnswer;
         }
 
         @Override

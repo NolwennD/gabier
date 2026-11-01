@@ -25,6 +25,7 @@ class FakeJavaLanguageServerTest {
     private static final Path MAIN = ROOT.resolve("src/main/java/demo/Main.java");
     private static final Path GREETER = ROOT.resolve("src/main/java/demo/Greeter.java");
     private static final Path TOTALS = ROOT.resolve("src/main/java/demo/Totals.java");
+    private static final Path SHAPES = ROOT.resolve("src/main/java/demo/Shapes.java");
     private static final Path BROKEN = ROOT.resolve("src/main/java/demo/Broken.java");
     private static final Path UNTIDY = ROOT.resolve("src/main/java/demo/Untidy.java");
     private static final Path TIDY = ROOT.resolve("src/main/java/demo/Tidy.java");
@@ -145,6 +146,31 @@ class FakeJavaLanguageServerTest {
                 .isThrownBy(() ->
                         server.extractMethod(TOTALS, new Range(new Position(5, 30), new Position(6, 20)), "partial"))
                 .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE));
+    }
+
+    @Test
+    void answersTheChangeSetOfAMoveScenarioWithPathsUnderItsRoot() {
+        server.scripted(Scenarios.MOVE_AN_INNER_TYPE_THAT_USES_THE_OUTER_INSTANCE);
+
+        ChangeSet changes = server.moveTypeToFile(SHAPES, new Position(17, 17));
+
+        assertThat(changes)
+                .isEqualTo(((Answer.Moved) Scenarios.MOVE_AN_INNER_TYPE_THAT_USES_THE_OUTER_INSTANCE
+                                .inside(ROOT)
+                                .answer())
+                        .changes());
+        assertThat(changes.changes())
+                .contains(new FileChange.CreateFile(ROOT.resolve("src/main/java/demo/Label.java")));
+    }
+
+    @Test
+    void throwsTheRefusalOfAMoveScenario() {
+        server.scripted(Scenarios.MOVE_A_TOP_LEVEL_TYPE);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.moveTypeToFile(SHAPES, new Position(2, 13)))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_MOVABLE));
+        assertThat(server.asked()).containsExactly(new Request.MoveTypeToFile(SHAPES, new Position(2, 13)));
     }
 
     @Test

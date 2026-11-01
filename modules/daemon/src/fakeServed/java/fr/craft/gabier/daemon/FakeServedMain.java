@@ -71,7 +71,9 @@ public final class FakeServedMain {
                 Scenarios.EXTRACT_VARIABLE_OUTSIDE_THE_PROJECT,
                 Scenarios.EXTRACT_METHOD_THAT_USES_A_LOCAL_VARIABLE,
                 Scenarios.EXTRACT_METHOD_FROM_HALF_A_STATEMENT,
-                Scenarios.EXTRACT_METHOD_TO_AN_INVALID_NAME);
+                Scenarios.EXTRACT_METHOD_TO_AN_INVALID_NAME,
+                Scenarios.MOVE_A_STATIC_NESTED_TYPE,
+                Scenarios.MOVE_A_TOP_LEVEL_TYPE);
         for (var scenario : scenarios) {
             scenario.writeProject(root);
             server.scripted(scenario);
@@ -131,6 +133,11 @@ public final class FakeServedMain {
         @Override
         public ChangeSet extractMethod(Path file, Range selection, String name) {
             return server.extractMethod(file, selection, name);
+        }
+
+        @Override
+        public ChangeSet moveTypeToFile(Path file, Position position) {
+            return server.moveTypeToFile(file, position);
         }
 
         @Override

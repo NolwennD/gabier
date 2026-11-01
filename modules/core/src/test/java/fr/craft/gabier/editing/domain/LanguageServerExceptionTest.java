@@ -25,6 +25,7 @@ class LanguageServerExceptionTest {
                         "language-server-not-an-expression",
                         "language-server-not-extractable",
                         "language-server-not-a-file",
+                        "language-server-not-movable",
                         "language-server-not-ready",
                         "language-server-unresolved-imports");
     }
@@ -74,6 +75,19 @@ class LanguageServerExceptionTest {
                         Map.of("file", FILE.toString(), "line", "4", "column", "7", "endLine", "5", "endColumn", "2"));
         assertThat(exception)
                 .hasMessage("The selection 4:7-5:2 of " + FILE + " is not statements or an expression to extract");
+    }
+
+    @Test
+    void saysWhichTypeCannotBeMovedToAFileOfItsOwn() {
+        LanguageServerException exception = LanguageServerException.notMovable(FILE, new Position(4, 7));
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_MOVABLE);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters()).isEqualTo(Map.of("file", FILE.toString(), "line", "4", "column", "7"));
+        assertThat(exception)
+                .hasMessage("No nested type at 4:7 in " + FILE + " can be moved to a file of its own: the position is"
+                        + " outside any type, the type is a top-level type, or a file of its name exists in its"
+                        + " package");
     }
 
     @Test

@@ -32,6 +32,8 @@ import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionKind;
 import org.eclipse.lsp4j.CodeActionParams;
 import org.eclipse.lsp4j.Command;
+import org.eclipse.lsp4j.CreateFile;
+import org.eclipse.lsp4j.CreateFileOptions;
 import org.eclipse.lsp4j.DiagnosticSeverity;
 import org.eclipse.lsp4j.DocumentSymbol;
 import org.eclipse.lsp4j.Location;
@@ -2342,6 +2344,214 @@ class JdtlsLanguageServerTest {
                         .isInstanceOf(JdtlsException.class)
                         .hasMessageContaining(
                                 "Interrupted while waiting for the extraction of the selection into a method");
+                assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+    }
+
+    @Nested
+    class MovingATypeToAFile {
+
+        private static final String OUTER = """
+            package demo;
+
+            public class Shapes {
+                public static class Circle {}
+            }
+            """;
+
+        private final Position inCircle = new Position(3, 24);
+        private Path shapes;
+        private Path circle;
+
+        @BeforeEach
+        void writeTheSources() throws IOException {
+            shapes = write("src/main/java/demo/Shapes.java", OUTER);
+            circle = root.resolve("src/main/java/demo/Circle.java");
+        }
+
+        private static org.eclipse.lsp4j.Position at(int line, int column) {
+            return new org.eclipse.lsp4j.Position(line, column);
+        }
+
+        /** What jdtls answers: the outer class without the type, then the file with the type, in this order. */
+        private CompletableFuture<JdtlsServer.RefactorEdit> moves() {
+            var outer = new TextDocumentEdit(
+                    new VersionedTextDocumentIdentifier(shapes.toUri().toString(), null),
+                    List.of(Either.forLeft(new TextEdit(new Range(at(3, 4), at(3, 35)), ""))));
+            var create = new CreateFile(circle.toUri().toString());
+            create.setOptions(new CreateFileOptions(false, true));
+            var inner = new TextDocumentEdit(
+                    new VersionedTextDocumentIdentifier(circle.toUri().toString(), null),
+                    List.of(Either.forLeft(
+                            new TextEdit(new Range(at(0, 0), at(0, 0)), "package demo;\n\npublic class Circle {}"))));
+            var edit = new WorkspaceEdit(List.of(
+                    Either.forLeft(outer),
+                    Either.<TextDocumentEdit, ResourceOperation>forRight(create),
+                    Either.forLeft(inner)));
+
+            return CompletableFuture.completedFuture(new JdtlsServer.RefactorEdit(edit, null, null));
+        }
+
+        @Test
+        void asksJdtlsToMoveTheTypeToANewFileWithAnEmptyRangeAtThePositionAndTheReferencesUpdated() throws Exception {
+            fake.moveAnswers(moves());
+
+            try (var server = started()) {
+                server.moveTypeToFile(shapes, inCircle);
+
+                assertThat(fake.moveRequests()).hasSize(1);
+                var request = fake.moveRequests().getFirst();
+                assertThat(request.moveKind()).isEqualTo("moveTypeToNewFile");
+                assertThat(request.updateReferences()).isTrue();
+                assertThat(request.params().getTextDocument().getUri())
+                        .isEqualTo(shapes.toUri().toString());
+                assertThat(request.params().getRange()).isEqualTo(new Range(at(3, 24), at(3, 24)));
+            }
+        }
+
+        @Test
+        void answersTheEditsOfTheOuterFileTheCreationOfTheNewFileAndItsTextInTheOrderOfJdtls() throws Exception {
+            fake.moveAnswers(moves());
+
+            try (var server = started()) {
+                ChangeSet changes = server.moveTypeToFile(shapes, inCircle);
+
+                assertThat(changes.changes()).hasSize(3);
+                assertThat(changes.changes().get(0)).isInstanceOfSatisfying(FileChange.EditFile.class, edit -> {
+                    assertThat(edit.file()).isEqualTo(shapes);
+                    assertThat(SourceText.edited(shapes, OUTER, edit.edits()))
+                            .isEqualTo("package demo;\n\npublic class Shapes {\n    \n}\n");
+                });
+                assertThat(changes.changes().get(1)).isEqualTo(new FileChange.CreateFile(circle));
+                assertThat(changes.changes().get(2)).isInstanceOfSatisfying(FileChange.EditFile.class, edit -> {
+                    assertThat(edit.file()).isEqualTo(circle);
+                    assertThat(SourceText.edited(circle, "", edit.edits()))
+                            .isEqualTo("package demo;\n\npublic class Circle {}");
+                });
+                assertThat(shapes).hasContent(OUTER);
+                assertThat(circle).doesNotExist();
+            }
+        }
+
+        @Test
+        void refusesATypeJdtlsCannotMoveWhateverItsReason() throws Exception {
+            fake.moveAnswers(CompletableFuture.completedFuture(new JdtlsServer.RefactorEdit(
+                    null, null, "Failed to move type to new file because no type is selected.")));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.moveTypeToFile(shapes, inCircle))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_MOVABLE);
+                            assertThat(refusal.parameters())
+                                    .containsEntry("file", shapes.toString())
+                                    .containsEntry("line", "3")
+                                    .containsEntry("column", "24");
+                        });
+            }
+        }
+
+        @Test
+        void refusesWhenJdtlsAnswersNothing() throws Exception {
+            fake.moveAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.moveTypeToFile(shapes, inCircle))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_MOVABLE));
+            }
+        }
+
+        @Test
+        void refusesWhenJdtlsDeclinesTheRequest() throws Exception {
+            fake.moveAnswers(CompletableFuture.failedFuture(new ResponseErrorException(
+                    new ResponseError(ResponseErrorCode.InvalidRequest, "cannot move", null))));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.moveTypeToFile(shapes, inCircle))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_MOVABLE));
+            }
+        }
+
+        @Test
+        void refusesAnEditThatChangesNothing() throws Exception {
+            fake.moveAnswers(CompletableFuture.completedFuture(
+                    new JdtlsServer.RefactorEdit(new WorkspaceEdit(List.of()), null, null)));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.moveTypeToFile(shapes, inCircle))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_MOVABLE));
+            }
+        }
+
+        @Test
+        void refusesAFileOutsideTheProjectWithoutAskingJdtls() throws Exception {
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.moveTypeToFile(root.resolve("../Elsewhere.java"), inCircle))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key())
+                                        .isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+                assertThat(fake.moveRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesAsNotReadyWhileJdtlsIsStillImporting() throws Exception {
+            fake.neverAnswersInitialize();
+
+            try (var server = start()) {
+                assertThatThrownBy(() -> server.moveTypeToFile(shapes, inCircle))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+                assertThat(fake.moveRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
+            fake.moveAnswers(CompletableFuture.failedFuture(new IllegalStateException("the model is broken")));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.moveTypeToFile(shapes, inCircle))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("waiting for the move of the type at Position[line=3, column=24]")
+                        .hasMessageContaining("Internal error");
+            }
+        }
+
+        @Test
+        void refusesAFileThatDoesNotExistAndAFolderWithoutAskingJdtls() throws Exception {
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.moveTypeToFile(root.resolve("src/main/java/demo/Nope.java"), inCircle))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.FILE_MISSING));
+                assertThatThrownBy(() -> server.moveTypeToFile(root.resolve("src/main/java/demo"), inCircle))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_A_FILE));
+                assertThat(fake.moveRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
+            fake.moveAnswers(moves());
+
+            try (var server = started()) {
+                Thread.currentThread().interrupt();
+
+                assertThatThrownBy(() -> server.moveTypeToFile(shapes, inCircle))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining(
+                                "Interrupted while waiting for the move of the type at Position[line=3, column=24]");
                 assertThat(Thread.interrupted()).isTrue();
             }
         }

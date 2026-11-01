@@ -87,7 +87,8 @@ class ScenarioReplayTest {
                 || scenario.request() instanceof Request.Rename
                 || scenario.request() instanceof Request.OrganizeImports
                 || scenario.request() instanceof Request.ExtractVariable
-                || scenario.request() instanceof Request.ExtractMethod;
+                || scenario.request() instanceof Request.ExtractMethod
+                || scenario.request() instanceof Request.MoveTypeToFile;
     }
 
     /**
@@ -211,6 +212,15 @@ class ScenarioReplayTest {
                         .isEqualTo(extracted.changes());
                 compile(scenario, root, answer, differences);
             }
+            case Answer.Moved moved -> {
+                var answer = (ChangeSet) ask(server, request);
+                System.out.println(scenario.name() + ": jdtls answered " + answer);
+                differences
+                        .assertThat(answer)
+                        .as("%s: the change set jdtls answers", scenario.name())
+                        .isEqualTo(moved.changes());
+                compile(scenario, root, answer, differences);
+            }
             case Answer.Organized organized -> {
                 var answer = (Optional<?>) ask(server, request);
                 System.out.println(scenario.name() + ": jdtls answered " + answer);
@@ -265,6 +275,7 @@ class ScenarioReplayTest {
                 server.extractVariable(extract.file(), extract.selection(), extract.name());
             case Request.ExtractMethod extract ->
                 server.extractMethod(extract.file(), extract.selection(), extract.name());
+            case Request.MoveTypeToFile move -> server.moveTypeToFile(move.file(), move.position());
         };
     }
 

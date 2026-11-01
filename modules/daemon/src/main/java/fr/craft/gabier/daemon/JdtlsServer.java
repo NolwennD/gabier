@@ -20,6 +20,22 @@ interface JdtlsServer extends LanguageServer {
     CompletableFuture<RefactorEdit> getRefactorEdit(RefactorEditParams params);
 
     /**
+     * The edit of a move, in the same shape as a refactoring: when jdtls cannot do it, there is no edit and a message
+     * (or it answers null).
+     */
+    @JsonRequest("java/move")
+    CompletableFuture<RefactorEdit> move(MoveParams params);
+
+    /**
+     * What is asked of {@code java/move}.
+     *
+     * @param moveKind the move, {@code moveTypeToNewFile} for a nested type
+     * @param params the file and the position (an empty range) of the type to move
+     * @param updateReferences whether the references to what is moved are updated
+     */
+    record MoveParams(String moveKind, CodeActionParams params, boolean updateReferences) {}
+
+    /**
      * What is asked of {@code java/getRefactorEdit}.
      *
      * @param command the refactoring, for instance {@code extractVariable}

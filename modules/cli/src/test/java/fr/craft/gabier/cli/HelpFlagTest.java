@@ -46,6 +46,23 @@ class HelpFlagTest {
         return out.toString(StandardCharsets.UTF_8);
     }
 
+    @Test
+    void theHelpOfMoveTypeToFileWarnsThatANestedTestClassCannotBeInstantiatedOnceMovedAndHowToAvoidIt() {
+        for (var help : new String[][] {{"help", "move-type-to-file"}, {"move-type-to-file", "--help"}}) {
+            assertThat(printedBy(help))
+                    .contains("Notes:")
+                    .contains("gets a field and a constructor parameter of the outer type")
+                    .contains("@Nested test class can then no longer be instantiated by JUnit")
+                    .contains("having it extend the shared base class")
+                    .contains("Refusals");
+        }
+    }
+
+    @Test
+    void theHelpOfACommandWithoutNotesHasNoNotesSection() {
+        assertThat(printedBy("help", "rename")).doesNotContain("Notes:");
+    }
+
     @ParameterizedTest
     @EnumSource(Command.class)
     void theLongFlagGivesTheSameTextAsHelpOfTheCommand(Command command) {

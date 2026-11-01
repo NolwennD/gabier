@@ -265,6 +265,27 @@ class GabierTest {
         }
 
         @Test
+        void moveTypeToFileWithoutAFileAndOnePositionIsAnUnknownUsage() {
+            for (var arguments : List.of(
+                    List.of("move-type-to-file"),
+                    List.of("move-type-to-file", "--dry-run"),
+                    List.of("move-type-to-file", "A.java"),
+                    List.of("move-type-to-file", "A.java", "3:4", "3:9"),
+                    List.of("move-type-to-file", "A.java", "3"),
+                    List.of("move-type-to-file", "A.java", "0:4"),
+                    List.of("move-type-to-file", "A.java", "3:four"))) {
+                out.reset();
+                err.reset();
+
+                assertThat(run(arguments.toArray(String[]::new)))
+                        .as(arguments.toString())
+                        .isEqualTo(2);
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(usageText(String.join(" ", arguments)));
+            }
+        }
+
+        @Test
         void extractVariableWithAPositionThatIsNotLineColonColumnFromOneIsAnUnknownUsage() {
             for (var positions : List.of(
                     List.of("3", "3:9"),
@@ -305,6 +326,7 @@ class GabierTest {
                 "organize-imports",
                 "extract-variable",
                 "extract-method",
+                "move-type-to-file",
                 "status",
                 "stop",
                 "help");
@@ -416,13 +438,22 @@ class GabierTest {
         }
 
         @Test
+        void helpOfACommandWithNotesAsJsonHasThemAndTheOthersDoNot() {
+            assertThat(run("help", "--json", "move-type-to-file")).isZero();
+
+            var help = object(Json.parse(out()));
+            assertThat(help).containsOnlyKeys("name", "summary", "usage", "example", "notes", "refusals");
+            assertThat((String) help.get("notes")).contains("@Nested").contains("extend the shared base class");
+        }
+
+        @Test
         void helpOfAnUnknownCommandIsAUsageErrorThatListsTheKnownOnes() {
             assertThat(run("help", "frobnicate")).isEqualTo(2);
 
             assertThat(out()).isEmpty();
             assertThat(err())
                     .startsWith("Usage error: Unknown command; the commands are diagnostics, rename, organize-imports,"
-                            + " extract-variable, extract-method, status, stop, help (usage-error;"
+                            + " extract-variable, extract-method, move-type-to-file, status, stop, help (usage-error;"
                             + " command=frobnicate)");
         }
 
@@ -1725,6 +1756,120 @@ class GabierTest {
                         .isEqualTo(2);
 
                 assertThat(err()).isEqualTo(NOT_EXTRACTABLE.toJson() + System.lineSeparator());
+            }
+        }
+    }
+
+    @Nested
+    class MovingATypeToAFile {
+
+        private static final String REQUEST = """
+            {"jsonrpc":"2.0","id":1,"method":"move-type-to-file","params":{"column":"%s","dryRun":"%s","file":"%s",\
+            "line":"%s"}}\
+            """;
+        private static final ChangedFiles MOVED = new ChangedFiles(
+                List.of(Path.of("/project/Circle.java")),
+                List.of(),
+                List.of(),
+                List.of(Path.of("/project/Shapes.java"), Path.of("/project/Circle.java")),
+                """
+                --- /project/Circle.java
+                +++ /project/Circle.java
+                @@ -0,0 +1,3 @@
+                +public class Circle {
+                +}
+                """);
+        private static final Problem NOT_MOVABLE = new Problem(
+                "urn:gabier:error:language-server-not-movable",
+                "Not movable",
+                "No nested type at 2:13 in /project/Shapes.java can be moved to a file of its own",
+                "language-server-not-movable",
+                Map.of("file", "/project/Shapes.java"),
+                ErrorStatus.BAD_REQUEST);
+
+        private Path socket() {
+            return directory.resolve("gabier.sock");
+        }
+
+        private int runWithSocket(String... args) {
+            return run(Map.of("GABIER_SOCKET", socket().toString()), args);
+        }
+
+        @Test
+        void asksTheDaemonToMoveTheTypeAtThePositionCountedFromOneAsItIsShownAndSendsItFromZero() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", MOVED.toJson()))) {
+                assertThat(runWithSocket("move-type-to-file", "/project/Shapes.java", "6:25"))
+                        .isZero();
+
+                assertThat(daemon.requests())
+                        .containsExactly(REQUEST.formatted(24, false, Path.of("/project/Shapes.java"), 5));
+            }
+        }
+
+        @Test
+        void asksForADryRunWithTheDryRunOptionWhereverItIsAndSaysThatNothingWasWritten() throws IOException {
+            for (var arguments : List.of(
+                    List.of("move-type-to-file", "--dry-run", "/project/Shapes.java", "6:25"),
+                    List.of("move-type-to-file", "/project/Shapes.java", "6:25", "--dry-run"))) {
+                try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", MOVED.toJson()))) {
+                    out.reset();
+                    assertThat(runWithSocket(arguments.toArray(String[]::new))).isZero();
+
+                    assertThat(daemon.requests())
+                            .containsExactly(REQUEST.formatted(24, true, Path.of("/project/Shapes.java"), 5));
+                    assertThat(out().lines()).startsWith("dry run, nothing written", "modified /project/Shapes.java");
+                }
+                Files.deleteIfExists(socket());
+            }
+        }
+
+        @Test
+        void listsTheFilesThatChangedAndWereCreatedThenShowsTheDiff() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", MOVED.toJson()))) {
+                assertThat(runWithSocket("move-type-to-file", "/project/Shapes.java", "6:25"))
+                        .isZero();
+
+                assertThat(out().lines())
+                        .startsWith(
+                                "modified /project/Shapes.java",
+                                "modified /project/Circle.java",
+                                "created /project/Circle.java",
+                                "",
+                                "--- /project/Circle.java")
+                        .contains("+public class Circle {");
+                assertThat(err()).isEmpty();
+            }
+        }
+
+        @Test
+        void givesTheResultAsJsonWithTheJsonOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", MOVED.toJson()))) {
+                assertThat(runWithSocket("--json", "move-type-to-file", "/project/Shapes.java", "6:25"))
+                        .isZero();
+
+                assertThat(out()).isEqualTo(MOVED.toJson() + System.lineSeparator());
+                assertThat(err()).isEmpty();
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsItsProblemObjectWithTheExitCodeOfItsCategory() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", NOT_MOVABLE))) {
+                assertThat(runWithSocket("move-type-to-file", "/project/Shapes.java", "3:14"))
+                        .isEqualTo(2);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(NOT_MOVABLE.toText() + System.lineSeparator());
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsJsonWithTheJsonOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", NOT_MOVABLE))) {
+                assertThat(runWithSocket("--json", "move-type-to-file", "/project/Shapes.java", "3:14"))
+                        .isEqualTo(2);
+
+                assertThat(err()).isEqualTo(NOT_MOVABLE.toJson() + System.lineSeparator());
             }
         }
     }
