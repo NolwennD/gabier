@@ -1,7 +1,8 @@
 # gabier inline
 
-`gabier inline <file> <line>:<column>` replaces a local variable, a method or a constant by its value, at its uses, and
-removes the declaration, instead of editing every use by hand. It is the counterpart of `extract-variable` and
+`gabier inline <file> <line>:<column>` replaces a local variable, a method or a constant by its value instead of editing every use by hand.
+On a local variable, or on the declaration of a method or a constant, every use is replaced and the declaration is removed; on one
+use of a method or a constant, that use only is replaced and the declaration stays. It is the counterpart of `extract-variable` and
 `extract-method`. The position is on the **name** of what to inline, **from 1** as `diagnostics` shows it, and is sent to
 the daemon from 0. `--dry-run` (anywhere after the command) writes nothing and shows what would change.
 
