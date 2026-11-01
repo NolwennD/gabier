@@ -24,4 +24,9 @@ Done when:
 - [ ] Adding a command that returns changed files is one `@Nested` class of about twenty lines (shown on the last command added).
 - [ ] `bin/ci`: `format`, `build` and `test` are enough (no production code changes); the worker says so.
 
-Depends on: 31-10-2026-2348-gabier-is-composed-of-capabilities.md (the structure it fixes, same module).
+The nested classes are taken out with `gabier move-type-to-file` (dogfooding), not by cutting and pasting. A moved class
+loses its `@Nested`, and the number of tests run per class is compared before and after (the "old test -> new test" table
+above): a top-level class still annotated `@Nested` would silently not run. A friction met with the command is a ticket.
+
+Depends on: 01-11-2026-0855-gabier-moves-a-nested-type-to-its-own-file.md (the command used to move the nested classes, same
+module). The structure it builds on, `31-10-2026-2348-gabier-is-composed-of-capabilities.md`, is closed.
