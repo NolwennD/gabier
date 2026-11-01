@@ -10,8 +10,9 @@ jdtls creates `<Type>.java` in the package of the outer class, takes the type ou
 references and the imports of the project (a user of `Shapes.Circle` in another package now imports `demo.Circle`). A
 static nested class and an inner class that does not use the outer instance are moved as they are. The answer lists the
 files that changed (`modified <file>`) and the one that was created (`created <file>`, listed once, not as modified),
-then the unified diff, where the new file is one block (`--- /dev/null`, `+++ <file>`, its text as one hunk), preceded by `dry run, nothing written` for a dry run; with `--json`, the `ChangedFiles` object of the other
-commands that change files.
+then the unified diff, where the new file is one block (`--- /dev/null`, `+++ <file>`, its text as one hunk), preceded
+by `dry run, nothing written` for a dry run; with `--json`, the `ChangedFiles` object of the other commands that change
+files.
 
 ```text
 $ gabier move-type-to-file --dry-run src/main/java/demo/Shapes.java 6:25

@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * What a set of changes does, or did. Every path is absolute and normalized (see {@link ChangeApplier}). The lists
  * follow the changes of the set, in their order: a file is listed under the path it had when the change ran, and one
- * that is created and then edited is both created and modified.
+ * that is created and then edited is listed as created only.
  *
  * @param created the files created
  * @param renamed the files moved
