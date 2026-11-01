@@ -10,6 +10,7 @@ import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.TextEdit;
+import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
 import fr.craft.gabier.editing.fixtures.Scenario.Request;
 import java.nio.file.Path;
@@ -111,6 +112,15 @@ import java.util.stream.IntStream;
  *       ("The package p is not accessible") are deleted by its edit; the adapter refuses them, which the catalogue
  *       cannot show (a package that is not accessible needs a class path that a scenario project does not have) and
  *       {@code JdtlsProbeTest} replays on the source set {@code fakeServed} of the checkout.
+ *   <li>the creation of a type ({@link #CREATE_A_CLASS}, {@link #CREATE_AN_INTERFACE}, {@link #CREATE_A_RECORD}, {@link
+ *       #CREATE_AN_ENUM}): the file need not exist. The adapter opens it in jdtls with no text and asks for the
+ *       completion at its start: the snippet of the kind is the text of the file, with the {@code package} line that
+ *       jdtls derives from the path ({@link #CREATE_A_TYPE_IN_A_SUBPACKAGE}; none in the default package, {@link
+ *       #CREATE_A_TYPE_IN_THE_DEFAULT_PACKAGE}; a folder that does not exist yet gives its package too, {@link
+ *       #CREATE_A_TYPE_IN_A_NEW_PACKAGE}) and, with the preferences jdtls is started with ({@code
+ *       JdtlsSettings.javaPreferences}), no comment. jdtls offers the snippet for any path: for a file under no source
+ *       folder it writes no package line, so the adapter asks for the source folders ({@code
+ *       java.project.listSourcePaths}) and refuses ({@link #CREATE_A_TYPE_OUTSIDE_THE_SOURCE_FOLDERS}).
  * </ul>
  *
  * <p>The fake answers from the request alone: it does not check that the files a test wrote are the ones of the
@@ -138,6 +148,14 @@ public final class Scenarios {
     private static final Path CIRCLE = Path.of("src/main/java/demo/Circle.java");
     private static final Path SQUARE = Path.of("src/main/java/demo/Square.java");
     private static final Path LABEL = Path.of("src/main/java/demo/Label.java");
+    private static final Path WIDGET = Path.of("src/main/java/demo/Widget.java");
+    private static final Path RENDERER = Path.of("src/main/java/demo/Renderer.java");
+    private static final Path POINT = Path.of("src/main/java/demo/Point.java");
+    private static final Path COLOR = Path.of("src/main/java/demo/Color.java");
+    private static final Path LAUNCHER = Path.of("src/main/java/Launcher.java");
+    private static final Path CONSOLE = Path.of("src/main/java/demo/app/Console.java");
+    private static final Path UNSOURCED = Path.of("Unsourced.java");
+    private static final Path GADGET = Path.of("src/main/java/fresh/Gadget.java");
     private static final Path PRICES = Path.of("src/main/java/demo/Prices.java");
     private static final Path CHECKOUT = Path.of("src/main/java/demo/Checkout.java");
 
@@ -1063,6 +1081,126 @@ public final class Scenarios {
             new Request.Inline(ELSEWHERE, new Position(0, 0)),
             new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
 
+    /**
+     * A class in a new file of the package {@code demo}: the file does not exist and is not written by the server,
+     * which answers the creation of the file and the one edit that gives it its text. The package line is derived
+     * from the path.
+     */
+    public static final Scenario CREATE_A_CLASS = new Scenario(
+            "create-a-class",
+            PROJECT,
+            new Request.CreateType(WIDGET, TypeKind.CLASS),
+            new Answer.Created(created(WIDGET, """
+                package demo;
+
+                public class Widget {
+
+                }
+                """)));
+
+    /** An interface: the same, with the keyword of the kind. */
+    public static final Scenario CREATE_AN_INTERFACE = new Scenario(
+            "create-an-interface",
+            PROJECT,
+            new Request.CreateType(RENDERER, TypeKind.INTERFACE),
+            new Answer.Created(created(RENDERER, """
+                package demo;
+
+                public interface Renderer {
+
+                }
+                """)));
+
+    /** A record, whose components go between the parentheses. */
+    public static final Scenario CREATE_A_RECORD = new Scenario(
+            "create-a-record",
+            PROJECT,
+            new Request.CreateType(POINT, TypeKind.RECORD),
+            new Answer.Created(created(POINT, """
+                package demo;
+
+                public record Point() {
+                }
+                """)));
+
+    /** An enum, whose constants go in the body. */
+    public static final Scenario CREATE_AN_ENUM = new Scenario(
+            "create-an-enum",
+            PROJECT,
+            new Request.CreateType(COLOR, TypeKind.ENUM),
+            new Answer.Created(created(COLOR, """
+                package demo;
+
+                public enum Color {
+
+                }
+                """)));
+
+    /** A file straight under the source folder is in the default package: no {@code package} line. */
+    public static final Scenario CREATE_A_TYPE_IN_THE_DEFAULT_PACKAGE = new Scenario(
+            "create-a-type-in-the-default-package",
+            PROJECT,
+            new Request.CreateType(LAUNCHER, TypeKind.CLASS),
+            new Answer.Created(created(LAUNCHER, """
+                public class Launcher {
+
+                }
+                """)));
+
+    /** A file of a folder two levels down: the package is the path of the folder, with dots. */
+    public static final Scenario CREATE_A_TYPE_IN_A_SUBPACKAGE = new Scenario(
+            "create-a-type-in-a-subpackage",
+            PROJECT,
+            new Request.CreateType(CONSOLE, TypeKind.CLASS),
+            new Answer.Created(created(CONSOLE, """
+                package demo.app;
+
+                public class Console {
+
+                }
+                """)));
+
+    /**
+     * A file in a folder that does not exist yet: the server derives the package from the path all the same, but a
+     * change set creates files and never folders, so the application of the answer is refused.
+     */
+    public static final Scenario CREATE_A_TYPE_IN_A_NEW_PACKAGE = new Scenario(
+            "create-a-type-in-a-new-package",
+            PROJECT,
+            new Request.CreateType(GADGET, TypeKind.CLASS),
+            new Answer.Created(created(GADGET, """
+                package fresh;
+
+                public class Gadget {
+
+                }
+                """)));
+
+    /** The project is still being imported: the server cannot say what the new file holds. */
+    public static final Scenario CREATE_A_TYPE_WHILE_THE_SERVER_IMPORTS = new Scenario(
+            "create-a-type-while-the-server-imports",
+            PROJECT,
+            new Request.CreateType(WIDGET, TypeKind.CLASS),
+            new Answer.Refused(LanguageServerErrorKey.NOT_READY));
+
+    /** A file that is not in the project the server was started on. */
+    public static final Scenario CREATE_A_TYPE_OUTSIDE_THE_PROJECT = new Scenario(
+            "create-a-type-outside-the-project",
+            PROJECT,
+            new Request.CreateType(ELSEWHERE, TypeKind.CLASS),
+            new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+
+    /**
+     * A file of the project that is under none of its source folders (here, its root): no package can be derived for
+     * it, and jdtls would offer the snippet all the same, as for the default package. The adapter asks which folders
+     * are source folders ({@code java.project.listSourcePaths}) and refuses.
+     */
+    public static final Scenario CREATE_A_TYPE_OUTSIDE_THE_SOURCE_FOLDERS = new Scenario(
+            "create-a-type-outside-the-source-folders",
+            PROJECT,
+            new Request.CreateType(UNSOURCED, TypeKind.CLASS),
+            new Answer.Refused(LanguageServerErrorKey.NOT_CREATABLE));
+
     /** The project is still being imported: the server cannot say what a rename changes. */
     public static final Scenario RENAME_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "rename-while-the-server-imports",
@@ -1171,7 +1309,17 @@ public final class Scenarios {
                 INLINE_A_RECURSIVE_METHOD,
                 INLINE_AN_ABSTRACT_METHOD,
                 INLINE_WHILE_THE_SERVER_IMPORTS,
-                INLINE_OUTSIDE_THE_PROJECT);
+                INLINE_OUTSIDE_THE_PROJECT,
+                CREATE_A_CLASS,
+                CREATE_AN_INTERFACE,
+                CREATE_A_RECORD,
+                CREATE_AN_ENUM,
+                CREATE_A_TYPE_IN_THE_DEFAULT_PACKAGE,
+                CREATE_A_TYPE_IN_A_SUBPACKAGE,
+                CREATE_A_TYPE_IN_A_NEW_PACKAGE,
+                CREATE_A_TYPE_WHILE_THE_SERVER_IMPORTS,
+                CREATE_A_TYPE_OUTSIDE_THE_PROJECT,
+                CREATE_A_TYPE_OUTSIDE_THE_SOURCE_FOLDERS);
     }
 
     /** The sequels of the catalogue: scenarios in a row, with the files changed on disk between them. */
@@ -1238,6 +1386,11 @@ public final class Scenarios {
         files.put(BROKEN, source);
 
         return files;
+    }
+
+    /** The creation of a file and the edit that gives it its whole text, as jdtls answers a new type. */
+    private static ChangeSet created(Path file, String text) {
+        return new ChangeSet(List.of(new FileChange.CreateFile(file), edits(file, replace(0, 0, 0, 0, text))));
     }
 
     private static FileChange edits(Path file, TextEdit... edits) {

@@ -15,6 +15,7 @@ import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.TextEdit;
+import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
 import fr.craft.gabier.editing.fixtures.Scenario.Request;
 import fr.craft.gabier.shared.error.domain.MissingMandatoryValueException;
@@ -124,6 +125,20 @@ class ScenarioTest {
                 .isThrownBy(() -> scenario(move, new Answer.Renamed(changes)));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> scenario(move, new Answer.Extracted(changes)));
+    }
+
+    @Test
+    void rejectsACreatedAnswerForAnotherRequestAndAnotherAnswerForCreatingAType() {
+        Request.Rename rename = new Request.Rename(FILE, POSITION, "B");
+        Request.CreateType create = new Request.CreateType(FILE, TypeKind.CLASS);
+        ChangeSet changes = set(new CreateFile(FILE));
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(rename, new Answer.Created(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(create, new Answer.Moved(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(create, new Answer.Extracted(changes)));
     }
 
     @Test
@@ -271,6 +286,32 @@ class ScenarioTest {
     }
 
     @Test
+    void buildsTheRefusalOfACreateTypeRequest() {
+        Request.CreateType create = new Request.CreateType(FILE, TypeKind.RECORD);
+
+        assertThat(create.refusal(LanguageServerErrorKey.NOT_READY).key()).isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(create.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
+                .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(create.refusal(LanguageServerErrorKey.NOT_CREATABLE).parameters())
+                .isEqualTo(Map.of("file", FILE.toString(), "kind", "record"));
+        for (var key : List.of(
+                LanguageServerErrorKey.FILE_MISSING,
+                LanguageServerErrorKey.NOT_A_FILE,
+                LanguageServerErrorKey.NO_SUCH_SYMBOL,
+                LanguageServerErrorKey.INVALID_NAME,
+                LanguageServerErrorKey.NOT_AN_EXPRESSION,
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                LanguageServerErrorKey.NOT_INLINABLE,
+                LanguageServerErrorKey.NOT_MOVABLE,
+                LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
+                LanguageServerErrorKey.UNRESOLVED_IMPORTS)) {
+            assertThatExceptionOfType(IllegalArgumentException.class)
+                    .as(key.toString())
+                    .isThrownBy(() -> create.refusal(key));
+        }
+    }
+
+    @Test
     void buildsTheRefusalOfAnInlineRequest() {
         Request.Inline inline = new Request.Inline(FILE, POSITION);
 
@@ -341,6 +382,8 @@ class ScenarioTest {
                 .isEqualTo(new Request.MoveTypeToFile(Path.of("/project/src/A.java"), POSITION));
         assertThat(new Request.Inline(FILE, POSITION).resolvedIn(ROOT))
                 .isEqualTo(new Request.Inline(Path.of("/project/src/A.java"), POSITION));
+        assertThat(new Request.CreateType(FILE, TypeKind.ENUM).resolvedIn(ROOT))
+                .isEqualTo(new Request.CreateType(Path.of("/project/src/A.java"), TypeKind.ENUM));
     }
 
     @Test
@@ -378,6 +421,20 @@ class ScenarioTest {
 
         assertThat(resolved)
                 .isEqualTo(new Answer.Moved(set(
+                        new CreateFile(Path.of("/project/src/B.java")),
+                        new EditFile(Path.of("/project/src/B.java"), List.of(edit)))));
+    }
+
+    @Test
+    void resolvesTheChangesOfACreatedAnswerAgainstARoot() {
+        TextEdit edit = new TextEdit(new Range(POSITION, POSITION), "class B {}");
+
+        Answer resolved = new Answer.Created(
+                        set(new CreateFile(Path.of("src/B.java")), new EditFile(Path.of("src/B.java"), List.of(edit))))
+                .resolvedIn(ROOT);
+
+        assertThat(resolved)
+                .isEqualTo(new Answer.Created(set(
                         new CreateFile(Path.of("/project/src/B.java")),
                         new EditFile(Path.of("/project/src/B.java"), List.of(edit)))));
     }

@@ -17,7 +17,10 @@ repository does it with `gabier` (installed on the PATH by `mise run install`; t
   a constructor parameter, which a JUnit `@Nested` class cannot take: see its help);
 - `gabier inline [--dry-run] <file> <line>:<column>` to replace a local variable, a method or a constant by its value and
   remove its declaration (1-based; on the declaration of a method or a constant every use is inlined, on one use that use
-  only: see its help). A Java refactoring that gabier has a command for goes through it.
+  only: see its help);
+- `gabier create [--dry-run] <file> <class|interface|record|enum>` to create a Java file that holds an empty type, with the
+  right `package` line and no comment, instead of writing the file by hand (the folder of the file must exist). A Java
+  refactoring that gabier has a command for goes through it.
 
 An operation gabier does not have yet is done as a text edit and becomes an issue (`.claude/rules/workflow.md`, step 4 of the
 development loop). The daemon serves one project, and there is one socket per user: two worktrees would share a daemon

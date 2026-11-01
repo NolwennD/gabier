@@ -10,6 +10,7 @@ import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.SourceText;
 import fr.craft.gabier.editing.domain.TextEdit;
+import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -34,10 +35,14 @@ import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionContext;
 import org.eclipse.lsp4j.CodeActionKind;
 import org.eclipse.lsp4j.CodeActionParams;
+import org.eclipse.lsp4j.CompletionItem;
+import org.eclipse.lsp4j.CompletionItemKind;
+import org.eclipse.lsp4j.CompletionParams;
 import org.eclipse.lsp4j.DiagnosticSeverity;
 import org.eclipse.lsp4j.DidCloseTextDocumentParams;
 import org.eclipse.lsp4j.DidOpenTextDocumentParams;
 import org.eclipse.lsp4j.DocumentSymbolParams;
+import org.eclipse.lsp4j.ExecuteCommandParams;
 import org.eclipse.lsp4j.FileChangeType;
 import org.eclipse.lsp4j.FileEvent;
 import org.eclipse.lsp4j.PrepareRenameParams;
@@ -618,6 +623,104 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     }
 
     /**
+     * Creates a type of the kind in a file that need not exist: the file is opened in jdtls with no text (as an editor
+     * opens a new file, never written to disk), and the snippet of the kind that jdtls completes the empty text with
+     * ({@code textDocument/completion} at 0:0, the client declaring {@code snippetSupport}, see {@link
+     * JdtlsCapabilities}) is the text of the file: jdtls derives the {@code package} line from the folder of the file
+     * in its source folder, writes the name of the file as the name of the type and, with the preferences of {@link
+     * JdtlsSettings#javaPreferences}, no comment. {@link NewTypeText} turns the snippet into the text of a file.
+     *
+     * <p>jdtls offers the snippet whatever the file: for one that is under no source folder it has no package to
+     * write, and gives the text of the default package. So the adapter asks which folders are source folders ({@code
+     * java.project.listSourcePaths}) and refuses a file that is under none. A kind jdtls has no snippet for (a record,
+     * before Java 14) is refused the same way, and jdtls does not say which of the two it is.
+     *
+     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, the file is under no
+     *     source folder or jdtls has no snippet of this kind
+     * @throws JdtlsException if jdtls dies or does not answer in time
+     */
+    @Override
+    public synchronized ChangeSet createType(Path file, TypeKind kind) {
+        JdtlsSession session = ready();
+        Path path = normalized(file);
+        requireInProject(session, path);
+        String what = "the snippet of a " + kind.keyword() + " for " + path;
+        JdtlsWatch watch = session.newWatch();
+        try {
+            takeInChangesOnDisk(session, watch);
+            if (sourceFolders(session, watch).stream().noneMatch(path::startsWith)) {
+                throw LanguageServerException.notCreatable(path, kind);
+            }
+            String snippet = snippetOfKind(session, watch, path, kind, what)
+                    .orElseThrow(() -> LanguageServerException.notCreatable(path, kind));
+            var start = new Position(0, 0);
+            var text = new TextEdit(new Range(start, start), NewTypeText.of(snippet));
+
+            return new ChangeSet(
+                    List.of(new FileChange.CreateFile(path), new FileChange.EditFile(path, List.of(text))));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException("Interrupted while waiting for " + what, interrupted);
+        }
+    }
+
+    /** The snippet of the kind that jdtls completes the empty text of the file with; the file is closed afterwards. */
+    private Optional<String> snippetOfKind(
+            JdtlsSession session, JdtlsWatch watch, Path path, TypeKind kind, String what) throws InterruptedException {
+        var uri = path.toUri().toString();
+        var service = session.server().getTextDocumentService();
+        var params = new CompletionParams(new TextDocumentIdentifier(uri), new org.eclipse.lsp4j.Position(0, 0));
+        service.didOpen(new DidOpenTextDocumentParams(new TextDocumentItem(uri, "java", 1, "")));
+        try {
+            return watch
+                    .await(what, () -> JdtlsRequests.unlessDeclined(service.completion(params)))
+                    .map(completion -> completion.isLeft()
+                            ? completion.getLeft()
+                            : completion.getRight().getItems())
+                    .stream()
+                    .flatMap(List::stream)
+                    .filter(item -> item.getKind() == CompletionItemKind.Snippet
+                            && kind.keyword().equals(item.getLabel()))
+                    .map(CompletionItem::getInsertText)
+                    .filter(Objects::nonNull)
+                    .findFirst();
+        } finally {
+            close(session, List.of(path));
+        }
+    }
+
+    /**
+     * The source folders of the projects jdtls imported ({@code java.project.listSourcePaths}: a result whose {@code
+     * data} lists them, each with its {@code path}).
+     *
+     * @throws JdtlsException if jdtls answers something else
+     */
+    private static List<Path> sourceFolders(JdtlsSession session, JdtlsWatch watch) throws InterruptedException {
+        var command = new ExecuteCommandParams("java.project.listSourcePaths", List.of());
+        Object answer = watch.await(
+                "the source folders of the project (java.project.listSourcePaths)",
+                () -> session.server().getWorkspaceService().executeCommand(command));
+        if (answer instanceof Map<?, ?> result
+                && Boolean.TRUE.equals(result.get("status"))
+                && result.get("data") instanceof List<?> sources) {
+            List<Path> folders = new ArrayList<>();
+            for (Object source : sources) {
+                if (!(source instanceof Map<?, ?> entry && entry.get("path") instanceof String folder)) {
+                    throw notSourceFolders(answer);
+                }
+                folders.add(normalized(Path.of(folder)));
+            }
+            return folders;
+        }
+        throw notSourceFolders(answer);
+    }
+
+    private static JdtlsException notSourceFolders(@Nullable Object answer) {
+        return new JdtlsException(
+                "java.project.listSourcePaths answered " + answer + ", which is not a list of source folders");
+    }
+
+    /**
      * Asks jdtls for the {@code source.organizeImports} code action of the file, resolves it when its edit is not given
      * (jdtls computes it at that point, the client declares {@code codeAction.resolveSupport} for {@code edit}), and
      * gives the edit in the terms of the domain ({@link WorkspaceEdits}). jdtls reads the file as it knows it (nothing is
@@ -841,9 +944,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * @throws LanguageServerException if the file is outside the project, does not exist or is a folder
      */
     private static String textInProject(JdtlsSession session, Path file) {
-        if (session.projects().stream().noneMatch(file::startsWith)) {
-            throw LanguageServerException.fileOutsideProject(file);
-        }
+        requireInProject(session, file);
         if (Files.isDirectory(file)) {
             throw LanguageServerException.notAFile(file);
         }
@@ -853,6 +954,12 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             throw LanguageServerException.fileMissing(file);
         } catch (IOException failure) {
             throw new UncheckedIOException(failure);
+        }
+    }
+
+    private static void requireInProject(JdtlsSession session, Path file) {
+        if (session.projects().stream().noneMatch(file::startsWith)) {
+            throw LanguageServerException.fileOutsideProject(file);
         }
     }
 

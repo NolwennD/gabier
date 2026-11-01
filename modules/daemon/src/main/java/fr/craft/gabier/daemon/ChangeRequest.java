@@ -1,5 +1,6 @@
 package fr.craft.gabier.daemon;
 
+import fr.craft.gabier.editing.application.CreateType;
 import fr.craft.gabier.editing.application.ExtractMethod;
 import fr.craft.gabier.editing.application.ExtractVariable;
 import fr.craft.gabier.editing.application.Inline;
@@ -10,6 +11,7 @@ import fr.craft.gabier.editing.application.RenameTarget;
 import fr.craft.gabier.editing.domain.ChangeReport;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.protocol.ChangedFiles;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -26,6 +28,7 @@ final class ChangeRequest {
     static final String FILE = "file";
     static final String NEW_NAME = "newName";
     static final String NAME = "name";
+    static final String KIND = "kind";
     static final String DRY_RUN = "dryRun";
     static final String START_LINE = "startLine";
     static final String START_COLUMN = "startColumn";
@@ -72,6 +75,11 @@ final class ChangeRequest {
         return value;
     }
 
+    /** The kind of type to create: the keyword of one of the four, as the cli passes it. */
+    TypeKind kind() {
+        return TypeKind.ofKeyword(text(KIND)).orElseThrow(() -> ParameterException.invalid(method, KIND));
+    }
+
     /** What the rename does, written unless the request is a dry run; the answer says the same either way. */
     DaemonMethod.Outcome run(Rename rename, RenameTarget target) {
         String newName = text(NEW_NAME);
@@ -110,6 +118,15 @@ final class ChangeRequest {
     DaemonMethod.Outcome run(Inline inline, Position position) {
         Path file = file();
         ChangeReport report = dryRun() ? inline.dryRun(file, position) : inline.apply(file, position);
+
+        return DaemonMethod.Outcome.of(changed(report).toJson());
+    }
+
+    /** What creating a type of the kind in the file does, written unless the request is a dry run. */
+    DaemonMethod.Outcome run(CreateType create) {
+        Path file = file();
+        TypeKind kind = kind();
+        ChangeReport report = dryRun() ? create.dryRun(file, kind) : create.apply(file, kind);
 
         return DaemonMethod.Outcome.of(changed(report).toJson());
     }

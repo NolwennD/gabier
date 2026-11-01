@@ -5,6 +5,7 @@ import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
 import fr.craft.gabier.editing.fixtures.Scenario.Request;
 import fr.craft.gabier.shared.error.domain.Assert;
@@ -106,6 +107,13 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
         Request request = new Request.Inline(file, position).resolvedIn(root);
 
         return ((Answer.Inlined) answerTo(request)).changes();
+    }
+
+    @Override
+    public ChangeSet createType(Path file, TypeKind kind) {
+        Request request = new Request.CreateType(file, kind).resolvedIn(root);
+
+        return ((Answer.Created) answerTo(request)).changes();
     }
 
     @Override

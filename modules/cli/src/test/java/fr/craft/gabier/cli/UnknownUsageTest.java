@@ -21,7 +21,8 @@ class UnknownUsageTest extends CliTest {
                         extractVariableWithAPositionThatIsNotLineColonColumnFromOne(),
                         extractMethodWithoutAFileTwoPositionsAndAName(),
                         withoutAFileAndOnePosition("move-type-to-file"),
-                        withoutAFileAndOnePosition("inline"))
+                        withoutAFileAndOnePosition("inline"),
+                        createWithoutAFileAndAKind())
                 .flatMap(List::stream);
     }
 
@@ -103,6 +104,14 @@ class UnknownUsageTest extends CliTest {
                 List.of("extract-method", "A.java", "3:4", "3:9"),
                 List.of("extract-method", "A.java", "3:4", "3:9", "name", "more"),
                 List.of("extract-method", "A.java", "3", "3:9", "name"));
+    }
+
+    private static List<List<String>> createWithoutAFileAndAKind() {
+        return List.of(
+                List.of("create"),
+                List.of("create", "--dry-run"),
+                List.of("create", "A.java"),
+                List.of("create", "A.java", "class", "record"));
     }
 
     private static List<List<String>> withoutAFileAndOnePosition(String command) {

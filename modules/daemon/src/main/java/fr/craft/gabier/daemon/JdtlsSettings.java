@@ -50,7 +50,13 @@ record JdtlsSettings(
      *       "#"} the static imports and {@code ""} every import that no other group takes. The default ({@code java},
      *       {@code javax}, {@code org}, {@code com}) puts a blank line between the groups; the project keeps the static
      *       imports first, a blank line, then one block of all the others in ASCII order (open-java-format), which is
-     *       {@code "#"} then {@code ""}.
+     *       {@code "#"} then {@code ""};
+     *   <li>{@code java.templates.typeComment}: the Javadoc jdtls writes above the type of a file it creates (the
+     *       snippets of {@code SnippetCompletionProposal} use it). By default it is a Javadoc with the name of the
+     *       type, and an empty setting means that default. A comment of white space only, which the evaluation of the template
+     *       judges empty ({@code StubUtility.evaluateTemplate}), gives a type with no comment. There is no file header
+     *       to turn off: {@code java.templates.fileHeader} is empty by default. {@code
+     *       java.codeGeneration.generateComments} is {@code false} by default, and does not govern these snippets.
      * </ul>
      */
     static Map<String, Object> javaPreferences() {
@@ -61,6 +67,7 @@ record JdtlsSettings(
                 "java",
                 Map.of(
                         "sources", Map.of("organizeImports", thresholds),
-                        "completion", Map.of("importOrder", List.of("#", ""))));
+                        "completion", Map.of("importOrder", List.of("#", "")),
+                        "templates", Map.of("typeComment", List.of(" "))));
     }
 }

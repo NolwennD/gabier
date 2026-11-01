@@ -89,7 +89,8 @@ class ScenarioReplayTest {
                 || scenario.request() instanceof Request.ExtractVariable
                 || scenario.request() instanceof Request.ExtractMethod
                 || scenario.request() instanceof Request.MoveTypeToFile
-                || scenario.request() instanceof Request.Inline;
+                || scenario.request() instanceof Request.Inline
+                || scenario.request() instanceof Request.CreateType;
     }
 
     /**
@@ -231,6 +232,15 @@ class ScenarioReplayTest {
                         .isEqualTo(inlined.changes());
                 compile(scenario, root, answer, differences);
             }
+            case Answer.Created created -> {
+                var answer = (ChangeSet) ask(server, request);
+                System.out.println(scenario.name() + ": jdtls answered " + answer);
+                differences
+                        .assertThat(answer)
+                        .as("%s: the change set jdtls answers", scenario.name())
+                        .isEqualTo(created.changes());
+                compile(scenario, root, answer, differences);
+            }
             case Answer.Organized organized -> {
                 var answer = (Optional<?>) ask(server, request);
                 System.out.println(scenario.name() + ": jdtls answered " + answer);
@@ -287,6 +297,7 @@ class ScenarioReplayTest {
                 server.extractMethod(extract.file(), extract.selection(), extract.name());
             case Request.MoveTypeToFile move -> server.moveTypeToFile(move.file(), move.position());
             case Request.Inline inline -> server.inline(inline.file(), inline.position());
+            case Request.CreateType create -> server.createType(create.file(), create.kind());
         };
     }
 
@@ -304,7 +315,13 @@ class ScenarioReplayTest {
         Path copy = Files.createTempDirectory("gabier-renamed-").toRealPath();
         try {
             copyProject(root, copy);
-            new ChangeApplier(new NioFileStore()).apply(rebased(answer, root, copy));
+            ChangeSet onTheCopy = rebased(answer, root, copy);
+            for (FileChange change : onTheCopy.changes()) {
+                if (change instanceof FileChange.CreateFile create) {
+                    Files.createDirectories(create.file().getParent());
+                }
+            }
+            new ChangeApplier(new NioFileStore()).apply(onTheCopy);
             differences
                     .assertThat(compilationErrors(copy))
                     .as("%s: the errors of the project once the change set of jdtls is applied", scenario.name())

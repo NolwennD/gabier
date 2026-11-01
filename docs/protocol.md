@@ -47,3 +47,4 @@ daemon ([help](commands/help.md)).
 | `extract-method`   | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-method](commands/extract-method.md)               |
 | `move-type-to-file` | `file`, `line`, `column`, `dryRun`                                          | [move-type-to-file](commands/move-type-to-file.md)         |
 | `inline`           | `file`, `line`, `column`, `dryRun`                                          | [inline](commands/inline.md)                               |
+| `create`           | `file`, `kind`, `dryRun`                                                    | [create](commands/create.md)                               |

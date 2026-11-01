@@ -25,6 +25,9 @@ import java.util.concurrent.locks.LockSupport;
 import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionParams;
 import org.eclipse.lsp4j.Command;
+import org.eclipse.lsp4j.CompletionItem;
+import org.eclipse.lsp4j.CompletionList;
+import org.eclipse.lsp4j.CompletionParams;
 import org.eclipse.lsp4j.Diagnostic;
 import org.eclipse.lsp4j.DidChangeConfigurationParams;
 import org.eclipse.lsp4j.DidChangeTextDocumentParams;
@@ -130,6 +133,11 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private final List<JdtlsServer.RefactorEditParams> refactorEditRequests = new CopyOnWriteArrayList<>();
     private CompletableFuture<JdtlsServer.RefactorEdit> moveAnswer = new CompletableFuture<>();
     private final List<JdtlsServer.MoveParams> moveRequests = new CopyOnWriteArrayList<>();
+    private CompletableFuture<Either<List<CompletionItem>, CompletionList>> completionAnswer =
+            new CompletableFuture<>();
+    private final List<CompletionParams> completionRequests = new CopyOnWriteArrayList<>();
+    private CompletableFuture<Object> sourcePathsAnswer = new CompletableFuture<>();
+    private final AtomicInteger sourcePathRequests = new AtomicInteger();
     private final List<List<String>> registeredWatchers = new ArrayList<>();
     private final List<DidChangeWatchedFilesParams> watched = new CopyOnWriteArrayList<>();
 
@@ -282,6 +290,43 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     FakeJdtls moveAnswers(CompletableFuture<JdtlsServer.RefactorEdit> answer) {
         this.moveAnswer = answer;
         return this;
+    }
+
+    /**
+     * The answer to {@code textDocument/completion}, whatever the request: the items or a list, null or a failed
+     * future. Unscripted, the request never gets an answer.
+     */
+    FakeJdtls completionAnswers(CompletableFuture<Either<List<CompletionItem>, CompletionList>> answer) {
+        this.completionAnswer = answer;
+        return this;
+    }
+
+    /** The {@code textDocument/completion} requests received, in order. */
+    List<CompletionParams> completionRequests() {
+        return completionRequests;
+    }
+
+    /**
+     * The answer to {@code java.project.listSourcePaths}: what jdtls gives, a result whose {@code data} lists the
+     * source folders ({@code path}), then anything a test wants to script (null, another shape, a failed future).
+     * Unscripted, the command never gets an answer.
+     */
+    FakeJdtls sourcePathsAnswers(CompletableFuture<Object> answer) {
+        this.sourcePathsAnswer = answer;
+        return this;
+    }
+
+    /** The source folders of the project, in the shape jdtls lists them. */
+    FakeJdtls listsSourcePaths(Path... folders) {
+        var data = Arrays.stream(folders)
+                .map(folder -> Map.of("path", folder.toString(), "projectName", "project"))
+                .toList();
+        return sourcePathsAnswers(CompletableFuture.completedFuture(Map.of("status", true, "data", data)));
+    }
+
+    /** The number of {@code java.project.listSourcePaths} commands received. */
+    int sourcePathRequests() {
+        return sourcePathRequests.get();
     }
 
     /** The {@code java/move} requests received, in order. */
@@ -665,6 +710,14 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                 }
 
                 @Override
+                public CompletableFuture<Either<List<CompletionItem>, CompletionList>> completion(
+                        CompletionParams params) {
+                    received.add("completion " + named(params.getTextDocument().getUri()));
+                    completionRequests.add(params);
+                    return completionAnswer;
+                }
+
+                @Override
                 public CompletableFuture<CodeAction> resolveCodeAction(CodeAction action) {
                     received.add("resolveCodeAction");
                     resolveRequests.add(action);
@@ -689,6 +742,10 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
             return new WorkspaceService() {
                 @Override
                 public CompletableFuture<Object> executeCommand(ExecuteCommandParams params) {
+                    if (params.getCommand().equals("java.project.listSourcePaths")) {
+                        sourcePathRequests.incrementAndGet();
+                        return sourcePathsAnswer;
+                    }
                     commands.add(params.getCommand());
                     int asked = projectRequests.getAndIncrement();
                     if (answersNothingToProjects) {

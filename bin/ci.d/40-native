@@ -24,7 +24,8 @@ import java.util.stream.Stream;
  * and so are {@code organize-imports} (a dry run, a file organized, a file in order, a refusal) and {@code
  * extract-variable} (a dry run, a variable extracted under the name given, refusals), {@code extract-method} (a dry run,
  * a method extracted under the name given, refusals), {@code move-type-to-file} (a dry run, a type moved to a file of
- * its own, a refusal) and {@code inline} (a dry run, a constant inlined, a refusal);
+ * its own, a refusal), {@code inline} (a dry run, a constant inlined, a refusal) and {@code create} (a dry run, a class
+ * created, refusals);
  * a request command with no daemon running starts {@code gabier-daemon} (found on the {@code PATH} or next to the cli;
  * not found, exiting at once), the next request uses it, and {@code stop} ends it. Runs in the current directory, the
  * checkout under verification. It starts and signals only the processes it started, by their handle, and the daemons
@@ -252,6 +253,7 @@ public final class Native {
                 extractMethodWithTheFakeServer();
                 moveTypeToFileWithTheFakeServer();
                 inlineWithTheFakeServer();
+                createWithTheFakeServer();
                 fakeServedRefusesAFolderThatIsNotEmpty();
             } finally {
                 for (Process process : started) {
@@ -861,6 +863,71 @@ public final class Native {
                     "gabier inline replaces the constant by its value in the files that use it and removes it");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after the inlining");
+        }
+
+        /**
+         * {@code gabier create} against the daemon served by the fake language server: the dry run writes nothing, the
+         * class is created with the package line the server gave, and a second creation of the file, and a name that is
+         * not the name of a type, are refused as problem objects that write nothing.
+         */
+        private void createWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("create-project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            Path widget = project.resolve("src/main/java/demo/Widget.java");
+            String file = "create-project/src/main/java/demo/Widget.java";
+
+            Run dryRun = gabier("create", "--dry-run", file, "class");
+            expect(
+                    dryRun.exit() == 0
+                            && dryRun.err().isEmpty()
+                            && dryRun.out().lines().findFirst().orElse("").equals("dry run, nothing written")
+                            && dryRun.out().contains("created " + widget)
+                            && dryRun.out().contains("+public class Widget {")
+                            && Files.notExists(widget),
+                    "gabier create --dry-run lists the file and the diff and writes nothing");
+
+            Run json = gabier("--json", "create", "--dry-run", file, "class");
+            expect(
+                    json.exit() == 0 && json.out().contains("\"created\":[") && Files.notExists(widget),
+                    "gabier --json create gives the result as the daemon gave it");
+
+            Run kind = gabier("create", file, "annotation");
+            expect(
+                    kind.exit() == 2
+                            && kind.out().isEmpty()
+                            && kind.err().contains("(invalid-parameter; ")
+                            && Files.notExists(widget),
+                    "create of a kind that is not one of the four is refused as a problem object, exit 2");
+
+            Run created = gabier("create", file, "class");
+            expect(
+                    created.exit() == 0
+                            && created.out().contains("created " + widget)
+                            && Files.exists(widget)
+                            && Files.readString(widget).equals("package demo;\n\npublic class Widget {\n\n}\n"),
+                    "gabier create writes the file with the package line, the class and no comment");
+
+            Run again = gabier("create", file, "class");
+            expect(
+                    again.exit() == 2
+                            && again.out().isEmpty()
+                            && again.err().contains("(editing-file-exists; ")
+                            && Files.readString(widget).equals("package demo;\n\npublic class Widget {\n\n}\n"),
+                    "create of a file that exists is refused as a problem object and leaves the file as it was");
+
+            Run name = gabier("create", "create-project/src/main/java/demo/widget-impl.java", "class");
+            expect(
+                    name.exit() == 2
+                            && name.out().isEmpty()
+                            && name.err().contains("(editing-not-a-type-name; ")
+                            && Files.notExists(project.resolve("src/main/java/demo/widget-impl.java")),
+                    "create of a file whose name is not a type name is refused as a problem object, exit 2");
+            gabier("stop");
+            expect(ends(process), "the daemon served by the fake stops after the creation");
         }
 
         /** A {@code gabier-daemon} in the folder: a script with this body, which the cli finds and launches. */

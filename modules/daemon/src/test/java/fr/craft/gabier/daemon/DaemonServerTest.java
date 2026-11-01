@@ -94,7 +94,9 @@ class DaemonServerTest {
                         .scripted(Scenarios.MOVE_A_STATIC_NESTED_TYPE)
                         .scripted(Scenarios.MOVE_A_TOP_LEVEL_TYPE)
                         .scripted(Scenarios.INLINE_A_CONSTANT)
-                        .scripted(Scenarios.INLINE_A_VARIABLE_ASSIGNED_TWICE));
+                        .scripted(Scenarios.INLINE_A_VARIABLE_ASSIGNED_TWICE)
+                        .scripted(Scenarios.CREATE_A_CLASS)
+                        .scripted(Scenarios.CREATE_A_TYPE_OUTSIDE_THE_PROJECT));
     }
 
     private DaemonServer open() {
@@ -618,6 +620,43 @@ class DaemonServerTest {
                         .contains("\"key\":\"language-server-not-inlinable\"");
                 assertThat(Files.readString(prices)).isEqualTo(before);
             }
+        }
+
+        @Test
+        void createAnswersWhatWasCreatedAndWritesTheFileUnlessItIsADryRun() throws IOException {
+            serving();
+            Scenarios.CREATE_A_CLASS.writeProject(directory);
+            var widget = directory.resolve("src/main/java/demo/Widget.java");
+
+            try (var client = connect(socket())) {
+                var dryRun = client.ask(createRequest(widget, "class", true));
+
+                assertThat(dryRun).contains("\"created\":[").contains("Widget.java");
+                assertThat(widget).doesNotExist();
+
+                var done = client.ask(createRequest(widget, "class", false));
+
+                assertThat(done).contains("\"created\":[");
+                assertThat(widget).content().isEqualTo("package demo;\n\npublic class Widget {\n\n}\n");
+            }
+        }
+
+        @Test
+        void aFileOutsideTheProjectIsRefusedByCreateWithItsProblemObject() throws IOException {
+            serving();
+            Scenarios.CREATE_A_TYPE_OUTSIDE_THE_PROJECT.writeProject(directory);
+            var outside = directory.resolve("../outside/Elsewhere.java").normalize();
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask(createRequest(outside, "class", false)))
+                        .contains("\"key\":\"language-server-file-outside-project\"");
+            }
+        }
+
+        private static String createRequest(Path file, String kind, boolean dryRun) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"create","params":{"file":"%s","kind":"%s","dryRun":"%s"}}
+                """.formatted(file, kind, dryRun);
         }
 
         private static String inlineRequest(Path file, String line, String column, boolean dryRun) {

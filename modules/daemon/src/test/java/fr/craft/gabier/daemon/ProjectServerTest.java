@@ -11,6 +11,7 @@ import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.protocol.JdtlsState;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
 import java.io.IOException;
@@ -168,6 +169,11 @@ class ProjectServerTest {
         }
 
         @Override
+        public ChangeSet createType(Path file, TypeKind kind) {
+            return RENAMED;
+        }
+
+        @Override
         public Optional<ChangeSet> organizeImports(Path file) {
             return Optional.of(RENAMED);
         }
@@ -273,6 +279,13 @@ class ProjectServerTest {
         }
 
         @Test
+        void aCreationOfATypeStartsItToo() {
+            assertThat(project.createType(FILE, TypeKind.CLASS)).isEqualTo(ScriptedServer.RENAMED);
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
         void anInlineStartsItToo() {
             assertThat(project.inline(FILE, new Position(0, 0))).isEqualTo(ScriptedServer.RENAMED);
 
@@ -289,6 +302,7 @@ class ProjectServerTest {
             project.extractMethod(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x");
             project.moveTypeToFile(FILE, new Position(0, 0));
             project.inline(FILE, new Position(0, 0));
+            project.createType(FILE, TypeKind.RECORD);
 
             assertThat(starter.starts).hasValue(1);
         }

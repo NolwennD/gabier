@@ -77,6 +77,19 @@ class HelpFlagTest {
     }
 
     @Test
+    void theHelpOfCreateSaysWhereThePackageComesFromAndThatTheFolderMustExist() {
+        for (var help : new String[][] {{"help", "create"}, {"create", "--help"}}) {
+            assertThat(printedBy(help))
+                    .contains("Notes:")
+                    .contains("the package line comes from the folder of the file")
+                    .contains("The folder of the file must exist")
+                    .contains("editing-file-exists")
+                    .contains("language-server-not-creatable")
+                    .contains("Refusals");
+        }
+    }
+
+    @Test
     void theHelpOfACommandWithoutNotesHasNoNotesSection() {
         assertThat(printedBy("help", "rename")).doesNotContain("Notes:");
     }

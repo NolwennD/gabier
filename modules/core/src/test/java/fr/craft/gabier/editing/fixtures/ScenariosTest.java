@@ -172,7 +172,17 @@ class ScenariosTest {
                         "inline-a-recursive-method",
                         "inline-an-abstract-method",
                         "inline-while-the-server-imports",
-                        "inline-a-file-outside-the-project");
+                        "inline-a-file-outside-the-project",
+                        "create-a-class",
+                        "create-an-interface",
+                        "create-a-record",
+                        "create-an-enum",
+                        "create-a-type-in-the-default-package",
+                        "create-a-type-in-a-subpackage",
+                        "create-a-type-in-a-new-package",
+                        "create-a-type-while-the-server-imports",
+                        "create-a-type-outside-the-project",
+                        "create-a-type-outside-the-source-folders");
     }
 
     @Test
@@ -255,6 +265,17 @@ class ScenariosTest {
     }
 
     @Test
+    void refusesForEachReasonOfThePortOnACreationOfAType() {
+        assertThat(answeredWith(Answer.Refused.class).stream()
+                        .filter(scenario -> scenario.request() instanceof Request.CreateType)
+                        .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
+                        LanguageServerErrorKey.NOT_CREATABLE,
+                        LanguageServerErrorKey.NOT_READY);
+    }
+
+    @Test
     void holdsOnlyRelativeJavaSourcesAndRelativeRequests() {
         for (Scenario scenario : ALL) {
             assertThat(scenario.files().keySet())
@@ -290,6 +311,8 @@ class ScenariosTest {
                 assertThat(scenario.files().keySet())
                         .as(scenario.name())
                         .anyMatch(source -> source.startsWith(file) && !source.equals(file));
+            } else if (scenario.request() instanceof Request.CreateType) {
+                assertThat(scenario.files()).as(scenario.name()).doesNotContainKey(file);
             } else {
                 assertThat(scenario.files()).as(scenario.name()).containsKey(file);
             }
@@ -582,6 +605,34 @@ class ScenariosTest {
                     .orElseThrow();
 
             assertThat(request.position().line()).as(scenario.name()).isBetween(declaration, end);
+        }
+    }
+
+    @Test
+    void createsTheFileOfTheKindAskedInThePackageOfItsFolderWithNoComment(@TempDir Path directory) throws IOException {
+        List<Scenario> creations = answeredWith(Answer.Created.class);
+        assertThat(creations).hasSize(7);
+        for (Scenario scenario : creations) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+            var request = (Request.CreateType) inside.request();
+            Path sources = root.resolve("src/main/java");
+            Files.createDirectories(request.file().getParent());
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.Created) inside.answer()).changes());
+
+            String folder = sources.relativize(request.file().getParent()).toString();
+            String packageLine = folder.isEmpty() ? "" : "package " + folder.replace('/', '.') + ";\n\n";
+            String name = request.file().getFileName().toString().replace(".java", "");
+            assertThat(Files.readString(request.file()))
+                    .as(scenario.name())
+                    .startsWith(packageLine + "public " + request.kind().keyword() + " " + name)
+                    .endsWith("}\n")
+                    .doesNotContain("/*")
+                    .doesNotContain("//")
+                    .doesNotContain("\t")
+                    .doesNotContain("$");
         }
     }
 

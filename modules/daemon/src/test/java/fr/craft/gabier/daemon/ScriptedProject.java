@@ -5,6 +5,7 @@ import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.protocol.JdtlsState;
 import java.nio.file.Path;
 import java.util.List;
@@ -152,6 +153,11 @@ final class ScriptedProject implements ServedProject {
     @Override
     public ChangeSet inline(Path file, Position position) {
         return server.inline(file, position);
+    }
+
+    @Override
+    public ChangeSet createType(Path file, TypeKind kind) {
+        return server.createType(file, kind);
     }
 
     @Override

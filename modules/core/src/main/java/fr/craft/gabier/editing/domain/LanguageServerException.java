@@ -79,6 +79,20 @@ public final class LanguageServerException extends GeneratorException {
                         + " abstract, a declaration that nothing uses)"));
     }
 
+    /**
+     * The server offers no type of this kind to create in the file: the file is outside every source folder of the
+     * project (so no package can be derived for it), or the Java level of the project has no such type (a record
+     * before Java 14). The server does not tell which.
+     */
+    public static LanguageServerException notCreatable(Path file, TypeKind kind) {
+        return new LanguageServerException(GeneratorException.badRequest(LanguageServerErrorKey.NOT_CREATABLE)
+                .message("A " + kind.keyword() + " cannot be created in " + file
+                        + ": the file is outside every source folder of the project, or the Java level of the project"
+                        + " has no such type")
+                .addParameter("file", file.toString())
+                .addParameter("kind", kind.keyword()));
+    }
+
     /** The server does not accept the name for the symbol at the position. */
     public static LanguageServerException invalidName(Path file, Position position, String name) {
         return new LanguageServerException(positioned(LanguageServerErrorKey.INVALID_NAME, file, position)

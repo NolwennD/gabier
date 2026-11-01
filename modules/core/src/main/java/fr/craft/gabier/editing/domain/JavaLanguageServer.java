@@ -82,6 +82,16 @@ public interface JavaLanguageServer {
     ChangeSet inline(Path file, Position position);
 
     /**
+     * What creating a type of a kind in a new file changes: the file is created, with the {@code package} line its path
+     * gives (none in the default package), the declaration of an empty type of that kind named after the file, and no
+     * comment. The file need not exist, and the server does not write it.
+     *
+     * @return the change set to apply, which creates the file and gives it its text
+     * @throws LanguageServerException if the server is not ready or the file is not in the project
+     */
+    ChangeSet createType(Path file, TypeKind kind);
+
+    /**
      * What organizing the imports of a file changes: the missing imports are added, the unused ones removed, and the
      * rest ordered as the server is configured to (for gabier, as the project keeps them, with no import collapsed into
      * a star). Only the file itself is edited.

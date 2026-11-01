@@ -23,6 +23,7 @@ class LanguageServerExceptionTest {
                         "language-server-invalid-name",
                         "language-server-no-such-symbol",
                         "language-server-not-an-expression",
+                        "language-server-not-creatable",
                         "language-server-not-inlinable",
                         "language-server-not-extractable",
                         "language-server-not-a-file",
@@ -102,6 +103,18 @@ class LanguageServerExceptionTest {
                 .hasMessage("Nothing at 4:7 in " + FILE + " can be inlined: the position is not on a local variable,"
                         + " a method or a constant, or the server refuses it (a variable assigned more than once, a"
                         + " method that is recursive or abstract, a declaration that nothing uses)");
+    }
+
+    @Test
+    void saysWhichKindOfTypeTheServerCannotCreateWhere() {
+        LanguageServerException exception = LanguageServerException.notCreatable(FILE, TypeKind.RECORD);
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_CREATABLE);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters()).isEqualTo(Map.of("file", FILE.toString(), "kind", "record"));
+        assertThat(exception)
+                .hasMessage("A record cannot be created in " + FILE + ": the file is outside every source folder of"
+                        + " the project, or the Java level of the project has no such type");
     }
 
     @Test

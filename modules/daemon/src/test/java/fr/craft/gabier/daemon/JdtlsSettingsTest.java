@@ -42,10 +42,13 @@ class JdtlsSettingsTest {
     }
 
     @Test
-    void neverCollapsesImportsToAStarAndOrdersThemAsTheProjectDoes() {
+    void holdsThePreferencesJdtlsIsStartedWith() {
         // The Checkstyle of the project bans star imports; its formatter keeps the static imports first, then one
         // block of all the others, in ASCII order. "#" is the group of the static imports, "" the one of everything
-        // else.
+        // else. jdtls writes /** Name */ above the type of a file it creates with its default type comment, and an
+        // empty
+        // setting means "the default": a type comment of white space only is judged empty when the template is
+        // evaluated, so the type has none. (java.templates.fileHeader is empty by default: no header.)
         assertThat(JdtlsSettings.javaPreferences())
                 .isEqualTo(Map.of(
                         "java",
@@ -59,6 +62,8 @@ class JdtlsSettingsTest {
                                                 "staticStarThreshold",
                                                 Integer.MAX_VALUE)),
                                 "completion",
-                                Map.of("importOrder", List.of("#", "")))));
+                                Map.of("importOrder", List.of("#", "")),
+                                "templates",
+                                Map.of("typeComment", List.of(" ")))));
     }
 }

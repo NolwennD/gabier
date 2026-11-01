@@ -11,6 +11,7 @@ import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.TextEdit;
+import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
 import fr.craft.gabier.editing.fixtures.Scenario.Request;
 import java.nio.file.Path;
@@ -29,6 +30,7 @@ class FakeJavaLanguageServerTest {
     private static final Path SHAPES = ROOT.resolve("src/main/java/demo/Shapes.java");
     private static final Path BROKEN = ROOT.resolve("src/main/java/demo/Broken.java");
     private static final Path UNTIDY = ROOT.resolve("src/main/java/demo/Untidy.java");
+    private static final Path WIDGET = ROOT.resolve("src/main/java/demo/Widget.java");
     private static final Path TIDY = ROOT.resolve("src/main/java/demo/Tidy.java");
 
     private FakeJavaLanguageServer server;
@@ -172,6 +174,28 @@ class FakeJavaLanguageServerTest {
                 .isThrownBy(() -> server.moveTypeToFile(SHAPES, new Position(2, 13)))
                 .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_MOVABLE));
         assertThat(server.asked()).containsExactly(new Request.MoveTypeToFile(SHAPES, new Position(2, 13)));
+    }
+
+    @Test
+    void answersTheChangeSetOfACreateScenarioWithPathsUnderItsRoot() {
+        server.scripted(Scenarios.CREATE_A_CLASS);
+
+        ChangeSet changes = server.createType(WIDGET, TypeKind.CLASS);
+
+        assertThat(changes)
+                .isEqualTo(
+                        ((Answer.Created) Scenarios.CREATE_A_CLASS.inside(ROOT).answer()).changes());
+        assertThat(changes.changes()).contains(new FileChange.CreateFile(WIDGET));
+        assertThat(server.asked()).containsExactly(new Request.CreateType(WIDGET, TypeKind.CLASS));
+    }
+
+    @Test
+    void throwsTheRefusalOfACreateScenario() {
+        server.scripted(Scenarios.CREATE_A_TYPE_WHILE_THE_SERVER_IMPORTS);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.createType(WIDGET, TypeKind.CLASS))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
     }
 
     @Test

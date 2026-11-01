@@ -13,6 +13,7 @@ sealed interface Capability
                 ExtractMethod,
                 MoveTypeToFile,
                 Inline,
+                Create,
                 Status,
                 Stop,
                 Help {

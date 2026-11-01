@@ -4,6 +4,7 @@ import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.editing.fixtures.FakeJavaLanguageServer;
 import fr.craft.gabier.editing.fixtures.Scenario;
 import fr.craft.gabier.editing.fixtures.Scenarios;
@@ -75,7 +76,9 @@ public final class FakeServedMain {
                 Scenarios.MOVE_A_STATIC_NESTED_TYPE,
                 Scenarios.MOVE_A_TOP_LEVEL_TYPE,
                 Scenarios.INLINE_A_CONSTANT,
-                Scenarios.INLINE_A_VARIABLE_ASSIGNED_TWICE);
+                Scenarios.INLINE_A_VARIABLE_ASSIGNED_TWICE,
+                Scenarios.CREATE_A_CLASS,
+                Scenarios.CREATE_A_TYPE_OUTSIDE_THE_PROJECT);
         for (var scenario : scenarios) {
             scenario.writeProject(root);
             server.scripted(scenario);
@@ -145,6 +148,11 @@ public final class FakeServedMain {
         @Override
         public ChangeSet inline(Path file, Position position) {
             return server.inline(file, position);
+        }
+
+        @Override
+        public ChangeSet createType(Path file, TypeKind kind) {
+            return server.createType(file, kind);
         }
 
         @Override

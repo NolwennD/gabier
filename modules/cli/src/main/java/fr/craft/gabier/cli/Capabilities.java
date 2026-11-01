@@ -16,6 +16,7 @@ final class Capabilities {
             new ExtractMethod(),
             new MoveTypeToFile(),
             new Inline(),
+            new Create(),
             new Status(),
             new Stop(),
             new Help());

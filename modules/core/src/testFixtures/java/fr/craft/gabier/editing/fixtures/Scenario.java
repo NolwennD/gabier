@@ -11,6 +11,7 @@ import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.shared.error.domain.Assert;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -75,6 +76,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                         request);
             case Answer.Moved _ -> require(request instanceof Request.MoveTypeToFile, "moved", request);
             case Answer.Inlined _ -> require(request instanceof Request.Inline, "inlined", request);
+            case Answer.Created _ -> require(request instanceof Request.CreateType, "created", request);
             case Answer.Organized _ -> require(request instanceof Request.OrganizeImports, "organized", request);
             case Answer.AlreadyOrganized _ ->
                 require(request instanceof Request.OrganizeImports, "already organized", request);
@@ -144,7 +146,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             AMBIGUOUS_IMPORTS,
-                            UNRESOLVED_IMPORTS ->
+                            UNRESOLVED_IMPORTS,
+                            NOT_CREATABLE ->
                         throw new IllegalArgumentException("A request for diagnostics cannot get " + key);
                 };
             }
@@ -171,7 +174,13 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case AMBIGUOUS_IMPORTS -> LanguageServerException.ambiguousImports(file, details);
                     case UNRESOLVED_IMPORTS -> LanguageServerException.unresolvedImports(file, details);
-                    case NO_SUCH_SYMBOL, INVALID_NAME, NOT_AN_EXPRESSION, NOT_EXTRACTABLE, NOT_INLINABLE, NOT_MOVABLE ->
+                    case NO_SUCH_SYMBOL,
+                            INVALID_NAME,
+                            NOT_AN_EXPRESSION,
+                            NOT_EXTRACTABLE,
+                            NOT_INLINABLE,
+                            NOT_MOVABLE,
+                            NOT_CREATABLE ->
                         throw new IllegalArgumentException("A request to organize imports cannot get " + key);
                 };
             }
@@ -205,7 +214,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             AMBIGUOUS_IMPORTS,
-                            UNRESOLVED_IMPORTS -> throw new IllegalArgumentException("A rename cannot get " + key);
+                            UNRESOLVED_IMPORTS,
+                            NOT_CREATABLE -> throw new IllegalArgumentException("A rename cannot get " + key);
                 };
             }
         }
@@ -238,7 +248,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             AMBIGUOUS_IMPORTS,
-                            UNRESOLVED_IMPORTS ->
+                            UNRESOLVED_IMPORTS,
+                            NOT_CREATABLE ->
                         throw new IllegalArgumentException("An extraction of a variable cannot get " + key);
                 };
             }
@@ -272,7 +283,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             AMBIGUOUS_IMPORTS,
-                            UNRESOLVED_IMPORTS ->
+                            UNRESOLVED_IMPORTS,
+                            NOT_CREATABLE ->
                         throw new IllegalArgumentException("An extraction of a method cannot get " + key);
                 };
             }
@@ -305,8 +317,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             AMBIGUOUS_IMPORTS,
-                            UNRESOLVED_IMPORTS ->
-                        throw new IllegalArgumentException("A move of a type cannot get " + key);
+                            UNRESOLVED_IMPORTS,
+                            NOT_CREATABLE -> throw new IllegalArgumentException("A move of a type cannot get " + key);
                 };
             }
         }
@@ -338,7 +350,42 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_EXTRACTABLE,
                             NOT_MOVABLE,
                             AMBIGUOUS_IMPORTS,
-                            UNRESOLVED_IMPORTS -> throw new IllegalArgumentException("An inlining cannot get " + key);
+                            UNRESOLVED_IMPORTS,
+                            NOT_CREATABLE -> throw new IllegalArgumentException("An inlining cannot get " + key);
+                };
+            }
+        }
+
+        /** The creation of a type of a kind in a new file. */
+        record CreateType(Path file, TypeKind kind) implements Request {
+
+            public CreateType {
+                Assert.notNull("file", file);
+                Assert.notNull("kind", kind);
+            }
+
+            @Override
+            public CreateType resolvedIn(Path root) {
+                return new CreateType(resolve(root, file), kind);
+            }
+
+            @Override
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
+                return switch (key) {
+                    case NOT_READY -> LanguageServerException.notReady();
+                    case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
+                    case NOT_CREATABLE -> LanguageServerException.notCreatable(file, kind);
+                    case FILE_MISSING,
+                            NOT_A_FILE,
+                            NO_SUCH_SYMBOL,
+                            INVALID_NAME,
+                            NOT_AN_EXPRESSION,
+                            NOT_EXTRACTABLE,
+                            NOT_INLINABLE,
+                            NOT_MOVABLE,
+                            AMBIGUOUS_IMPORTS,
+                            UNRESOLVED_IMPORTS ->
+                        throw new IllegalArgumentException("A creation of a type cannot get " + key);
                 };
             }
         }
@@ -432,6 +479,19 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             @Override
             public Inlined resolvedIn(Path root) {
                 return new Inlined(Renamed.resolvedIn(root, changes));
+            }
+        }
+
+        /** The change set that creates a type in a new file: the creation of the file and the edit that holds its text. */
+        record Created(ChangeSet changes) implements Answer {
+
+            public Created {
+                Assert.notNull("changes", changes);
+            }
+
+            @Override
+            public Created resolvedIn(Path root) {
+                return new Created(Renamed.resolvedIn(root, changes));
             }
         }
 

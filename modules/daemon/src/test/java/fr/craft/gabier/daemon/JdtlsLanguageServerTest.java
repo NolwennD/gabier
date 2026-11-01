@@ -12,6 +12,7 @@ import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.SourceText;
+import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -32,6 +33,9 @@ import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionKind;
 import org.eclipse.lsp4j.CodeActionParams;
 import org.eclipse.lsp4j.Command;
+import org.eclipse.lsp4j.CompletionItem;
+import org.eclipse.lsp4j.CompletionItemKind;
+import org.eclipse.lsp4j.CompletionList;
 import org.eclipse.lsp4j.CreateFile;
 import org.eclipse.lsp4j.CreateFileOptions;
 import org.eclipse.lsp4j.DiagnosticSeverity;
@@ -2839,6 +2843,267 @@ class JdtlsLanguageServerTest {
                         .hasMessageContaining(
                                 "Interrupted while waiting for the inlining of the symbol at Position[line=3,"
                                         + " column=21]");
+                assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+    }
+
+    @Nested
+    class CreatingAType {
+
+        private static final String SNIPPET = "package demo;\n\npublic class Widget {\n\n\t${0}\n}";
+
+        private Path widget;
+        private Path sources;
+
+        @BeforeEach
+        void chooseTheFile() {
+            sources = root.resolve("src/main/java");
+            widget = root.resolve("src/main/java/demo/Widget.java");
+            fake.listsSourcePaths(sources);
+        }
+
+        private static CompletionItem snippet(String label, String text) {
+            var item = new CompletionItem(label);
+            item.setKind(CompletionItemKind.Snippet);
+            item.setInsertText(text);
+            return item;
+        }
+
+        private static CompletableFuture<Either<List<CompletionItem>, CompletionList>> items(CompletionItem... items) {
+            return CompletableFuture.completedFuture(Either.forLeft(List.of(items)));
+        }
+
+        private static org.eclipse.lsp4j.Position at(int line, int column) {
+            return new org.eclipse.lsp4j.Position(line, column);
+        }
+
+        @Test
+        void opensTheFileEmptyWhereverItIsAndAsksForTheCompletionAtItsStartWithoutWritingIt() throws Exception {
+            fake.completionAnswers(items(snippet("class", SNIPPET)));
+
+            try (var server = started()) {
+                server.createType(widget, TypeKind.CLASS);
+
+                assertThat(fake.opened())
+                        .containsExactly(new FakeJdtls.Opened(widget.toUri().toString(), ""));
+                assertThat(fake.completionRequests()).hasSize(1);
+                var request = fake.completionRequests().getFirst();
+                assertThat(request.getTextDocument().getUri())
+                        .isEqualTo(widget.toUri().toString());
+                assertThat(request.getPosition()).isEqualTo(at(0, 0));
+                assertThat(fake.closed(1)).containsExactly(widget.toUri().toString());
+                assertThat(widget).doesNotExist();
+            }
+        }
+
+        @Test
+        void answersTheCreationOfTheFileAndTheOneEditThatGivesItsTextWithoutTheCursor() throws Exception {
+            fake.completionAnswers(items(snippet("class", SNIPPET)));
+
+            try (var server = started()) {
+                ChangeSet changes = server.createType(widget, TypeKind.CLASS);
+
+                assertThat(changes.changes()).hasSize(2);
+                assertThat(changes.changes().get(0)).isEqualTo(new FileChange.CreateFile(widget));
+                assertThat(changes.changes().get(1)).isInstanceOfSatisfying(FileChange.EditFile.class, edit -> {
+                    assertThat(edit.file()).isEqualTo(widget);
+                    assertThat(SourceText.edited(widget, "", edit.edits()))
+                            .isEqualTo("package demo;\n\npublic class Widget {\n\n}\n");
+                });
+            }
+        }
+
+        @ParameterizedTest
+        @CsvSource({"CLASS,class", "INTERFACE,interface", "RECORD,record", "ENUM,enum"})
+        void takesTheSnippetOfTheKindAskedAmongTheOthers(TypeKind kind, String label) throws Exception {
+            fake.completionAnswers(items(
+                    snippet("class", "public class Widget {\n}"),
+                    snippet("interface", "public interface Widget {\n}"),
+                    snippet("record", "public record Widget(${0}) {\n}"),
+                    snippet("enum", "public enum Widget {\n}")));
+
+            try (var server = started()) {
+                ChangeSet changes = server.createType(widget, kind);
+
+                assertThat(changes.changes().get(1))
+                        .isInstanceOfSatisfying(
+                                FileChange.EditFile.class,
+                                edit -> assertThat(edit.edits().getFirst().newText())
+                                        .startsWith("public " + label + " Widget"));
+            }
+        }
+
+        @Test
+        void readsTheItemsOfACompletionList() throws Exception {
+            fake.completionAnswers(CompletableFuture.completedFuture(
+                    Either.forRight(new CompletionList(false, List.of(snippet("class", SNIPPET))))));
+
+            try (var server = started()) {
+                assertThat(server.createType(widget, TypeKind.CLASS).changes()).hasSize(2);
+            }
+        }
+
+        @Test
+        void ignoresAnItemThatIsNotTheSnippetOfTheKindOrHasNoText() throws Exception {
+            var keyword = new CompletionItem("class");
+            keyword.setKind(CompletionItemKind.Keyword);
+            keyword.setInsertText("class");
+            var withoutText = new CompletionItem("class");
+            withoutText.setKind(CompletionItemKind.Snippet);
+            fake.completionAnswers(items(keyword, withoutText, snippet("class", SNIPPET)));
+
+            try (var server = started()) {
+                ChangeSet changes = server.createType(widget, TypeKind.CLASS);
+
+                assertThat(changes.changes().get(1))
+                        .isInstanceOfSatisfying(
+                                FileChange.EditFile.class,
+                                edit -> assertThat(edit.edits().getFirst().newText())
+                                        .contains("public class Widget"));
+            }
+        }
+
+        @Test
+        void refusesAKindJdtlsOffersNoSnippetFor() throws Exception {
+            fake.completionAnswers(items(snippet("class", SNIPPET)));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.createType(widget, TypeKind.RECORD))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_CREATABLE);
+                            assertThat(refusal.parameters())
+                                    .containsEntry("file", widget.toString())
+                                    .containsEntry("kind", "record");
+                        });
+                assertThat(fake.closed(1)).containsExactly(widget.toUri().toString());
+            }
+        }
+
+        @Test
+        void refusesWhenJdtlsAnswersNothing() throws Exception {
+            fake.completionAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.createType(widget, TypeKind.CLASS))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_CREATABLE));
+            }
+        }
+
+        @Test
+        void refusesWhenJdtlsDeclinesTheRequest() throws Exception {
+            fake.completionAnswers(CompletableFuture.failedFuture(new ResponseErrorException(
+                    new ResponseError(ResponseErrorCode.InvalidRequest, "cannot complete", null))));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.createType(widget, TypeKind.CLASS))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_CREATABLE));
+            }
+        }
+
+        @Test
+        void refusesAFileOutsideEverySourceFolderWithoutOpeningItAndAsksJdtlsWhichTheyAre() throws Exception {
+            fake.completionAnswers(items(snippet("class", SNIPPET)));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.createType(root.resolve("Unsourced.java"), TypeKind.CLASS))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_CREATABLE));
+                assertThat(fake.sourcePathRequests()).isEqualTo(1);
+                assertThat(fake.opened()).isEmpty();
+                assertThat(fake.completionRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void acceptsAFileUnderAnyOfTheSourceFoldersAndNotOneThatOnlySharesTheStartOfTheName() throws Exception {
+            fake.listsSourcePaths(root.resolve("src/main/java"), root.resolve("src/test/java"));
+            fake.completionAnswers(items(snippet("class", "public class Widget {\n}")));
+
+            try (var server = started()) {
+                assertThat(server.createType(root.resolve("src/test/java/Widget.java"), TypeKind.CLASS)
+                                .changes())
+                        .hasSize(2);
+                assertThatThrownBy(() -> server.createType(root.resolve("src/main/javax/Widget.java"), TypeKind.CLASS))
+                        .isInstanceOf(LanguageServerException.class);
+            }
+        }
+
+        @ParameterizedTest
+        @ValueSource(
+                strings = {"no workspace", "no data", "data without a path", "data that is no folder", "not a result"})
+        void saysWhatJdtlsAnsweredWhenItDoesNotListTheSourceFoldersAsExpected(String shape) throws Exception {
+            Object answer = switch (shape) {
+                case "no workspace" -> Map.of("status", false, "message", "no workspace");
+                case "no data" -> Map.of("status", true);
+                case "data without a path" -> Map.of("status", true, "data", List.of(Map.of("projectName", "p")));
+                case "data that is no folder" -> Map.of("status", true, "data", List.of("src/main/java"));
+                default -> "nothing";
+            };
+            fake.sourcePathsAnswers(CompletableFuture.completedFuture(answer));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.createType(widget, TypeKind.CLASS))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("java.project.listSourcePaths answered")
+                        .hasMessageContaining(String.valueOf(answer));
+            }
+        }
+
+        @Test
+        void refusesAFileOutsideTheProjectWithoutAskingJdtlsAnything() throws Exception {
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.createType(root.resolve("../Elsewhere.java"), TypeKind.CLASS))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key())
+                                        .isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+                assertThat(fake.sourcePathRequests()).isZero();
+                assertThat(fake.completionRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesAsNotReadyWhileJdtlsIsStillImporting() throws Exception {
+            fake.neverAnswersInitialize();
+
+            try (var server = start()) {
+                assertThatThrownBy(() -> server.createType(widget, TypeKind.CLASS))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+                assertThat(fake.completionRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
+            fake.completionAnswers(CompletableFuture.failedFuture(new IllegalStateException("the model is broken")));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.createType(widget, TypeKind.CLASS))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("waiting for the snippet of a class for " + widget)
+                        .hasMessageContaining("Internal error");
+                assertThat(fake.closed(1)).containsExactly(widget.toUri().toString());
+            }
+        }
+
+        @Test
+        void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
+            fake.completionAnswers(items(snippet("class", SNIPPET)));
+
+            try (var server = started()) {
+                Thread.currentThread().interrupt();
+
+                assertThatThrownBy(() -> server.createType(widget, TypeKind.CLASS))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Interrupted while waiting for the snippet of a class for " + widget);
                 assertThat(Thread.interrupted()).isTrue();
             }
         }

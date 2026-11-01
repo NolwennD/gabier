@@ -71,6 +71,13 @@ public final class EditingException extends GeneratorException {
                 .addParameter("folder", folder.toString()));
     }
 
+    static EditingException notATypeName(Path file) {
+        return new EditingException(GeneratorException.badRequest(EditingErrorKey.NOT_A_TYPE_NAME)
+                .message("The file " + file + " cannot hold a type: its name must be a Java identifier that is not"
+                        + " a keyword, followed by .java")
+                .addParameter("file", file.toString()));
+    }
+
     static EditingException readFailed(Path file, IOException cause) {
         return new EditingException(GeneratorException.internalServerError(EditingErrorKey.READ_FAILED)
                 .message("The file " + file + " could not be read")
