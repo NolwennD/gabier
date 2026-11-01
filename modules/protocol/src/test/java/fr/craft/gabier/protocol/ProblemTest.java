@@ -98,10 +98,11 @@ class ProblemTest {
         void writesTheMembersInAStableOrderOnOneLine() {
             var problem = problem("It broke", Map.of("zebra", "1", "apple", "2"));
 
-            assertThat(problem.toJson())
-                    .isEqualTo("{\"type\":\"urn:gabier:error:some-key\",\"title\":\"Some key\","
-                            + "\"detail\":\"It broke\",\"key\":\"some-key\","
-                            + "\"parameters\":{\"apple\":\"2\",\"zebra\":\"1\"}}");
+            assertThat(problem.toJson()).isEqualTo("""
+                {"type":"urn:gabier:error:some-key","title":"Some key",\
+                "detail":"It broke","key":"some-key",\
+                "parameters":{"apple":"2","zebra":"1"}}\
+                """);
         }
 
         @Test

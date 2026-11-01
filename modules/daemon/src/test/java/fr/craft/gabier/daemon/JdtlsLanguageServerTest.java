@@ -1065,14 +1065,16 @@ class JdtlsLanguageServerTest {
 
         @BeforeEach
         void writeTheSources() throws IOException {
-            greeter = write(
-                    "src/main/java/demo/Greeter.java",
-                    "package demo;\n\n"
-                            + "import java.util.Set;\n"
-                            + "import java.util.List;\n\n"
-                            + "class Greeter {\n"
-                            + "    List<String> names;\n"
-                            + "}\n");
+            greeter = write("src/main/java/demo/Greeter.java", """
+                package demo;
+
+                import java.util.Set;
+                import java.util.List;
+
+                class Greeter {
+                    List<String> names;
+                }
+                """);
             // An import that jdtls removes is judged by the diagnostics of the file: none, unless a test says.
             fake.publishesOnOpen(greeter, List.of());
         }
@@ -1304,15 +1306,17 @@ class JdtlsLanguageServerTest {
 
         @Test
         void namesTheStaticImportsAndEveryImportRemovedThatHasAnError() throws Exception {
-            Path statics = write(
-                    "src/main/java/demo/Statics.java",
-                    "package demo;\n\n"
-                            + "import static java.util.Map.entry;\n"
-                            + "import java.util.Set;\n"
-                            + "import java.util.List;\n\n"
-                            + "class Statics {\n"
-                            + "    List<String> names;\n"
-                            + "}\n");
+            Path statics = write("src/main/java/demo/Statics.java", """
+                package demo;
+
+                import static java.util.Map.entry;
+                import java.util.Set;
+                import java.util.List;
+
+                class Statics {
+                    List<String> names;
+                }
+                """);
             var action = lazyAction();
             action.setEdit(new WorkspaceEdit(Map.of(
                     statics.toUri().toString(),

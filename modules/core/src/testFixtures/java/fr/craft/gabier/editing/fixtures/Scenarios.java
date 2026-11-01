@@ -621,16 +621,12 @@ public final class Scenarios {
             "rename-a-field",
             PROJECT,
             new Request.Rename(GREETER, new Position(3, 19), "salutation"),
-            new Answer.Renamed(new ChangeSet(List.of(edits(
-                    GREETER,
-                    replace(
-                            3,
-                            19,
-                            6,
-                            33,
-                            "salutation = \"Hello\";\n\n"
-                                    + "    public String greet(String name) {\n"
-                                    + "        String message = salutation"))))));
+            new Answer.Renamed(new ChangeSet(List.of(edits(GREETER, replace(3, 19, 6, 33, """
+                salutation = "Hello";
+
+                    public String greet(String name) {
+                        String message = salutation\
+                """))))));
 
     /** {@code greet}, called from another class: edits in two files. */
     public static final Scenario RENAME_METHOD = new Scenario(

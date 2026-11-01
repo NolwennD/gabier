@@ -26,10 +26,12 @@ final class Move implements Capability {
                 ...\
                 """)
             .asksTheDaemon(
-                    "language-server-not-movable-to-package: the files cannot go to the package (the reason says why:"
-                            + " already in it, a file of that name there, not a Java source, in no source folder, in"
-                            + " several source folders, the folder cannot be made, or the language server has no change"
-                            + " to make)",
+                    """
+                    language-server-not-movable-to-package: the files cannot go to the package (the reason says why:\
+                     already in it, a file of that name there, not a Java source, in no source folder, in\
+                     several source folders, the folder cannot be made, or the language server has no change\
+                     to make)\
+                    """,
                     "editing-not-a-package-name: the last operand is not a package name (the default package, a"
                             + " keyword, an empty part)",
                     Refusal.FILE_OUTSIDE_PROJECT,

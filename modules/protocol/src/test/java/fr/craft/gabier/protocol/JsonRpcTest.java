@@ -27,9 +27,10 @@ class JsonRpcTest {
             Map.of("a", "1"),
             ErrorStatus.BAD_REQUEST);
 
-    private static final String PROBLEM_JSON =
-            "{\"type\":\"urn:gabier:error:some-key\",\"title\":\"Some key\",\"detail\":\"It went \\\"wrong\\\"\","
-                    + "\"key\":\"some-key\",\"parameters\":{\"a\":\"1\"}}";
+    private static final String PROBLEM_JSON = """
+        {"type":"urn:gabier:error:some-key","title":"Some key","detail":"It went \\"wrong\\"",\
+        "key":"some-key","parameters":{"a":"1"}}\
+        """;
 
     @Nested
     class Requests {
@@ -366,14 +367,22 @@ class JsonRpcTest {
                     "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":\"x\",\"data\":{}}}",
                     "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32000,\"data\":1}}",
                     "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32000,\"data\":{}}}",
-                    "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32000,\"data\":{\"type\":\"t\",\"title\":\"T\","
-                            + "\"detail\":\"d\",\"key\":\"k\",\"parameters\":{\"a\":1}}}}",
-                    "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32000,\"data\":{\"type\":\"t\",\"title\":\"T\","
-                            + "\"detail\":\"d\",\"key\":\"k\",\"parameters\":[]}}}",
-                    "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32000,\"data\":{\"type\":\"t\",\"title\":\"T\","
-                            + "\"detail\":\"d\",\"key\":1,\"parameters\":{}}}}",
-                    "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32000,\"data\":{\"type\":\"t\",\"title\":\"T\","
-                            + "\"detail\":\" \",\"key\":\"k\",\"parameters\":{}}}}"
+                    """
+                    {"jsonrpc":"2.0","id":1,"error":{"code":-32000,"data":{"type":"t","title":"T",\
+                    "detail":"d","key":"k","parameters":{"a":1}}}}\
+                    """,
+                    """
+                    {"jsonrpc":"2.0","id":1,"error":{"code":-32000,"data":{"type":"t","title":"T",\
+                    "detail":"d","key":"k","parameters":[]}}}\
+                    """,
+                    """
+                    {"jsonrpc":"2.0","id":1,"error":{"code":-32000,"data":{"type":"t","title":"T",\
+                    "detail":"d","key":1,"parameters":{}}}}\
+                    """,
+                    """
+                    {"jsonrpc":"2.0","id":1,"error":{"code":-32000,"data":{"type":"t","title":"T",\
+                    "detail":" ","key":"k","parameters":{}}}}\
+                    """
                 })
         void anInvalidResponseIsAnInternalError(String line) {
             var failure = catchThrowableOfType(GeneratorException.class, () -> RpcResponse.parse(line));
@@ -384,10 +393,10 @@ class JsonRpcTest {
 
         @Test
         void aProblemWithABlankMemberKeepsTheRefusalOfTheProblemAsItsCause() {
-            var failure = catchThrowableOfType(
-                    InvalidResponseException.class,
-                    () -> RpcResponse.parse("{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32000,\"data\":"
-                            + "{\"type\":\"t\",\"title\":\"T\",\"detail\":\" \",\"key\":\"k\",\"parameters\":{}}}}"));
+            var failure = catchThrowableOfType(InvalidResponseException.class, () -> RpcResponse.parse("""
+                {"jsonrpc":"2.0","id":1,"error":{"code":-32000,"data":\
+                {"type":"t","title":"T","detail":" ","key":"k","parameters":{}}}}\
+                """));
 
             assertThat(failure.getCause()).isInstanceOf(MissingMandatoryValueException.class);
         }

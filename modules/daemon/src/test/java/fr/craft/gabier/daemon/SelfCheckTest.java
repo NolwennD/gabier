@@ -238,18 +238,20 @@ class SelfCheckTest {
         void namesTheModulesAndTheJson() {
             SelfCheck check = new SelfCheck(DAEMON_MODULE, LSP4J_MODULE);
 
-            assertThat(check.summary())
-                    .isEqualTo("the daemon is in the module fr.craft.gabier.daemon, Position in the module"
-                            + " org.eclipse.lsp4j, Gson wrote {\"line\":1,\"character\":2}");
+            assertThat(check.summary()).isEqualTo("""
+                the daemon is in the module fr.craft.gabier.daemon, Position in the module\
+                 org.eclipse.lsp4j, Gson wrote {"line":1,"character":2}\
+                """);
         }
 
         @Test
         void callsAClassPathClassUnnamed() {
             SelfCheck check = new SelfCheck(null, null);
 
-            assertThat(check.summary())
-                    .isEqualTo("the daemon is in no named module, Position in no named module,"
-                            + " Gson wrote {\"line\":1,\"character\":2}");
+            assertThat(check.summary()).isEqualTo("""
+                the daemon is in no named module, Position in no named module,\
+                 Gson wrote {"line":1,"character":2}\
+                """);
         }
     }
 

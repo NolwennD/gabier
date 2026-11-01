@@ -158,11 +158,12 @@ class HelpTest extends CliTest {
         assertThat(run("help", "frobnicate")).isEqualTo(2);
 
         assertThat(out()).isEmpty();
-        assertThat(err())
-                .startsWith("Usage error: Unknown command; the commands are diagnostics, rename, organize-imports,"
-                        + " cleanup, extract-variable, extract-method, extract-constant, extract-field,"
-                        + " move-type-to-file, move, inline, create, references, status, stop, help"
-                        + " (usage-error; command=frobnicate)");
+        assertThat(err()).startsWith("""
+            Usage error: Unknown command; the commands are diagnostics, rename, organize-imports,\
+             cleanup, extract-variable, extract-method, extract-constant, extract-field,\
+             move-type-to-file, move, inline, create, references, status, stop, help\
+             (usage-error; command=frobnicate)\
+            """);
     }
 
     @Test
