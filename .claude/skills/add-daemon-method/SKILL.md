@@ -89,8 +89,15 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    - its name in the `permits` clause of the sealed interface `Capability`: a capability left out does not compile;
    - one `new` in the list of `Capabilities`, at its place in the order of `gabier help`. The list rejects two
      capabilities with one name when the class loads; no test compares it with `permits`.
-   Test the rules of reading in `ArgumentsTest` when they are new (no socket), and the command in `GabierTest` against
-   `ScriptedDaemon` (a real socket, scripted answers). Document it: a page `docs/commands/<command>.md` (modelled on the
+   Test the rules of reading in `ArgumentsTest` when they are new (no socket), and the command in a test class of its own
+   (`RenamingTest`, `InliningTest`), which extends `CliTest` and runs against `ScriptedDaemon` (a real socket, scripted
+   answers; `daemonAnswering(result)`). That class holds only what is the command's own: the request it sends for a
+   position, its special outputs. What every command shares is not rewritten: a command that returns changed files adds
+   a `@Nested` class that implements `ChangesCommandContract` and gives its name, what follows the file on its command
+   line and its request (`InliningTest.ReturningChangedFiles` is the model), and inherits the tests of the absolute path,
+   `--dry-run`, the list and the diff, the terminal escapes and `--json`; add its command line to `DaemonAnswersTest`
+   (refusal as text and as JSON, a result it cannot read) and the lines that are not its usage to `UnknownUsageTest`.
+   Document it: a page `docs/commands/<command>.md` (modelled on the
    existing ones: usage, example in text and `--json`, a `## Refusals` section with one bullet `` - `key`: meaning `` per
    refusal, the daemon method and its parameters), one line in the
    "Capabilities" list of the README that links to it, and a row in the table of methods of `docs/protocol.md`. A file

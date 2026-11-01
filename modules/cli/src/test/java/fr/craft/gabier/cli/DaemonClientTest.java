@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** The client over streams: the sockets are in {@code GabierTest}. */
+/** The client over streams: the command tests (a {@link CliTest} each) run it on a socket. */
 class DaemonClientTest {
 
     private static final String RESULT = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"pid\":7}}\n";
