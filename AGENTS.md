@@ -22,8 +22,12 @@ If the hook is missing (for example `MISE_NO_HOOKS` is set), install it by hand:
 (`./gradlew jdtlsProbe`) reads. In a shell where mise is not activated, run commands through `mise exec --` to get
 `GABIER_JDTLS` and the pinned tools (`jdtls`, `ripwire`, `hk`) on the `PATH`.
 
-The launcher needs Python 3 and a JDK 21 or later: it runs `$JAVA_HOME/bin/java` if that file exists, otherwise the
-`java` found on the `PATH`, and fails under an older JDK. The repository's `.sdkmanrc` selects JDK 27.
+The launcher is a Python 3 script (the project itself uses no Python) and needs a JDK 21 or later: it runs
+`$JAVA_HOME/bin/java` if that file exists, otherwise the `java` found on the `PATH`, and fails under an older JDK.
+
+The JDK of the project is the one `.sdkmanrc` pins, for [SDKMAN!](https://sdkman.io). With `sdkman_auto_env=true` in
+`~/.sdkman/etc/config`, entering the directory selects it (`sdk env install` once to fetch it, `sdk env` to select it by
+hand). The native cli also needs a GraalVM of the same release, which Gradle finds among the SDKMAN! candidates.
 
 The pre-commit hook formats the staged `.java` files with
 [open-java-format](https://github.com/openjavaformat/open-java-format) (one style, 120 columns), as

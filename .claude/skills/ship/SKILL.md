@@ -115,7 +115,7 @@ open suggestions, then the `Tokens:` list (`.claude/rules/logbook.md`): one line
 transcript of the session over the period of the ticket (from the launch of the worker, not from the opening of the issue which may have waited in the queue, to now):
 
 ```bash
-J=$(ls -t ~/.claude/projects/-home-nolwenn-dev-projects-gabier/*.jsonl | head -1)
+J=$(ls -t "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$(git rev-parse --show-toplevel | tr / -)"/*.jsonl | head -1)
 A=$(date -u -d "<ISO time of the launch of the worker>" +%Y-%m-%dT%H:%M:%S); B=$(date -u +%Y-%m-%dT%H:%M:%S)
 jq -s --arg a "$A" --arg b "$B" '[.[] | select(.message.usage != null and .timestamp >= $a and .timestamp <= $b)]
   | {calls: length, input: (map(.message.usage.input_tokens) | add), cache_write: (map(.message.usage.cache_creation_input_tokens) | add),

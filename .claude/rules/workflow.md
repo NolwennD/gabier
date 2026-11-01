@@ -10,8 +10,7 @@
 4. Refactor if useful, tests green. Back to 2 as long as the list is not empty. A Java refactoring goes through gabier
    itself (dogfooding): the latest installed version that works, not the build in progress, so that a broken build does
    not stop its own repair. An operation gabier does not have yet is done as a text edit and becomes an issue
-   (`ticket --issue-only`); no other tool, no script of any language stands in for it, and chatbot's Python driver is
-   not used any more.
+   (`ticket --issue-only`); no other tool, no script of any language stands in for it.
 
 Let the compiler drive: a type or a method is **used** before it is created. Never write code "for later".
 
@@ -138,9 +137,13 @@ the work goes to what an agent can then do that it could not before.
 
 ## Orientation (decision of the user, 01-11-2026)
 
-Before reading code to find where something is, in gabier or in the jdtls clone
-(`/home/nolwenn/dev/projects/eclipse.jdt.ls`), ask `ripwire <root> --for="<question in English>"` and read only the
-files it points to.
+Before reading code to find where something is, in gabier or in the jdtls source, ask
+`ripwire <root> --for="<question in English>"` and read only the files it points to.
+
+- The jdtls source is not in this repository, and where it lies depends on the machine. A ticket that needs to read it
+  asks the user to clone `https://github.com/eclipse-jdtls/eclipse.jdt.ls` and to check out the tag `v<jdtls_version>`
+  (`mise.toml`, so the source read is the one of the jdtls that runs), then reads the path the user gives, never writing
+  in it. A ticket never writes the path of a clone in a rule, a skill or an issue.
 
 - Its links are by name, so its counts are floors. What must be exact (callers, references) goes through jdtls, and a
   refactoring goes through gabier (`.claude/rules/dogfooding.md`).
