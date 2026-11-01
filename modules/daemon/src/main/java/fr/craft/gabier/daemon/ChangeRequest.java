@@ -4,17 +4,20 @@ import fr.craft.gabier.editing.application.CreateType;
 import fr.craft.gabier.editing.application.ExtractMethod;
 import fr.craft.gabier.editing.application.ExtractVariable;
 import fr.craft.gabier.editing.application.Inline;
+import fr.craft.gabier.editing.application.MoveToPackage;
 import fr.craft.gabier.editing.application.MoveTypeToFile;
 import fr.craft.gabier.editing.application.OrganizeImports;
 import fr.craft.gabier.editing.application.Rename;
 import fr.craft.gabier.editing.application.RenameTarget;
 import fr.craft.gabier.editing.domain.ChangeReport;
+import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.protocol.ChangedFiles;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -26,6 +29,7 @@ import java.util.Objects;
 final class ChangeRequest {
 
     static final String FILE = "file";
+    static final String FILES = "files";
     static final String NEW_NAME = "newName";
     static final String NAME = "name";
     static final String KIND = "kind";
@@ -49,6 +53,15 @@ final class ChangeRequest {
             return Path.of(text(FILE));
         } catch (InvalidPathException e) {
             throw ParameterException.invalid(method, FILE);
+        }
+    }
+
+    /** The files of a request that takes several: absolute paths, one per line. */
+    List<Path> files() {
+        try {
+            return text(FILES).lines().map(Path::of).toList();
+        } catch (InvalidPathException e) {
+            throw ParameterException.invalid(method, FILES);
         }
     }
 
@@ -115,6 +128,14 @@ final class ChangeRequest {
         return DaemonMethod.Outcome.of(changed(report).toJson());
     }
 
+    /** What moving the files to the package does, written unless the request is a dry run. */
+    DaemonMethod.Outcome run(MoveToPackage move, PackageName target) {
+        List<Path> files = files();
+        ChangeReport report = dryRun() ? move.dryRun(files, target) : move.apply(files, target);
+
+        return DaemonMethod.Outcome.of(changed(report).toJson());
+    }
+
     /** What inlining the symbol at the position does, written unless the request is a dry run. */
     DaemonMethod.Outcome run(Inline inline, Position position) {
         Path file = file();
@@ -153,7 +174,7 @@ final class ChangeRequest {
         return flag(DRY_RUN);
     }
 
-    private String text(String name) {
+    String text(String name) {
         return Objects.requireNonNull(params.get(name), "the handler refuses a request without it");
     }
 

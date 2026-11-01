@@ -9,6 +9,7 @@ import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
+import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.ReferenceLocations;
@@ -166,6 +167,11 @@ class ProjectServerTest {
         }
 
         @Override
+        public ChangeSet moveToPackage(List<Path> files, PackageName target) {
+            return RENAMED;
+        }
+
+        @Override
         public ChangeSet inline(Path file, Position position) {
             return RENAMED;
         }
@@ -286,6 +292,14 @@ class ProjectServerTest {
         }
 
         @Test
+        void aMoveToAPackageStartsItToo() {
+            assertThat(project.moveToPackage(List.of(FILE), PackageName.of("demo")))
+                    .isEqualTo(ScriptedServer.RENAMED);
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
         void aCreationOfATypeStartsItToo() {
             assertThat(project.createType(FILE, TypeKind.CLASS)).isEqualTo(ScriptedServer.RENAMED);
 
@@ -315,6 +329,7 @@ class ProjectServerTest {
             project.extractVariable(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x");
             project.extractMethod(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x");
             project.moveTypeToFile(FILE, new Position(0, 0));
+            project.moveToPackage(List.of(FILE), PackageName.of("demo"));
             project.inline(FILE, new Position(0, 0));
             project.createType(FILE, TypeKind.RECORD);
             project.references(FILE, new Position(0, 0), false);

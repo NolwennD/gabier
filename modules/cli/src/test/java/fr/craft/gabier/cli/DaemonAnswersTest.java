@@ -23,6 +23,7 @@ class DaemonAnswersTest extends CliTest {
                 List.of("extract-variable", "/project/Greeter.java", "7:26", "7:48", "joined"),
                 List.of("extract-method", "/project/Totals.java", "6:9", "6:47", "printCount"),
                 List.of("move-type-to-file", "/project/Shapes.java", "6:25"),
+                List.of("move", "/project/Invoice.java", "/project/Payment.java", "demo.billing"),
                 List.of("inline", "/project/Prices.java", "4:22"),
                 List.of("create", "/project/Widget.java", "class"),
                 List.of("references", "/project/Ledger.java", "10:17"));

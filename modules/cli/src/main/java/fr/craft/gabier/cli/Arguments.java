@@ -69,6 +69,19 @@ record Arguments(List<String> all, List<String> operands) {
     }
 
     /**
+     * The operands once {@code --dry-run} is taken out, when there are at least that many; else the usage error. For a
+     * command that takes a list of files and then a last operand.
+     */
+    Arguments atLeast(int count) {
+        var withoutDryRun = without(DRY_RUN);
+        if (withoutDryRun.operands.size() < count) {
+            throw UsageException.unsupportedArguments(all);
+        }
+
+        return withoutDryRun;
+    }
+
+    /**
      * These words with this option taken out of the operands, and nothing else: unlike {@link #operands(int, String...)},
      * {@code --dry-run} stays an operand, so that a command with no dry run refuses it.
      */

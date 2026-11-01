@@ -59,6 +59,25 @@ class ArgumentsTest {
         assertThatThrownBy(() -> arguments.operands(3)).isInstanceOf(UsageException.class);
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3})
+    void atLeastKeepsTheOperandsOnceTheDryRunIsOutWhenThereAreThatManyOrMore(int count) {
+        var arguments = Arguments.of(List.of("move", "A.java", "--dry-run", "B.java", "demo.p"));
+
+        assertThat(arguments.atLeast(count).operands()).containsExactly("A.java", "B.java", "demo.p");
+    }
+
+    @Test
+    void fewerOperandsThanTheMinimumAreAUsageErrorNamingTheArguments() {
+        var arguments = Arguments.of(List.of("move", "--dry-run", "A.java"));
+
+        assertThat(arguments.atLeast(1).operands()).containsExactly("A.java");
+        assertThatThrownBy(() -> arguments.atLeast(2))
+                .isInstanceOf(UsageException.class)
+                .satisfies(failure -> assertThat(((GeneratorException) failure).parameters())
+                        .containsEntry("arguments", "move --dry-run A.java"));
+    }
+
     @Test
     void withoutAnOptionTakesOnlyThatOptionOutOfTheOperands() {
         var arguments = Arguments.of(List.of("references", "--include-declaration", "A.java", "3:4"));

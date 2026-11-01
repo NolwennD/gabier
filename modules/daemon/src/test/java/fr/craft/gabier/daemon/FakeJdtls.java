@@ -22,6 +22,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.Consumer;
 import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionParams;
 import org.eclipse.lsp4j.Command;
@@ -138,6 +139,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private final List<JdtlsServer.RefactorEditParams> refactorEditRequests = new CopyOnWriteArrayList<>();
     private CompletableFuture<JdtlsServer.RefactorEdit> moveAnswer = new CompletableFuture<>();
     private final List<JdtlsServer.MoveParams> moveRequests = new CopyOnWriteArrayList<>();
+    private volatile Consumer<JdtlsServer.MoveParams> onMove = params -> {};
     private CompletableFuture<Either<List<CompletionItem>, CompletionList>> completionAnswer =
             new CompletableFuture<>();
     private final List<CompletionParams> completionRequests = new CopyOnWriteArrayList<>();
@@ -341,6 +343,12 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /** The number of {@code java.project.listSourcePaths} commands received. */
     int sourcePathRequests() {
         return sourcePathRequests.get();
+    }
+
+    /** What happens when a {@code java/move} request arrives, before it is answered: a test looks at the disk then. */
+    FakeJdtls onMove(Consumer<JdtlsServer.MoveParams> action) {
+        this.onMove = action;
+        return this;
     }
 
     /** The {@code java/move} requests received, in order. */
@@ -644,8 +652,14 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
 
         @Override
         public CompletableFuture<RefactorEdit> move(MoveParams params) {
-            received.add("move " + named(params.params().getTextDocument().getUri()));
+            CodeActionParams ofType = params.params();
+            received.add("move "
+                    + named(
+                            ofType != null
+                                    ? ofType.getTextDocument().getUri()
+                                    : params.sourceUris().getFirst()));
             moveRequests.add(params);
+            onMove.accept(params);
             return moveAnswer;
         }
 

@@ -15,6 +15,7 @@ public enum LanguageServerErrorKey implements ErrorKey {
     NOT_EXTRACTABLE("language-server-not-extractable"),
     NOT_A_FILE("language-server-not-a-file"),
     NOT_MOVABLE("language-server-not-movable"),
+    NOT_MOVABLE_TO_PACKAGE("language-server-not-movable-to-package"),
     NOT_READY("language-server-not-ready"),
     UNRESOLVED_IMPORTS("language-server-unresolved-imports");
 

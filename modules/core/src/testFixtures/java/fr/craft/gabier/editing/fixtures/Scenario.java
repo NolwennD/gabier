@@ -10,6 +10,8 @@ import fr.craft.gabier.editing.domain.FileChange.RenameFile;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Location;
+import fr.craft.gabier.editing.domain.NotMovableReason;
+import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.ReferenceLocations;
@@ -18,6 +20,7 @@ import fr.craft.gabier.shared.error.domain.Assert;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -77,6 +80,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                         "extracted",
                         request);
             case Answer.Moved _ -> require(request instanceof Request.MoveTypeToFile, "moved", request);
+            case Answer.MovedToPackage _ ->
+                require(request instanceof Request.MoveToPackage, "moved to a package", request);
             case Answer.Inlined _ -> require(request instanceof Request.Inline, "inlined", request);
             case Answer.Referenced _ -> require(request instanceof Request.References, "referenced", request);
             case Answer.Created _ -> require(request instanceof Request.CreateType, "created", request);
@@ -148,6 +153,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
                             NOT_CREATABLE ->
@@ -183,6 +189,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
                             NOT_CREATABLE ->
                         throw new IllegalArgumentException("A request to organize imports cannot get " + key);
                 };
@@ -216,6 +223,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
                             NOT_CREATABLE -> throw new IllegalArgumentException("A rename cannot get " + key);
@@ -250,6 +258,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
                             NOT_CREATABLE ->
@@ -285,6 +294,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_AN_EXPRESSION,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
                             NOT_CREATABLE ->
@@ -319,10 +329,74 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_AN_EXPRESSION,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
                             NOT_CREATABLE -> throw new IllegalArgumentException("A move of a type cannot get " + key);
                 };
+            }
+        }
+
+        /**
+         * The move of files to a package.
+         *
+         * @param files the files, at least one; the first is the one a refusal about a file names
+         * @param target the package
+         */
+        record MoveToPackage(List<Path> files, PackageName target) implements Request {
+
+            public MoveToPackage {
+                Assert.field("files", files).notNull().notEmpty().noNullElement();
+                Assert.notNull("target", target);
+                files = List.copyOf(files);
+            }
+
+            @Override
+            public Path file() {
+                return files.getFirst();
+            }
+
+            @Override
+            public MoveToPackage resolvedIn(Path root) {
+                return new MoveToPackage(
+                        files.stream().map(file -> resolve(root, file)).toList(), target);
+            }
+
+            /**
+             * The details of a refusal for {@code NOT_MOVABLE_TO_PACKAGE} are the name of its reason. The exception
+             * names the first file, except for the reasons about the set of files, which name them all.
+             */
+            @Override
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
+                return switch (key) {
+                    case NOT_READY -> LanguageServerException.notReady();
+                    case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file());
+                    case FILE_MISSING -> LanguageServerException.fileMissing(file());
+                    case NOT_A_FILE -> LanguageServerException.notAFile(file());
+                    case NOT_MOVABLE_TO_PACKAGE -> notMovable(details.getFirst());
+                    case NO_SUCH_SYMBOL,
+                            INVALID_NAME,
+                            NOT_AN_EXPRESSION,
+                            NOT_EXTRACTABLE,
+                            NOT_INLINABLE,
+                            NOT_MOVABLE,
+                            AMBIGUOUS_IMPORTS,
+                            UNRESOLVED_IMPORTS,
+                            NOT_CREATABLE ->
+                        throw new IllegalArgumentException("A move to a package cannot get " + key);
+                };
+            }
+
+            private LanguageServerException notMovable(String reasonName) {
+                NotMovableReason reason = Arrays.stream(NotMovableReason.values())
+                        .filter(candidate -> candidate.get().equals(reasonName))
+                        .findFirst()
+                        .orElseThrow();
+                boolean aboutTheSet =
+                        reason == NotMovableReason.SEVERAL_SOURCE_FOLDERS || reason == NotMovableReason.NOTHING_TO_MOVE;
+
+                return LanguageServerException.notMovableToPackage(
+                        aboutTheSet ? files : List.of(file()), target, reason);
             }
         }
 
@@ -352,6 +426,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_AN_EXPRESSION,
                             NOT_EXTRACTABLE,
                             NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
                             NOT_CREATABLE -> throw new IllegalArgumentException("An inlining cannot get " + key);
@@ -385,6 +460,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
                             NOT_CREATABLE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS ->
@@ -420,6 +496,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS ->
                         throw new IllegalArgumentException("A creation of a type cannot get " + key);
@@ -503,6 +580,22 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             @Override
             public Moved resolvedIn(Path root) {
                 return new Moved(Renamed.resolvedIn(root, changes));
+            }
+        }
+
+        /**
+         * The change set that moves files to a package: the edits of the {@code package} line of each file and of the
+         * files that refer to it, and the move of each file to the folder of the package.
+         */
+        record MovedToPackage(ChangeSet changes) implements Answer {
+
+            public MovedToPackage {
+                Assert.notNull("changes", changes);
+            }
+
+            @Override
+            public MovedToPackage resolvedIn(Path root) {
+                return new MovedToPackage(Renamed.resolvedIn(root, changes));
             }
         }
 

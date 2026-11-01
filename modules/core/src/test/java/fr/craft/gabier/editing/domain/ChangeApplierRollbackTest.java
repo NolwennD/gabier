@@ -225,6 +225,24 @@ class ChangeApplierRollbackTest {
         }
 
         @Test
+        void removesTheFoldersMadeForAFileMovedThatCannotBeMovedAndPutsTheFileBack() throws IOException {
+            Path source = file("B.txt", "b\n");
+            Path target = path("fresh/deeper/B.txt");
+            Map<String, String> before = snapshot();
+            ChangeApplier applier = new ChangeApplier(new FaultyFileStore(files).failing(Operation.MOVE, target));
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> applier.apply(set(new RenameFile(source, target))))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(EditingErrorKey.WRITE_FAILED);
+                        assertThat(exception.parameters()).isEqualTo(Map.of("file", target.toString()));
+                    });
+
+            assertThat(snapshot()).isEqualTo(before);
+            assertThat(path("fresh")).doesNotExist();
+        }
+
+        @Test
         void leavesTheSourceAloneWhenTheRenameItselfFails() throws IOException {
             Path edited = file("A.txt", "a\n");
             Path source = file("B.txt", "b\n");

@@ -192,7 +192,20 @@ class ScenariosTest {
                         "references-where-there-is-no-symbol",
                         "references-from-a-comment",
                         "references-while-the-server-imports",
-                        "references-of-a-file-outside-the-project");
+                        "references-of-a-file-outside-the-project",
+                        "move-a-class-to-an-existing-package",
+                        "move-several-classes-to-an-existing-package",
+                        "move-a-class-to-a-new-package",
+                        "move-a-test-class-to-a-new-package",
+                        "move-a-class-to-the-package-it-is-in",
+                        "move-a-class-to-a-package-that-has-a-file-of-its-name",
+                        "move-a-file-that-is-not-a-java-source",
+                        "move-a-file-of-no-source-folder",
+                        "move-files-of-two-source-folders",
+                        "move-a-file-that-does-not-exist",
+                        "move-a-folder",
+                        "move-a-file-outside-the-project",
+                        "move-while-the-server-imports");
     }
 
     @Test
@@ -261,6 +274,83 @@ class ScenariosTest {
     }
 
     @Test
+    void refusesForEachReasonOfThePortOnAMoveToAPackage() {
+        List<Answer.Refused> refusals = answeredWith(Answer.Refused.class).stream()
+                .filter(scenario -> scenario.request() instanceof Request.MoveToPackage)
+                .map(scenario -> (Answer.Refused) scenario.answer())
+                .toList();
+
+        assertThat(refusals.stream().map(Answer.Refused::key))
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.FILE_MISSING,
+                        LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
+                        LanguageServerErrorKey.NOT_A_FILE,
+                        LanguageServerErrorKey.NOT_READY,
+                        LanguageServerErrorKey.NOT_MOVABLE_TO_PACKAGE,
+                        LanguageServerErrorKey.NOT_MOVABLE_TO_PACKAGE,
+                        LanguageServerErrorKey.NOT_MOVABLE_TO_PACKAGE,
+                        LanguageServerErrorKey.NOT_MOVABLE_TO_PACKAGE,
+                        LanguageServerErrorKey.NOT_MOVABLE_TO_PACKAGE);
+        assertThat(refusals.stream()
+                        .filter(refused -> refused.key() == LanguageServerErrorKey.NOT_MOVABLE_TO_PACKAGE)
+                        .map(Answer.Refused::details))
+                .containsExactlyInAnyOrder(
+                        List.of("already-in-package"),
+                        List.of("name-taken"),
+                        List.of("not-a-java-source"),
+                        List.of("outside-source-folders"),
+                        List.of("several-source-folders"));
+    }
+
+    @Test
+    void movesEachFileToTheFolderOfThePackageUnderItsSourceFolderAndRewritesItsPackageLine(@TempDir Path directory)
+            throws IOException {
+        List<Scenario> moves = answeredWith(Answer.MovedToPackage.class);
+        assertThat(moves).hasSize(4);
+        for (Scenario scenario : moves) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+            var request = (Request.MoveToPackage) inside.request();
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.MovedToPackage) inside.answer()).changes());
+
+            for (Path file : request.files()) {
+                Path sourceFolder = root.resolve(root.relativize(file).subpath(0, 3));
+                Path moved = sourceFolder.resolve(request.target().folder()).resolve(file.getFileName());
+                assertThat(file).as(scenario.name()).doesNotExist();
+                assertThat(Files.readString(moved))
+                        .as(scenario.name())
+                        .startsWith("package " + request.target().value() + ";\n");
+            }
+        }
+    }
+
+    @Test
+    void leavesEveryFileOfAMovePackageLineMatchingItsFolder(@TempDir Path directory) throws IOException {
+        for (Scenario scenario : answeredWith(Answer.MovedToPackage.class)) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.MovedToPackage) inside.answer()).changes());
+
+            for (var source : filesUnder(root).entrySet()) {
+                Path relative = root.relativize(source.getKey());
+                if (!relative.toString().matches("src/(main|test)/java/.*")) {
+                    continue;
+                }
+                Path folder = relative.getParent();
+                String expected =
+                        folder.subpath(3, folder.getNameCount()).toString().replace('/', '.');
+                assertThat(source.getValue())
+                        .as(scenario.name() + ": " + relative)
+                        .startsWith("package " + expected + ";\n");
+            }
+        }
+    }
+
+    @Test
     void refusesForEachReasonOfThePortOnAnInline() {
         assertThat(answeredWith(Answer.Refused.class).stream()
                         .filter(scenario -> scenario.request() instanceof Request.Inline)
@@ -305,7 +395,9 @@ class ScenariosTest {
                     .isNotEmpty()
                     .allSatisfy(file -> {
                         assertThat(file.isAbsolute()).isFalse();
-                        assertThat(file.toString()).matches("src/(main|test)/java/.*\\.java");
+                        assertThat(file.toString())
+                                .matches(
+                                        "src/(main|test)/java/.*\\.java|src/main/resources/.*|src/main/other/.*\\.java");
                     });
             assertThat(scenario.request().file().isAbsolute())
                     .as(scenario.name())

@@ -3,6 +3,7 @@ package fr.craft.gabier.daemon;
 import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.JavaLanguageServer;
+import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.ReferenceLocations;
@@ -149,6 +150,11 @@ final class ScriptedProject implements ServedProject {
     @Override
     public ChangeSet moveTypeToFile(Path file, Position position) {
         return server.moveTypeToFile(file, position);
+    }
+
+    @Override
+    public ChangeSet moveToPackage(List<Path> files, PackageName target) {
+        return server.moveToPackage(files, target);
     }
 
     @Override

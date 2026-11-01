@@ -44,7 +44,7 @@ public sealed interface FileChange {
      * The move of a file, with its content, to a path where no file exists.
      *
      * @param from the file to move, which must exist
-     * @param to where it goes, which must not exist; its directory must
+     * @param to where it goes, which must not exist; its directory is made if it does not, as for {@link CreateFile}
      */
     record RenameFile(Path from, Path to) implements FileChange {
 

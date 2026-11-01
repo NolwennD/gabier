@@ -24,7 +24,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaFileObject;
 import javax.tools.ToolProvider;
@@ -90,6 +93,7 @@ class ScenarioReplayTest {
                 || scenario.request() instanceof Request.ExtractVariable
                 || scenario.request() instanceof Request.ExtractMethod
                 || scenario.request() instanceof Request.MoveTypeToFile
+                || scenario.request() instanceof Request.MoveToPackage
                 || scenario.request() instanceof Request.Inline
                 || scenario.request() instanceof Request.CreateType
                 || scenario.request() instanceof Request.References;
@@ -225,6 +229,18 @@ class ScenarioReplayTest {
                         .isEqualTo(moved.changes());
                 compile(scenario, root, answer, differences);
             }
+            case Answer.MovedToPackage moved -> {
+                var answer = (ChangeSet) ask(server, request);
+                System.out.println(scenario.name() + ": jdtls answered " + answer);
+                // jdtls does not answer the files of a move in a stable order (seen to change from one run to the next,
+                // the temporary folder differing): the changes must be the same, not their order. The order that
+                // matters, the edits of a file before its rename, is proved by applying the set in compile().
+                differences
+                        .assertThat(answer.changes())
+                        .as("%s: the changes jdtls answers", scenario.name())
+                        .containsExactlyInAnyOrderElementsOf(moved.changes().changes());
+                compile(scenario, root, answer, differences);
+            }
             case Answer.Inlined inlined -> {
                 var answer = (ChangeSet) ask(server, request);
                 System.out.println(scenario.name() + ": jdtls answered " + answer);
@@ -306,6 +322,7 @@ class ScenarioReplayTest {
             case Request.ExtractMethod extract ->
                 server.extractMethod(extract.file(), extract.selection(), extract.name());
             case Request.MoveTypeToFile move -> server.moveTypeToFile(move.file(), move.position());
+            case Request.MoveToPackage move -> server.moveToPackage(move.files(), move.target());
             case Request.Inline inline -> server.inline(inline.file(), inline.position());
             case Request.CreateType create -> server.createType(create.file(), create.kind());
             case Request.References references ->
@@ -319,6 +336,32 @@ class ScenarioReplayTest {
                 .assertThat(sources(root))
                 .as("%s: the sources of %s after the request", scenario.name(), root)
                 .isEqualTo(scenario.files());
+        if (scenario.request() instanceof Request.MoveToPackage) {
+            differences
+                    .assertThat(folders(root))
+                    .as(
+                            "%s: the folders of %s after the request (a request makes none, whatever its answer)",
+                            scenario.name(), root)
+                    .isEqualTo(foldersOf(root, scenario.files()));
+        }
+    }
+
+    /** The folders under {@code src}, as they are on disk. */
+    private static Set<Path> folders(Path root) throws IOException {
+        try (var files = Files.walk(root.resolve("src"))) {
+            return files.filter(Files::isDirectory).collect(Collectors.toCollection(TreeSet::new));
+        }
+    }
+
+    /** The folders under {@code src} that the files need. */
+    private static Set<Path> foldersOf(Path root, Map<Path, String> files) {
+        Set<Path> folders = new TreeSet<>();
+        for (Path file : files.keySet()) {
+            for (Path folder = file.getParent(); folder.startsWith(root.resolve("src")); folder = folder.getParent()) {
+                folders.add(folder);
+            }
+        }
+        return folders;
     }
 
     /** The project with the change set applied (to a copy of it) is Java that compiles: every reference was changed. */

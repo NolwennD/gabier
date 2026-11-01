@@ -71,6 +71,13 @@ public final class EditingException extends GeneratorException {
                 .addParameter("folder", folder.toString()));
     }
 
+    static EditingException notAPackageName(String text) {
+        return new EditingException(GeneratorException.badRequest(EditingErrorKey.NOT_A_PACKAGE_NAME)
+                .message("\"" + text + "\" is not the name of a package: it must be Java identifiers that are not"
+                        + " keywords, separated by dots")
+                .addParameter("package", text));
+    }
+
     static EditingException notATypeName(Path file) {
         return new EditingException(GeneratorException.badRequest(EditingErrorKey.NOT_A_TYPE_NAME)
                 .message("The file " + file + " cannot hold a type: its name must be a Java identifier that is not"

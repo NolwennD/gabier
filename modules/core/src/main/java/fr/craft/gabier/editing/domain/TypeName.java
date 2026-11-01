@@ -16,7 +16,8 @@ public record TypeName(String value) {
 
     private static final String EXTENSION = ".java";
 
-    private static final Set<String> RESERVED = Set.of(
+    /** The words no name can be: the keywords, the literals and {@code _} (JLS 3.8, 3.9). */
+    private static final Set<String> KEYWORDS = Set.of(
             "abstract",
             "assert",
             "boolean",
@@ -70,12 +71,10 @@ public record TypeName(String value) {
             "_",
             "true",
             "false",
-            "null",
-            "var",
-            "yield",
-            "record",
-            "sealed",
-            "permits");
+            "null");
+
+    /** The restricted identifiers: no type can be called so, though other names (a package) can. */
+    private static final Set<String> RESTRICTED = Set.of("var", "yield", "record", "sealed", "permits");
 
     public TypeName {
         Assert.notBlank("value", value);
@@ -95,14 +94,20 @@ public record TypeName(String value) {
             throw EditingException.notATypeName(file);
         }
         String name = fileName.substring(0, fileName.length() - EXTENSION.length());
-        if (!isIdentifier(name) || RESERVED.contains(name)) {
+        if (!isIdentifier(name) || isKeyword(name) || RESTRICTED.contains(name)) {
             throw EditingException.notATypeName(file);
         }
 
         return new TypeName(name);
     }
 
-    private static boolean isIdentifier(String name) {
+    /** Whether the text is a word of the language no name can be: a keyword, a literal or {@code _}. */
+    static boolean isKeyword(String name) {
+        return KEYWORDS.contains(name);
+    }
+
+    /** Whether the text is made of the characters of a Java identifier, the first of which can start one. */
+    static boolean isIdentifier(String name) {
         return !name.isEmpty()
                 && Character.isJavaIdentifierStart(name.codePointAt(0))
                 && name.codePoints().allMatch(Character::isJavaIdentifierPart);

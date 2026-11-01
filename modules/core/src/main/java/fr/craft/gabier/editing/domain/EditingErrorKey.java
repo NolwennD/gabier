@@ -8,6 +8,7 @@ public enum EditingErrorKey implements ErrorKey {
     FILE_MISSING("editing-file-missing"),
     FOLDER_MISSING("editing-folder-missing"),
     INVALID_RANGE("editing-invalid-range"),
+    NOT_A_PACKAGE_NAME("editing-not-a-package-name"),
     NOT_A_TYPE_NAME("editing-not-a-type-name"),
     OVERLAPPING_EDITS("editing-overlapping-edits"),
     READ_FAILED("editing-read-failed"),

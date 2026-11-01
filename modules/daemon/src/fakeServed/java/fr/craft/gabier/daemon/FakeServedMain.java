@@ -2,11 +2,13 @@ package fr.craft.gabier.daemon;
 
 import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.Diagnostic;
+import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.editing.fixtures.FakeJavaLanguageServer;
+import fr.craft.gabier.editing.fixtures.PackageMoveScenarios;
 import fr.craft.gabier.editing.fixtures.Scenario;
 import fr.craft.gabier.editing.fixtures.Scenarios;
 import fr.craft.gabier.protocol.JdtlsState;
@@ -76,6 +78,8 @@ public final class FakeServedMain {
                 Scenarios.EXTRACT_METHOD_TO_AN_INVALID_NAME,
                 Scenarios.MOVE_A_STATIC_NESTED_TYPE,
                 Scenarios.MOVE_A_TOP_LEVEL_TYPE,
+                PackageMoveScenarios.MOVE_A_CLASS_TO_A_NEW_PACKAGE,
+                PackageMoveScenarios.MOVE_A_CLASS_TO_THE_PACKAGE_IT_IS_IN,
                 Scenarios.INLINE_A_CONSTANT,
                 Scenarios.INLINE_A_VARIABLE_ASSIGNED_TWICE,
                 Scenarios.CREATE_A_CLASS,
@@ -149,6 +153,11 @@ public final class FakeServedMain {
         @Override
         public ChangeSet moveTypeToFile(Path file, Position position) {
             return server.moveTypeToFile(file, position);
+        }
+
+        @Override
+        public ChangeSet moveToPackage(List<Path> files, PackageName target) {
+            return server.moveToPackage(files, target);
         }
 
         @Override

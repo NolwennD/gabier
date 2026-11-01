@@ -3,6 +3,7 @@ package fr.craft.gabier.editing.fixtures;
 import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.JavaLanguageServer;
+import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.ReferenceLocations;
@@ -101,6 +102,13 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
         Request request = new Request.MoveTypeToFile(file, position).resolvedIn(root);
 
         return ((Answer.Moved) answerTo(request)).changes();
+    }
+
+    @Override
+    public ChangeSet moveToPackage(List<Path> files, PackageName target) {
+        Request request = new Request.MoveToPackage(files, target).resolvedIn(root);
+
+        return ((Answer.MovedToPackage) answerTo(request)).changes();
     }
 
     @Override

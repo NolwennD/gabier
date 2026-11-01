@@ -24,7 +24,7 @@ import java.util.stream.Stream;
  * and so are {@code organize-imports} (a dry run, a file organized, a file in order, a refusal) and {@code
  * extract-variable} (a dry run, a variable extracted under the name given, refusals), {@code extract-method} (a dry run,
  * a method extracted under the name given, refusals), {@code move-type-to-file} (a dry run, a type moved to a file of
- * its own, a refusal), {@code inline} (a dry run, a constant inlined, a refusal) and {@code create} (a dry run, a class
+ * its own, a refusal), {@code move} (a dry run that makes no folder, classes moved to a new package, refusals), {@code inline} (a dry run, a constant inlined, a refusal) and {@code create} (a dry run, a class
  * created, refusals) and {@code references} (the uses of a type, the declaration apart, a symbol nothing uses, refusals);
  * a request command with no daemon running starts {@code gabier-daemon} (found on the {@code PATH} or next to the cli;
  * not found, exiting at once), the next request uses it, and {@code stop} ends it. Runs in the current directory, the
@@ -64,7 +64,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, help, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, extract-variable, extract-method, move-type-to-file and inline included, the daemon started on demand)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, extract-variable, extract-method, move-type-to-file, move and inline included, the daemon started on demand)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -252,6 +252,7 @@ public final class Native {
                 extractVariableWithTheFakeServer();
                 extractMethodWithTheFakeServer();
                 moveTypeToFileWithTheFakeServer();
+                moveToAPackageWithTheFakeServer();
                 inlineWithTheFakeServer();
                 createWithTheFakeServer();
                 referencesWithTheFakeServer();
@@ -811,6 +812,69 @@ public final class Native {
                     "gabier move-type-to-file writes the file of the type and takes the type out of its outer class");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after the move of a type");
+        }
+
+        /**
+         * {@code gabier move} against the daemon served by the fake language server: the dry run writes nothing, not even
+         * the folder of the new package, the class is moved to the package with its folder made, and a class already in
+         * the package is refused as a problem object that writes nothing.
+         */
+        private void moveToAPackageWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("move-package-project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            Path invoice = project.resolve("src/main/java/demo/Invoice.java");
+            Path archive = project.resolve("src/main/java/demo/archive");
+            Path archived = archive.resolve("Invoice.java");
+            String file = "move-package-project/src/main/java/demo/Invoice.java";
+            String original = Files.readString(invoice);
+
+            Run dryRun = gabier("move", "--dry-run", file, "demo.archive");
+            expect(
+                    dryRun.exit() == 0
+                            && dryRun.err().isEmpty()
+                            && dryRun.out().lines().findFirst().orElse("").equals("dry run, nothing written")
+                            && dryRun.out().contains("renamed " + invoice + " -> " + archived)
+                            && Files.readString(invoice).equals(original)
+                            && !Files.exists(archive),
+                    "gabier move --dry-run lists the files and the diff and writes nothing, not even the folder");
+
+            Run samePackage = gabier("move", file, "demo");
+            expect(
+                    samePackage.exit() == 2
+                            && samePackage.out().isEmpty()
+                            && samePackage.err().contains("(language-server-not-movable-to-package; ")
+                            && Files.readString(invoice).equals(original),
+                    "move to the package of the class is refused as a problem object, exit 2");
+
+            Run notAPackage = gabier("move", file, "demo..archive");
+            expect(
+                    notAPackage.exit() == 2
+                            && notAPackage.out().isEmpty()
+                            && notAPackage.err().contains("(editing-not-a-package-name; ")
+                            && !Files.exists(archive),
+                    "move to a name that is not a package is refused as a problem object, exit 2");
+
+            Run json = gabier("--json", "move", "--dry-run", file, "demo.archive");
+            expect(
+                    json.exit() == 0
+                            && json.out().contains("\"renamed\":[")
+                            && Files.readString(invoice).equals(original)
+                            && !Files.exists(archive),
+                    "gabier --json move gives the result as the daemon gave it");
+
+            Run moved = gabier("move", file, "demo.archive");
+            expect(
+                    moved.exit() == 0
+                            && moved.out().contains("renamed " + invoice + " -> " + archived)
+                            && !Files.exists(invoice)
+                            && Files.readString(archived).startsWith("package demo.archive;\n"),
+                    "gabier move writes the class in the folder it makes for the package");
+            gabier("stop");
+            expect(ends(process), "the daemon served by the fake stops after the move to a package");
         }
 
         /**

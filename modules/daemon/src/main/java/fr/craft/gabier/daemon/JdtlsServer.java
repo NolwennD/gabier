@@ -27,13 +27,33 @@ interface JdtlsServer extends LanguageServer {
     CompletableFuture<RefactorEdit> move(MoveParams params);
 
     /**
-     * What is asked of {@code java/move}.
+     * What is asked of {@code java/move}, which jdtls reads by the kind of the move: one request type for every kind
+     * (LSP4J maps a method name once), so a field is null for the kinds that do not read it, and Gson leaves it out.
      *
-     * @param moveKind the move, {@code moveTypeToNewFile} for a nested type
-     * @param params the file and the position (an empty range) of the type to move
+     * @param moveKind the move: {@code moveTypeToNewFile} for a nested type, {@code moveResource} for files
+     * @param params the file and the position (an empty range) of the type to move; for {@code moveTypeToNewFile}
      * @param updateReferences whether the references to what is moved are updated
+     * @param sourceUris the files to move, as URIs; for {@code moveResource}
+     * @param destination the URI of the folder of the package they go to, which jdtls must know as a package; for
+     *     {@code moveResource}
      */
-    record MoveParams(String moveKind, CodeActionParams params, boolean updateReferences) {}
+    record MoveParams(
+            String moveKind,
+            @Nullable CodeActionParams params,
+            boolean updateReferences,
+            @Nullable List<String> sourceUris,
+            @Nullable String destination) {
+
+        /** The move of the nested type at the position of {@code params} to a file of its own. */
+        static MoveParams typeToNewFile(CodeActionParams params) {
+            return new MoveParams("moveTypeToNewFile", params, true, null, null);
+        }
+
+        /** The move of files to the package whose folder is given, the references updated. */
+        static MoveParams resources(List<String> sourceUris, String destination) {
+            return new MoveParams("moveResource", null, true, sourceUris, destination);
+        }
+    }
 
     /**
      * What is asked of {@code java/getRefactorEdit}.

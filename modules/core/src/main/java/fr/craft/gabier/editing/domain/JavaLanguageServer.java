@@ -69,6 +69,19 @@ public interface JavaLanguageServer {
     ChangeSet moveTypeToFile(Path file, Position position);
 
     /**
+     * What moving files to a package changes: each file goes to the folder of the package under its own source folder,
+     * keeping its name, its {@code package} line is rewritten, and the imports and the references of the project are
+     * updated. The folder of a package that does not exist yet is not created by the server: the change set moves the
+     * files into it. The files must be Java sources of one source folder of the project, none of them in the package
+     * already or of the name of a file the package holds.
+     *
+     * @return the change set to apply, which edits files and moves the files
+     * @throws LanguageServerException if the server is not ready, a file is not a file of its project (outside it,
+     *     missing or a folder), or the files cannot be moved to the package (see {@link NotMovableReason})
+     */
+    ChangeSet moveToPackage(List<Path> files, PackageName target);
+
+    /**
      * What inlining the local variable, the method or the constant at a position changes: every use is replaced by its
      * value (the body of a method) and the declaration is removed, in this file and in the others that use it. On a
      * method or a constant, a position on a use and not on the declaration inlines that use only, and the declaration

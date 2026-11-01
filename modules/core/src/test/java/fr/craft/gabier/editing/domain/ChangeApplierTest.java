@@ -578,11 +578,52 @@ class ChangeApplierTest {
         }
 
         @Test
-        void refusesARenameIntoAFolderThatDoesNotExist() throws IOException {
+        void makesTheFoldersOfAFileRenamedIntoAFolderThatDoesNotExist() throws IOException {
             Path from = file("A.java", "a");
 
-            assertRefusedAndUntouched(
-                    set(new RenameFile(from, path("missing/B.java"))), EditingErrorKey.FOLDER_MISSING);
+            ChangeReport report = applier.apply(set(new RenameFile(from, path("missing/deeper/B.java"))));
+
+            assertThat(path("missing/deeper/B.java")).isRegularFile().hasContent("a");
+            assertThat(from).doesNotExist();
+            assertThat(report.renamed()).containsExactly(new Renamed(from, path("missing/deeper/B.java")));
+        }
+
+        @Test
+        void makesTheFolderOnceForAFileCreatedAndAFileMovedIntoItWhicheverComesFirst() throws IOException {
+            Path first = file("A.java", "a");
+            Path second = file("B.java", "b");
+
+            applier.apply(set(new CreateFile(path("fresh/New.java")), new RenameFile(first, path("fresh/A.java"))));
+            applier.apply(set(new RenameFile(second, path("other/B.java")), new CreateFile(path("other/New.java"))));
+
+            assertThat(path("fresh/New.java")).isRegularFile();
+            assertThat(path("fresh/A.java")).isRegularFile().hasContent("a");
+            assertThat(path("other/New.java")).isRegularFile();
+            assertThat(path("other/B.java")).isRegularFile().hasContent("b");
+        }
+
+        @Test
+        void makesTheFolderOnceForSeveralFilesMovedIntoIt() throws IOException {
+            Path first = file("A.java", "a");
+            Path second = file("B.java", "b");
+
+            ChangeReport report = applier.apply(
+                    set(new RenameFile(first, path("fresh/A.java")), new RenameFile(second, path("fresh/B.java"))));
+
+            assertThat(path("fresh/A.java")).hasContent("a");
+            assertThat(path("fresh/B.java")).hasContent("b");
+            assertThat(report.renamed()).hasSize(2);
+        }
+
+        @Test
+        void makesNoFolderForAFileMovedInTheDryRunAndReportsTheMove() throws IOException {
+            Path from = file("A.java", "a");
+            Map<String, String> before = snapshot();
+
+            ChangeReport report = applier.dryRun(set(new RenameFile(from, path("fresh/deeper/A.java"))));
+
+            assertThat(report.renamed()).containsExactly(new Renamed(from, path("fresh/deeper/A.java")));
+            assertThat(snapshot()).isEqualTo(before);
         }
 
         @Test

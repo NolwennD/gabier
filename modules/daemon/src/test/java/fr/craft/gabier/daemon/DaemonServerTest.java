@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import fr.craft.gabier.editing.fixtures.FakeJavaLanguageServer;
+import fr.craft.gabier.editing.fixtures.PackageMoveScenarios;
 import fr.craft.gabier.editing.fixtures.Scenarios;
 import fr.craft.gabier.protocol.DaemonStatus;
 import fr.craft.gabier.protocol.FileDiagnostics;
@@ -93,6 +94,8 @@ class DaemonServerTest {
                         .scripted(Scenarios.EXTRACT_METHOD_FROM_HALF_A_STATEMENT)
                         .scripted(Scenarios.MOVE_A_STATIC_NESTED_TYPE)
                         .scripted(Scenarios.MOVE_A_TOP_LEVEL_TYPE)
+                        .scripted(PackageMoveScenarios.MOVE_A_CLASS_TO_A_NEW_PACKAGE)
+                        .scripted(PackageMoveScenarios.MOVE_A_CLASS_TO_THE_PACKAGE_IT_IS_IN)
                         .scripted(Scenarios.INLINE_A_CONSTANT)
                         .scripted(Scenarios.INLINE_A_VARIABLE_ASSIGNED_TWICE)
                         .scripted(Scenarios.CREATE_A_CLASS)
@@ -586,6 +589,47 @@ class DaemonServerTest {
                 {"jsonrpc":"2.0","id":3,"method":"move-type-to-file","params":{"file":"%s","line":"%s",\
                 "column":"%s","dryRun":"%s"}}
                 """.formatted(file, line, column, dryRun);
+        }
+
+        @Test
+        void moveAnswersWhatWasMovedAndMakesTheFolderOfThePackageUnlessItIsADryRun() throws IOException {
+            serving();
+            PackageMoveScenarios.MOVE_A_CLASS_TO_A_NEW_PACKAGE.writeProject(directory);
+            var invoice = directory.resolve("src/main/java/demo/Invoice.java");
+            var archived = directory.resolve("src/main/java/demo/archive/Invoice.java");
+
+            try (var client = connect(socket())) {
+                var dryRun = client.ask(moveRequest(invoice, "demo.archive", true));
+
+                assertThat(dryRun).contains("\"renamed\":[").contains("demo/archive/Invoice.java");
+                assertThat(directory.resolve("src/main/java/demo/archive")).doesNotExist();
+
+                var done = client.ask(moveRequest(invoice, "demo.archive", false));
+
+                assertThat(done).contains("\"renamed\":[").contains("\"modified\":[");
+                assertThat(archived).content().startsWith("package demo.archive;");
+                assertThat(invoice).doesNotExist();
+            }
+        }
+
+        @Test
+        void aMoveToTheSamePackageIsRefusedWithItsProblemObjectAndNothingIsWritten() throws IOException {
+            serving();
+            PackageMoveScenarios.MOVE_A_CLASS_TO_THE_PACKAGE_IT_IS_IN.writeProject(directory);
+            var invoice = directory.resolve("src/main/java/demo/Invoice.java");
+            var before = Files.readString(invoice);
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask(moveRequest(invoice, "demo", false)))
+                        .contains("\"key\":\"language-server-not-movable-to-package\"");
+                assertThat(Files.readString(invoice)).isEqualTo(before);
+            }
+        }
+
+        private static String moveRequest(Path file, String target, boolean dryRun) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"move","params":{"files":"%s","package":"%s","dryRun":"%s"}}
+                """.formatted(file, target, dryRun);
         }
 
         @Test

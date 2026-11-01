@@ -28,6 +28,7 @@ class LanguageServerExceptionTest {
                         "language-server-not-extractable",
                         "language-server-not-a-file",
                         "language-server-not-movable",
+                        "language-server-not-movable-to-package",
                         "language-server-not-ready",
                         "language-server-unresolved-imports");
     }
@@ -115,6 +116,50 @@ class LanguageServerExceptionTest {
         assertThat(exception)
                 .hasMessage("A record cannot be created in " + FILE + ": the file is outside every source folder of"
                         + " the project, or the Java level of the project has no such type");
+    }
+
+    @Test
+    void saysWhichFilesCannotBeMovedToWhichPackageAndWhy() {
+        LanguageServerException exception = LanguageServerException.notMovableToPackage(
+                List.of(FILE, Path.of("/project/src/B.java")),
+                PackageName.of("demo.billing"),
+                NotMovableReason.SEVERAL_SOURCE_FOLDERS);
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_MOVABLE_TO_PACKAGE);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters())
+                .isEqualTo(Map.of(
+                        "files",
+                        FILE + ", /project/src/B.java",
+                        "package",
+                        "demo.billing",
+                        "reason",
+                        "several-source-folders"));
+        assertThat(exception)
+                .hasMessage("Cannot move " + FILE + ", /project/src/B.java to the package demo.billing: the files are"
+                        + " not all in one source folder");
+    }
+
+    @Test
+    void givesEachReasonAFilesPackageCannotBeMovedItsNameAndItsSentence() {
+        assertThat(Arrays.stream(NotMovableReason.values()).map(NotMovableReason::get))
+                .containsExactly(
+                        "already-in-package",
+                        "name-taken",
+                        "not-a-java-source",
+                        "outside-source-folders",
+                        "several-source-folders",
+                        "folder-not-made",
+                        "nothing-to-move");
+        assertThat(Arrays.stream(NotMovableReason.values()).map(NotMovableReason::sentence))
+                .containsExactly(
+                        "the file is already in that package",
+                        "a file of that name exists in that package",
+                        "the file is not a Java source (.java)",
+                        "the file is under no source folder of the project",
+                        "the files are not all in one source folder",
+                        "the folder of the package cannot be made",
+                        "the language server has no change to make");
     }
 
     @Test

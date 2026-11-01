@@ -111,7 +111,7 @@ final class PlanBuilder {
         if (exists(to)) {
             throw EditingException.fileExists(to);
         }
-        requireFolder(to);
+        makeFolders(to);
         steps.add(new Step.Move(from, to));
         files.put(from, Optional.empty());
         files.put(to, Optional.of(bytes));
@@ -139,8 +139,9 @@ final class PlanBuilder {
     }
 
     /**
-     * The folder of a file that is to be created is made when it is not there: every missing folder, from the first
-     * that exists down to the folder of the file, is a step before the one that creates the file. What is in the way
+     * The folder of a file that is to be created, or to which a file is moved, is made when it is not there: every
+     * missing folder, from the first that exists down to the folder of the file, is a step before the one that creates
+     * or moves the file. What is in the way
      * (a file, a link to nothing, where a folder would go) cannot be made a folder and is refused.
      */
     private void makeFolders(Path file) {
@@ -155,14 +156,6 @@ final class PlanBuilder {
             folder = Objects.requireNonNull(folder.getParent());
         }
         missing.forEach(this::makeFolder);
-    }
-
-    /** A file that is renamed to a path goes into a folder that exists: the set makes no folder for it. */
-    private void requireFolder(Path file) {
-        Path folder = Objects.requireNonNull(file.getParent());
-        if (!store.isFolder(folder)) {
-            throw EditingException.folderMissing(file, folder);
-        }
     }
 
     private void makeFolder(Path folder) {

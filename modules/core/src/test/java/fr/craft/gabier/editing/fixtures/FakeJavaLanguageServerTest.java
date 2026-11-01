@@ -8,6 +8,7 @@ import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
+import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.TextEdit;
@@ -174,6 +175,32 @@ class FakeJavaLanguageServerTest {
                 .isThrownBy(() -> server.moveTypeToFile(SHAPES, new Position(2, 13)))
                 .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_MOVABLE));
         assertThat(server.asked()).containsExactly(new Request.MoveTypeToFile(SHAPES, new Position(2, 13)));
+    }
+
+    @Test
+    void answersTheChangeSetOfAMoveToAPackageScenarioWithPathsUnderItsRoot() {
+        server.scripted(PackageMoveScenarios.MOVE_A_CLASS_TO_AN_EXISTING_PACKAGE);
+        Path invoice = ROOT.resolve("src/main/java/demo/Invoice.java");
+        PackageName billing = PackageName.of("demo.billing");
+
+        ChangeSet changes = server.moveToPackage(List.of(invoice), billing);
+
+        assertThat(changes.changes())
+                .contains(new FileChange.RenameFile(invoice, ROOT.resolve("src/main/java/demo/billing/Invoice.java")));
+        assertThat(server.asked()).containsExactly(new Request.MoveToPackage(List.of(invoice), billing));
+    }
+
+    @Test
+    void throwsTheRefusalOfAMoveToAPackageScenario() {
+        server.scripted(PackageMoveScenarios.MOVE_A_CLASS_TO_THE_PACKAGE_IT_IS_IN);
+        Path invoice = ROOT.resolve("src/main/java/demo/Invoice.java");
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.moveToPackage(List.of(invoice), PackageName.of("demo")))
+                .satisfies(exception -> {
+                    assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_MOVABLE_TO_PACKAGE);
+                    assertThat(exception.parameters()).containsEntry("reason", "already-in-package");
+                });
     }
 
     @Test

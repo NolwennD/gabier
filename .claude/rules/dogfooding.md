@@ -15,6 +15,9 @@ repository does it with `gabier` (installed on the PATH by `mise run install`; t
 - `gabier move-type-to-file [--dry-run] <file> <line>:<column>` to make a nested type a top-level type in a file of its
   own (1-based; the innermost type that encloses the position; an inner class that uses its outer instance gets a field and
   a constructor parameter, which a JUnit `@Nested` class cannot take: see its help);
+- `gabier move [--dry-run] <file>... <package>` to move Java classes to a package, creating it when it is missing (it
+  rewrites the `package` lines, the imports and the references; run `gabier diagnostics` afterwards for the
+  package-private members it cannot see);
 - `gabier inline [--dry-run] <file> <line>:<column>` to replace a local variable, a method or a constant by its value and
   remove its declaration (1-based; on the declaration of a method or a constant every use is inlined, on one use that use
   only: see its help);

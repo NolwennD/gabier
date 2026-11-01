@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 /**
  * The catalogue of the contract scenarios: every answer the core relies on from a language server for Java. The
@@ -1431,8 +1432,13 @@ public final class Scenarios {
 
     private Scenarios() {}
 
-    /** Every scenario of the catalogue. */
+    /** Every scenario of the catalogue, those of {@link PackageMoveScenarios} included. */
     public static List<Scenario> all() {
+        return Stream.concat(own().stream(), PackageMoveScenarios.all().stream())
+                .toList();
+    }
+
+    private static List<Scenario> own() {
         return List.of(
                 CLEAN_FILE,
                 FILE_WITH_AN_ERROR,
@@ -1586,7 +1592,7 @@ public final class Scenarios {
         return new ChangeSet(List.of(new FileChange.CreateFile(file), edits(file, replace(0, 0, 0, 0, text))));
     }
 
-    private static FileChange edits(Path file, TextEdit... edits) {
+    static FileChange edits(Path file, TextEdit... edits) {
         return new EditFile(file, List.of(edits));
     }
 
@@ -1596,7 +1602,7 @@ public final class Scenarios {
     }
 
     /** Replaces the text from a position to another, possibly on other lines. */
-    private static TextEdit replace(int fromLine, int fromColumn, int toLine, int toColumn, String text) {
+    static TextEdit replace(int fromLine, int fromColumn, int toLine, int toColumn, String text) {
         return new TextEdit(new Range(new Position(fromLine, fromColumn), new Position(toLine, toColumn)), text);
     }
 }

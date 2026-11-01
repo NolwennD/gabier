@@ -3,6 +3,7 @@ package fr.craft.gabier.daemon;
 import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.LanguageServerException;
+import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.ReferenceLocations;
@@ -117,6 +118,11 @@ final class ProjectServer implements ServedProject {
     @Override
     public ChangeSet moveTypeToFile(Path file, Position position) {
         return ready().moveTypeToFile(file, position);
+    }
+
+    @Override
+    public ChangeSet moveToPackage(List<Path> files, PackageName target) {
+        return ready().moveToPackage(files, target);
     }
 
     @Override

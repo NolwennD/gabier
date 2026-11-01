@@ -13,6 +13,8 @@ import fr.craft.gabier.editing.domain.FileChange.RenameFile;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Location;
+import fr.craft.gabier.editing.domain.NotMovableReason;
+import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.ReferenceLocations;
@@ -127,6 +129,20 @@ class ScenarioTest {
                 .isThrownBy(() -> scenario(move, new Answer.Renamed(changes)));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> scenario(move, new Answer.Extracted(changes)));
+    }
+
+    @Test
+    void rejectsAMovedToAPackageAnswerForAnotherRequestAndAnotherAnswerForMovingToAPackage() {
+        Request.Rename rename = new Request.Rename(FILE, POSITION, "B");
+        Request.MoveToPackage move = new Request.MoveToPackage(List.of(FILE), PackageName.of("demo.b"));
+        ChangeSet changes = set(new CreateFile(FILE));
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(rename, new Answer.MovedToPackage(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(move, new Answer.Moved(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(move, new Answer.Renamed(changes)));
     }
 
     @Test
@@ -288,6 +304,45 @@ class ScenarioTest {
     }
 
     @Test
+    void buildsTheRefusalOfAMoveToAPackageRequest() {
+        Path other = Path.of("src/B.java");
+        PackageName target = PackageName.of("demo.b");
+        Request.MoveToPackage move = new Request.MoveToPackage(List.of(FILE, other), target);
+
+        assertThat(move.file()).isEqualTo(FILE);
+        assertThat(move.refusal(LanguageServerErrorKey.NOT_READY).key()).isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(move.refusal(LanguageServerErrorKey.FILE_MISSING).parameters())
+                .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(move.refusal(LanguageServerErrorKey.NOT_A_FILE).key()).isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
+        assertThat(move.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
+                .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(move.refusal(LanguageServerErrorKey.NOT_MOVABLE_TO_PACKAGE, List.of("name-taken")))
+                .hasMessage(
+                        LanguageServerException.notMovableToPackage(List.of(FILE), target, NotMovableReason.NAME_TAKEN)
+                                .getMessage());
+        assertThat(move.refusal(LanguageServerErrorKey.NOT_MOVABLE_TO_PACKAGE, List.of("several-source-folders")))
+                .hasMessage(LanguageServerException.notMovableToPackage(
+                                List.of(FILE, other), target, NotMovableReason.SEVERAL_SOURCE_FOLDERS)
+                        .getMessage());
+        assertThat(move.refusal(LanguageServerErrorKey.NOT_MOVABLE_TO_PACKAGE, List.of("nothing-to-move")))
+                .hasMessage(LanguageServerException.notMovableToPackage(
+                                List.of(FILE, other), target, NotMovableReason.NOTHING_TO_MOVE)
+                        .getMessage());
+        for (var key : List.of(
+                LanguageServerErrorKey.NO_SUCH_SYMBOL,
+                LanguageServerErrorKey.INVALID_NAME,
+                LanguageServerErrorKey.NOT_AN_EXPRESSION,
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                LanguageServerErrorKey.NOT_MOVABLE,
+                LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
+                LanguageServerErrorKey.UNRESOLVED_IMPORTS)) {
+            assertThatExceptionOfType(IllegalArgumentException.class)
+                    .as(key.toString())
+                    .isThrownBy(() -> move.refusal(key));
+        }
+    }
+
+    @Test
     void buildsTheRefusalOfACreateTypeRequest() {
         Request.CreateType create = new Request.CreateType(FILE, TypeKind.RECORD);
 
@@ -382,6 +437,11 @@ class ScenarioTest {
                 .isEqualTo(new Request.ExtractMethod(Path.of("/project/src/A.java"), SELECTION, "b"));
         assertThat(new Request.MoveTypeToFile(FILE, POSITION).resolvedIn(ROOT))
                 .isEqualTo(new Request.MoveTypeToFile(Path.of("/project/src/A.java"), POSITION));
+        assertThat(new Request.MoveToPackage(List.of(FILE, Path.of("src/B.java")), PackageName.of("demo.b"))
+                        .resolvedIn(ROOT))
+                .isEqualTo(new Request.MoveToPackage(
+                        List.of(Path.of("/project/src/A.java"), Path.of("/project/src/B.java")),
+                        PackageName.of("demo.b")));
         assertThat(new Request.Inline(FILE, POSITION).resolvedIn(ROOT))
                 .isEqualTo(new Request.Inline(Path.of("/project/src/A.java"), POSITION));
         assertThat(new Request.CreateType(FILE, TypeKind.ENUM).resolvedIn(ROOT))
@@ -425,6 +485,16 @@ class ScenarioTest {
                 .isEqualTo(new Answer.Moved(set(
                         new CreateFile(Path.of("/project/src/B.java")),
                         new EditFile(Path.of("/project/src/B.java"), List.of(edit)))));
+    }
+
+    @Test
+    void resolvesTheChangesOfAMovedToAPackageAnswerAgainstARoot() {
+        Answer resolved = new Answer.MovedToPackage(set(new RenameFile(Path.of("src/B.java"), Path.of("src/b/B.java"))))
+                .resolvedIn(ROOT);
+
+        assertThat(resolved)
+                .isEqualTo(new Answer.MovedToPackage(
+                        set(new RenameFile(Path.of("/project/src/B.java"), Path.of("/project/src/b/B.java")))));
     }
 
     @Test

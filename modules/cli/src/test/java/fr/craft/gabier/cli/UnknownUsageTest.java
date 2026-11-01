@@ -21,6 +21,7 @@ class UnknownUsageTest extends CliTest {
                         extractVariableWithAPositionThatIsNotLineColonColumnFromOne(),
                         extractMethodWithoutAFileTwoPositionsAndAName(),
                         withoutAFileAndOnePosition("move-type-to-file"),
+                        moveWithoutAFileAndAPackage(),
                         withoutAFileAndOnePosition("inline"),
                         createWithoutAFileAndAKind(),
                         referencesWithoutAFileAndOnePosition())
@@ -126,6 +127,14 @@ class UnknownUsageTest extends CliTest {
                 List.of("references", "A.java", "3:four"),
                 List.of("references", "--dry-run", "A.java", "3:4"),
                 List.of("references", "--token", "A.java", "3:4"));
+    }
+
+    private static List<List<String>> moveWithoutAFileAndAPackage() {
+        return List.of(
+                List.of("move"),
+                List.of("move", "--dry-run"),
+                List.of("move", "A.java"),
+                List.of("move", "--dry-run", "A.java"));
     }
 
     private static List<List<String>> withoutAFileAndOnePosition(String command) {

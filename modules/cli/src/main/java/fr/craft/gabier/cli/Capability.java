@@ -12,6 +12,7 @@ sealed interface Capability
                 ExtractVariable,
                 ExtractMethod,
                 MoveTypeToFile,
+                Move,
                 Inline,
                 Create,
                 References,

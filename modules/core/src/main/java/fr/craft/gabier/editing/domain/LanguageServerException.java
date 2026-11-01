@@ -67,6 +67,22 @@ public final class LanguageServerException extends GeneratorException {
     }
 
     /**
+     * Files cannot be moved to the package, for a reason gabier decides: the server does not refuse them itself.
+     *
+     * @param files the files that cannot be moved: the offending ones, or all of them when the reason is about their set
+     */
+    public static LanguageServerException notMovableToPackage(
+            List<Path> files, PackageName target, NotMovableReason reason) {
+        String names = files.stream().map(Path::toString).collect(Collectors.joining(", "));
+
+        return new LanguageServerException(GeneratorException.badRequest(LanguageServerErrorKey.NOT_MOVABLE_TO_PACKAGE)
+                .message("Cannot move " + names + " to the package " + target.value() + ": " + reason.sentence())
+                .addParameter("files", names)
+                .addParameter("package", target.value())
+                .addParameter("reason", reason.get()));
+    }
+
+    /**
      * The server has nothing to inline at the position: it is not on a local variable, a method or a constant, or the
      * server refuses the inlining (a variable assigned more than once, a method that is recursive or abstract, a
      * declaration that nothing uses). The server does not tell which.

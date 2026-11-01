@@ -65,6 +65,20 @@ class HelpFlagTest {
     }
 
     @Test
+    void theHelpOfMoveSaysThatAMoveCanBreakWhatNeedsThePackageAndThatThePackageCannotBeTheDefaultOne() {
+        for (var help : new String[][] {{"help", "move"}, {"move", "--help"}}) {
+            assertThat(printedBy(help))
+                    .contains("gabier [--json] move [--dry-run] <file>... <package>")
+                    .contains("Notes:")
+                    .contains("package-private")
+                    .contains("gabier diagnostics")
+                    .contains("default package")
+                    .contains("language-server-not-movable-to-package")
+                    .contains("editing-not-a-package-name");
+        }
+    }
+
+    @Test
     void theHelpOfInlineSaysWhereToPutThePositionOfAMethodOrAConstantToInlineAllItsUses() {
         for (var help : new String[][] {{"help", "inline"}, {"inline", "--help"}}) {
             assertThat(printedBy(help))
