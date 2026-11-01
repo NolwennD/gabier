@@ -92,7 +92,9 @@ class DaemonServerTest {
                         .scripted(Scenarios.EXTRACT_METHOD_THAT_USES_A_LOCAL_VARIABLE)
                         .scripted(Scenarios.EXTRACT_METHOD_FROM_HALF_A_STATEMENT)
                         .scripted(Scenarios.MOVE_A_STATIC_NESTED_TYPE)
-                        .scripted(Scenarios.MOVE_A_TOP_LEVEL_TYPE));
+                        .scripted(Scenarios.MOVE_A_TOP_LEVEL_TYPE)
+                        .scripted(Scenarios.INLINE_A_CONSTANT)
+                        .scripted(Scenarios.INLINE_A_VARIABLE_ASSIGNED_TWICE));
     }
 
     private DaemonServer open() {
@@ -578,6 +580,49 @@ class DaemonServerTest {
         private static String moveTypeToFileRequest(Path file, String line, String column, boolean dryRun) {
             return """
                 {"jsonrpc":"2.0","id":3,"method":"move-type-to-file","params":{"file":"%s","line":"%s",\
+                "column":"%s","dryRun":"%s"}}
+                """.formatted(file, line, column, dryRun);
+        }
+
+        @Test
+        void inlineAnswersWhatWasChangedAndWritesTheFilesUnlessItIsADryRun() throws IOException {
+            serving();
+            Scenarios.INLINE_A_CONSTANT.writeProject(directory);
+            var prices = directory.resolve("src/main/java/demo/Prices.java");
+
+            try (var client = connect(socket())) {
+                var dryRun = client.ask(inlineRequest(prices, "3", "21", true));
+
+                assertThat(dryRun)
+                        .contains("\"modified\":[")
+                        .contains("Prices.java")
+                        .contains("Checkout.java");
+                assertThat(Files.readString(prices)).contains("static final int VAT");
+
+                var done = client.ask(inlineRequest(prices, "3", "21", false));
+
+                assertThat(done).contains("\"modified\":[");
+                assertThat(Files.readString(prices)).doesNotContain("VAT");
+            }
+        }
+
+        @Test
+        void aPositionThatCannotBeInlinedIsRefusedWithItsProblemObjectAndNothingIsWritten() throws IOException {
+            serving();
+            Scenarios.INLINE_A_VARIABLE_ASSIGNED_TWICE.writeProject(directory);
+            var prices = directory.resolve("src/main/java/demo/Prices.java");
+            var before = Files.readString(prices);
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask(inlineRequest(prices, "20", "12", false)))
+                        .contains("\"key\":\"language-server-not-inlinable\"");
+                assertThat(Files.readString(prices)).isEqualTo(before);
+            }
+        }
+
+        private static String inlineRequest(Path file, String line, String column, boolean dryRun) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"inline","params":{"file":"%s","line":"%s",\
                 "column":"%s","dryRun":"%s"}}
                 """.formatted(file, line, column, dryRun);
         }

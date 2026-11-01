@@ -127,6 +127,20 @@ class ScenarioTest {
     }
 
     @Test
+    void rejectsAnInlinedAnswerForAnotherRequestAndAnotherAnswerForInlining() {
+        Request.Rename rename = new Request.Rename(FILE, POSITION, "B");
+        Request.Inline inline = new Request.Inline(FILE, POSITION);
+        ChangeSet changes = set(new CreateFile(FILE));
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(rename, new Answer.Inlined(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(inline, new Answer.Renamed(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(inline, new Answer.Extracted(changes)));
+    }
+
+    @Test
     void rejectsARefusalThatTheRequestCannotGet() {
         Request.Diagnostics diagnostics = new Request.Diagnostics(FILE);
 
@@ -257,6 +271,33 @@ class ScenarioTest {
     }
 
     @Test
+    void buildsTheRefusalOfAnInlineRequest() {
+        Request.Inline inline = new Request.Inline(FILE, POSITION);
+
+        assertThat(inline.refusal(LanguageServerErrorKey.NOT_READY).key()).isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(inline.refusal(LanguageServerErrorKey.FILE_MISSING).key())
+                .isEqualTo(LanguageServerErrorKey.FILE_MISSING);
+        assertThat(inline.refusal(LanguageServerErrorKey.NOT_A_FILE).key())
+                .isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
+        assertThat(inline.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
+                .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(inline.refusal(LanguageServerErrorKey.NOT_INLINABLE).parameters())
+                .isEqualTo(Map.of("file", FILE.toString(), "line", "0", "column", "6"));
+        for (var key : List.of(
+                LanguageServerErrorKey.NO_SUCH_SYMBOL,
+                LanguageServerErrorKey.INVALID_NAME,
+                LanguageServerErrorKey.NOT_AN_EXPRESSION,
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                LanguageServerErrorKey.NOT_MOVABLE,
+                LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
+                LanguageServerErrorKey.UNRESOLVED_IMPORTS)) {
+            assertThatExceptionOfType(IllegalArgumentException.class)
+                    .as(key.toString())
+                    .isThrownBy(() -> inline.refusal(key));
+        }
+    }
+
+    @Test
     void buildsTheRefusalOfAnOrganizeImportsRequest() {
         Request.OrganizeImports organize = new Request.OrganizeImports(FILE);
 
@@ -298,6 +339,8 @@ class ScenarioTest {
                 .isEqualTo(new Request.ExtractMethod(Path.of("/project/src/A.java"), SELECTION, "b"));
         assertThat(new Request.MoveTypeToFile(FILE, POSITION).resolvedIn(ROOT))
                 .isEqualTo(new Request.MoveTypeToFile(Path.of("/project/src/A.java"), POSITION));
+        assertThat(new Request.Inline(FILE, POSITION).resolvedIn(ROOT))
+                .isEqualTo(new Request.Inline(Path.of("/project/src/A.java"), POSITION));
     }
 
     @Test
@@ -337,6 +380,16 @@ class ScenarioTest {
                 .isEqualTo(new Answer.Moved(set(
                         new CreateFile(Path.of("/project/src/B.java")),
                         new EditFile(Path.of("/project/src/B.java"), List.of(edit)))));
+    }
+
+    @Test
+    void resolvesTheChangesOfAnInlinedAnswerAgainstARoot() {
+        TextEdit edit = new TextEdit(new Range(POSITION, POSITION), "");
+
+        Answer resolved = new Answer.Inlined(set(new EditFile(Path.of("src/B.java"), List.of(edit)))).resolvedIn(ROOT);
+
+        assertThat(resolved)
+                .isEqualTo(new Answer.Inlined(set(new EditFile(Path.of("/project/src/B.java"), List.of(edit)))));
     }
 
     @Test

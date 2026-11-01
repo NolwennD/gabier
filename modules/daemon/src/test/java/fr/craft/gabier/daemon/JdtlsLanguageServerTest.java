@@ -2556,4 +2556,291 @@ class JdtlsLanguageServerTest {
             }
         }
     }
+
+    @Nested
+    class Inlining {
+
+        private static final String PRICES = """
+            package demo;
+
+            public class Prices {
+                static final int VAT = 20;
+
+                int gross(int net) {
+                    return net * VAT / 100;
+                }
+            }
+            """;
+
+        private final Position onTheConstant = new Position(3, 21);
+        private Path prices;
+
+        @BeforeEach
+        void writeTheSources() throws IOException {
+            prices = write("src/main/java/demo/Prices.java", PRICES);
+        }
+
+        private org.eclipse.lsp4j.Position at(int line, int column) {
+            return new org.eclipse.lsp4j.Position(line, column);
+        }
+
+        private CompletableFuture<List<Either<Command, CodeAction>>> offers(CodeAction action) {
+            return CompletableFuture.completedFuture(List.of(Either.forRight(action)));
+        }
+
+        /** What jdtls offers first: the action, with its data and no edit yet. */
+        private CodeAction lazyAction() {
+            var action = new CodeAction("Inline Constant");
+            action.setKind(CodeActionKind.RefactorInline);
+            action.setData("jdtls-data");
+            return action;
+        }
+
+        /** The action once resolved: the edit is given as {@code documentChanges}, as jdtls gives a refactoring. */
+        private CodeAction resolvedAction() {
+            var edit = new TextDocumentEdit(
+                    new VersionedTextDocumentIdentifier(prices.toUri().toString(), null),
+                    List.of(
+                            Either.forLeft(new TextEdit(new Range(at(3, 0), at(5, 0)), "")),
+                            Either.forLeft(new TextEdit(new Range(at(6, 20), at(6, 23)), "20"))));
+            var action = lazyAction();
+            action.setEdit(new WorkspaceEdit(List.of(Either.forLeft(edit))));
+            return action;
+        }
+
+        private ChangeSet inlined() {
+            return new ChangeSet(List.of(new FileChange.EditFile(
+                    prices,
+                    List.of(
+                            new fr.craft.gabier.editing.domain.TextEdit(
+                                    new fr.craft.gabier.editing.domain.Range(new Position(3, 0), new Position(5, 0)),
+                                    ""),
+                            new fr.craft.gabier.editing.domain.TextEdit(
+                                    new fr.craft.gabier.editing.domain.Range(new Position(6, 20), new Position(6, 23)),
+                                    "20")))));
+        }
+
+        @Test
+        void asksForTheInlineActionAtThePositionAloneThenResolvesItAndAnswersInTheTermsOfTheDomain() throws Exception {
+            fake.codeActionAnswers(offers(lazyAction()))
+                    .resolveAnswers(CompletableFuture.completedFuture(resolvedAction()));
+
+            try (var server = started()) {
+                assertThat(server.inline(prices, onTheConstant)).isEqualTo(inlined());
+
+                assertThat(fake.codeActionRequests()).hasSize(1);
+                CodeActionParams request = fake.codeActionRequests().getFirst();
+                assertThat(request.getTextDocument().getUri())
+                        .isEqualTo(prices.toUri().toString());
+                assertThat(request.getRange()).isEqualTo(new Range(at(3, 21), at(3, 21)));
+                assertThat(request.getContext().getOnly()).containsExactly("refactor.inline");
+                assertThat(request.getContext().getDiagnostics()).isEmpty();
+                assertThat(fake.resolveRequests()).hasSize(1);
+                assertThat(fake.resolveRequests().getFirst().getData()).isEqualTo(new JsonPrimitive("jdtls-data"));
+                assertThat(prices).hasContent(PRICES);
+            }
+        }
+
+        @Test
+        void usesTheEditOfTheActionWhenJdtlsGivesItWithoutBeingAskedToResolve() throws Exception {
+            fake.codeActionAnswers(offers(resolvedAction()));
+
+            try (var server = started()) {
+                assertThat(server.inline(prices, onTheConstant)).isEqualTo(inlined());
+                assertThat(fake.resolveRequests()).isEmpty();
+            }
+        }
+
+        private void assertNotInlinable(JdtlsLanguageServer server) {
+            assertThatThrownBy(() -> server.inline(prices, onTheConstant))
+                    .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                        assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_INLINABLE);
+                        assertThat(refusal.parameters())
+                                .containsEntry("file", prices.toString())
+                                .containsEntry("line", "3")
+                                .containsEntry("column", "21");
+                    });
+        }
+
+        @Test
+        void refusesWhenJdtlsOffersNoInlineAction() throws Exception {
+            fake.codeActionAnswers(CompletableFuture.completedFuture(List.of()));
+
+            try (var server = started()) {
+                assertNotInlinable(server);
+                assertThat(fake.resolveRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesWhenJdtlsAnswersNothing() throws Exception {
+            fake.codeActionAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertNotInlinable(server);
+            }
+        }
+
+        /** What jdtls offers beside the inline action: all its refactorings, not only the kind that was asked for. */
+        private CodeAction otherAction() {
+            var action = new CodeAction("Change type to 'var'");
+            action.setKind(CodeActionKind.RefactorRewrite);
+            action.setEdit(new WorkspaceEdit(List.of(Either.forLeft(new TextDocumentEdit(
+                    new VersionedTextDocumentIdentifier(prices.toUri().toString(), null),
+                    List.of(Either.forLeft(new TextEdit(new Range(at(6, 8), at(6, 11)), "var"))))))));
+            return action;
+        }
+
+        @Test
+        void takesTheInlineActionAmongTheRefactoringsJdtlsOffersWhateverTheKindAsked() throws Exception {
+            fake.codeActionAnswers(CompletableFuture.completedFuture(
+                    List.of(Either.forRight(otherAction()), Either.forRight(resolvedAction()))));
+
+            try (var server = started()) {
+                assertThat(server.inline(prices, onTheConstant)).isEqualTo(inlined());
+            }
+        }
+
+        @Test
+        void skipsMakeStaticWhichJdtlsOffersWithTheKindOfTheInlinings() throws Exception {
+            var makeStatic = otherAction();
+            makeStatic.setTitle("Make static");
+            makeStatic.setKind(CodeActionKind.RefactorInline);
+            fake.codeActionAnswers(CompletableFuture.completedFuture(
+                    List.of(Either.forRight(makeStatic), Either.forRight(resolvedAction()))));
+
+            try (var server = started()) {
+                assertThat(server.inline(prices, onTheConstant)).isEqualTo(inlined());
+            }
+        }
+
+        @Test
+        void refusesWhenJdtlsOffersOnlyOtherRefactorings() throws Exception {
+            fake.codeActionAnswers(offers(otherAction()));
+
+            try (var server = started()) {
+                assertNotInlinable(server);
+                assertThat(fake.resolveRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesWhenJdtlsOffersOnlyACommand() throws Exception {
+            fake.codeActionAnswers(CompletableFuture.completedFuture(
+                    List.of(Either.forLeft(new Command("Inline", "java.apply.workspaceEdit")))));
+
+            try (var server = started()) {
+                assertNotInlinable(server);
+            }
+        }
+
+        @Test
+        void refusesWhenJdtlsDeclinesTheRequest() throws Exception {
+            fake.codeActionAnswers(CompletableFuture.failedFuture(new ResponseErrorException(
+                    new ResponseError(ResponseErrorCode.InvalidRequest, "cannot inline", null))));
+
+            try (var server = started()) {
+                assertNotInlinable(server);
+            }
+        }
+
+        @Test
+        void refusesWhenTheResolvedActionHasNoEdit() throws Exception {
+            // What jdtls answers when the conditions of the refactoring fail once it is computed.
+            fake.codeActionAnswers(offers(lazyAction()))
+                    .resolveAnswers(CompletableFuture.completedFuture(lazyAction()));
+
+            try (var server = started()) {
+                assertNotInlinable(server);
+            }
+        }
+
+        @Test
+        void refusesWhenTheResolveIsDeclined() throws Exception {
+            fake.codeActionAnswers(offers(lazyAction())).resolveAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertNotInlinable(server);
+            }
+        }
+
+        @Test
+        void refusesAnEditThatChangesNothing() throws Exception {
+            var action = lazyAction();
+            action.setEdit(new WorkspaceEdit(List.of()));
+            fake.codeActionAnswers(offers(action));
+
+            try (var server = started()) {
+                assertNotInlinable(server);
+            }
+        }
+
+        @Test
+        void refusesAFileOutsideTheProjectWithoutAskingJdtls() throws Exception {
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.inline(root.resolve("../Elsewhere.java"), onTheConstant))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key())
+                                        .isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+                assertThat(fake.codeActionRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesAFileThatDoesNotExistAndAFolderWithoutAskingJdtls() throws Exception {
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.inline(root.resolve("src/main/java/demo/Nope.java"), onTheConstant))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.FILE_MISSING));
+                assertThatThrownBy(() -> server.inline(root.resolve("src/main/java/demo"), onTheConstant))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_A_FILE));
+                assertThat(fake.codeActionRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesAsNotReadyWhileJdtlsIsStillImporting() throws Exception {
+            fake.neverAnswersInitialize();
+
+            try (var server = start()) {
+                assertThatThrownBy(() -> server.inline(prices, onTheConstant))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+                assertThat(fake.codeActionRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
+            fake.codeActionAnswers(CompletableFuture.failedFuture(new IllegalStateException("the model is broken")));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.inline(prices, onTheConstant))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("waiting for the inlining of the symbol at Position[line=3, column=21]")
+                        .hasMessageContaining("Internal error");
+            }
+        }
+
+        @Test
+        void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
+            fake.codeActionAnswers(offers(resolvedAction()));
+
+            try (var server = started()) {
+                Thread.currentThread().interrupt();
+
+                assertThatThrownBy(() -> server.inline(prices, onTheConstant))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining(
+                                "Interrupted while waiting for the inlining of the symbol at Position[line=3,"
+                                        + " column=21]");
+                assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+    }
 }

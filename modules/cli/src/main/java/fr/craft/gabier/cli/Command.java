@@ -134,6 +134,32 @@ enum Command {
                     "editing-file-exists: the file to create appeared since the language server answered",
                     "editing-stale-edit: the change cannot be applied to the files as they are",
                     "language-server-not-ready: the Java language server is not ready")),
+    INLINE(
+            "inline",
+            "replace a local variable, a method or a constant by its value",
+            "gabier [--json] inline [--dry-run] <file> <line>:<column>",
+            """
+            $ gabier inline --dry-run src/main/java/demo/Prices.java 4:22
+            dry run, nothing written
+            modified /work/demo/src/main/java/demo/Prices.java
+            modified /work/demo/src/main/java/demo/Checkout.java
+            ...\
+            """,
+            """
+            The position is on the name of a local variable, a method or a constant.
+            A local variable is inlined everywhere, whatever the position.
+            A position on the declaration of a method or a constant inlines every use and removes it;
+            a position on one use inlines that use only and keeps the declaration.\
+            """,
+            requestRefusals(
+                    "language-server-not-inlinable: nothing the server can inline at the position (not on a variable,"
+                            + " a method or a constant; a variable assigned more than once; a recursive or abstract"
+                            + " method; a declaration that nothing uses)",
+                    "language-server-file-outside-project: the file is not in the project the daemon serves",
+                    "language-server-file-missing: the path is under the project and no file is there",
+                    "language-server-not-a-file: the path is a folder",
+                    "editing-stale-edit: the change cannot be applied to the files as they are",
+                    "language-server-not-ready: the Java language server is not ready")),
     STATUS(
             "status",
             "the project the daemon serves, and where jdtls is",

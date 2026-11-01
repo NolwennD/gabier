@@ -160,7 +160,19 @@ class ScenariosTest {
                         "move-a-top-level-type",
                         "move-a-type-to-a-file-that-exists",
                         "move-a-type-while-the-server-imports",
-                        "move-a-type-of-a-file-outside-the-project");
+                        "move-a-type-of-a-file-outside-the-project",
+                        "inline-a-local-variable",
+                        "inline-a-local-variable-from-one-of-its-uses",
+                        "inline-a-method",
+                        "inline-one-call-of-a-method",
+                        "inline-a-constant",
+                        "inline-one-use-of-a-constant",
+                        "inline-where-there-is-nothing-to-inline",
+                        "inline-a-variable-assigned-twice",
+                        "inline-a-recursive-method",
+                        "inline-an-abstract-method",
+                        "inline-while-the-server-imports",
+                        "inline-a-file-outside-the-project");
     }
 
     @Test
@@ -225,6 +237,20 @@ class ScenariosTest {
                         LanguageServerErrorKey.NOT_MOVABLE,
                         LanguageServerErrorKey.NOT_MOVABLE,
                         LanguageServerErrorKey.NOT_MOVABLE,
+                        LanguageServerErrorKey.NOT_READY);
+    }
+
+    @Test
+    void refusesForEachReasonOfThePortOnAnInline() {
+        assertThat(answeredWith(Answer.Refused.class).stream()
+                        .filter(scenario -> scenario.request() instanceof Request.Inline)
+                        .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
+                        LanguageServerErrorKey.NOT_INLINABLE,
+                        LanguageServerErrorKey.NOT_INLINABLE,
+                        LanguageServerErrorKey.NOT_INLINABLE,
+                        LanguageServerErrorKey.NOT_INLINABLE,
                         LanguageServerErrorKey.NOT_READY);
     }
 
@@ -596,5 +622,74 @@ class ScenariosTest {
                 .hasSizeGreaterThan(99);
         assertThat(block.stream().filter(line -> line.startsWith("import static demo.many.Constants.")))
                 .hasSizeGreaterThan(99);
+    }
+
+    /** What an inline is asked on: the name of the variable, the method or the constant. */
+    private static String inlined(Scenario scenario) {
+        var request = (Request.Inline) scenario.request();
+
+        return identifierAt(scenario, request.file(), request.position());
+    }
+
+    private static int occurrencesOf(String name, Map<Path, String> files) {
+        Pattern word = wholeWord(name);
+
+        return files.values().stream()
+                .mapToInt(source -> (int) word.matcher(source).results().count())
+                .sum();
+    }
+
+    @Test
+    void startsEveryInlineOnTheNameOfAVariableAMethodOrAConstant() {
+        List<Scenario> inlines = answeredWith(Answer.Inlined.class);
+
+        assertThat(inlines).hasSize(6);
+        assertThat(inlines.stream().map(ScenariosTest::inlined))
+                .containsExactly("vat", "vat", "handling", "handling", "VAT", "VAT");
+    }
+
+    @Test
+    void startsTheRefusedInlinesOnWhatTheyAreRefusedFor() {
+        assertThat(inlined(Scenarios.INLINE_WHERE_THERE_IS_NOTHING_TO_INLINE)).isEmpty();
+        assertThat(inlined(Scenarios.INLINE_A_VARIABLE_ASSIGNED_TWICE)).isEqualTo("rate");
+        assertThat(inlined(Scenarios.INLINE_A_RECURSIVE_METHOD)).isEqualTo("countdown");
+        assertThat(inlined(Scenarios.INLINE_AN_ABSTRACT_METHOD)).isEqualTo("apply");
+    }
+
+    @Test
+    void leavesNeitherTheDeclarationNorAUseOfWhatIsInlinedFromItsDeclarationOrFromAUseOfAVariable(
+            @TempDir Path directory) throws IOException {
+        for (Scenario scenario : List.of(
+                Scenarios.INLINE_A_LOCAL_VARIABLE,
+                Scenarios.INLINE_A_LOCAL_VARIABLE_FROM_ONE_OF_ITS_USES,
+                Scenarios.INLINE_A_METHOD,
+                Scenarios.INLINE_A_CONSTANT)) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.Inlined) inside.answer()).changes());
+
+            assertThat(occurrencesOf(inlined(scenario), filesUnder(root)))
+                    .as(scenario.name())
+                    .isZero();
+        }
+    }
+
+    @Test
+    void keepsTheDeclarationAndInlinesOnlyTheCallOrTheUseItIsAskedOn(@TempDir Path directory) throws IOException {
+        for (Scenario scenario :
+                List.of(Scenarios.INLINE_ONE_CALL_OF_A_METHOD, Scenarios.INLINE_ONE_USE_OF_A_CONSTANT)) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+            int before = occurrencesOf(inlined(scenario), inside.files());
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.Inlined) inside.answer()).changes());
+
+            assertThat(occurrencesOf(inlined(scenario), filesUnder(root)))
+                    .as(scenario.name())
+                    .isEqualTo(before - 1);
+        }
     }
 }

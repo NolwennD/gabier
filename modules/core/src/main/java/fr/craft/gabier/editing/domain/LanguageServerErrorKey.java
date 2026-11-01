@@ -10,6 +10,7 @@ public enum LanguageServerErrorKey implements ErrorKey {
     INVALID_NAME("language-server-invalid-name"),
     NO_SUCH_SYMBOL("language-server-no-such-symbol"),
     NOT_AN_EXPRESSION("language-server-not-an-expression"),
+    NOT_INLINABLE("language-server-not-inlinable"),
     NOT_EXTRACTABLE("language-server-not-extractable"),
     NOT_A_FILE("language-server-not-a-file"),
     NOT_MOVABLE("language-server-not-movable"),

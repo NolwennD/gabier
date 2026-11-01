@@ -102,6 +102,13 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
     }
 
     @Override
+    public ChangeSet inline(Path file, Position position) {
+        Request request = new Request.Inline(file, position).resolvedIn(root);
+
+        return ((Answer.Inlined) answerTo(request)).changes();
+    }
+
+    @Override
     public Optional<ChangeSet> organizeImports(Path file) {
         Request request = new Request.OrganizeImports(file).resolvedIn(root);
 

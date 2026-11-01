@@ -549,6 +549,75 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     }
 
     /**
+     * Inlines the local variable, the method or the constant at the position, with the code action {@code
+     * refactor.inline} asked for an empty range at the position (jdtls offers it when the position is on the name of
+     * what it can inline: {@code RefactorProcessor.getInlineProposal}). The {@code only} of the request chooses
+     * the processors jdtls runs, not the actions it returns (the refactor processor answers all of its {@code refactor.*}
+     * actions), so the action taken is the one of the kind {@code refactor.inline} that is titled "Inline ..." ("Inline
+     * Method", "Inline Constant", "Inline local variable"): jdtls gives "Make static" the same kind.
+     *
+     * <p>The edit is computed when the action is resolved, as for the organization of the imports, and jdtls gives none
+     * when the conditions of the refactoring fail: a variable assigned more than once, a method that is recursive.
+     * Nothing is offered for a position on no variable, method or constant, an abstract method, or a declaration that
+     * nothing uses; all of these are one refusal, {@code not-inlinable}, as jdtls does not say which. On a variable,
+     * jdtls inlines every use and removes the declaration, whatever the position; on a method or a constant, a position
+     * on the declaration inlines every use and removes it, a position on a use inlines that use only.
+     *
+     * @throws LanguageServerException if jdtls is not ready, the file is not in its project or jdtls has nothing to
+     *     inline there
+     * @throws JdtlsException if jdtls dies or does not answer in time
+     */
+    @Override
+    public synchronized ChangeSet inline(Path file, Position position) {
+        JdtlsSession session = ready();
+        Path path = normalized(file);
+        textInProject(session, path);
+        var at = new org.eclipse.lsp4j.Position(position.line(), position.column());
+        var params = new CodeActionParams(
+                new TextDocumentIdentifier(path.toUri().toString()),
+                new org.eclipse.lsp4j.Range(at, at),
+                new CodeActionContext(List.of(), List.of(CodeActionKind.RefactorInline)));
+        var service = session.server().getTextDocumentService();
+        JdtlsWatch watch = session.newWatch();
+        try {
+            takeInChangesOnDisk(session, watch);
+            var offered = watch.await(
+                    "the inlining of the symbol at " + position + " of " + path,
+                    () -> JdtlsRequests.unlessDeclined(service.codeAction(params)));
+            Optional<CodeAction> action = offered.stream()
+                    .flatMap(List::stream)
+                    .filter(Either::isRight)
+                    .map(Either::getRight)
+                    .filter(JdtlsLanguageServer::isAnInlining)
+                    .findFirst();
+            if (action.isPresent() && action.get().getEdit() == null) {
+                var unresolved = action.get();
+                action = watch.await(
+                        "the edit of the inlining of the symbol at " + position + " of " + path,
+                        () -> JdtlsRequests.unlessDeclined(service.resolveCodeAction(unresolved)));
+            }
+            List<FileChange> changes = action.map(CodeAction::getEdit)
+                    .map(edit -> WorkspaceEdits.of(edit, JdtlsLanguageServer::textOnDisk))
+                    .orElse(List.of());
+            if (changes.isEmpty()) {
+                throw LanguageServerException.notInlinable(path, position);
+            }
+
+            return new ChangeSet(changes);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException(
+                    "Interrupted while waiting for the inlining of the symbol at " + position + " of " + path,
+                    interrupted);
+        }
+    }
+
+    private static boolean isAnInlining(CodeAction offer) {
+        return CodeActionKind.RefactorInline.equals(offer.getKind())
+                && offer.getTitle().startsWith("Inline ");
+    }
+
+    /**
      * Asks jdtls for the {@code source.organizeImports} code action of the file, resolves it when its edit is not given
      * (jdtls computes it at that point, the client declares {@code codeAction.resolveSupport} for {@code edit}), and
      * gives the edit in the terms of the domain ({@link WorkspaceEdits}). jdtls reads the file as it knows it (nothing is

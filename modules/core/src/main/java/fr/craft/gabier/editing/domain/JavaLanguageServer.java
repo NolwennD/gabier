@@ -69,6 +69,19 @@ public interface JavaLanguageServer {
     ChangeSet moveTypeToFile(Path file, Position position);
 
     /**
+     * What inlining the local variable, the method or the constant at a position changes: every use is replaced by its
+     * value (the body of a method) and the declaration is removed, in this file and in the others that use it. On a
+     * method or a constant, a position on a use and not on the declaration inlines that use only, and the declaration
+     * stays.
+     *
+     * @return the change set to apply, which only edits files
+     * @throws LanguageServerException if the server is not ready, the file is not a file of its project (outside it,
+     *     missing or a folder) or the server has nothing to inline there (not on a variable, a method or a constant, a
+     *     variable assigned more than once, a method that is recursive or abstract, a declaration that nothing uses)
+     */
+    ChangeSet inline(Path file, Position position);
+
+    /**
      * What organizing the imports of a file changes: the missing imports are added, the unused ones removed, and the
      * rest ordered as the server is configured to (for gabier, as the project keeps them, with no import collapsed into
      * a star). Only the file itself is edited.

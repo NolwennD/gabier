@@ -66,6 +66,19 @@ public final class LanguageServerException extends GeneratorException {
                         + " top-level type, or a file of its name exists in its package"));
     }
 
+    /**
+     * The server has nothing to inline at the position: it is not on a local variable, a method or a constant, or the
+     * server refuses the inlining (a variable assigned more than once, a method that is recursive or abstract, a
+     * declaration that nothing uses). The server does not tell which.
+     */
+    public static LanguageServerException notInlinable(Path file, Position position) {
+        return new LanguageServerException(positioned(LanguageServerErrorKey.NOT_INLINABLE, file, position)
+                .message("Nothing at " + format(position) + " in " + file
+                        + " can be inlined: the position is not on a local variable, a method or a constant, or the"
+                        + " server refuses it (a variable assigned more than once, a method that is recursive or"
+                        + " abstract, a declaration that nothing uses)"));
+    }
+
     /** The server does not accept the name for the symbol at the position. */
     public static LanguageServerException invalidName(Path file, Position position, String name) {
         return new LanguageServerException(positioned(LanguageServerErrorKey.INVALID_NAME, file, position)

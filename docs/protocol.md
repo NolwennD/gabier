@@ -46,3 +46,4 @@ daemon ([help](commands/help.md)).
 | `extract-variable` | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-variable](commands/extract-variable.md)           |
 | `extract-method`   | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-method](commands/extract-method.md)               |
 | `move-type-to-file` | `file`, `line`, `column`, `dryRun`                                          | [move-type-to-file](commands/move-type-to-file.md)         |
+| `inline`           | `file`, `line`, `column`, `dryRun`                                          | [inline](commands/inline.md)                               |

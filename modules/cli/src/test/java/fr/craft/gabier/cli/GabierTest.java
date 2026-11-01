@@ -286,6 +286,27 @@ class GabierTest {
         }
 
         @Test
+        void inlineWithoutAFileAndOnePositionIsAnUnknownUsage() {
+            for (var arguments : List.of(
+                    List.of("inline"),
+                    List.of("inline", "--dry-run"),
+                    List.of("inline", "A.java"),
+                    List.of("inline", "A.java", "3:4", "3:9"),
+                    List.of("inline", "A.java", "3"),
+                    List.of("inline", "A.java", "0:4"),
+                    List.of("inline", "A.java", "3:four"))) {
+                out.reset();
+                err.reset();
+
+                assertThat(run(arguments.toArray(String[]::new)))
+                        .as(arguments.toString())
+                        .isEqualTo(2);
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(usageText(String.join(" ", arguments)));
+            }
+        }
+
+        @Test
         void extractVariableWithAPositionThatIsNotLineColonColumnFromOneIsAnUnknownUsage() {
             for (var positions : List.of(
                     List.of("3", "3:9"),
@@ -327,6 +348,7 @@ class GabierTest {
                 "extract-variable",
                 "extract-method",
                 "move-type-to-file",
+                "inline",
                 "status",
                 "stop",
                 "help");
@@ -453,8 +475,8 @@ class GabierTest {
             assertThat(out()).isEmpty();
             assertThat(err())
                     .startsWith("Usage error: Unknown command; the commands are diagnostics, rename, organize-imports,"
-                            + " extract-variable, extract-method, move-type-to-file, status, stop, help (usage-error;"
-                            + " command=frobnicate)");
+                            + " extract-variable, extract-method, move-type-to-file, inline, status, stop,"
+                            + " help (usage-error; command=frobnicate)");
         }
 
         @Test
@@ -1870,6 +1892,120 @@ class GabierTest {
                         .isEqualTo(2);
 
                 assertThat(err()).isEqualTo(NOT_MOVABLE.toJson() + System.lineSeparator());
+            }
+        }
+    }
+
+    @Nested
+    class Inlining {
+
+        private static final String REQUEST = """
+            {"jsonrpc":"2.0","id":1,"method":"inline","params":{"column":"%s","dryRun":"%s","file":"%s",\
+            "line":"%s"}}\
+            """;
+        private static final ChangedFiles INLINED = new ChangedFiles(
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(Path.of("/project/Prices.java"), Path.of("/project/Checkout.java")),
+                """
+                --- /project/Prices.java
+                +++ /project/Prices.java
+                @@ -1,3 +1,2 @@
+                -    static final int VAT = 20;
+                +    int vat = net * 20;
+                """);
+        private static final Problem NOT_INLINABLE = new Problem(
+                "urn:gabier:error:language-server-not-inlinable",
+                "Not inlinable",
+                "Nothing at 20:12 in /project/Prices.java can be inlined",
+                "language-server-not-inlinable",
+                Map.of("file", "/project/Prices.java"),
+                ErrorStatus.BAD_REQUEST);
+
+        private Path socket() {
+            return directory.resolve("gabier.sock");
+        }
+
+        private int runWithSocket(String... args) {
+            return run(Map.of("GABIER_SOCKET", socket().toString()), args);
+        }
+
+        @Test
+        void asksTheDaemonToInlineTheSymbolAtThePositionCountedFromOneAsItIsShownAndSendsItFromZero()
+                throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", INLINED.toJson()))) {
+                assertThat(runWithSocket("inline", "/project/Prices.java", "4:22"))
+                        .isZero();
+
+                assertThat(daemon.requests())
+                        .containsExactly(REQUEST.formatted(21, false, Path.of("/project/Prices.java"), 3));
+            }
+        }
+
+        @Test
+        void asksForADryRunWithTheDryRunOptionWhereverItIsAndSaysThatNothingWasWritten() throws IOException {
+            for (var arguments : List.of(
+                    List.of("inline", "--dry-run", "/project/Prices.java", "4:22"),
+                    List.of("inline", "/project/Prices.java", "4:22", "--dry-run"))) {
+                try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", INLINED.toJson()))) {
+                    out.reset();
+                    assertThat(runWithSocket(arguments.toArray(String[]::new))).isZero();
+
+                    assertThat(daemon.requests())
+                            .containsExactly(REQUEST.formatted(21, true, Path.of("/project/Prices.java"), 3));
+                    assertThat(out().lines()).startsWith("dry run, nothing written", "modified /project/Prices.java");
+                }
+                Files.deleteIfExists(socket());
+            }
+        }
+
+        @Test
+        void listsTheFilesThatChangedThenShowsTheDiff() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", INLINED.toJson()))) {
+                assertThat(runWithSocket("inline", "/project/Prices.java", "4:22"))
+                        .isZero();
+
+                assertThat(out().lines())
+                        .startsWith(
+                                "modified /project/Prices.java",
+                                "modified /project/Checkout.java",
+                                "",
+                                "--- /project/Prices.java")
+                        .contains("-    static final int VAT = 20;");
+                assertThat(err()).isEmpty();
+            }
+        }
+
+        @Test
+        void givesTheResultAsJsonWithTheJsonOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.success("1", INLINED.toJson()))) {
+                assertThat(runWithSocket("--json", "inline", "/project/Prices.java", "4:22"))
+                        .isZero();
+
+                assertThat(out()).isEqualTo(INLINED.toJson() + System.lineSeparator());
+                assertThat(err()).isEmpty();
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsItsProblemObjectWithTheExitCodeOfItsCategory() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", NOT_INLINABLE))) {
+                assertThat(runWithSocket("inline", "/project/Prices.java", "21:13"))
+                        .isEqualTo(2);
+
+                assertThat(out()).isEmpty();
+                assertThat(err()).isEqualTo(NOT_INLINABLE.toText() + System.lineSeparator());
+            }
+        }
+
+        @Test
+        void reportsARefusalOfTheDaemonAsJsonWithTheJsonOption() throws IOException {
+            try (var daemon = new ScriptedDaemon(socket(), JsonRpc.failure("1", NOT_INLINABLE))) {
+                assertThat(runWithSocket("--json", "inline", "/project/Prices.java", "21:13"))
+                        .isEqualTo(2);
+
+                assertThat(err()).isEqualTo(NOT_INLINABLE.toJson() + System.lineSeparator());
             }
         }
     }

@@ -163,6 +163,11 @@ class ProjectServerTest {
         }
 
         @Override
+        public ChangeSet inline(Path file, Position position) {
+            return RENAMED;
+        }
+
+        @Override
         public Optional<ChangeSet> organizeImports(Path file) {
             return Optional.of(RENAMED);
         }
@@ -268,6 +273,13 @@ class ProjectServerTest {
         }
 
         @Test
+        void anInlineStartsItToo() {
+            assertThat(project.inline(FILE, new Position(0, 0))).isEqualTo(ScriptedServer.RENAMED);
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
         void keepsItForTheNextRequests() {
             project.diagnostics(FILE);
             project.diagnostics(FILE);
@@ -276,6 +288,7 @@ class ProjectServerTest {
             project.extractVariable(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x");
             project.extractMethod(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x");
             project.moveTypeToFile(FILE, new Position(0, 0));
+            project.inline(FILE, new Position(0, 0));
 
             assertThat(starter.starts).hasValue(1);
         }

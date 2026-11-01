@@ -59,6 +59,18 @@ class HelpFlagTest {
     }
 
     @Test
+    void theHelpOfInlineSaysWhereToPutThePositionOfAMethodOrAConstantToInlineAllItsUses() {
+        for (var help : new String[][] {{"help", "inline"}, {"inline", "--help"}}) {
+            assertThat(printedBy(help))
+                    .contains("Notes:")
+                    .contains("on the declaration of a method or a constant inlines every use and removes it")
+                    .contains("on one use inlines that use only")
+                    .contains("A local variable is inlined everywhere")
+                    .contains("Refusals");
+        }
+    }
+
+    @Test
     void theHelpOfACommandWithoutNotesHasNoNotesSection() {
         assertThat(printedBy("help", "rename")).doesNotContain("Notes:");
     }

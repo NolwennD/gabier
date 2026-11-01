@@ -25,6 +25,7 @@ class FakeJavaLanguageServerTest {
     private static final Path MAIN = ROOT.resolve("src/main/java/demo/Main.java");
     private static final Path GREETER = ROOT.resolve("src/main/java/demo/Greeter.java");
     private static final Path TOTALS = ROOT.resolve("src/main/java/demo/Totals.java");
+    private static final Path PRICES = ROOT.resolve("src/main/java/demo/Prices.java");
     private static final Path SHAPES = ROOT.resolve("src/main/java/demo/Shapes.java");
     private static final Path BROKEN = ROOT.resolve("src/main/java/demo/Broken.java");
     private static final Path UNTIDY = ROOT.resolve("src/main/java/demo/Untidy.java");
@@ -171,6 +172,28 @@ class FakeJavaLanguageServerTest {
                 .isThrownBy(() -> server.moveTypeToFile(SHAPES, new Position(2, 13)))
                 .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_MOVABLE));
         assertThat(server.asked()).containsExactly(new Request.MoveTypeToFile(SHAPES, new Position(2, 13)));
+    }
+
+    @Test
+    void answersTheChangeSetOfAnInlineScenarioWithPathsUnderItsRoot() {
+        server.scripted(Scenarios.INLINE_A_CONSTANT);
+
+        ChangeSet changes = server.inline(PRICES, new Position(3, 21));
+
+        assertThat(changes)
+                .isEqualTo(((Answer.Inlined)
+                                Scenarios.INLINE_A_CONSTANT.inside(ROOT).answer())
+                        .changes());
+        assertThat(server.asked()).containsExactly(new Request.Inline(PRICES, new Position(3, 21)));
+    }
+
+    @Test
+    void throwsTheRefusalOfAnInlineScenario() {
+        server.scripted(Scenarios.INLINE_A_VARIABLE_ASSIGNED_TWICE);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.inline(PRICES, new Position(20, 12)))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_INLINABLE));
     }
 
     @Test

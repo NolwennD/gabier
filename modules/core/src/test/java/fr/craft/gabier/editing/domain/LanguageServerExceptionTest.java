@@ -23,6 +23,7 @@ class LanguageServerExceptionTest {
                         "language-server-invalid-name",
                         "language-server-no-such-symbol",
                         "language-server-not-an-expression",
+                        "language-server-not-inlinable",
                         "language-server-not-extractable",
                         "language-server-not-a-file",
                         "language-server-not-movable",
@@ -88,6 +89,19 @@ class LanguageServerExceptionTest {
                 .hasMessage("No nested type at 4:7 in " + FILE + " can be moved to a file of its own: the position is"
                         + " outside any type, the type is a top-level type, or a file of its name exists in its"
                         + " package");
+    }
+
+    @Test
+    void saysWhichPositionHoldsNothingTheServerCanInline() {
+        LanguageServerException exception = LanguageServerException.notInlinable(FILE, new Position(4, 7));
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_INLINABLE);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters()).isEqualTo(Map.of("file", FILE.toString(), "line", "4", "column", "7"));
+        assertThat(exception)
+                .hasMessage("Nothing at 4:7 in " + FILE + " can be inlined: the position is not on a local variable,"
+                        + " a method or a constant, or the server refuses it (a variable assigned more than once, a"
+                        + " method that is recursive or abstract, a declaration that nothing uses)");
     }
 
     @Test

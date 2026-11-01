@@ -23,8 +23,8 @@ import java.util.stream.Stream;
  * {@code rename} is run against the latter too (a dry run, a rename by token, by position and of a type, and refusals),
  * and so are {@code organize-imports} (a dry run, a file organized, a file in order, a refusal) and {@code
  * extract-variable} (a dry run, a variable extracted under the name given, refusals), {@code extract-method} (a dry run,
- * a method extracted under the name given, refusals) and {@code move-type-to-file} (a dry run, a type moved to a file of
- * its own, a refusal);
+ * a method extracted under the name given, refusals), {@code move-type-to-file} (a dry run, a type moved to a file of
+ * its own, a refusal) and {@code inline} (a dry run, a constant inlined, a refusal);
  * a request command with no daemon running starts {@code gabier-daemon} (found on the {@code PATH} or next to the cli;
  * not found, exiting at once), the next request uses it, and {@code stop} ends it. Runs in the current directory, the
  * checkout under verification. It starts and signals only the processes it started, by their handle, and the daemons
@@ -63,7 +63,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, help, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, extract-variable, extract-method and move-type-to-file included, the daemon started on demand)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, extract-variable, extract-method, move-type-to-file and inline included, the daemon started on demand)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -251,6 +251,7 @@ public final class Native {
                 extractVariableWithTheFakeServer();
                 extractMethodWithTheFakeServer();
                 moveTypeToFileWithTheFakeServer();
+                inlineWithTheFakeServer();
                 fakeServedRefusesAFolderThatIsNotEmpty();
             } finally {
                 for (Process process : started) {
@@ -807,6 +808,59 @@ public final class Native {
                     "gabier move-type-to-file writes the file of the type and takes the type out of its outer class");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after the move of a type");
+        }
+
+        /**
+         * {@code gabier inline} against the daemon served by the fake language server: the dry run writes nothing, the
+         * constant is inlined in the files that use it and its declaration is removed, and a variable assigned twice is
+         * refused as a problem object that writes nothing.
+         */
+        private void inlineWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("inline-project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            Path prices = project.resolve("src/main/java/demo/Prices.java");
+            Path checkout = project.resolve("src/main/java/demo/Checkout.java");
+            String file = "inline-project/src/main/java/demo/Prices.java";
+            String original = Files.readString(prices);
+
+            Run dryRun = gabier("inline", "--dry-run", file, "4:22");
+            expect(
+                    dryRun.exit() == 0
+                            && dryRun.err().isEmpty()
+                            && dryRun.out().lines().findFirst().orElse("").equals("dry run, nothing written")
+                            && dryRun.out().contains("modified " + checkout)
+                            && dryRun.out().contains("-    static final int VAT = 20;")
+                            && Files.readString(prices).equals(original),
+                    "gabier inline --dry-run lists the files and the diff and writes nothing");
+
+            Run twice = gabier("inline", file, "21:13");
+            expect(
+                    twice.exit() == 2
+                            && twice.out().isEmpty()
+                            && twice.err().contains("(language-server-not-inlinable; ")
+                            && Files.readString(prices).equals(original),
+                    "inline of a variable assigned twice is refused as a problem object, exit 2");
+
+            Run json = gabier("--json", "inline", "--dry-run", file, "4:22");
+            expect(
+                    json.exit() == 0
+                            && json.out().contains("\"modified\":[")
+                            && Files.readString(prices).equals(original),
+                    "gabier --json inline gives the result as the daemon gave it");
+
+            Run inlined = gabier("inline", file, "4:22");
+            expect(
+                    inlined.exit() == 0
+                            && inlined.out().contains("modified " + prices)
+                            && !Files.readString(prices).contains("VAT")
+                            && !Files.readString(checkout).contains("VAT"),
+                    "gabier inline replaces the constant by its value in the files that use it and removes it");
+            gabier("stop");
+            expect(ends(process), "the daemon served by the fake stops after the inlining");
         }
 
         /** A {@code gabier-daemon} in the folder: a script with this body, which the cli finds and launches. */

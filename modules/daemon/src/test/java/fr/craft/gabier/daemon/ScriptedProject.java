@@ -150,6 +150,11 @@ final class ScriptedProject implements ServedProject {
     }
 
     @Override
+    public ChangeSet inline(Path file, Position position) {
+        return server.inline(file, position);
+    }
+
+    @Override
     public Optional<ChangeSet> organizeImports(Path file) {
         return server.organizeImports(file);
     }

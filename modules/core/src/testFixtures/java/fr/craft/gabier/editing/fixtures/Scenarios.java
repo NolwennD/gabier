@@ -24,7 +24,7 @@ import java.util.stream.IntStream;
  * project is two small classes of a package {@code demo}: a {@code Greeter} with a field, a method and a local
  * variable, and a {@code Main} that uses it; and, for the problems to report, a {@code Broken} (an error) and a {@code
  * Sloppy} (a warning); for the moves of a type, a {@code Shapes} with nested types and a {@code Drawing} that uses one
- * of them from the package {@code demo.app}. All the positions are 0-based ({@code line}, {@code column}) as in {@link Position}; every path
+ * of them from the package {@code demo.app}; for the inlinings, a {@code Prices} and a {@code Checkout} that uses it. All the positions are 0-based ({@code line}, {@code column}) as in {@link Position}; every path
  * is relative to the root of the project.
  *
  * <p>The scenarios are replayed against a real jdtls by {@code ScenarioReplayTest} (module {@code daemon}, {@code
@@ -82,6 +82,18 @@ import java.util.stream.IntStream;
  *       tell them apart ({@link #MOVE_A_TYPE_FROM_A_POSITION_OUTSIDE_ANY_TYPE}, {@link #MOVE_A_TOP_LEVEL_TYPE}, {@link
  *       #MOVE_A_TYPE_TO_A_FILE_THAT_EXISTS}). Nothing is overwritten because jdtls refuses before it computes an edit;
  *       the new file has no line break at its end;
+ *   <li>the inlining of a local variable, a method or a constant: the code action {@code refactor.inline} at the
+ *       position (an empty range), resolved for its edit. jdtls offers "Make static" with the same kind, so the adapter
+ *       takes the action titled "Inline ...". A variable is inlined everywhere whatever the position, with the
+ *       expression parenthesized where it could read differently, as in a concatenation ({@link #INLINE_A_LOCAL_VARIABLE}, {@link
+ *       #INLINE_A_LOCAL_VARIABLE_FROM_ONE_OF_ITS_USES}); a method and a constant are inlined everywhere, and removed, from
+ *       their declaration ({@link #INLINE_A_METHOD}, {@link #INLINE_A_CONSTANT}), and at the one call or use only, the
+ *       declaration staying, from a call or a use ({@link #INLINE_ONE_CALL_OF_A_METHOD}, {@link
+ *       #INLINE_ONE_USE_OF_A_CONSTANT}). jdtls merges the edits of a file as for a rename. It offers no action, or one
+ *       with no edit, for a position on nothing inlinable, a variable assigned twice, a recursive method and an abstract
+ *       one, and does not say why: one refusal for gabier, {@code not-inlinable} ({@link
+ *       #INLINE_WHERE_THERE_IS_NOTHING_TO_INLINE}, {@link #INLINE_A_VARIABLE_ASSIGNED_TWICE}, {@link
+ *       #INLINE_A_RECURSIVE_METHOD}, {@link #INLINE_AN_ABSTRACT_METHOD});
  *   <li>files changed on disk between two requests: jdtls reads a file once, and learns of what changes only if the
  *       client tells it ({@code workspace/didChangeWatchedFiles}, which it asks for by registering its watchers). A
  *       {@link Sequel} is two scenarios in a row with the disk changed between them ({@link #sequels()}): a type
@@ -126,6 +138,8 @@ public final class Scenarios {
     private static final Path CIRCLE = Path.of("src/main/java/demo/Circle.java");
     private static final Path SQUARE = Path.of("src/main/java/demo/Square.java");
     private static final Path LABEL = Path.of("src/main/java/demo/Label.java");
+    private static final Path PRICES = Path.of("src/main/java/demo/Prices.java");
+    private static final Path CHECKOUT = Path.of("src/main/java/demo/Checkout.java");
 
     /** How many types of one package, and constants of one class, {@code Wide} imports one by one: over the 99 of jdtls. */
     private static final int MANY = 100;
@@ -249,6 +263,58 @@ public final class Scenarios {
         }
         """;
 
+    /**
+     * What the inlinings are asked on: a constant ({@code VAT}), a local variable used twice ({@code vat}), a method
+     * called twice in its class and once in {@link #CHECKOUT_SOURCE} ({@code handling}), a variable assigned twice
+     * ({@code rate}), a recursive method ({@code countdown}) and an abstract one ({@code apply}).
+     */
+    private static final String PRICES_SOURCE = """
+        package demo;
+
+        public class Prices {
+            static final int VAT = 20;
+
+            public int gross(int net) {
+                int vat = net * VAT / 100;
+                System.out.println("tax: " + vat);
+                return net + vat;
+            }
+
+            public int shipped(int weight) {
+                return handling(weight) + handling(weight * 2);
+            }
+
+            int handling(int weight) {
+                return weight * 3 + 5;
+            }
+
+            public int discounted(int net) {
+                int rate = 10;
+                rate = rate + 5;
+                return net - net * rate / 100;
+            }
+
+            int countdown(int steps) {
+                return steps <= 0 ? 0 : countdown(steps - 1) + 1;
+            }
+
+            abstract static class Rule {
+                abstract int apply(int net);
+            }
+        }
+        """;
+
+    /** A user of the constant and of the method of {@link #PRICES_SOURCE} in another file. */
+    private static final String CHECKOUT_SOURCE = """
+        package demo;
+
+        public class Checkout {
+            public int total(Prices prices, int net) {
+                return net + Prices.VAT + prices.handling(net);
+            }
+        }
+        """;
+
     private static final String BROKEN_SOURCE = """
         package demo;
 
@@ -321,7 +387,11 @@ public final class Scenarios {
             SHAPES,
             SHAPES_SOURCE,
             DRAWING,
-            DRAWING_SOURCE);
+            DRAWING_SOURCE,
+            PRICES,
+            PRICES_SOURCE,
+            CHECKOUT,
+            CHECKOUT_SOURCE);
 
     /**
      * {@code Untidy}, {@code Tidy} and {@code Wide}, with the types and the constants {@code Wide} imports: the project
@@ -355,7 +425,11 @@ public final class Scenarios {
             SHAPES,
             SHAPES_SOURCE,
             DRAWING,
-            DRAWING_SOURCE);
+            DRAWING_SOURCE,
+            PRICES,
+            PRICES_SOURCE,
+            CHECKOUT,
+            CHECKOUT_SOURCE);
 
     /** A file without a problem: no diagnostic. */
     public static final Scenario CLEAN_FILE = new Scenario(
@@ -883,6 +957,112 @@ public final class Scenarios {
             new Request.MoveTypeToFile(ELSEWHERE, new Position(0, 0)),
             new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
 
+    /**
+     * {@code vat}, a local variable used twice, from its declaration: the use is replaced by the expression that
+     * initializes it, the declaration is removed.
+     */
+    public static final Scenario INLINE_A_LOCAL_VARIABLE = new Scenario(
+            "inline-a-local-variable",
+            PROJECT,
+            new Request.Inline(PRICES, new Position(6, 12)),
+            new Answer.Inlined(new ChangeSet(List.of(edits(PRICES, replace(6, 8, 8, 24, """
+                System.out.println("tax: " + (net * VAT / 100));
+                        return net + net * VAT / 100\
+                """))))));
+
+    /** The same variable, from one of its uses: a variable is inlined everywhere, whatever the position. */
+    public static final Scenario INLINE_A_LOCAL_VARIABLE_FROM_ONE_OF_ITS_USES = new Scenario(
+            "inline-a-local-variable-from-one-of-its-uses",
+            PROJECT,
+            new Request.Inline(PRICES, new Position(8, 21)),
+            INLINE_A_LOCAL_VARIABLE.answer());
+
+    /**
+     * {@code handling}, a method called twice in its class and once in {@code Checkout}, from its declaration: each call
+     * is replaced by the body, the method is removed.
+     */
+    public static final Scenario INLINE_A_METHOD = new Scenario(
+            "inline-a-method",
+            PROJECT,
+            new Request.Inline(PRICES, new Position(15, 8)),
+            new Answer.Inlined(new ChangeSet(List.of(
+                    edits(CHECKOUT, replace(4, 34, 54, "net * 3 + 5")), edits(PRICES, replace(12, 15, 19, 4, """
+                        weight * 3 + 5 + weight * 2 * 3 + 5;
+                            }
+
+                        \s\s\s\s\
+                        """))))));
+
+    /** The first call of {@code handling}: jdtls inlines that call only, the method stays for the others. */
+    public static final Scenario INLINE_ONE_CALL_OF_A_METHOD = new Scenario(
+            "inline-one-call-of-a-method",
+            PROJECT,
+            new Request.Inline(PRICES, new Position(12, 15)),
+            new Answer.Inlined(new ChangeSet(List.of(edits(PRICES, replace(12, 15, 31, "weight * 3 + 5"))))));
+
+    /**
+     * {@code VAT}, a constant used in {@code Prices} and in {@code Checkout}, from its declaration: each use is
+     * replaced by the value, the constant is removed.
+     */
+    public static final Scenario INLINE_A_CONSTANT = new Scenario(
+            "inline-a-constant",
+            PROJECT,
+            new Request.Inline(PRICES, new Position(3, 21)),
+            new Answer.Inlined(new ChangeSet(
+                    List.of(edits(PRICES, replace(3, 4, 6, 27, """
+                        public int gross(int net) {
+                                int vat = net * 20\
+                        """)), edits(CHECKOUT, replace(4, 21, 31, "20"))))));
+
+    /** The use of {@code VAT} in {@code gross}: jdtls inlines that use only, the constant stays for the others. */
+    public static final Scenario INLINE_ONE_USE_OF_A_CONSTANT = new Scenario(
+            "inline-one-use-of-a-constant",
+            PROJECT,
+            new Request.Inline(PRICES, new Position(6, 24)),
+            new Answer.Inlined(new ChangeSet(List.of(edits(PRICES, replace(6, 24, 27, "20"))))));
+
+    /** The {@code package} line is on no variable, method or constant: jdtls offers no inlining. */
+    public static final Scenario INLINE_WHERE_THERE_IS_NOTHING_TO_INLINE = new Scenario(
+            "inline-where-there-is-nothing-to-inline",
+            PROJECT,
+            new Request.Inline(PRICES, new Position(0, 3)),
+            new Answer.Refused(LanguageServerErrorKey.NOT_INLINABLE));
+
+    /** {@code rate} is given a value and then another: its value is not one expression, jdtls offers no inlining. */
+    public static final Scenario INLINE_A_VARIABLE_ASSIGNED_TWICE = new Scenario(
+            "inline-a-variable-assigned-twice",
+            PROJECT,
+            new Request.Inline(PRICES, new Position(20, 12)),
+            new Answer.Refused(LanguageServerErrorKey.NOT_INLINABLE));
+
+    /** {@code countdown} calls itself: it cannot replace its calls by its body, jdtls offers no inlining. */
+    public static final Scenario INLINE_A_RECURSIVE_METHOD = new Scenario(
+            "inline-a-recursive-method",
+            PROJECT,
+            new Request.Inline(PRICES, new Position(25, 8)),
+            new Answer.Refused(LanguageServerErrorKey.NOT_INLINABLE));
+
+    /** {@code apply} has no body to put in place of its calls: jdtls offers no inlining. */
+    public static final Scenario INLINE_AN_ABSTRACT_METHOD = new Scenario(
+            "inline-an-abstract-method",
+            PROJECT,
+            new Request.Inline(PRICES, new Position(30, 21)),
+            new Answer.Refused(LanguageServerErrorKey.NOT_INLINABLE));
+
+    /** The project is still being imported: the server cannot say what an inlining changes. */
+    public static final Scenario INLINE_WHILE_THE_SERVER_IMPORTS = new Scenario(
+            "inline-while-the-server-imports",
+            PROJECT,
+            new Request.Inline(PRICES, new Position(3, 21)),
+            new Answer.Refused(LanguageServerErrorKey.NOT_READY));
+
+    /** A file that is not in the project the server was started on. */
+    public static final Scenario INLINE_OUTSIDE_THE_PROJECT = new Scenario(
+            "inline-a-file-outside-the-project",
+            PROJECT,
+            new Request.Inline(ELSEWHERE, new Position(0, 0)),
+            new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+
     /** The project is still being imported: the server cannot say what a rename changes. */
     public static final Scenario RENAME_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "rename-while-the-server-imports",
@@ -979,7 +1159,19 @@ public final class Scenarios {
                 MOVE_A_TOP_LEVEL_TYPE,
                 MOVE_A_TYPE_TO_A_FILE_THAT_EXISTS,
                 MOVE_A_TYPE_WHILE_THE_SERVER_IMPORTS,
-                MOVE_A_TYPE_OUTSIDE_THE_PROJECT);
+                MOVE_A_TYPE_OUTSIDE_THE_PROJECT,
+                INLINE_A_LOCAL_VARIABLE,
+                INLINE_A_LOCAL_VARIABLE_FROM_ONE_OF_ITS_USES,
+                INLINE_A_METHOD,
+                INLINE_ONE_CALL_OF_A_METHOD,
+                INLINE_A_CONSTANT,
+                INLINE_ONE_USE_OF_A_CONSTANT,
+                INLINE_WHERE_THERE_IS_NOTHING_TO_INLINE,
+                INLINE_A_VARIABLE_ASSIGNED_TWICE,
+                INLINE_A_RECURSIVE_METHOD,
+                INLINE_AN_ABSTRACT_METHOD,
+                INLINE_WHILE_THE_SERVER_IMPORTS,
+                INLINE_OUTSIDE_THE_PROJECT);
     }
 
     /** The sequels of the catalogue: scenarios in a row, with the files changed on disk between them. */

@@ -118,6 +118,11 @@ final class ProjectServer implements ServedProject {
     }
 
     @Override
+    public ChangeSet inline(Path file, Position position) {
+        return ready().inline(file, position);
+    }
+
+    @Override
     public Optional<ChangeSet> organizeImports(Path file) {
         return ready().organizeImports(file);
     }

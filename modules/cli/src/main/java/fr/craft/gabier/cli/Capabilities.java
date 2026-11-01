@@ -14,6 +14,7 @@ final class Capabilities {
             case EXTRACT_VARIABLE -> new ExtractVariable();
             case EXTRACT_METHOD -> new ExtractMethod();
             case MOVE_TYPE_TO_FILE -> new MoveTypeToFile();
+            case INLINE -> new Inline();
             case STATUS -> new Status();
             case STOP -> new Stop();
             case HELP -> new Help();

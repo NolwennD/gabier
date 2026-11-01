@@ -73,7 +73,9 @@ public final class FakeServedMain {
                 Scenarios.EXTRACT_METHOD_FROM_HALF_A_STATEMENT,
                 Scenarios.EXTRACT_METHOD_TO_AN_INVALID_NAME,
                 Scenarios.MOVE_A_STATIC_NESTED_TYPE,
-                Scenarios.MOVE_A_TOP_LEVEL_TYPE);
+                Scenarios.MOVE_A_TOP_LEVEL_TYPE,
+                Scenarios.INLINE_A_CONSTANT,
+                Scenarios.INLINE_A_VARIABLE_ASSIGNED_TWICE);
         for (var scenario : scenarios) {
             scenario.writeProject(root);
             server.scripted(scenario);
@@ -138,6 +140,11 @@ public final class FakeServedMain {
         @Override
         public ChangeSet moveTypeToFile(Path file, Position position) {
             return server.moveTypeToFile(file, position);
+        }
+
+        @Override
+        public ChangeSet inline(Path file, Position position) {
+            return server.inline(file, position);
         }
 
         @Override

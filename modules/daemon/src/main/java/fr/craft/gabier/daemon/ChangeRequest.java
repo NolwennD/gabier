@@ -2,6 +2,7 @@ package fr.craft.gabier.daemon;
 
 import fr.craft.gabier.editing.application.ExtractMethod;
 import fr.craft.gabier.editing.application.ExtractVariable;
+import fr.craft.gabier.editing.application.Inline;
 import fr.craft.gabier.editing.application.MoveTypeToFile;
 import fr.craft.gabier.editing.application.OrganizeImports;
 import fr.craft.gabier.editing.application.Rename;
@@ -101,6 +102,14 @@ final class ChangeRequest {
     DaemonMethod.Outcome run(MoveTypeToFile move, Position position) {
         Path file = file();
         ChangeReport report = dryRun() ? move.dryRun(file, position) : move.apply(file, position);
+
+        return DaemonMethod.Outcome.of(changed(report).toJson());
+    }
+
+    /** What inlining the symbol at the position does, written unless the request is a dry run. */
+    DaemonMethod.Outcome run(Inline inline, Position position) {
+        Path file = file();
+        ChangeReport report = dryRun() ? inline.dryRun(file, position) : inline.apply(file, position);
 
         return DaemonMethod.Outcome.of(changed(report).toJson());
     }
