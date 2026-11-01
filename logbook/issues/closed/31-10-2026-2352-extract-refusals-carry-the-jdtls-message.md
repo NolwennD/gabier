@@ -12,3 +12,7 @@ Done when:
 - [ ] The problem of both refusals carries the `errorMessage` of jdtls (as a parameter, neutralised in text as every text that
       comes from the project), shown by a scenario replayed on the real jdtls; the docs say it.
 - [ ] `bin/ci` green, coverage 100%.
+
+## Resolution
+
+Rejected, not done. The user decided on 01-11-2026 that gabier refuses in one way whatever jdtls answers, with a text of its own, and the ticket `01-11-2026-2144-extractions-refuse-in-one-way.md` (f35f2dd) did so. The worker found, on jdtls 1.63, that the premise of this issue was wrong: real jdtls never answers `errorMessage` for the four extractions, so there is no message to carry.
