@@ -56,7 +56,15 @@ record JdtlsSettings(
      *       type, and an empty setting means that default. A comment of white space only, which the evaluation of the template
      *       judges empty ({@code StubUtility.evaluateTemplate}), gives a type with no comment. There is no file header
      *       to turn off: {@code java.templates.fileHeader} is empty by default. {@code
-     *       java.codeGeneration.generateComments} is {@code false} by default, and does not govern these snippets.
+     *       java.codeGeneration.generateComments} is {@code false} by default, and does not govern these snippets;
+     *   <li>{@code java.references.includeAccessors}: with the default ({@code true}) a search for the references of a
+     *       field also gives the calls of its getter, its setter and its builder ({@code ReferencesHandler}), which are
+     *       uses of other methods, so it is {@code false}: the references of a symbol are the places that name it;
+     *   <li>{@code java.references.includeDecompiledSources}: the sources of a class file jdtls decompiles to answer a
+     *       search. It acts only for a client that declares {@code classFileContentsSupport}, which gabier does not (see
+     *       {@link JdtlsCapabilities#extended}): jdtls then answers no place in a class file at all, whatever this says.
+     *       It is {@code false} so that the setting does not depend on that.
+     *       {@code java.search.scope} stays {@code all}: the test sources are searched too.
      * </ul>
      */
     static Map<String, Object> javaPreferences() {
@@ -68,6 +76,7 @@ record JdtlsSettings(
                 Map.of(
                         "sources", Map.of("organizeImports", thresholds),
                         "completion", Map.of("importOrder", List.of("#", "")),
-                        "templates", Map.of("typeComment", List.of(" "))));
+                        "templates", Map.of("typeComment", List.of(" ")),
+                        "references", Map.of("includeAccessors", false, "includeDecompiledSources", false)));
     }
 }

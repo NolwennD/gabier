@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * What the methods that change files share: how their parameters are read (every refusal names the parameter, as an
+ * What the methods that change files share, and {@code references} with them: how their parameters are read (every refusal names the parameter, as an
  * {@code invalid-parameter}), and how the report of the core becomes the result of the protocol. The request carries
  * the parameters that the method declares, so none is checked for presence here.
  */
@@ -30,6 +30,7 @@ final class ChangeRequest {
     static final String NAME = "name";
     static final String KIND = "kind";
     static final String DRY_RUN = "dryRun";
+    static final String INCLUDE_DECLARATION = "includeDeclaration";
     static final String START_LINE = "startLine";
     static final String START_COLUMN = "startColumn";
     static final String END_LINE = "endLine";
@@ -139,12 +140,17 @@ final class ChangeRequest {
         return DaemonMethod.Outcome.of(changed(report).toJson());
     }
 
-    private boolean dryRun() {
-        return switch (text(DRY_RUN)) {
+    /** A flag: the value is {@code true} or {@code false}, anything else is an invalid parameter. */
+    boolean flag(String name) {
+        return switch (text(name)) {
             case "true" -> true;
             case "false" -> false;
-            default -> throw ParameterException.invalid(method, DRY_RUN);
+            default -> throw ParameterException.invalid(method, name);
         };
+    }
+
+    private boolean dryRun() {
+        return flag(DRY_RUN);
     }
 
     private String text(String name) {

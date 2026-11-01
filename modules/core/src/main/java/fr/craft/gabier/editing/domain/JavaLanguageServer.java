@@ -92,6 +92,19 @@ public interface JavaLanguageServer {
     ChangeSet createType(Path file, TypeKind kind);
 
     /**
+     * Where the symbol at a position (a type, a method, a field, a local variable or a parameter of the project) is
+     * used, in every file of the project, the test sources included. Nothing is written. A symbol that nothing uses has
+     * no reference, which is an answer and not a refusal.
+     *
+     * @param includeDeclaration whether the place where the symbol is declared is answered too, apart from the uses
+     * @return the places of the uses, and of the declaration when it was asked for
+     * @throws LanguageServerException if the server is not ready, the file is not a file of its project (outside it,
+     *     missing or a folder) or there is no symbol of the project at the position (a blank, a comment, a keyword, a
+     *     type of the JDK or of a library)
+     */
+    ReferenceLocations references(Path file, Position position, boolean includeDeclaration);
+
+    /**
      * What organizing the imports of a file changes: the missing imports are added, the unused ones removed, and the
      * rest ordered as the server is configured to (for gabier, as the project keeps them, with no import collapsed into
      * a star). Only the file itself is edited.

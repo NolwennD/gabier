@@ -315,4 +315,38 @@ class FakeJavaLanguageServerTest {
                 .isThrownBy(() -> server.diagnostics(GREETER))
                 .withMessageContaining(MAIN.toString());
     }
+
+    @Test
+    void answersTheLocationsOfAReferencesScenarioWithPathsUnderItsRoot() {
+        server.scripted(Scenarios.REFERENCES_OF_A_METHOD_WITH_ITS_DECLARATION);
+        Path bank = ROOT.resolve("src/main/java/demo/app/Bank.java");
+
+        var found = server.references(bank, new Position(7, 15), true);
+
+        assertThat(found)
+                .isEqualTo(((Answer.Referenced) Scenarios.REFERENCES_OF_A_METHOD_WITH_ITS_DECLARATION
+                                .inside(ROOT)
+                                .answer())
+                        .locations());
+        assertThat(server.asked()).containsExactly(new Request.References(bank, new Position(7, 15), true));
+    }
+
+    @Test
+    void answersOnlyTheRequestWhoseFlagIsTheOneScripted() {
+        server.scripted(Scenarios.REFERENCES_OF_A_METHOD_WITH_ITS_DECLARATION);
+
+        assertThatExceptionOfType(AssertionError.class)
+                .isThrownBy(() -> server.references(
+                        ROOT.resolve("src/main/java/demo/app/Bank.java"), new Position(7, 15), false));
+    }
+
+    @Test
+    void throwsTheRefusalOfAReferencesScenario() {
+        server.scripted(Scenarios.REFERENCES_WHERE_THERE_IS_NO_SYMBOL);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() ->
+                        server.references(ROOT.resolve("src/main/java/demo/Ledger.java"), new Position(4, 0), false))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+    }
 }

@@ -96,7 +96,9 @@ class DaemonServerTest {
                         .scripted(Scenarios.INLINE_A_CONSTANT)
                         .scripted(Scenarios.INLINE_A_VARIABLE_ASSIGNED_TWICE)
                         .scripted(Scenarios.CREATE_A_CLASS)
-                        .scripted(Scenarios.CREATE_A_TYPE_OUTSIDE_THE_PROJECT));
+                        .scripted(Scenarios.CREATE_A_TYPE_OUTSIDE_THE_PROJECT)
+                        .scripted(Scenarios.REFERENCES_OF_A_TYPE)
+                        .scripted(Scenarios.REFERENCES_WHERE_THERE_IS_NO_SYMBOL));
     }
 
     private DaemonServer open() {
@@ -651,6 +653,44 @@ class DaemonServerTest {
                 assertThat(client.ask(createRequest(outside, "class", false)))
                         .contains("\"key\":\"language-server-file-outside-project\"");
             }
+        }
+
+        @Test
+        void referencesAnswersTheUsesWithTheirLinesOfSourceAndWritesNothing() throws IOException {
+            serving();
+            Scenarios.REFERENCES_OF_A_TYPE.writeProject(directory);
+            var ledger = directory.resolve("src/main/java/demo/Ledger.java");
+            var before = Files.readString(ledger);
+
+            try (var client = connect(socket())) {
+                var answer = client.ask(referencesRequest(ledger, "2", "13", false));
+
+                assertThat(answer)
+                        .contains("\"declarations\":[]")
+                        .contains("\"source\":\"import demo.Ledger;\"")
+                        .contains("Bank.java")
+                        .contains("LedgerTest.java");
+                assertThat(Files.readString(ledger)).isEqualTo(before);
+            }
+        }
+
+        @Test
+        void aPositionOnNothingIsRefusedByReferencesWithItsProblemObject() throws IOException {
+            serving();
+            Scenarios.REFERENCES_WHERE_THERE_IS_NO_SYMBOL.writeProject(directory);
+            var ledger = directory.resolve("src/main/java/demo/Ledger.java");
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask(referencesRequest(ledger, "4", "0", false)))
+                        .contains("\"key\":\"language-server-no-such-symbol\"");
+            }
+        }
+
+        private static String referencesRequest(Path file, String line, String column, boolean includeDeclaration) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"references","params":{"file":"%s","line":"%s",\
+                "column":"%s","includeDeclaration":"%s"}}
+                """.formatted(file, line, column, includeDeclaration);
         }
 
         private static String createRequest(Path file, String kind, boolean dryRun) {

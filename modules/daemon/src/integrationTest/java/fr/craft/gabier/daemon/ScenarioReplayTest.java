@@ -7,6 +7,7 @@ import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
+import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.fixtures.Scenario;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
 import fr.craft.gabier.editing.fixtures.Scenario.Request;
@@ -90,7 +91,8 @@ class ScenarioReplayTest {
                 || scenario.request() instanceof Request.ExtractMethod
                 || scenario.request() instanceof Request.MoveTypeToFile
                 || scenario.request() instanceof Request.Inline
-                || scenario.request() instanceof Request.CreateType;
+                || scenario.request() instanceof Request.CreateType
+                || scenario.request() instanceof Request.References;
     }
 
     /**
@@ -241,6 +243,14 @@ class ScenarioReplayTest {
                         .isEqualTo(created.changes());
                 compile(scenario, root, answer, differences);
             }
+            case Answer.Referenced referenced -> {
+                var answer = (ReferenceLocations) ask(server, request);
+                System.out.println(scenario.name() + ": jdtls answered " + answer);
+                differences
+                        .assertThat(answer)
+                        .as("%s: the places jdtls answers", scenario.name())
+                        .isEqualTo(referenced.locations());
+            }
             case Answer.Organized organized -> {
                 var answer = (Optional<?>) ask(server, request);
                 System.out.println(scenario.name() + ": jdtls answered " + answer);
@@ -298,6 +308,8 @@ class ScenarioReplayTest {
             case Request.MoveTypeToFile move -> server.moveTypeToFile(move.file(), move.position());
             case Request.Inline inline -> server.inline(inline.file(), inline.position());
             case Request.CreateType create -> server.createType(create.file(), create.kind());
+            case Request.References references ->
+                server.references(references.file(), references.position(), references.includeDeclaration());
         };
     }
 

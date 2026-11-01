@@ -49,6 +49,10 @@ class JdtlsSettingsTest {
         // empty
         // setting means "the default": a type comment of white space only is judged empty when the template is
         // evaluated, so the type has none. (java.templates.fileHeader is empty by default: no header.)
+        // A search for references answers the places of the symbol and no more: java.references.includeAccessors is
+        // true
+        // by default, which adds the calls of the getter, the setter and the builder of a field to its references, and
+        // java.references.includeDecompiledSources (true) is about class files, which gabier never receives.
         assertThat(JdtlsSettings.javaPreferences())
                 .isEqualTo(Map.of(
                         "java",
@@ -64,6 +68,8 @@ class JdtlsSettingsTest {
                                 "completion",
                                 Map.of("importOrder", List.of("#", "")),
                                 "templates",
-                                Map.of("typeComment", List.of(" ")))));
+                                Map.of("typeComment", List.of(" ")),
+                                "references",
+                                Map.of("includeAccessors", false, "includeDecompiledSources", false))));
     }
 }

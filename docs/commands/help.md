@@ -1,7 +1,7 @@
 # gabier help
 
 `gabier help` lists the commands, one line each; `gabier help <command>` gives the usage of a command, one example and its
-refusals, and, for a command that has some, notes (a warning to read before the call: `move-type-to-file`, `inline` and `create` have one). `gabier --help` and `gabier -h` are `gabier help`. `gabier <command> --help` and `gabier <command> -h` are
+refusals, and, for a command that has some, notes (a warning to read before the call: `move-type-to-file`, `inline`, `create` and `references` have one). `gabier --help` and `gabier -h` are `gabier help`. `gabier <command> --help` and `gabier <command> -h` are
 `gabier help <command>`, for every command, the same text (and the same JSON object with `--json`): the flag can stand
 anywhere after the command, it wins over the other words (they are not read, so `gabier rename --token --help` is
 not a usage error), and it starts no daemon. The answer is plain text on the standard output, exit code 0.
@@ -32,7 +32,7 @@ $ gabier stop --help
 Stop the daemon.
 ...
 $ gabier help frobnicate
-Usage error: Unknown command; the commands are diagnostics, rename, organize-imports, extract-variable, extract-method, move-type-to-file, inline, create, status, stop, help (usage-error; command=frobnicate)
+Usage error: Unknown command; the commands are diagnostics, rename, organize-imports, extract-variable, extract-method, move-type-to-file, inline, create, references, status, stop, help (usage-error; command=frobnicate)
 ```
 
 **Where the text lives.** The help text of every command is written once, in the class of its capability in the cli

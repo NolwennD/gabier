@@ -68,6 +68,15 @@ record Arguments(List<String> all, List<String> operands) {
                 .exactly(count);
     }
 
+    /**
+     * These words with this option taken out of the operands, and nothing else: unlike {@link #operands(int, String...)},
+     * {@code --dry-run} stays an operand, so that a command with no dry run refuses it.
+     */
+    Arguments without(String option) {
+        return new Arguments(
+                all, operands.stream().filter(word -> !word.equals(option)).toList());
+    }
+
     /** The operand at this index. */
     String operand(int index) {
         return operands.get(index);

@@ -14,6 +14,7 @@ sealed interface Capability
                 MoveTypeToFile,
                 Inline,
                 Create,
+                References,
                 Status,
                 Stop,
                 Help {

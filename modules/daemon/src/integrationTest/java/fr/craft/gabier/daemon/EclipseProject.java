@@ -27,16 +27,28 @@ final class EclipseProject {
         <?xml version="1.0" encoding="UTF-8"?>
         <classpath>
           <classpathentry kind="src" path="src/main/java"/>
-          <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+        %s  <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
           <classpathentry kind="output" path="bin"/>
         </classpath>
         """;
 
+    /** The test sources, marked as such: only for a project that has them, as a source folder that is not there is an error. */
+    private static final String TESTS = """
+          <classpathentry kind="src" path="src/test/java">
+            <attributes><attribute name="test" value="true"/></attributes>
+          </classpathentry>
+        """;
+
     private EclipseProject() {}
 
-    /** Makes the folder, whose sources are under {@code src/main/java}, a project jdtls imports. */
+    /**
+     * Makes the folder, whose sources are under {@code src/main/java} and, if there are any, {@code src/test/java}, a
+     * project jdtls imports.
+     */
     static void describe(Path root) throws IOException {
         Files.writeString(root.resolve(".project"), PROJECT);
-        Files.writeString(root.resolve(".classpath"), CLASSPATH);
+        Files.writeString(
+                root.resolve(".classpath"),
+                CLASSPATH.formatted(Files.isDirectory(root.resolve("src/test/java")) ? TESTS : ""));
     }
 }

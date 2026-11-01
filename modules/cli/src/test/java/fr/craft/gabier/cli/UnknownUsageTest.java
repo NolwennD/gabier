@@ -22,7 +22,8 @@ class UnknownUsageTest extends CliTest {
                         extractMethodWithoutAFileTwoPositionsAndAName(),
                         withoutAFileAndOnePosition("move-type-to-file"),
                         withoutAFileAndOnePosition("inline"),
-                        createWithoutAFileAndAKind())
+                        createWithoutAFileAndAKind(),
+                        referencesWithoutAFileAndOnePosition())
                 .flatMap(List::stream);
     }
 
@@ -112,6 +113,19 @@ class UnknownUsageTest extends CliTest {
                 List.of("create", "--dry-run"),
                 List.of("create", "A.java"),
                 List.of("create", "A.java", "class", "record"));
+    }
+
+    private static List<List<String>> referencesWithoutAFileAndOnePosition() {
+        return List.of(
+                List.of("references"),
+                List.of("references", "--include-declaration"),
+                List.of("references", "A.java"),
+                List.of("references", "A.java", "3:4", "3:9"),
+                List.of("references", "A.java", "3"),
+                List.of("references", "A.java", "0:4"),
+                List.of("references", "A.java", "3:four"),
+                List.of("references", "--dry-run", "A.java", "3:4"),
+                List.of("references", "--token", "A.java", "3:4"));
     }
 
     private static List<List<String>> withoutAFileAndOnePosition(String command) {

@@ -11,6 +11,7 @@ import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.protocol.JdtlsState;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
@@ -80,6 +81,7 @@ class ProjectServerTest {
 
         static final ChangeSet RENAMED =
                 new ChangeSet(List.of(new FileChange.CreateFile(Path.of("/work/demo/Other.java"))));
+        static final ReferenceLocations NO_REFERENCES = new ReferenceLocations(List.of(), List.of());
         static final Diagnostic WARNING = new Diagnostic(Diagnostic.Severity.WARNING, new Position(1, 2), "unused");
 
         private final CountDownLatch released = new CountDownLatch(1);
@@ -171,6 +173,11 @@ class ProjectServerTest {
         @Override
         public ChangeSet createType(Path file, TypeKind kind) {
             return RENAMED;
+        }
+
+        @Override
+        public ReferenceLocations references(Path file, Position position, boolean includeDeclaration) {
+            return NO_REFERENCES;
         }
 
         @Override
@@ -286,6 +293,13 @@ class ProjectServerTest {
         }
 
         @Test
+        void aSearchForReferencesStartsItToo() {
+            assertThat(project.references(FILE, new Position(0, 0), true)).isEqualTo(ScriptedServer.NO_REFERENCES);
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
         void anInlineStartsItToo() {
             assertThat(project.inline(FILE, new Position(0, 0))).isEqualTo(ScriptedServer.RENAMED);
 
@@ -303,6 +317,7 @@ class ProjectServerTest {
             project.moveTypeToFile(FILE, new Position(0, 0));
             project.inline(FILE, new Position(0, 0));
             project.createType(FILE, TypeKind.RECORD);
+            project.references(FILE, new Position(0, 0), false);
 
             assertThat(starter.starts).hasValue(1);
         }

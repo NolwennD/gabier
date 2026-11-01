@@ -12,8 +12,10 @@ import fr.craft.gabier.editing.domain.FileChange.EditFile;
 import fr.craft.gabier.editing.domain.FileChange.RenameFile;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
+import fr.craft.gabier.editing.domain.Location;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.domain.TextEdit;
 import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
@@ -505,5 +507,78 @@ class ScenarioTest {
 
         assertThat(directory.resolve("src/a/A.java")).hasContent("class A {}\n");
         assertThat(directory.resolve("src/B.java")).hasContent("class B {}\n");
+    }
+
+    @Test
+    void rejectsAReferencedAnswerForAnotherRequestAndAnotherAnswerForReferences() {
+        Request.Rename rename = new Request.Rename(FILE, POSITION, "B");
+        Request.References references = new Request.References(FILE, POSITION, false);
+        ReferenceLocations none = new ReferenceLocations(List.of(), List.of());
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(rename, new Answer.Referenced(none)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(references, new Answer.Renamed(set(new CreateFile(FILE)))));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(references, new Answer.Diagnosed(List.of())));
+    }
+
+    @Test
+    void buildsTheRefusalOfAReferencesRequest() {
+        Request.References references = new Request.References(FILE, POSITION, true);
+
+        assertThat(references.refusal(LanguageServerErrorKey.NOT_READY).key())
+                .isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(references.refusal(LanguageServerErrorKey.FILE_MISSING).key())
+                .isEqualTo(LanguageServerErrorKey.FILE_MISSING);
+        assertThat(references.refusal(LanguageServerErrorKey.NOT_A_FILE).key())
+                .isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
+        assertThat(references
+                        .refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT)
+                        .parameters())
+                .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(references.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL).parameters())
+                .isEqualTo(Map.of("file", FILE.toString(), "line", "0", "column", "6"));
+        for (var key : List.of(
+                LanguageServerErrorKey.INVALID_NAME,
+                LanguageServerErrorKey.NOT_AN_EXPRESSION,
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                LanguageServerErrorKey.NOT_INLINABLE,
+                LanguageServerErrorKey.NOT_MOVABLE,
+                LanguageServerErrorKey.NOT_CREATABLE,
+                LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
+                LanguageServerErrorKey.UNRESOLVED_IMPORTS)) {
+            assertThatExceptionOfType(IllegalArgumentException.class)
+                    .as(key.toString())
+                    .isThrownBy(() -> references.refusal(key));
+        }
+    }
+
+    @Test
+    void resolvesTheFileOfAReferencesRequestAgainstARoot() {
+        assertThat(new Request.References(FILE, POSITION, true).resolvedIn(ROOT))
+                .isEqualTo(new Request.References(Path.of("/project/src/A.java"), POSITION, true));
+    }
+
+    @Test
+    void resolvesTheLocationsOfAReferencedAnswerAgainstARoot() {
+        Position elsewhere = new Position(3, 4);
+
+        Answer resolved = new Answer.Referenced(new ReferenceLocations(
+                        List.of(new Location(Path.of("src/A.java"), POSITION)),
+                        List.of(new Location(Path.of("src/B.java"), elsewhere))))
+                .resolvedIn(ROOT);
+
+        assertThat(resolved)
+                .isEqualTo(new Answer.Referenced(new ReferenceLocations(
+                        List.of(new Location(Path.of("/project/src/A.java"), POSITION)),
+                        List.of(new Location(Path.of("/project/src/B.java"), elsewhere)))));
+    }
+
+    @Test
+    void rejectsAReferencedAnswerWithoutLocations() {
+        assertThatExceptionOfType(MissingMandatoryValueException.class)
+                .isThrownBy(() -> new Answer.Referenced(null))
+                .satisfies(exception -> assertThat(exception.field()).isEqualTo("locations"));
     }
 }

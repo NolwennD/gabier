@@ -25,7 +25,7 @@ import java.util.stream.Stream;
  * extract-variable} (a dry run, a variable extracted under the name given, refusals), {@code extract-method} (a dry run,
  * a method extracted under the name given, refusals), {@code move-type-to-file} (a dry run, a type moved to a file of
  * its own, a refusal), {@code inline} (a dry run, a constant inlined, a refusal) and {@code create} (a dry run, a class
- * created, refusals);
+ * created, refusals) and {@code references} (the uses of a type, the declaration apart, a symbol nothing uses, refusals);
  * a request command with no daemon running starts {@code gabier-daemon} (found on the {@code PATH} or next to the cli;
  * not found, exiting at once), the next request uses it, and {@code stop} ends it. Runs in the current directory, the
  * checkout under verification. It starts and signals only the processes it started, by their handle, and the daemons
@@ -254,6 +254,7 @@ public final class Native {
                 moveTypeToFileWithTheFakeServer();
                 inlineWithTheFakeServer();
                 createWithTheFakeServer();
+                referencesWithTheFakeServer();
                 fakeServedRefusesAFolderThatIsNotEmpty();
             } finally {
                 for (Process process : started) {
@@ -928,6 +929,79 @@ public final class Native {
                     "create of a file whose name is not a type name is refused as a problem object, exit 2");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after the creation");
+        }
+
+        /**
+         * {@code gabier references} against the daemon served by the fake language server: the uses of a type, in the
+         * text and as JSON, the declaration of a method listed apart, a method nothing calls (no reference, exit 0), and
+         * a position on nothing refused as a problem object. Nothing is written.
+         */
+        private void referencesWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("references-project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            Path ledger = project.resolve("src/main/java/demo/Ledger.java");
+            Path bank = project.resolve("src/main/java/demo/app/Bank.java");
+            String file = "references-project/src/main/java/demo/Ledger.java";
+            String before = Files.readString(ledger);
+
+            Run uses = gabier("references", file, "3:14");
+            expect(
+                    uses.exit() == 0
+                            && uses.err().isEmpty()
+                            && uses.out().lines().count() == 5
+                            && uses.out().lines().findFirst().orElse("").equals(bank + ":3:8: import demo.Ledger;")
+                            && uses.out().contains("LedgerTest.java:5:9: Ledger ledger = new Ledger();"),
+                    "gabier references lists the uses of a type, with positions from 1 and the source lines");
+
+            Run json = gabier("--json", "references", file, "3:14");
+            expect(
+                    json.exit() == 0
+                            && json.out().startsWith("{\"declarations\":[],\"references\":[{\"file\":\"" + bank + "\"")
+                            && json.out().contains("\"line\":2,\"column\":7,\"source\":\"import demo.Ledger;\""),
+                    "gabier --json references gives the result as the daemon gave it, with positions from 0");
+
+            Run declaration = gabier(
+                    "references", "--include-declaration", "references-project/src/main/java/demo/app/Bank.java", "8:16");
+            expect(
+                    declaration.exit() == 0
+                            && declaration.out().lines().findFirst().orElse("").equals("declaration:")
+                            && declaration.out().contains(ledger + ":10:17: public void deposit(int amount) {")
+                            && declaration.out().contains("references:"),
+                    "gabier references --include-declaration lists the declaration apart");
+
+            Run nothing = gabier("references", file, "19:9");
+            expect(
+                    nothing.exit() == 0
+                            && nothing.err().isEmpty()
+                            && nothing.out().equals("no references"),
+                    "gabier references says that a symbol nothing uses has no reference, exit 0");
+
+            Run emptyJson = gabier("--json", "references", file, "19:9");
+            expect(
+                    emptyJson.exit() == 0
+                            && emptyJson.out().equals("{\"declarations\":[],\"references\":[]}"),
+                    "gabier --json references gives two empty lists for a symbol nothing uses");
+
+            Run blank = gabier("references", file, "5:1");
+            expect(
+                    blank.exit() == 2
+                            && blank.out().isEmpty()
+                            && blank.err().contains("(language-server-no-such-symbol; "),
+                    "references of a position on nothing is refused as a problem object, exit 2");
+
+            Run dryRun = gabier("references", "--dry-run", file, "3:14");
+            expect(
+                    dryRun.exit() == 2 && dryRun.out().isEmpty() && dryRun.err().contains("(usage-error"),
+                    "references has no dry run: the option is a usage error");
+            expect(
+                    Files.readString(ledger).equals(before) && Files.exists(bank),
+                    "gabier references writes nothing");
+            gabier("stop");
+            expect(ends(process), "the daemon served by the fake stops after the references");
         }
 
         /** A {@code gabier-daemon} in the folder: a script with this body, which the cli finds and launches. */

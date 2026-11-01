@@ -25,6 +25,8 @@ in [The daemon](docs/daemon.md). The daemon starts by itself at the first comman
   or constant: every use, and the declaration goes; on one use: that use only).
 - [`gabier create`](docs/commands/create.md): create a file that holds an empty class, interface, record or enum, with the
   right `package` line and no comment.
+- [`gabier references`](docs/commands/references.md): list where a symbol is used, in every file of the project and its
+  tests (the declaration on request).
 - [`gabier help [<command>]`](docs/commands/help.md): list the commands, or explain one (usage, example, refusals).
 - [`gabier status` and `gabier stop`](docs/commands/status-and-stop.md): see what the daemon serves, and stop it.
 

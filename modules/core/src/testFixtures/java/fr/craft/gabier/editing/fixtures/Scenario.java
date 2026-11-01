@@ -9,8 +9,10 @@ import fr.craft.gabier.editing.domain.FileChange.EditFile;
 import fr.craft.gabier.editing.domain.FileChange.RenameFile;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
+import fr.craft.gabier.editing.domain.Location;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.shared.error.domain.Assert;
 import java.io.IOException;
@@ -76,6 +78,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                         request);
             case Answer.Moved _ -> require(request instanceof Request.MoveTypeToFile, "moved", request);
             case Answer.Inlined _ -> require(request instanceof Request.Inline, "inlined", request);
+            case Answer.Referenced _ -> require(request instanceof Request.References, "referenced", request);
             case Answer.Created _ -> require(request instanceof Request.CreateType, "created", request);
             case Answer.Organized _ -> require(request instanceof Request.OrganizeImports, "organized", request);
             case Answer.AlreadyOrganized _ ->
@@ -356,6 +359,40 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             }
         }
 
+        /** The places where the symbol at a position is used, and declared when that is asked for. */
+        record References(Path file, Position position, boolean includeDeclaration) implements Request {
+
+            public References {
+                Assert.notNull("file", file);
+                Assert.notNull("position", position);
+            }
+
+            @Override
+            public References resolvedIn(Path root) {
+                return new References(resolve(root, file), position, includeDeclaration);
+            }
+
+            @Override
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
+                return switch (key) {
+                    case NOT_READY -> LanguageServerException.notReady();
+                    case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
+                    case FILE_MISSING -> LanguageServerException.fileMissing(file);
+                    case NOT_A_FILE -> LanguageServerException.notAFile(file);
+                    case NO_SUCH_SYMBOL -> LanguageServerException.noSuchSymbol(file, position);
+                    case INVALID_NAME,
+                            NOT_AN_EXPRESSION,
+                            NOT_EXTRACTABLE,
+                            NOT_INLINABLE,
+                            NOT_MOVABLE,
+                            NOT_CREATABLE,
+                            AMBIGUOUS_IMPORTS,
+                            UNRESOLVED_IMPORTS ->
+                        throw new IllegalArgumentException("A request for references cannot get " + key);
+                };
+            }
+        }
+
         /** The creation of a type of a kind in a new file. */
         record CreateType(Path file, TypeKind kind) implements Request {
 
@@ -492,6 +529,26 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             @Override
             public Created resolvedIn(Path root) {
                 return new Created(Renamed.resolvedIn(root, changes));
+            }
+        }
+
+        /** The places where a symbol is used, and where it is declared when that was asked for. */
+        record Referenced(ReferenceLocations locations) implements Answer {
+
+            public Referenced {
+                Assert.notNull("locations", locations);
+            }
+
+            @Override
+            public Referenced resolvedIn(Path root) {
+                return new Referenced(new ReferenceLocations(
+                        resolved(root, locations.declarations()), resolved(root, locations.references())));
+            }
+
+            private static List<Location> resolved(Path root, List<Location> locations) {
+                return locations.stream()
+                        .map(location -> new Location(Scenario.resolve(root, location.file()), location.position()))
+                        .toList();
             }
         }
 

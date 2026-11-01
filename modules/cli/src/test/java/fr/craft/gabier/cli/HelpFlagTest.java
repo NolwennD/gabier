@@ -90,6 +90,19 @@ class HelpFlagTest {
     }
 
     @Test
+    void theHelpOfReferencesSaysWhatIsListedAndWhatIsNot() {
+        for (var help : new String[][] {{"help", "references"}, {"references", "--help"}}) {
+            assertThat(printedBy(help))
+                    .contains("Notes:")
+                    .contains("--include-declaration")
+                    .contains("accessors")
+                    .contains("test sources")
+                    .contains("language-server-no-such-symbol")
+                    .contains("Refusals");
+        }
+    }
+
+    @Test
     void theHelpOfACommandWithoutNotesHasNoNotesSection() {
         assertThat(printedBy("help", "rename")).doesNotContain("Notes:");
     }

@@ -4,6 +4,7 @@ import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.editing.fixtures.FakeJavaLanguageServer;
 import fr.craft.gabier.editing.fixtures.Scenario;
@@ -78,7 +79,12 @@ public final class FakeServedMain {
                 Scenarios.INLINE_A_CONSTANT,
                 Scenarios.INLINE_A_VARIABLE_ASSIGNED_TWICE,
                 Scenarios.CREATE_A_CLASS,
-                Scenarios.CREATE_A_TYPE_OUTSIDE_THE_PROJECT);
+                Scenarios.CREATE_A_TYPE_OUTSIDE_THE_PROJECT,
+                Scenarios.REFERENCES_OF_A_TYPE,
+                Scenarios.REFERENCES_OF_A_METHOD_WITH_ITS_DECLARATION,
+                Scenarios.REFERENCES_OF_A_SYMBOL_NOTHING_USES,
+                Scenarios.REFERENCES_WHERE_THERE_IS_NO_SYMBOL,
+                Scenarios.REFERENCES_OF_A_FILE_OUTSIDE_THE_PROJECT);
         for (var scenario : scenarios) {
             scenario.writeProject(root);
             server.scripted(scenario);
@@ -153,6 +159,11 @@ public final class FakeServedMain {
         @Override
         public ChangeSet createType(Path file, TypeKind kind) {
             return server.createType(file, kind);
+        }
+
+        @Override
+        public ReferenceLocations references(Path file, Position position, boolean includeDeclaration) {
+            return server.references(file, position, includeDeclaration);
         }
 
         @Override

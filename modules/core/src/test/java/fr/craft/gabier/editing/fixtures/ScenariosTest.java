@@ -10,6 +10,7 @@ import fr.craft.gabier.editing.domain.FileChange.RenameFile;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.domain.TextEdit;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
 import fr.craft.gabier.editing.fixtures.Scenario.Request;
@@ -182,7 +183,16 @@ class ScenariosTest {
                         "create-a-type-in-a-new-package",
                         "create-a-type-while-the-server-imports",
                         "create-a-type-outside-the-project",
-                        "create-a-type-outside-the-source-folders");
+                        "create-a-type-outside-the-source-folders",
+                        "references-of-a-type",
+                        "references-of-a-method-with-its-declaration",
+                        "references-of-a-field-without-its-accessors",
+                        "references-of-a-local-variable",
+                        "references-of-a-symbol-nothing-uses",
+                        "references-where-there-is-no-symbol",
+                        "references-from-a-comment",
+                        "references-while-the-server-imports",
+                        "references-of-a-file-outside-the-project");
     }
 
     @Test
@@ -276,6 +286,18 @@ class ScenariosTest {
     }
 
     @Test
+    void refusesForEachReasonOfThePortOnAReferences() {
+        assertThat(answeredWith(Answer.Refused.class).stream()
+                        .filter(scenario -> scenario.request() instanceof Request.References)
+                        .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
+                        LanguageServerErrorKey.NO_SUCH_SYMBOL,
+                        LanguageServerErrorKey.NO_SUCH_SYMBOL,
+                        LanguageServerErrorKey.NOT_READY);
+    }
+
+    @Test
     void holdsOnlyRelativeJavaSourcesAndRelativeRequests() {
         for (Scenario scenario : ALL) {
             assertThat(scenario.files().keySet())
@@ -283,7 +305,7 @@ class ScenariosTest {
                     .isNotEmpty()
                     .allSatisfy(file -> {
                         assertThat(file.isAbsolute()).isFalse();
-                        assertThat(file.toString()).startsWith("src/main/java/").endsWith(".java");
+                        assertThat(file.toString()).matches("src/(main|test)/java/.*\\.java");
                     });
             assertThat(scenario.request().file().isAbsolute())
                     .as(scenario.name())
@@ -742,5 +764,97 @@ class ScenariosTest {
                     .as(scenario.name())
                     .isEqualTo(before - 1);
         }
+    }
+
+    /** The name of the symbol a references scenario is asked about: the identifier at the position of its request. */
+    private static String referenced(Scenario scenario) {
+        var request = (Request.References) scenario.request();
+
+        return identifierAt(scenario, request.file(), request.position());
+    }
+
+    /** Whether the name starts at the position, possibly after the packages of a qualified name ({@code demo.Ledger}). */
+    private static boolean namesAt(Scenario scenario, Path file, Position position, String name) {
+        String rest = lineOf(scenario, file, position.line()).substring(position.column());
+
+        return Pattern.compile("^([a-z][a-z0-9]*\\.)*" + Pattern.quote(name) + "(?![\\p{L}\\p{N}_$])")
+                .matcher(rest)
+                .find();
+    }
+
+    @Test
+    void startsEveryReferencesOnTheNameOfATypeAMethodAFieldOrAVariable() {
+        List<Scenario> references = answeredWith(Answer.Referenced.class);
+
+        assertThat(references.stream().map(ScenariosTest::referenced))
+                .containsExactly("Ledger", "deposit", "balance", "fee", "unused");
+    }
+
+    @Test
+    void startsTheRefusedReferencesWhereTheirReasonIs() {
+        assertThat(referenced(Scenarios.REFERENCES_WHERE_THERE_IS_NO_SYMBOL)).isEmpty();
+        String comment = lineOf(
+                Scenarios.REFERENCES_FROM_A_COMMENT,
+                Scenarios.REFERENCES_FROM_A_COMMENT.request().file(),
+                ((Request.References) Scenarios.REFERENCES_FROM_A_COMMENT.request())
+                        .position()
+                        .line());
+        assertThat(comment).contains("//");
+        assertThat(comment.indexOf("//"))
+                .isLessThan(((Request.References) Scenarios.REFERENCES_FROM_A_COMMENT.request())
+                        .position()
+                        .column());
+    }
+
+    @Test
+    void putsEveryLocationOnTheNameOfTheSymbolInAFileOfTheProject() {
+        for (Scenario scenario : answeredWith(Answer.Referenced.class)) {
+            var found = ((Answer.Referenced) scenario.answer()).locations();
+            for (var location : Stream.concat(found.declarations().stream(), found.references().stream())
+                    .toList()) {
+                assertThat(scenario.files()).as(scenario.name()).containsKey(location.file());
+                assertThat(namesAt(scenario, location.file(), location.position(), referenced(scenario)))
+                        .as("%s: %s", scenario.name(), location)
+                        .isTrue();
+            }
+        }
+    }
+
+    @Test
+    void showsReferencesInAnotherPackageAndInATestSource() {
+        var type = ((Answer.Referenced) Scenarios.REFERENCES_OF_A_TYPE.answer()).locations();
+
+        assertThat(type.references().stream().map(location -> location.file().toString()))
+                .contains("src/main/java/demo/app/Bank.java", "src/test/java/demo/LedgerTest.java");
+    }
+
+    @Test
+    void listsTheDeclarationOnlyWhereItIsAsked() {
+        for (Scenario scenario : answeredWith(Answer.Referenced.class)) {
+            var request = (Request.References) scenario.request();
+            var found = ((Answer.Referenced) scenario.answer()).locations();
+
+            assertThat(found.declarations()).as(scenario.name()).hasSize(request.includeDeclaration() ? 1 : 0);
+        }
+        assertThat(answeredWith(Answer.Referenced.class).stream()
+                        .filter(scenario -> ((Request.References) scenario.request()).includeDeclaration()))
+                .containsExactly(Scenarios.REFERENCES_OF_A_METHOD_WITH_ITS_DECLARATION);
+    }
+
+    @Test
+    void leavesTheCallsOfTheAccessorsOutOfTheReferencesOfAField() {
+        var field = ((Answer.Referenced) Scenarios.REFERENCES_OF_A_FIELD_WITHOUT_ITS_ACCESSORS.answer()).locations();
+        var source = Scenarios.REFERENCES_OF_A_FIELD_WITHOUT_ITS_ACCESSORS.files();
+
+        assertThat(source.values()).anyMatch(text -> text.contains(".getBalance()"));
+        assertThat(field.references())
+                .extracting(location -> location.file().toString())
+                .containsOnly("src/main/java/demo/Ledger.java");
+    }
+
+    @Test
+    void showsASymbolNothingUses() {
+        assertThat(((Answer.Referenced) Scenarios.REFERENCES_OF_A_SYMBOL_NOTHING_USES.answer()).locations())
+                .isEqualTo(new ReferenceLocations(List.of(), List.of()));
     }
 }

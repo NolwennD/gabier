@@ -7,8 +7,10 @@ import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.FileChange.EditFile;
 import fr.craft.gabier.editing.domain.FileChange.RenameFile;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
+import fr.craft.gabier.editing.domain.Location;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.domain.TextEdit;
 import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
@@ -121,6 +123,16 @@ import java.util.stream.IntStream;
  *       JdtlsSettings.javaPreferences}), no comment. jdtls offers the snippet for any path: for a file under no source
  *       folder it writes no package line, so the adapter asks for the source folders ({@code
  *       java.project.listSourcePaths}) and refuses ({@link #CREATE_A_TYPE_OUTSIDE_THE_SOURCE_FOLDERS}).
+ *   <li>the references of a symbol ({@link #REFERENCES_OF_A_TYPE}, {@link #REFERENCES_OF_A_METHOD_WITH_ITS_DECLARATION},
+ *       {@link #REFERENCES_OF_A_FIELD_WITHOUT_ITS_ACCESSORS}, {@link #REFERENCES_OF_A_LOCAL_VARIABLE}): the project has a
+ *       test source ({@code src/test/java}) and a class in another package that use {@code Ledger}, and the replay marks
+ *       the test folder as such. jdtls does not say which place is the declaration: the adapter asks a second time with
+ *       it and keeps what is new. With its defaults jdtls lists the accessors of a field with the field; it is started
+ *       with {@code java.references.includeAccessors} false (see {@code JdtlsSettings.javaPreferences}). A position on
+ *       nothing ({@link #REFERENCES_WHERE_THERE_IS_NO_SYMBOL}, {@link #REFERENCES_FROM_A_COMMENT}) would answer the
+ *       references of the enclosing member, so the adapter asks {@code prepareRename} first, as {@code rename} does, and
+ *       maps its refusal to {@code no-such-symbol}; a symbol nothing uses is an empty answer ({@link
+ *       #REFERENCES_OF_A_SYMBOL_NOTHING_USES}).
  * </ul>
  *
  * <p>The fake answers from the request alone: it does not check that the files a test wrote are the ones of the
@@ -158,6 +170,9 @@ public final class Scenarios {
     private static final Path GADGET = Path.of("src/main/java/fresh/Gadget.java");
     private static final Path PRICES = Path.of("src/main/java/demo/Prices.java");
     private static final Path CHECKOUT = Path.of("src/main/java/demo/Checkout.java");
+    private static final Path LEDGER = Path.of("src/main/java/demo/Ledger.java");
+    private static final Path BANK = Path.of("src/main/java/demo/app/Bank.java");
+    private static final Path LEDGER_TEST = Path.of("src/test/java/demo/LedgerTest.java");
 
     /** How many types of one package, and constants of one class, {@code Wide} imports one by one: over the 99 of jdtls. */
     private static final int MANY = 100;
@@ -333,6 +348,65 @@ public final class Scenarios {
         }
         """;
 
+    /**
+     * What the references are asked on: a type ({@code Ledger}), a field with its getter ({@code balance}), a method
+     * ({@code deposit}), a local variable ({@code fee}) with a comment to point at, and a method that nothing calls
+     * ({@code unused}).
+     */
+    private static final String LEDGER_SOURCE = """
+        package demo;
+
+        public class Ledger {
+            private int balance;
+
+            public int getBalance() {
+                return balance;
+            }
+
+            public void deposit(int amount) {
+                int fee = amount / 100; // one percent
+                balance = balance + amount - fee;
+            }
+
+            public void reset() {
+                balance = 0;
+            }
+
+            int unused() {
+                return 0;
+            }
+        }
+        """;
+
+    /** A user of the type, the method and the getter of {@link #LEDGER_SOURCE} from another package. */
+    private static final String BANK_SOURCE = """
+        package demo.app;
+
+        import demo.Ledger;
+
+        public class Bank {
+            public int open() {
+                Ledger ledger = new Ledger();
+                ledger.deposit(100);
+                return ledger.getBalance();
+            }
+        }
+        """;
+
+    /** A user of {@link #LEDGER_SOURCE} in a test source. */
+    private static final String LEDGER_TEST_SOURCE = """
+        package demo;
+
+        class LedgerTest {
+            int depositsTwice() {
+                Ledger ledger = new Ledger();
+                ledger.deposit(5);
+                ledger.deposit(7);
+                return ledger.getBalance();
+            }
+        }
+        """;
+
     private static final String BROKEN_SOURCE = """
         package demo;
 
@@ -409,7 +483,13 @@ public final class Scenarios {
             PRICES,
             PRICES_SOURCE,
             CHECKOUT,
-            CHECKOUT_SOURCE);
+            CHECKOUT_SOURCE,
+            LEDGER,
+            LEDGER_SOURCE,
+            BANK,
+            BANK_SOURCE,
+            LEDGER_TEST,
+            LEDGER_TEST_SOURCE);
 
     /**
      * {@code Untidy}, {@code Tidy} and {@code Wide}, with the types and the constants {@code Wide} imports: the project
@@ -447,7 +527,13 @@ public final class Scenarios {
             PRICES,
             PRICES_SOURCE,
             CHECKOUT,
-            CHECKOUT_SOURCE);
+            CHECKOUT_SOURCE,
+            LEDGER,
+            LEDGER_SOURCE,
+            BANK,
+            BANK_SOURCE,
+            LEDGER_TEST,
+            LEDGER_TEST_SOURCE);
 
     /** A file without a problem: no diagnostic. */
     public static final Scenario CLEAN_FILE = new Scenario(
@@ -1201,6 +1287,103 @@ public final class Scenarios {
             new Request.CreateType(UNSOURCED, TypeKind.CLASS),
             new Answer.Refused(LanguageServerErrorKey.NOT_CREATABLE));
 
+    /**
+     * The type {@code Ledger}, asked from its declaration: its uses in another package (the import and the two
+     * mentions in {@code Bank}) and in a test source ({@code LedgerTest}), in the order of the files then of the
+     * positions. The declaration is not answered unless it is asked for.
+     */
+    public static final Scenario REFERENCES_OF_A_TYPE = new Scenario(
+            "references-of-a-type",
+            PROJECT,
+            new Request.References(LEDGER, new Position(2, 13), false),
+            new Answer.Referenced(new ReferenceLocations(
+                    List.of(),
+                    List.of(
+                            new Location(BANK, new Position(2, 7)),
+                            new Location(BANK, new Position(6, 8)),
+                            new Location(BANK, new Position(6, 28)),
+                            new Location(LEDGER_TEST, new Position(4, 8)),
+                            new Location(LEDGER_TEST, new Position(4, 28))))));
+
+    /**
+     * The method {@code deposit}, asked from one of its calls, with its declaration: the declaration is answered apart
+     * from the calls, which are in another package and in a test source.
+     */
+    public static final Scenario REFERENCES_OF_A_METHOD_WITH_ITS_DECLARATION = new Scenario(
+            "references-of-a-method-with-its-declaration",
+            PROJECT,
+            new Request.References(BANK, new Position(7, 15), true),
+            new Answer.Referenced(new ReferenceLocations(
+                    List.of(new Location(LEDGER, new Position(9, 16))),
+                    List.of(
+                            new Location(BANK, new Position(7, 15)),
+                            new Location(LEDGER_TEST, new Position(5, 15)),
+                            new Location(LEDGER_TEST, new Position(6, 15))))));
+
+    /**
+     * The field {@code balance}: its uses in its class. The calls of its getter {@code getBalance} in {@code Bank} and
+     * {@code LedgerTest} are not uses of the field, and jdtls leaves them out only because {@code
+     * java.references.includeAccessors} is {@code false} (it is {@code true} by default).
+     */
+    public static final Scenario REFERENCES_OF_A_FIELD_WITHOUT_ITS_ACCESSORS = new Scenario(
+            "references-of-a-field-without-its-accessors",
+            PROJECT,
+            new Request.References(LEDGER, new Position(3, 16), false),
+            new Answer.Referenced(new ReferenceLocations(
+                    List.of(),
+                    List.of(
+                            new Location(LEDGER, new Position(6, 15)),
+                            new Location(LEDGER, new Position(11, 8)),
+                            new Location(LEDGER, new Position(11, 18)),
+                            new Location(LEDGER, new Position(15, 8))))));
+
+    /** The local variable {@code fee}, asked from its declaration: its one use. */
+    public static final Scenario REFERENCES_OF_A_LOCAL_VARIABLE = new Scenario(
+            "references-of-a-local-variable",
+            PROJECT,
+            new Request.References(LEDGER, new Position(10, 12), false),
+            new Answer.Referenced(
+                    new ReferenceLocations(List.of(), List.of(new Location(LEDGER, new Position(11, 37))))));
+
+    /** A method that nothing calls: no reference, which is an answer and not a refusal. */
+    public static final Scenario REFERENCES_OF_A_SYMBOL_NOTHING_USES = new Scenario(
+            "references-of-a-symbol-nothing-uses",
+            PROJECT,
+            new Request.References(LEDGER, new Position(18, 8), false),
+            new Answer.Referenced(new ReferenceLocations(List.of(), List.of())));
+
+    /**
+     * An empty line inside the class. jdtls answers the references of the type that encloses a position where it
+     * finds no symbol ({@code ReferencesHandler} falls back to the element at the offset), so the adapter asks {@code
+     * prepareRename} first, as for a rename, and refuses what jdtls declines.
+     */
+    public static final Scenario REFERENCES_WHERE_THERE_IS_NO_SYMBOL = new Scenario(
+            "references-where-there-is-no-symbol",
+            PROJECT,
+            new Request.References(LEDGER, new Position(4, 0), false),
+            new Answer.Refused(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+
+    /** A word of a comment: no symbol, whatever the method that holds the comment. */
+    public static final Scenario REFERENCES_FROM_A_COMMENT = new Scenario(
+            "references-from-a-comment",
+            PROJECT,
+            new Request.References(LEDGER, new Position(10, 40), false),
+            new Answer.Refused(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+
+    /** The project is still being imported: the server cannot say where a symbol is used. */
+    public static final Scenario REFERENCES_WHILE_THE_SERVER_IMPORTS = new Scenario(
+            "references-while-the-server-imports",
+            PROJECT,
+            new Request.References(LEDGER, new Position(2, 13), false),
+            new Answer.Refused(LanguageServerErrorKey.NOT_READY));
+
+    /** A file that is not in the project the server was started on. */
+    public static final Scenario REFERENCES_OF_A_FILE_OUTSIDE_THE_PROJECT = new Scenario(
+            "references-of-a-file-outside-the-project",
+            PROJECT,
+            new Request.References(ELSEWHERE, new Position(0, 0), false),
+            new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+
     /** The project is still being imported: the server cannot say what a rename changes. */
     public static final Scenario RENAME_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "rename-while-the-server-imports",
@@ -1319,7 +1502,16 @@ public final class Scenarios {
                 CREATE_A_TYPE_IN_A_NEW_PACKAGE,
                 CREATE_A_TYPE_WHILE_THE_SERVER_IMPORTS,
                 CREATE_A_TYPE_OUTSIDE_THE_PROJECT,
-                CREATE_A_TYPE_OUTSIDE_THE_SOURCE_FOLDERS);
+                CREATE_A_TYPE_OUTSIDE_THE_SOURCE_FOLDERS,
+                REFERENCES_OF_A_TYPE,
+                REFERENCES_OF_A_METHOD_WITH_ITS_DECLARATION,
+                REFERENCES_OF_A_FIELD_WITHOUT_ITS_ACCESSORS,
+                REFERENCES_OF_A_LOCAL_VARIABLE,
+                REFERENCES_OF_A_SYMBOL_NOTHING_USES,
+                REFERENCES_WHERE_THERE_IS_NO_SYMBOL,
+                REFERENCES_FROM_A_COMMENT,
+                REFERENCES_WHILE_THE_SERVER_IMPORTS,
+                REFERENCES_OF_A_FILE_OUTSIDE_THE_PROJECT);
     }
 
     /** The sequels of the catalogue: scenarios in a row, with the files changed on disk between them. */

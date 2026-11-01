@@ -24,7 +24,8 @@ class DaemonAnswersTest extends CliTest {
                 List.of("extract-method", "/project/Totals.java", "6:9", "6:47", "printCount"),
                 List.of("move-type-to-file", "/project/Shapes.java", "6:25"),
                 List.of("inline", "/project/Prices.java", "4:22"),
-                List.of("create", "/project/Widget.java", "class"));
+                List.of("create", "/project/Widget.java", "class"),
+                List.of("references", "/project/Ledger.java", "10:17"));
     }
 
     static Stream<List<String>> commandsThatTalkToTheDaemon() {

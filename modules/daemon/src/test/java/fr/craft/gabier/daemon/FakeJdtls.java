@@ -42,10 +42,12 @@ import org.eclipse.lsp4j.FileChangeType;
 import org.eclipse.lsp4j.InitializeParams;
 import org.eclipse.lsp4j.InitializeResult;
 import org.eclipse.lsp4j.InitializedParams;
+import org.eclipse.lsp4j.Location;
 import org.eclipse.lsp4j.PrepareRenameDefaultBehavior;
 import org.eclipse.lsp4j.PrepareRenameParams;
 import org.eclipse.lsp4j.PrepareRenameResult;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
+import org.eclipse.lsp4j.ReferenceParams;
 import org.eclipse.lsp4j.Registration;
 import org.eclipse.lsp4j.RegistrationParams;
 import org.eclipse.lsp4j.RenameParams;
@@ -121,6 +123,9 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private CompletableFuture<Either3<org.eclipse.lsp4j.Range, PrepareRenameResult, PrepareRenameDefaultBehavior>>
             prepareRenameAnswer = new CompletableFuture<>();
     private CompletableFuture<WorkspaceEdit> renameAnswer = new CompletableFuture<>();
+    private final Map<Boolean, CompletableFuture<List<? extends Location>>> referencesAnswers =
+            new ConcurrentHashMap<>();
+    private final List<ReferenceParams> referenced = new CopyOnWriteArrayList<>();
     private final List<PrepareRenameParams> prepared = new CopyOnWriteArrayList<>();
     private final List<RenameParams> renamed = new CopyOnWriteArrayList<>();
     private CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> documentSymbolAnswer =
@@ -244,6 +249,15 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
      */
     FakeJdtls renameAnswers(CompletableFuture<WorkspaceEdit> answer) {
         this.renameAnswer = answer;
+        return this;
+    }
+
+    /**
+     * The answer to {@code textDocument/references} when the request includes the declaration or not: the locations,
+     * null or a failed future. Unscripted, the request never gets an answer.
+     */
+    FakeJdtls referencesAnswers(boolean includeDeclaration, CompletableFuture<List<? extends Location>> answer) {
+        this.referencesAnswers.put(includeDeclaration, answer);
         return this;
     }
 
@@ -375,6 +389,11 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         return renamed;
     }
 
+    /** The {@code references} requests received, in order. */
+    List<ReferenceParams> referenced() {
+        return referenced;
+    }
+
     /**
      * Registers these globs to be watched ({@code client/registerCapability} for {@code workspace/didChangeWatchedFiles},
      * as jdtls does) once it is ready, in a registration of its own for each call: the start does not end before the
@@ -409,7 +428,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /**
      * What the fake received and sent about files, in the order it happened: {@code didChangeWatchedFiles},
      * {@code acknowledged <file>} (the publication that answers a deletion), {@code didOpen <file>},
-     * {@code prepareRename <file>}, {@code rename <file>}, {@code getRefactorEdit <file>} and {@code move <file>}, a file by its name.
+     * {@code prepareRename <file>}, {@code rename <file>}, {@code references <file>}, {@code getRefactorEdit <file>} and {@code move <file>}, a file by its name.
      */
     List<String> received() {
         return received;
@@ -681,6 +700,14 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                     received.add("rename " + named(params.getTextDocument().getUri()));
                     renamed.add(params);
                     return renameAnswer;
+                }
+
+                @Override
+                public CompletableFuture<List<? extends Location>> references(ReferenceParams params) {
+                    received.add("references " + named(params.getTextDocument().getUri()));
+                    referenced.add(params);
+                    return referencesAnswers.getOrDefault(
+                            params.getContext().isIncludeDeclaration(), new CompletableFuture<>());
                 }
 
                 @Override

@@ -3108,4 +3108,256 @@ class JdtlsLanguageServerTest {
             }
         }
     }
+
+    @Nested
+    class Referencing {
+
+        private static final String LEDGER = """
+            package demo;
+
+            public class Ledger {
+                int balance;
+
+                void reset() {
+                    balance = 0;
+                }
+            }
+            """;
+
+        private Path ledger;
+        private Path bank;
+
+        @BeforeEach
+        void writeTheSources() throws IOException {
+            ledger = write("src/main/java/demo/Ledger.java", LEDGER);
+            bank = write("src/main/java/demo/Bank.java", "package demo;\n\nclass Bank {\n    Ledger ledger;\n}\n");
+        }
+
+        private CompletableFuture<Either3<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>> renamable() {
+            var range = new Range(new org.eclipse.lsp4j.Position(3, 8), new org.eclipse.lsp4j.Position(3, 15));
+            return CompletableFuture.completedFuture(Either3.forFirst(range));
+        }
+
+        private Location at(Path file, int line, int column) {
+            var start = new org.eclipse.lsp4j.Position(line, column);
+            var end = new org.eclipse.lsp4j.Position(line, column + 7);
+
+            return new Location(file.toUri().toString(), new Range(start, end));
+        }
+
+        private CompletableFuture<List<? extends Location>> found(Location... locations) {
+            return CompletableFuture.completedFuture(List.of(locations));
+        }
+
+        private fr.craft.gabier.editing.domain.Location place(Path file, int line, int column) {
+            return new fr.craft.gabier.editing.domain.Location(file, new Position(line, column));
+        }
+
+        private CompletableFuture<List<? extends Location>> unanswered() {
+            return new CompletableFuture<>();
+        }
+
+        @Test
+        void asksWhetherThereIsASymbolThenForTheReferencesAndAnswersTheirPositionsInTheTermsOfTheDomain()
+                throws Exception {
+            fake.prepareRenameAnswers(renamable()).referencesAnswers(false, found(at(bank, 3, 4), at(ledger, 6, 8)));
+
+            try (var server = started()) {
+                var found = server.references(ledger, new Position(3, 8), false);
+
+                assertThat(found.declarations()).isEmpty();
+                assertThat(found.references()).containsExactly(place(bank, 3, 4), place(ledger, 6, 8));
+                assertThat(fake.prepared()).hasSize(1);
+                assertThat(fake.prepared().getFirst().getTextDocument().getUri())
+                        .isEqualTo(ledger.toUri().toString());
+                assertThat(fake.prepared().getFirst().getPosition()).isEqualTo(new org.eclipse.lsp4j.Position(3, 8));
+                assertThat(fake.referenced()).hasSize(1);
+                var request = fake.referenced().getFirst();
+                assertThat(request.getTextDocument().getUri())
+                        .isEqualTo(ledger.toUri().toString());
+                assertThat(request.getPosition()).isEqualTo(new org.eclipse.lsp4j.Position(3, 8));
+                assertThat(request.getContext().isIncludeDeclaration()).isFalse();
+                assertThat(fake.opened()).isEmpty();
+            }
+        }
+
+        @Test
+        void putsTheLocationsInTheOrderOfTheFilesThenOfThePositionsWhateverTheOrderOfJdtls() throws Exception {
+            fake.prepareRenameAnswers(renamable())
+                    .referencesAnswers(false, found(at(ledger, 6, 8), at(bank, 3, 4), at(ledger, 3, 8)));
+
+            try (var server = started()) {
+                var found = server.references(ledger, new Position(3, 8), false);
+
+                assertThat(found.references())
+                        .containsExactly(place(bank, 3, 4), place(ledger, 3, 8), place(ledger, 6, 8));
+            }
+        }
+
+        @Test
+        void asksAgainWithTheDeclarationAndAnswersWhatIsNewAsTheDeclaration() throws Exception {
+            fake.prepareRenameAnswers(renamable())
+                    .referencesAnswers(false, found(at(bank, 3, 4), at(ledger, 6, 8)))
+                    .referencesAnswers(true, found(at(ledger, 3, 8), at(bank, 3, 4), at(ledger, 6, 8)));
+
+            try (var server = started()) {
+                var found = server.references(bank, new Position(3, 4), true);
+
+                assertThat(found.declarations()).containsExactly(place(ledger, 3, 8));
+                assertThat(found.references()).containsExactly(place(bank, 3, 4), place(ledger, 6, 8));
+                assertThat(fake.referenced())
+                        .extracting(request -> request.getContext().isIncludeDeclaration())
+                        .containsExactly(false, true);
+            }
+        }
+
+        @Test
+        void answersNothingForASymbolNothingUsesAndForAnAnswerOfNull() throws Exception {
+            fake.prepareRenameAnswers(renamable())
+                    .referencesAnswers(false, CompletableFuture.completedFuture(null))
+                    .referencesAnswers(true, found(at(ledger, 3, 8)));
+
+            try (var server = started()) {
+                var found = server.references(ledger, new Position(3, 8), true);
+
+                assertThat(found.references()).isEmpty();
+                assertThat(found.declarations()).containsExactly(place(ledger, 3, 8));
+            }
+        }
+
+        @Test
+        void leavesOutWhatIsNotAFileOfTheProject() throws Exception {
+            var inAJar = new Location(
+                    "jdt://contents/rt.jar/java.lang/String.class",
+                    new Range(new org.eclipse.lsp4j.Position(0, 0), new org.eclipse.lsp4j.Position(0, 1)));
+            fake.prepareRenameAnswers(renamable()).referencesAnswers(false, found(inAJar, at(bank, 3, 4)));
+
+            try (var server = started()) {
+                var found = server.references(ledger, new Position(3, 8), false);
+
+                assertThat(found.references()).containsExactly(place(bank, 3, 4));
+            }
+        }
+
+        @Test
+        void tellsJdtlsOfTheFilesEditedSinceTheLastRequestBeforeAskingForTheReferences() throws Exception {
+            fake.registersWatchersFor("**/*.java")
+                    .prepareRenameAnswers(renamable())
+                    .referencesAnswers(false, found());
+
+            try (var server = started()) {
+                Files.writeString(bank, "package demo;\n\nclass Bank {\n    Ledger other;\n}\n");
+
+                server.references(ledger, new Position(3, 8), false);
+
+                assertThat(fake.received())
+                        .containsSubsequence(
+                                "didChangeWatchedFiles", "prepareRename Ledger.java", "references Ledger.java");
+            }
+        }
+
+        @Test
+        void refusesWhereJdtlsHasNothingToRenameAsNoSymbolWithoutAskingForTheReferences() throws Exception {
+            fake.prepareRenameAnswers(declined("Renaming this element is not supported."));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.references(ledger, new Position(4, 0), false))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NO_SUCH_SYMBOL);
+                            assertThat(refusal.parameters())
+                                    .containsEntry("file", ledger.toString())
+                                    .containsEntry("line", "4")
+                                    .containsEntry("column", "0");
+                        });
+                assertThat(fake.referenced()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesAsNoSymbolWhenJdtlsAnswersNullToThePreparation() throws Exception {
+            fake.prepareRenameAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.references(ledger, new Position(4, 0), false))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+                assertThat(fake.referenced()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesAFileOutsideTheProjectWithoutAskingJdtls() throws Exception {
+            Path outside = root.resolveSibling("outside").resolve("Elsewhere.java");
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.references(outside, new Position(0, 0), false))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT);
+                            assertThat(refusal.parameters()).containsEntry("file", outside.toString());
+                        });
+                assertThat(fake.prepared()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesAsNotReadyWhileJdtlsIsStillImporting() throws Exception {
+            fake.neverAnswersInitialize();
+
+            try (var server = start()) {
+                assertThatThrownBy(() -> server.references(ledger, new Position(3, 8), false))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+                assertThat(fake.prepared()).isEmpty();
+            }
+        }
+
+        @Test
+        void saysWhatWentWrongWhenJdtlsFailsInsteadOfAnswering() throws Exception {
+            fake.prepareRenameAnswers(renamable())
+                    .referencesAnswers(
+                            false, CompletableFuture.failedFuture(new IllegalStateException("the index is broken")));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.references(ledger, new Position(3, 8), false))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("waiting for the references of the symbol at")
+                        .hasMessageContaining("Internal error");
+            }
+        }
+
+        @Test
+        void failsWhenJdtlsDoesNotAnswerInTime() throws Exception {
+            fake.prepareRenameAnswers(renamable()).referencesAnswers(false, unanswered());
+
+            try (var server = start(Duration.ofSeconds(1))) {
+                server.awaitStarted();
+
+                assertThatThrownBy(() -> server.references(ledger, new Position(3, 8), false))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Timed out")
+                        .hasMessageContaining("references");
+            }
+        }
+
+        @Test
+        void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
+            fake.prepareRenameAnswers(renamable()).referencesAnswers(false, found());
+
+            try (var server = started()) {
+                Thread.currentThread().interrupt();
+
+                assertThatThrownBy(() -> server.references(ledger, new Position(3, 8), false))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Interrupted while waiting for the references");
+                assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+
+        private <T> CompletableFuture<T> declined(String message) {
+            return CompletableFuture.failedFuture(
+                    new ResponseErrorException(new ResponseError(ResponseErrorCode.InvalidRequest, message, null)));
+        }
+    }
 }

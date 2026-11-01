@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -102,6 +103,18 @@ record TextFile(String text, boolean bom) {
         }
 
         return Optional.empty();
+    }
+
+    /**
+     * The lines of the text without their terminators. The empty line after the last terminator is a line of its own,
+     * as for {@link Position}.
+     */
+    List<String> lines() {
+        LineIndex index = new LineIndex(text);
+
+        return IntStream.range(0, index.lineCount())
+                .mapToObj(line -> text.substring(index.start(line), index.start(line) + index.contentLength(line)))
+                .toList();
     }
 
     /** Where an offset of the text is: a point of a line, or the end of the text. */

@@ -60,6 +60,18 @@ class ArgumentsTest {
     }
 
     @Test
+    void withoutAnOptionTakesOnlyThatOptionOutOfTheOperands() {
+        var arguments = Arguments.of(List.of("references", "--include-declaration", "A.java", "3:4"));
+
+        assertThat(arguments.without("--include-declaration").operands()).containsExactly("A.java", "3:4");
+        assertThat(arguments.has("--include-declaration")).isTrue();
+        assertThat(Arguments.of(List.of("references", "--dry-run", "A.java", "3:4"))
+                        .without("--include-declaration")
+                        .operands())
+                .containsExactly("--dry-run", "A.java", "3:4");
+    }
+
+    @Test
     void anOptionNotGivenIsNotThere() {
         assertThat(Arguments.of(List.of("rename", "A.java")).has("--token")).isFalse();
     }

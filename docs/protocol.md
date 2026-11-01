@@ -48,3 +48,4 @@ daemon ([help](commands/help.md)).
 | `move-type-to-file` | `file`, `line`, `column`, `dryRun`                                          | [move-type-to-file](commands/move-type-to-file.md)         |
 | `inline`           | `file`, `line`, `column`, `dryRun`                                          | [inline](commands/inline.md)                               |
 | `create`           | `file`, `kind`, `dryRun`                                                    | [create](commands/create.md)                               |
+| `references`       | `file`, `line`, `column`, `includeDeclaration`                              | [references](commands/references.md)                       |

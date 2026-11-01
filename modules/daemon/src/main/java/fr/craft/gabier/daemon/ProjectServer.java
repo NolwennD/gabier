@@ -5,6 +5,7 @@ import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.protocol.JdtlsState;
 import java.io.IOException;
@@ -126,6 +127,11 @@ final class ProjectServer implements ServedProject {
     @Override
     public ChangeSet createType(Path file, TypeKind kind) {
         return ready().createType(file, kind);
+    }
+
+    @Override
+    public ReferenceLocations references(Path file, Position position, boolean includeDeclaration) {
+        return ready().references(file, position, includeDeclaration);
     }
 
     @Override

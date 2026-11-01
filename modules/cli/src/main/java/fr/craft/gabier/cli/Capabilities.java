@@ -17,6 +17,7 @@ final class Capabilities {
             new MoveTypeToFile(),
             new Inline(),
             new Create(),
+            new References(),
             new Status(),
             new Stop(),
             new Help());

@@ -5,6 +5,7 @@ import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
+import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.protocol.JdtlsState;
 import java.nio.file.Path;
@@ -158,6 +159,11 @@ final class ScriptedProject implements ServedProject {
     @Override
     public ChangeSet createType(Path file, TypeKind kind) {
         return server.createType(file, kind);
+    }
+
+    @Override
+    public ReferenceLocations references(Path file, Position position, boolean includeDeclaration) {
+        return server.references(file, position, includeDeclaration);
     }
 
     @Override
