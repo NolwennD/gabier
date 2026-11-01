@@ -308,6 +308,32 @@ class ScenarioTest {
     }
 
     @Test
+    void buildsTheRefusalOfAnExtractFieldRequest() {
+        Request.ExtractField extract = new Request.ExtractField(FILE, SELECTION, "1st");
+
+        assertThat(extract.refusal(LanguageServerErrorKey.NOT_READY).key()).isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(extract.refusal(LanguageServerErrorKey.FILE_MISSING).key())
+                .isEqualTo(LanguageServerErrorKey.FILE_MISSING);
+        assertThat(extract.refusal(LanguageServerErrorKey.NOT_A_FILE).key())
+                .isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
+        assertThat(extract.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
+                .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(extract.refusal(LanguageServerErrorKey.NOT_AN_EXPRESSION).parameters())
+                .isEqualTo(
+                        Map.of("file", FILE.toString(), "line", "0", "column", "6", "endLine", "0", "endColumn", "7"));
+        assertThat(extract.refusal(LanguageServerErrorKey.INVALID_NAME).parameters())
+                .isEqualTo(Map.of("file", FILE.toString(), "line", "0", "column", "6", "name", "1st"));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NOT_EXTRACTABLE));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.AMBIGUOUS_IMPORTS));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.UNRESOLVED_IMPORTS));
+    }
+
+    @Test
     void buildsTheRefusalOfAMoveTypeToFileRequest() {
         Request.MoveTypeToFile move = new Request.MoveTypeToFile(FILE, POSITION);
 
@@ -466,6 +492,8 @@ class ScenarioTest {
                 .isEqualTo(new Request.ExtractMethod(Path.of("/project/src/A.java"), SELECTION, "b"));
         assertThat(new Request.ExtractConstant(FILE, SELECTION, "B").resolvedIn(ROOT))
                 .isEqualTo(new Request.ExtractConstant(Path.of("/project/src/A.java"), SELECTION, "B"));
+        assertThat(new Request.ExtractField(FILE, SELECTION, "b").resolvedIn(ROOT))
+                .isEqualTo(new Request.ExtractField(Path.of("/project/src/A.java"), SELECTION, "b"));
         assertThat(new Request.MoveTypeToFile(FILE, POSITION).resolvedIn(ROOT))
                 .isEqualTo(new Request.MoveTypeToFile(Path.of("/project/src/A.java"), POSITION));
         assertThat(new Request.MoveToPackage(List.of(FILE, Path.of("src/B.java")), PackageName.of("demo.b"))

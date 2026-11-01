@@ -24,7 +24,7 @@ import java.util.stream.Stream;
  * and so are {@code organize-imports} (a dry run, a file organized, a file in order, a refusal) and {@code
  * extract-variable} (a dry run, a variable extracted under the name given, refusals), {@code extract-method} (a dry run,
  * a method extracted under the name given, refusals), {@code extract-constant} (a dry run, a constant extracted under the
- * name given, refusals), {@code move-type-to-file} (a dry run, a type moved to a file of
+ * name given, refusals), {@code extract-field} (a dry run, a field extracted under the name given, refusals), {@code move-type-to-file} (a dry run, a type moved to a file of
  * its own, a refusal), {@code move} (a dry run that makes no folder, classes moved to a new package, refusals), {@code inline} (a dry run, a constant inlined, a refusal) and {@code create} (a dry run, a class
  * created, refusals) and {@code references} (the uses of a type, the declaration apart, a symbol nothing uses, refusals);
  * a request command with no daemon running starts {@code gabier-daemon} (found on the {@code PATH} or next to the cli;
@@ -65,7 +65,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, help, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, extract-variable, extract-method, extract-constant, move-type-to-file, move and inline included, the daemon started on demand)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move and inline included, the daemon started on demand)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -253,6 +253,7 @@ public final class Native {
                 extractVariableWithTheFakeServer();
                 extractMethodWithTheFakeServer();
                 extractConstantWithTheFakeServer();
+                extractFieldWithTheFakeServer();
                 moveTypeToFileWithTheFakeServer();
                 moveToAPackageWithTheFakeServer();
                 inlineWithTheFakeServer();
@@ -824,6 +825,74 @@ public final class Native {
                     "gabier extract-constant writes the file, with the constant declared under the name given");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after the constant extractions");
+        }
+
+        /**
+         * {@code gabier extract-field} against the daemon served by the fake language server: the dry run writes
+         * nothing, the field is declared under the name given, assigned before the statement and used in place of the
+         * expression, a selection that is not an expression and a name that is not valid are refused as problem objects
+         * and write nothing.
+         */
+        private void extractFieldWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("extract-field-project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            Path totals = project.resolve("src/main/java/demo/Totals.java");
+            Path greeter = project.resolve("src/main/java/demo/Greeter.java");
+            String file = "extract-field-project/src/main/java/demo/Totals.java";
+            String greeterFile = "extract-field-project/src/main/java/demo/Greeter.java";
+            String original = Files.readString(totals);
+
+            Run dryRun = gabier("extract-field", "--dry-run", file, "6:28", "6:37", "label");
+            expect(
+                    dryRun.exit() == 0
+                            && dryRun.err().isEmpty()
+                            && dryRun.out().lines().findFirst().orElse("").equals("dry run, nothing written")
+                            && dryRun.out().contains("modified " + totals)
+                            && dryRun.out().contains("+    private String label;")
+                            && dryRun.out().contains("+        System.out.println(label + count);")
+                            && Files.readString(totals).equals(original),
+                    "gabier extract-field --dry-run lists the file and the diff and writes nothing");
+
+            Run notAnExpression = gabier("extract-field", greeterFile, "8:9", "8:15", "label");
+            expect(
+                    notAnExpression.exit() == 2
+                            && notAnExpression.out().isEmpty()
+                            && notAnExpression.err().contains("(language-server-not-an-expression; ")
+                            && Files.readString(totals).equals(original)
+                            && !Files.readString(greeter).contains("label"),
+                    "extract-field of a selection that is not an expression is refused as a problem object, exit 2");
+
+            Run invalidName = gabier("extract-field", file, "6:28", "6:37", "1st");
+            expect(
+                    invalidName.exit() == 2
+                            && invalidName.out().isEmpty()
+                            && invalidName.err().contains("(language-server-invalid-name; ")
+                            && Files.readString(totals).equals(original),
+                    "extract-field to a name that is not an identifier is refused as a problem object, exit 2");
+
+            Run json = gabier("--json", "extract-field", "--dry-run", file, "6:28", "6:37", "label");
+            expect(
+                    json.exit() == 0
+                            && json.out()
+                                    .startsWith("{\"created\":[],\"renamed\":[],\"deleted\":[],\"modified\":[\""
+                                            + totals + "\"],\"diff\":\"")
+                            && Files.readString(totals).equals(original),
+                    "gabier --json extract-field gives the result as the daemon gave it");
+
+            Run extracted = gabier("extract-field", file, "6:28", "6:37", "label");
+            String text = Files.readString(totals);
+            expect(
+                    extracted.exit() == 0
+                            && extracted.out().contains("modified " + totals)
+                            && text.contains("    private String label;\n")
+                            && text.contains("        label = \"count: \";\n        System.out.println(label + count);\n"),
+                    "gabier extract-field writes the file, with the field declared under the name given");
+            gabier("stop");
+            expect(ends(process), "the daemon served by the fake stops after the field extractions");
         }
 
         /**

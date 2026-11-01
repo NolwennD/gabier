@@ -158,6 +158,12 @@ class ScenariosTest {
                         "extract-a-constant-to-an-invalid-name",
                         "extract-a-constant-while-the-server-imports",
                         "extract-a-constant-of-a-file-outside-the-project",
+                        "extract-a-field",
+                        "extract-a-field-from-something-that-is-not-an-expression",
+                        "extract-a-field-from-outside-a-class-body",
+                        "extract-a-field-to-an-invalid-name",
+                        "extract-a-field-while-the-server-imports",
+                        "extract-a-field-of-a-file-outside-the-project",
                         "move-a-static-nested-type",
                         "move-an-inner-type-that-does-not-use-the-outer-instance",
                         "move-an-inner-type-that-uses-the-outer-instance",
@@ -274,6 +280,19 @@ class ScenariosTest {
                         LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
                         LanguageServerErrorKey.INVALID_NAME,
                         LanguageServerErrorKey.NOT_EXTRACTABLE,
+                        LanguageServerErrorKey.NOT_READY);
+    }
+
+    @Test
+    void refusesForEachReasonOfThePortOnAnExtractField() {
+        assertThat(answeredWith(Answer.Refused.class).stream()
+                        .filter(scenario -> scenario.request() instanceof Request.ExtractField)
+                        .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
+                        LanguageServerErrorKey.INVALID_NAME,
+                        LanguageServerErrorKey.NOT_AN_EXPRESSION,
+                        LanguageServerErrorKey.NOT_AN_EXPRESSION,
                         LanguageServerErrorKey.NOT_READY);
     }
 
@@ -699,6 +718,30 @@ class ScenariosTest {
             assertThat(Files.readString(request.file()))
                     .as(scenario.name())
                     .contains(" static final String " + request.name() + " = " + expression + ";")
+                    .contains("(" + request.name() + " + ");
+        }
+    }
+
+    @Test
+    void declaresTheFieldWithTheNameAskedForAssignsItAndUsesItInPlaceOfTheSelectedExpression(@TempDir Path directory)
+            throws IOException {
+        List<Scenario> extractions = answeredWith(Answer.Extracted.class).stream()
+                .filter(scenario -> scenario.request() instanceof Request.ExtractField)
+                .toList();
+        assertThat(extractions).hasSize(1);
+        for (Scenario scenario : extractions) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+            var request = (Request.ExtractField) inside.request();
+            String expression = selected(Files.readString(request.file()), request.selection());
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.Extracted) inside.answer()).changes());
+
+            assertThat(Files.readString(request.file()))
+                    .as(scenario.name())
+                    .contains("    private String " + request.name() + ";")
+                    .contains("        " + request.name() + " = " + expression + ";")
                     .contains("(" + request.name() + " + ");
         }
     }

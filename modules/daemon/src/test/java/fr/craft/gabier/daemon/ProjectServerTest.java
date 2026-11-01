@@ -162,6 +162,11 @@ class ProjectServerTest {
         }
 
         @Override
+        public ChangeSet extractField(Path file, Range selection, String name) {
+            return RENAMED;
+        }
+
+        @Override
         public ChangeSet extractMethod(Path file, Range selection, String name) {
             return RENAMED;
         }
@@ -290,6 +295,14 @@ class ProjectServerTest {
         }
 
         @Test
+        void anExtractionOfAFieldStartsItToo() {
+            assertThat(project.extractField(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x"))
+                    .isEqualTo(ScriptedServer.RENAMED);
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
         void anExtractionOfAMethodStartsItToo() {
             assertThat(project.extractMethod(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x"))
                     .isEqualTo(ScriptedServer.RENAMED);
@@ -341,6 +354,7 @@ class ProjectServerTest {
             project.organizeImports(FILE);
             project.extractVariable(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x");
             project.extractConstant(FILE, new Range(new Position(0, 0), new Position(0, 1)), "X");
+            project.extractField(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x");
             project.extractMethod(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x");
             project.moveTypeToFile(FILE, new Position(0, 0));
             project.moveToPackage(List.of(FILE), PackageName.of("demo"));

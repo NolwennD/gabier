@@ -12,8 +12,9 @@ repository does it with `gabier` (installed on the PATH by `mise run install`; t
 - `gabier extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>` to turn an expression into a local
   variable, `gabier extract-method [--dry-run] <file> <line>:<column> <line>:<column> <name>` to turn statements, or an
   expression, into a method, and `gabier extract-constant [--dry-run] <file> <line>:<column> <line>:<column> <name>` to
-  turn an expression that reads no local variable and no instance member into a `private static final` constant
-  (1-based positions, end excluded);
+  turn an expression that reads no local variable and no instance member into a `private static final` constant, and
+  `gabier extract-field [--dry-run] <file> <line>:<column> <line>:<column> <name>` to turn an expression into a field of
+  the class (1-based positions, end excluded);
 - `gabier move-type-to-file [--dry-run] <file> <line>:<column>` to make a nested type a top-level type in a file of its
   own (1-based; the innermost type that encloses the position; an inner class that uses its outer instance gets a field and
   a constructor parameter, which a JUnit `@Nested` class cannot take: see its help);

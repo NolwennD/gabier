@@ -2569,6 +2569,238 @@ class JdtlsLanguageServerTest {
         }
     }
 
+    /**
+     * The extraction of a field: jdtls declares it at the top of the class and, by default, assigns it in the current
+     * method. The place it says the name is, the first in its own order, is the assignment and not the declaration, so
+     * the rename changes the text before it: the adapter has the field renamed from there and still answers one edit.
+     */
+    @Nested
+    class ExtractingAField {
+
+        private static final String ORIGINAL = """
+            class Totals {
+                void print(int count) {
+                    System.out.println("count: " + count);
+                }
+            }
+            """;
+
+        /** The text once jdtls' edit is applied: the field carries the name jdtls proposed. */
+        private static final String PROPOSED = """
+            class Totals {
+                private String string;
+
+                void print(int count) {
+                    string = "count: ";
+                    System.out.println(string + count);
+                }
+            }
+            """;
+
+        private final fr.craft.gabier.editing.domain.Range selection =
+                new fr.craft.gabier.editing.domain.Range(new Position(2, 27), new Position(2, 36));
+        private Path totals;
+
+        @BeforeEach
+        void writeTheSources() throws IOException {
+            totals = write("src/main/java/demo/Totals.java", ORIGINAL);
+        }
+
+        private static org.eclipse.lsp4j.Position at(int line, int column) {
+            return new org.eclipse.lsp4j.Position(line, column);
+        }
+
+        private WorkspaceEdit workspaceEdit(TextEdit... edits) {
+            return new WorkspaceEdit(List.of(Either.forLeft(new TextDocumentEdit(
+                    new VersionedTextDocumentIdentifier(totals.toUri().toString(), 1),
+                    Arrays.stream(edits)
+                            .map(Either::<TextEdit, SnippetTextEdit>forLeft)
+                            .toList()))));
+        }
+
+        /** What jdtls answers: the declaration before the first member, the assignment before the statement. */
+        private WorkspaceEdit declaresTheField() {
+            return workspaceEdit(
+                    new TextEdit(new Range(at(1, 4), at(1, 4)), "private String string;\n\n    "),
+                    new TextEdit(new Range(at(2, 8), at(2, 8)), "string = \"count: \";\n        "),
+                    new TextEdit(new Range(at(2, 27), at(2, 36)), "string"));
+        }
+
+        /** What jdtls answers to the rename, for the text it was given: the declaration, the assignment and the use. */
+        private WorkspaceEdit renamesTo(String name) {
+            return workspaceEdit(
+                    new TextEdit(new Range(at(1, 19), at(1, 25)), name),
+                    new TextEdit(new Range(at(4, 8), at(4, 14)), name),
+                    new TextEdit(new Range(at(5, 27), at(5, 33)), name));
+        }
+
+        private CompletableFuture<JdtlsServer.RefactorEdit> proposal() {
+            var where = new JdtlsServer.RenamePosition(
+                    totals.toUri().toString(), PROPOSED.indexOf("string = "), "string".length());
+            var follow = new JdtlsServer.FollowUp("java.action.rename", List.of(where));
+
+            return CompletableFuture.completedFuture(new JdtlsServer.RefactorEdit(declaresTheField(), follow, null));
+        }
+
+        private void scriptTheExtraction(WorkspaceEdit rename) {
+            fake.refactorEditAnswers(proposal())
+                    .publishesOnOpen(totals, List.of())
+                    .renameAnswers(CompletableFuture.completedFuture(rename));
+        }
+
+        private static String applied(String text, ChangeSet changes) {
+            var edit = (FileChange.EditFile) changes.changes().getFirst();
+
+            return SourceText.edited(edit.file(), text, edit.edits());
+        }
+
+        @Test
+        void asksJdtlsForTheExtractionOfTheSelectionIntoAFieldAsGivenAndLeavesItWhereToInitialiseIt() throws Exception {
+            scriptTheExtraction(renamesTo("label"));
+
+            try (var server = started()) {
+                server.extractField(totals, selection, "label");
+
+                assertThat(fake.refactorEditRequests()).hasSize(1);
+                var request = fake.refactorEditRequests().getFirst();
+                assertThat(request.command()).isEqualTo("extractField");
+                assertThat(request.context().getTextDocument().getUri())
+                        .isEqualTo(totals.toUri().toString());
+                assertThat(request.context().getRange()).isEqualTo(new Range(at(2, 27), at(2, 36)));
+            }
+        }
+
+        @Test
+        void renamesTheFieldFromThePlaceJdtlsSaidOnTheTextItGave() throws Exception {
+            scriptTheExtraction(renamesTo("label"));
+
+            try (var server = started()) {
+                server.extractField(totals, selection, "label");
+
+                assertThat(fake.opened())
+                        .containsExactly(new FakeJdtls.Opened(totals.toUri().toString(), PROPOSED));
+                assertThat(fake.renamed()).hasSize(1);
+                assertThat(fake.renamed().getFirst().getPosition()).isEqualTo(at(4, 8));
+                assertThat(fake.renamed().getFirst().getNewName()).isEqualTo("label");
+                assertThat(fake.closed(1)).containsExactly(totals.toUri().toString());
+                assertThat(totals).hasContent(ORIGINAL);
+            }
+        }
+
+        @Test
+        void answersOneEditOfTheFileAsItIsOnDiskWithTheNameAskedFor() throws Exception {
+            scriptTheExtraction(renamesTo("label"));
+
+            try (var server = started()) {
+                ChangeSet changes = server.extractField(totals, selection, "label");
+
+                assertThat(changes.changes()).hasSize(1);
+                assertThat(applied(ORIGINAL, changes)).isEqualTo(PROPOSED.replace("string", "label"));
+            }
+        }
+
+        @Test
+        void keepsTheNameJdtlsProposedWhenThatIsTheNameAskedForWithoutRenamingAnything() throws Exception {
+            fake.refactorEditAnswers(proposal());
+
+            try (var server = started()) {
+                ChangeSet changes = server.extractField(totals, selection, "string");
+
+                assertThat(applied(ORIGINAL, changes)).isEqualTo(PROPOSED);
+                assertThat(fake.renamed()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesANameThatLeavesTheLineOfTheAssignmentOtherwiseThanItWas() throws Exception {
+            scriptTheExtraction(workspaceEdit(new TextEdit(new Range(at(4, 8), at(4, 14)), "label=")));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractField(totals, selection, "label"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME));
+                assertThat(totals).hasContent(ORIGINAL);
+            }
+        }
+
+        @Test
+        void refusesASelectionJdtlsHasNoExtractionFor() throws Exception {
+            fake.refactorEditAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractField(totals, selection, "label"))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION);
+                            assertThat(refusal.parameters())
+                                    .containsEntry("file", totals.toString())
+                                    .containsEntry("line", "2")
+                                    .containsEntry("column", "27")
+                                    .containsEntry("endLine", "2")
+                                    .containsEntry("endColumn", "36");
+                        });
+                assertThat(fake.opened()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesASelectionForWhichJdtlsGivesNoEdit() throws Exception {
+            fake.refactorEditAnswers(CompletableFuture.completedFuture(
+                    new JdtlsServer.RefactorEdit(null, null, "Cannot extract this selection")));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractField(totals, selection, "label"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal ->
+                                        assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+            }
+        }
+
+        @Test
+        void refusesANameJdtlsDeclinesForTheField() throws Exception {
+            fake.refactorEditAnswers(proposal())
+                    .publishesOnOpen(totals, List.of())
+                    .renameAnswers(CompletableFuture.failedFuture(new ResponseErrorException(
+                            new ResponseError(ResponseErrorCode.InvalidRequest, "not an identifier", null))));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractField(totals, selection, "1st"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME));
+                assertThat(fake.closed(1)).containsExactly(totals.toUri().toString());
+            }
+        }
+
+        @Test
+        void refusesAFileOutsideTheProjectWithoutAskingJdtls() throws Exception {
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractField(root.resolve("../Elsewhere.java"), selection, "any"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key())
+                                        .isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+                assertThat(fake.refactorEditRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
+            scriptTheExtraction(renamesTo("label"));
+
+            try (var server = started()) {
+                Thread.currentThread().interrupt();
+
+                assertThatThrownBy(() -> server.extractField(totals, selection, "label"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining(
+                                "Interrupted while waiting for the extraction of the expression into a field");
+                assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+    }
+
     @Nested
     class MovingATypeToAFile {
 

@@ -2,6 +2,7 @@ package fr.craft.gabier.daemon;
 
 import fr.craft.gabier.editing.application.CreateType;
 import fr.craft.gabier.editing.application.ExtractConstant;
+import fr.craft.gabier.editing.application.ExtractField;
 import fr.craft.gabier.editing.application.ExtractMethod;
 import fr.craft.gabier.editing.application.ExtractVariable;
 import fr.craft.gabier.editing.application.Inline;
@@ -114,6 +115,15 @@ final class ChangeRequest {
 
     /** What extracting the expression of the selection into a constant does, written unless the request is a dry run. */
     DaemonMethod.Outcome run(ExtractConstant extract, Range selection) {
+        Path file = file();
+        String name = token(NAME);
+        ChangeReport report = dryRun() ? extract.dryRun(file, selection, name) : extract.apply(file, selection, name);
+
+        return DaemonMethod.Outcome.of(changed(report).toJson());
+    }
+
+    /** What extracting the expression of the selection into a field does, written unless the request is a dry run. */
+    DaemonMethod.Outcome run(ExtractField extract, Range selection) {
         Path file = file();
         String name = token(NAME);
         ChangeReport report = dryRun() ? extract.dryRun(file, selection, name) : extract.apply(file, selection, name);

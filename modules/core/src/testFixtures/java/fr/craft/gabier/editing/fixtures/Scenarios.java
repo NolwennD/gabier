@@ -80,6 +80,15 @@ import java.util.stream.Stream;
  *       #EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE}) it answers nothing, no message either, which the adapter maps to
  *       {@code not-extractable}; a name that is not an identifier is declined by the rename ({@link
  *       #EXTRACT_CONSTANT_TO_AN_INVALID_NAME});
+ *   <li>the extraction of a field: {@code java/getRefactorEdit} with the command {@code extractField} (no client
+ *       capability, no setting; its optional argument, the place of the initialisation, is not sent) answers the
+ *       declaration at the top of the class, the assignment in the current method, which is jdtls's default, and the
+ *       replacement of the expression. The place it gives for the name to rename is the assignment, below the
+ *       declaration; the rename changes the text before it and the answer holds the one edit that results from both
+ *       ({@link #EXTRACT_FIELD}). jdtls answers nothing, no message either, for a keyword and for an expression outside a
+ *       class body, which the adapter maps to {@code not-an-expression} ({@link
+ *       #EXTRACT_FIELD_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION}, {@link #EXTRACT_FIELD_FROM_OUTSIDE_A_CLASS_BODY}); a
+ *       name that is not an identifier is declined by the rename ({@link #EXTRACT_FIELD_TO_AN_INVALID_NAME});
  *   <li>the move of a nested type to a file of its own: {@code java/move} with the move kind {@code moveTypeToNewFile}
  *       answers the edits of the files that refer to the type, of the outer class, the creation of the new file
  *       (because the client declares the resource operations) and the edit that gives it its text ({@link
@@ -943,6 +952,59 @@ public final class Scenarios {
             new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
 
     /**
+     * {@code "count: "} in {@code print}, extracted as {@code label}: jdtls declares the field and, by default,
+     * initialises it in the current method, before the statement that holds the expression. It proposes a name of its
+     * own, which is renamed; the answer holds the one edit that results of both.
+     */
+    public static final Scenario EXTRACT_FIELD = new Scenario(
+            "extract-a-field",
+            PROJECT,
+            new Request.ExtractField(TOTALS, new Range(new Position(5, 27), new Position(5, 36)), "label"),
+            new Answer.Extracted(new ChangeSet(List.of(edits(TOTALS, replace(3, 5, 5, 36, """
+                rivate String label;
+
+                    public void print(int[] values) {
+                        int count = values.length;
+                        label = "count: ";
+                        System.out.println(label\
+                """))))));
+
+    /** {@code return}: a keyword, not an expression, which jdtls has no field for. */
+    public static final Scenario EXTRACT_FIELD_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION = new Scenario(
+            "extract-a-field-from-something-that-is-not-an-expression",
+            PROJECT,
+            new Request.ExtractField(GREETER, new Range(new Position(7, 8), new Position(7, 14)), "label"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+
+    /** {@code demo}, in the {@code package} line: outside any class body, so no field can hold it. */
+    public static final Scenario EXTRACT_FIELD_FROM_OUTSIDE_A_CLASS_BODY = new Scenario(
+            "extract-a-field-from-outside-a-class-body",
+            PROJECT,
+            new Request.ExtractField(TOTALS, new Range(new Position(0, 8), new Position(0, 12)), "label"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+
+    /** A name that begins with a digit is not an identifier: jdtls declines the rename that gives the name. */
+    public static final Scenario EXTRACT_FIELD_TO_AN_INVALID_NAME = new Scenario(
+            "extract-a-field-to-an-invalid-name",
+            PROJECT,
+            new Request.ExtractField(TOTALS, new Range(new Position(5, 27), new Position(5, 36)), "1st"),
+            new Answer.Refused(LanguageServerErrorKey.INVALID_NAME));
+
+    /** The project is still being imported: the server cannot say what an extraction changes. */
+    public static final Scenario EXTRACT_FIELD_WHILE_THE_SERVER_IMPORTS = new Scenario(
+            "extract-a-field-while-the-server-imports",
+            PROJECT,
+            new Request.ExtractField(TOTALS, new Range(new Position(5, 27), new Position(5, 36)), "label"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_READY));
+
+    /** A file that is not in the project the server was started on. */
+    public static final Scenario EXTRACT_FIELD_OUTSIDE_THE_PROJECT = new Scenario(
+            "extract-a-field-of-a-file-outside-the-project",
+            PROJECT,
+            new Request.ExtractField(ELSEWHERE, new Range(new Position(0, 0), new Position(0, 1)), "anything"),
+            new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+
+    /**
      * {@code Shapes.Circle}, a static nested class, from its name. jdtls creates {@code Circle.java} in the package, takes
      * the type out of {@code Shapes} (the edit reaches the next members, which it repeats) and updates {@code Drawing},
      * which imported {@code Shapes} and now imports {@code Circle} as well. The new file has no line break at its end.
@@ -1536,6 +1598,12 @@ public final class Scenarios {
                 EXTRACT_CONSTANT_TO_AN_INVALID_NAME,
                 EXTRACT_CONSTANT_WHILE_THE_SERVER_IMPORTS,
                 EXTRACT_CONSTANT_OUTSIDE_THE_PROJECT,
+                EXTRACT_FIELD,
+                EXTRACT_FIELD_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION,
+                EXTRACT_FIELD_FROM_OUTSIDE_A_CLASS_BODY,
+                EXTRACT_FIELD_TO_AN_INVALID_NAME,
+                EXTRACT_FIELD_WHILE_THE_SERVER_IMPORTS,
+                EXTRACT_FIELD_OUTSIDE_THE_PROJECT,
                 MOVE_A_STATIC_NESTED_TYPE,
                 MOVE_AN_INNER_TYPE_THAT_DOES_NOT_USE_THE_OUTER_INSTANCE,
                 MOVE_AN_INNER_TYPE_THAT_USES_THE_OUTER_INSTANCE,

@@ -300,6 +300,23 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     }
 
     /**
+     * Extracts the expression of the selection into a new field of the class named as asked, and replaces it by the
+     * field. As for the variable, jdtls proposes a name of its own ({@code java/getRefactorEdit}, command {@code
+     * extractField}, which needs no client capability and no setting) and says where it is for the client to rename: the
+     * field is renamed with {@code textDocument/rename} on the text the edit gives, and the two edits are folded into
+     * one. Where the field is initialised is left to jdtls: the command takes the place as an optional argument, which the
+     * adapter does not send, so jdtls takes its default, the current method.
+     *
+     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, the selection cannot be a
+     *     field or jdtls declines the name
+     * @throws JdtlsException if jdtls dies, does not answer in time or answers what the adapter cannot apply
+     */
+    @Override
+    public synchronized ChangeSet extractField(Path file, Range selection, String name) {
+        return extract(Extraction.FIELD, file, selection, name);
+    }
+
+    /**
      * Extracts the selection (statements, or an expression) into a new method named as asked, and replaces it by the
      * call. As for the variable, jdtls proposes a name of its own ({@code java/getRefactorEdit}, command {@code
      * extractMethod}) and says where it is for the client to rename: the method is renamed with {@code
@@ -332,6 +349,11 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                 "the extraction of the expression into a constant",
                 "the extracted constant",
                 LanguageServerException::notAConstant),
+        FIELD(
+                "extractField",
+                "the extraction of the expression into a field",
+                "the extracted field",
+                LanguageServerException::notAnExpression),
         METHOD(
                 "extractMethod",
                 "the extraction of the selection into a method",
@@ -519,18 +541,20 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     }
 
     /**
-     * Whether the rename only changed the name of the declaration. jdtls does not decline every name it should: for
-     * the name of a local variable or parameter in scope it answers an edit all the same, and that edit does not leave
-     * the declaration as it was (the space before {@code =} is lost, the end of the next line is cut). A name that
-     * jdtls renames into such an edit is not valid for the variable.
+     * Whether the rename only changed the name where jdtls introduced it. jdtls does not decline every name it should:
+     * for the name of a local variable or parameter in scope it answers an edit all the same, and that edit does not
+     * leave the line as it was (the space before {@code =} is lost, the end of the next line is cut). A name that jdtls
+     * renames into such an edit is not valid for what was extracted. A rename never adds or removes a line, so the line
+     * is looked for by its number, not at the offset: the first place that jdtls introduced the name at is not always
+     * the first one the rename changes (a field is declared above the statement that assigns it), which moves the offset.
      */
     private static boolean leavesTheDeclarationAsItWas(
             String before, String after, Introduced introduced, String name) {
-        int start = introduced.offset();
-        String restBefore = restOfTheLine(before, start + introduced.text().length());
+        int line = SourceText.positionAt(before, introduced.offset()).line();
+        String restBefore =
+                restOfTheLine(before, introduced.offset() + introduced.text().length());
 
-        return after.startsWith(name, start)
-                && restOfTheLine(after, start + name.length()).equals(restBefore);
+        return after.lines().skip(line).findFirst().orElse("").endsWith(name + restBefore);
     }
 
     private static String restOfTheLine(String text, int from) {

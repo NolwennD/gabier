@@ -58,6 +58,20 @@ public interface JavaLanguageServer {
     ChangeSet extractConstant(Path file, Range selection, String name);
 
     /**
+     * What extracting the expression of a selection into a new field of the class changes: the selection is replaced by
+     * the field, which carries the given name and not one the server would propose, and the server declares it and
+     * initialises it where it proposes (by default in the current method, before the statement that holds the
+     * expression). Only the file itself is edited.
+     *
+     * @param selection the expression, from its first character to the end of its last
+     * @return the change set to apply
+     * @throws LanguageServerException if the server is not ready, the file is not a file of its project (outside it,
+     *     missing or a folder), the selection cannot be a field (it is not an expression, or it is outside a class body)
+     *     or the name is not valid for the field
+     */
+    ChangeSet extractField(Path file, Range selection, String name);
+
+    /**
      * What extracting the statements, or the expression, of a selection into a new method changes: the selection is
      * replaced by a call, and the method, which carries the given name and not one the server would propose, is
      * declared in the class; the server works out its parameters and its return value. Only the file itself is edited.

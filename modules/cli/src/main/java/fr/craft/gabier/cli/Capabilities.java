@@ -15,6 +15,7 @@ final class Capabilities {
             new ExtractVariable(),
             new ExtractMethod(),
             new ExtractConstant(),
+            new ExtractField(),
             new MoveTypeToFile(),
             new Move(),
             new Inline(),

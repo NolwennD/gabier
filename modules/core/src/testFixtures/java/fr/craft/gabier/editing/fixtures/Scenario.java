@@ -78,7 +78,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                 require(
                         request instanceof Request.ExtractVariable
                                 || request instanceof Request.ExtractMethod
-                                || request instanceof Request.ExtractConstant,
+                                || request instanceof Request.ExtractConstant
+                                || request instanceof Request.ExtractField,
                         "extracted",
                         request);
             case Answer.Moved _ -> require(request instanceof Request.MoveTypeToFile, "moved", request);
@@ -337,6 +338,42 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             UNRESOLVED_IMPORTS,
                             NOT_CREATABLE ->
                         throw new IllegalArgumentException("An extraction of a constant cannot get " + key);
+                };
+            }
+        }
+
+        /** The extraction of the expression of a selection into a field of a given name. */
+        record ExtractField(Path file, Range selection, String name) implements Request {
+
+            public ExtractField {
+                Assert.notNull("file", file);
+                Assert.notNull("selection", selection);
+                Assert.notNull("name", name);
+            }
+
+            @Override
+            public ExtractField resolvedIn(Path root) {
+                return new ExtractField(resolve(root, file), selection, name);
+            }
+
+            @Override
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
+                return switch (key) {
+                    case NOT_READY -> LanguageServerException.notReady();
+                    case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
+                    case FILE_MISSING -> LanguageServerException.fileMissing(file);
+                    case NOT_A_FILE -> LanguageServerException.notAFile(file);
+                    case NOT_AN_EXPRESSION -> LanguageServerException.notAnExpression(file, selection);
+                    case INVALID_NAME -> LanguageServerException.invalidName(file, selection.start(), name);
+                    case NO_SUCH_SYMBOL,
+                            NOT_EXTRACTABLE,
+                            NOT_INLINABLE,
+                            NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
+                            AMBIGUOUS_IMPORTS,
+                            UNRESOLVED_IMPORTS,
+                            NOT_CREATABLE ->
+                        throw new IllegalArgumentException("An extraction of a field cannot get " + key);
                 };
             }
         }

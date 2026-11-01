@@ -94,6 +94,8 @@ class DaemonServerTest {
                         .scripted(Scenarios.EXTRACT_METHOD_FROM_HALF_A_STATEMENT)
                         .scripted(Scenarios.EXTRACT_CONSTANT)
                         .scripted(Scenarios.EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE)
+                        .scripted(Scenarios.EXTRACT_FIELD)
+                        .scripted(Scenarios.EXTRACT_FIELD_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION)
                         .scripted(Scenarios.MOVE_A_STATIC_NESTED_TYPE)
                         .scripted(Scenarios.MOVE_A_TOP_LEVEL_TYPE)
                         .scripted(PackageMoveScenarios.MOVE_A_CLASS_TO_A_NEW_PACKAGE)
@@ -593,6 +595,52 @@ class DaemonServerTest {
                 boolean dryRun) {
             return """
                 {"jsonrpc":"2.0","id":3,"method":"extract-constant","params":{"file":"%s","startLine":"%s",\
+                "startColumn":"%s","endLine":"%s","endColumn":"%s","name":"%s","dryRun":"%s"}}
+                """.formatted(file, startLine, startColumn, endLine, endColumn, name, dryRun);
+        }
+
+        @Test
+        void extractFieldAnswersWhatChangedAndWritesTheFileUnlessItIsADryRun() throws IOException {
+            serving();
+            Scenarios.EXTRACT_FIELD.writeProject(directory);
+            var totals = directory.resolve("src/main/java/demo/Totals.java");
+
+            try (var client = connect(socket())) {
+                var dryRun = client.ask(extractFieldRequest(totals, "5", "27", "5", "36", "label", true));
+
+                assertThat(dryRun).contains("\"modified\":[").contains("private String label;");
+                assertThat(Files.readString(totals)).doesNotContain("label");
+
+                var done = client.ask(extractFieldRequest(totals, "5", "27", "5", "36", "label", false));
+
+                assertThat(done).contains("\"modified\":[");
+                assertThat(Files.readString(totals)).contains("System.out.println(label + count);");
+            }
+        }
+
+        @Test
+        void aKeywordIsRefusedByExtractFieldWithItsProblemObject() throws IOException {
+            serving();
+            Scenarios.EXTRACT_FIELD_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION.writeProject(directory);
+            var greeter = directory.resolve("src/main/java/demo/Greeter.java");
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask(extractFieldRequest(greeter, "7", "8", "7", "14", "label", false)))
+                        .contains("\"key\":\"language-server-not-an-expression\"");
+                assertThat(Files.readString(greeter)).doesNotContain("label");
+            }
+        }
+
+        private static String extractFieldRequest(
+                Path file,
+                String startLine,
+                String startColumn,
+                String endLine,
+                String endColumn,
+                String name,
+                boolean dryRun) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"extract-field","params":{"file":"%s","startLine":"%s",\
                 "startColumn":"%s","endLine":"%s","endColumn":"%s","name":"%s","dryRun":"%s"}}
                 """.formatted(file, startLine, startColumn, endLine, endColumn, name, dryRun);
         }

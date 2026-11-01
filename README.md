@@ -20,6 +20,7 @@ in [The daemon](docs/daemon.md). The daemon starts by itself at the first comman
 - [`gabier extract-variable`](docs/commands/extract-variable.md): turn an expression into a local variable.
 - [`gabier extract-method`](docs/commands/extract-method.md): turn statements, or an expression, into a method.
 - [`gabier extract-constant`](docs/commands/extract-constant.md): turn an expression into a constant.
+- [`gabier extract-field`](docs/commands/extract-field.md): turn an expression into a field of the class.
 - [`gabier move-type-to-file`](docs/commands/move-type-to-file.md): make a nested type a top-level type in a file of its
   own.
 - [`gabier move`](docs/commands/move.md): move Java classes to a package, creating the package when it does not exist.

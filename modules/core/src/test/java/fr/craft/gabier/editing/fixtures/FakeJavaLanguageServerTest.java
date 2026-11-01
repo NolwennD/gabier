@@ -181,6 +181,33 @@ class FakeJavaLanguageServerTest {
     }
 
     @Test
+    void answersTheChangeSetOfAnExtractFieldScenarioWithPathsUnderItsRoot() {
+        server.scripted(Scenarios.EXTRACT_FIELD);
+
+        ChangeSet changes = server.extractField(TOTALS, new Range(new Position(5, 27), new Position(5, 36)), "label");
+
+        assertThat(changes)
+                .isEqualTo(
+                        ((Answer.Extracted) Scenarios.EXTRACT_FIELD.inside(ROOT).answer()).changes());
+        assertThat(changes.changes())
+                .singleElement()
+                .isInstanceOfSatisfying(
+                        FileChange.EditFile.class,
+                        edit -> assertThat(edit.file()).isEqualTo(TOTALS));
+    }
+
+    @Test
+    void throwsTheRefusalOfAnExtractFieldScenario() {
+        server.scripted(Scenarios.EXTRACT_FIELD_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(
+                        () -> server.extractField(GREETER, new Range(new Position(7, 8), new Position(7, 14)), "label"))
+                .satisfies(
+                        exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+    }
+
+    @Test
     void answersTheChangeSetOfAMoveScenarioWithPathsUnderItsRoot() {
         server.scripted(Scenarios.MOVE_AN_INNER_TYPE_THAT_USES_THE_OUTER_INSTANCE);
 
