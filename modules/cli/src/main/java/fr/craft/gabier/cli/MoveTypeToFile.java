@@ -34,7 +34,8 @@ final class MoveTypeToFile implements Capability {
                 An inner class that uses its outer instance gets a field and a constructor parameter of the outer type.
                 A JUnit @Nested test class can then no longer be instantiated by JUnit.
                 To avoid it, first make the class independent of the outer instance,
-                for example by having it extend the shared base class, then move it.\
+                for example by having it extend the shared base class, then move it.
+                Each annotation of the class, such as @Nested, stays on it after the move.\
                 """);
 
     @Override

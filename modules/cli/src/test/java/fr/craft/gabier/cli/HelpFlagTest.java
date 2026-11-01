@@ -59,6 +59,7 @@ class HelpFlagTest {
                     .contains("gets a field and a constructor parameter of the outer type")
                     .contains("@Nested test class can then no longer be instantiated by JUnit")
                     .contains("having it extend the shared base class")
+                    .contains("annotation of the class, such as @Nested, stays on it after the move")
                     .contains("Refusals");
         }
     }

@@ -52,6 +52,10 @@ moving such a class breaks the tests. To avoid it, first make the class independ
 having it extend the shared base class (the members it reads from the outer class move to that base class), then move it.
 The help of the command (`gabier help move-type-to-file`, `gabier move-type-to-file --help`) says the same.
 
+**The annotations of the class are kept.** jdtls moves the text of the class as it is: an annotation on it, such as
+`@Nested`, stays on the new top-level class (with its import). A top-level class still annotated `@Nested` is not run
+by JUnit, so remove the annotation if the moved class is a test class that must run on its own.
+
 What jdtls writes in the new file is jdtls's: the file has no line break at its end, which the diff says with
 `\ No newline at end of file` (the diff says it only for a file that really lacks the line break), and the field and the
 constructor come with an empty Javadoc (`/** * */`). Run the formatter of the project on the new file.
