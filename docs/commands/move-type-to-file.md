@@ -9,8 +9,8 @@ would change.
 jdtls creates `<Type>.java` in the package of the outer class, takes the type out of the outer class, and updates the
 references and the imports of the project (a user of `Shapes.Circle` in another package now imports `demo.Circle`). A
 static nested class and an inner class that does not use the outer instance are moved as they are. The answer lists the
-files that changed (`modified <file>`, the new file included) and the one that was created (`created <file>`), then the
-unified diff, preceded by `dry run, nothing written` for a dry run; with `--json`, the `ChangedFiles` object of the other
+files that changed (`modified <file>`) and the one that was created (`created <file>`, listed once, not as modified),
+then the unified diff, where the new file is one block (`--- /dev/null`, `+++ <file>`, its text as one hunk), preceded by `dry run, nothing written` for a dry run; with `--json`, the `ChangedFiles` object of the other
 commands that change files.
 
 ```text
@@ -18,7 +18,6 @@ $ gabier move-type-to-file --dry-run src/main/java/demo/Shapes.java 6:25
 dry run, nothing written
 modified /work/demo/src/main/java/demo/app/Drawing.java
 modified /work/demo/src/main/java/demo/Shapes.java
-modified /work/demo/src/main/java/demo/Circle.java
 created /work/demo/src/main/java/demo/Circle.java
 
 --- /work/demo/src/main/java/demo/app/Drawing.java
@@ -27,7 +26,7 @@ created /work/demo/src/main/java/demo/Circle.java
 +import demo.Circle;
  import demo.Shapes;
 ...
---- /work/demo/src/main/java/demo/Circle.java
+--- /dev/null
 +++ /work/demo/src/main/java/demo/Circle.java
 @@ -0,0 +1,7 @@
 +package demo;
@@ -37,6 +36,7 @@ created /work/demo/src/main/java/demo/Circle.java
 +        return radius * radius * 3;
 +    }
 +}
+\ No newline at end of file
 ```
 
 ## An inner class that uses the outer instance
@@ -51,8 +51,9 @@ moving such a class breaks the tests. To avoid it, first make the class independ
 having it extend the shared base class (the members it reads from the outer class move to that base class), then move it.
 The help of the command (`gabier help move-type-to-file`, `gabier move-type-to-file --help`) says the same.
 
-What jdtls writes in the new file is jdtls's: the file has no line break at its end, and the field and the constructor
-come with an empty Javadoc (`/** * */`). Run the formatter of the project on the new file.
+What jdtls writes in the new file is jdtls's: the file has no line break at its end, which the diff says with
+`\ No newline at end of file` (the diff says it only for a file that really lacks the line break), and the field and the
+constructor come with an empty Javadoc (`/** * */`). Run the formatter of the project on the new file.
 
 ## How it is done
 

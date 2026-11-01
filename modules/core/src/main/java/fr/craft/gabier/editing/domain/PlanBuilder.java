@@ -34,7 +34,9 @@ final class PlanBuilder {
     private final List<Renamed> renamed = new ArrayList<>();
     private final List<Path> deleted = new ArrayList<>();
     private final Set<Path> modified = new LinkedHashSet<>();
-    private final StringBuilder diff = new StringBuilder();
+    private final List<DiffBlock> diff = new ArrayList<>();
+    /** Where the diff block of each file created by the changes is, so that a later edit completes it. */
+    private final Map<Path, Integer> createdBlocks = new HashMap<>();
 
     PlanBuilder(FileStore store) {
         this.store = store;
@@ -44,7 +46,7 @@ final class PlanBuilder {
         changes.changes().forEach(this::plan);
 
         return new ChangePlan(
-                steps, new ChangeReport(created, renamed, deleted, List.copyOf(modified), diff.toString()));
+                steps, new ChangeReport(created, renamed, deleted, List.copyOf(modified), renderedDiff()));
     }
 
     private void plan(FileChange change) {
@@ -54,6 +56,14 @@ final class PlanBuilder {
             case RenameFile rename -> rename(normalized(rename.from()), normalized(rename.to()));
             case DeleteFile delete -> delete(normalized(delete.file()));
         }
+    }
+
+    private String renderedDiff() {
+        StringBuilder rendered = new StringBuilder();
+        diff.forEach(block ->
+                rendered.append(UnifiedDiff.of(block.fromLabel(), block.fromText(), block.toLabel(), block.toText())));
+
+        return rendered.toString();
     }
 
     private void edit(EditFile change) {
@@ -67,8 +77,14 @@ final class PlanBuilder {
         byte[] edited = after.encode(file);
         steps.add(new Step.Write(file, edited, bytes));
         files.put(file, Optional.of(edited));
-        modified.add(file);
-        diff.append(UnifiedDiff.of(file.toString(), before.text(), file.toString(), after.text()));
+        Integer createdBlock = createdBlocks.get(file);
+        if (createdBlock == null) {
+            modified.add(file);
+            diff.add(new DiffBlock(file.toString(), before.text(), file.toString(), after.text()));
+        } else {
+            // The file is new: it is reported once, as created, and its diff shows its text as it ends up.
+            diff.set(createdBlock, new DiffBlock(NOTHING, "", file.toString(), after.text()));
+        }
     }
 
     private void create(Path file) {
@@ -80,7 +96,8 @@ final class PlanBuilder {
         steps.add(new Step.Create(file, empty));
         files.put(file, Optional.of(empty));
         created.add(file);
-        diff.append(UnifiedDiff.of(NOTHING, "", file.toString(), ""));
+        createdBlocks.put(file, diff.size());
+        diff.add(new DiffBlock(NOTHING, "", file.toString(), ""));
     }
 
     private void rename(Path from, Path to) {
@@ -93,7 +110,7 @@ final class PlanBuilder {
         files.put(from, Optional.empty());
         files.put(to, Optional.of(bytes));
         renamed.add(new Renamed(from, to));
-        diff.append(UnifiedDiff.of(from.toString(), "", to.toString(), ""));
+        diff.add(new DiffBlock(from.toString(), "", to.toString(), ""));
     }
 
     private void delete(Path file) {
@@ -103,7 +120,7 @@ final class PlanBuilder {
         deleted.add(file);
         // The lines of a file that is not text cannot be shown: its headers will do.
         String text = TextFile.tryDecode(bytes).map(TextFile::text).orElse("");
-        diff.append(UnifiedDiff.of(file.toString(), text, NOTHING, ""));
+        diff.add(new DiffBlock(file.toString(), text, NOTHING, ""));
     }
 
     /**
@@ -124,6 +141,9 @@ final class PlanBuilder {
             throw EditingException.folderMissing(file, folder);
         }
     }
+
+    /** One file header of the unified diff, with the two texts it compares. */
+    private record DiffBlock(String fromLabel, String fromText, String toLabel, String toText) {}
 
     private boolean exists(Path file) {
         Optional<byte[]> known = files.get(file);

@@ -245,7 +245,75 @@ class ChangeApplierTest {
 
             assertThat(file).hasContent("class New {}\n");
             assertThat(report.created()).containsExactly(file);
-            assertThat(report.modified()).containsExactly(file);
+            assertThat(report.modified()).isEmpty();
+        }
+
+        @Test
+        void showsAFileCreatedAndGivenItsTextAsOneDiffBlockWithTheTextOfTheLastEdit() {
+            Path file = path("New.java");
+
+            ChangeReport report = applier.dryRun(set(
+                    new CreateFile(file),
+                    new EditFile(file, List.of(edit(0, 0, 0, 0, "class New {\n"))),
+                    new EditFile(file, List.of(edit(1, 0, 1, 0, "}\n")))));
+
+            assertThat(report.created()).containsExactly(file);
+            assertThat(report.modified()).isEmpty();
+            assertThat(report.diff()).isEqualTo("""
+                --- /dev/null
+                +++ %s/New.java
+                @@ -0,0 +1,2 @@
+                +class New {
+                +}
+                """.formatted(directory));
+        }
+
+        @Test
+        void keepsTheOrderOfTheDiffBlocksWhenAFileIsCreatedAfterAnEdit() throws IOException {
+            Path edited = file("Edited.java", "class A {}\n");
+            Path file = path("New.java");
+
+            ChangeReport report = applier.dryRun(set(
+                    new EditFile(edited, List.of(edit(0, 6, 0, 7, "B"))),
+                    new CreateFile(file),
+                    new EditFile(file, List.of(edit(0, 0, 0, 0, "x\n")))));
+
+            assertThat(report.modified()).containsExactly(edited);
+            assertThat(report.diff()).isEqualTo("""
+                --- %1$s/Edited.java
+                +++ %1$s/Edited.java
+                @@ -1 +1 @@
+                -class A {}
+                +class B {}
+                --- /dev/null
+                +++ %1$s/New.java
+                @@ -0,0 +1 @@
+                +x
+                """.formatted(directory));
+        }
+
+        @Test
+        void saysThatTheTextOfACreatedFileHasNoNewlineAtTheEndOnlyWhenItHasNone() {
+            Path withNewline = path("With.java");
+            Path without = path("Without.java");
+
+            ChangeReport report = applier.dryRun(set(
+                    new CreateFile(withNewline),
+                    new EditFile(withNewline, List.of(edit(0, 0, 0, 0, "class With {}\n"))),
+                    new CreateFile(without),
+                    new EditFile(without, List.of(edit(0, 0, 0, 0, "class Without {}")))));
+
+            assertThat(report.diff()).isEqualTo("""
+                --- /dev/null
+                +++ %1$s/With.java
+                @@ -0,0 +1 @@
+                +class With {}
+                --- /dev/null
+                +++ %1$s/Without.java
+                @@ -0,0 +1 @@
+                +class Without {}
+                \\ No newline at end of file
+                """.formatted(directory));
         }
 
         @Test

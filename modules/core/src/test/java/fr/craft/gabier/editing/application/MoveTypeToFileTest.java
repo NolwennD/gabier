@@ -82,7 +82,7 @@ class MoveTypeToFileTest {
                 .endsWith("    }\n}");
         assertThat(text(SHAPES)).doesNotContain("class Circle").contains("public class Square {");
         assertThat(report.created()).containsExactly(path(CIRCLE));
-        assertThat(report.modified()).containsExactlyInAnyOrder(path(SHAPES), path(DRAWING), path(CIRCLE));
+        assertThat(report.modified()).containsExactlyInAnyOrder(path(SHAPES), path(DRAWING));
         assertThat(report.renamed()).isEmpty();
         assertThat(report.deleted()).isEmpty();
     }
@@ -116,7 +116,7 @@ class MoveTypeToFileTest {
             """);
         assertThat(text(SHAPES)).doesNotContain("class Square");
         assertThat(report.created()).containsExactly(path(SQUARE));
-        assertThat(report.modified()).containsExactlyInAnyOrder(path(SHAPES), path(SQUARE));
+        assertThat(report.modified()).containsExactly(path(SHAPES));
     }
 
     @Test
@@ -162,8 +162,10 @@ class MoveTypeToFileTest {
         assertThat(path(CIRCLE)).doesNotExist();
         assertThat(report.created()).containsExactly(path(CIRCLE));
         assertThat(report.diff())
-                .contains("+++ " + path(CIRCLE))
+                .containsOnlyOnce("+++ " + path(CIRCLE))
+                .containsOnlyOnce("--- /dev/null\n+++ " + path(CIRCLE) + "\n@@ -0,0 +1,")
                 .contains("+public class Circle {")
+                .doesNotContain("--- " + path(CIRCLE))
                 .contains("-    public static class Circle {")
                 .contains("+import demo.Circle;");
     }

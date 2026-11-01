@@ -74,10 +74,12 @@ class MoveTypeToFileMethodTest {
         assertThat(Files.readString(shapesSource)).doesNotContain("class Circle");
         assertThat(answer.created()).containsExactly(circle);
         assertThat(answer.modified()).contains(shapesSource, project.resolve("src/main/java/demo/app/Drawing.java"));
+        assertThat(answer.modified()).doesNotContain(circle);
         assertThat(answer.renamed()).isEmpty();
         assertThat(answer.deleted()).isEmpty();
         assertThat(answer.diff())
-                .contains("--- " + shapesSource, "+++ " + circle)
+                .contains("--- " + shapesSource, "--- /dev/null\n+++ " + circle)
+                .doesNotContain("--- " + circle)
                 .contains("+public class Circle {");
     }
 

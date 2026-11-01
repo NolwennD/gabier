@@ -114,7 +114,6 @@ enum Command {
             dry run, nothing written
             modified /work/demo/src/main/java/demo/app/Drawing.java
             modified /work/demo/src/main/java/demo/Shapes.java
-            modified /work/demo/src/main/java/demo/Circle.java
             created /work/demo/src/main/java/demo/Circle.java
             ...\
             """,

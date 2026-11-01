@@ -1793,9 +1793,9 @@ class GabierTest {
                 List.of(Path.of("/project/Circle.java")),
                 List.of(),
                 List.of(),
-                List.of(Path.of("/project/Shapes.java"), Path.of("/project/Circle.java")),
+                List.of(Path.of("/project/Shapes.java")),
                 """
-                --- /project/Circle.java
+                --- /dev/null
                 +++ /project/Circle.java
                 @@ -0,0 +1,3 @@
                 +public class Circle {
@@ -1854,10 +1854,10 @@ class GabierTest {
                 assertThat(out().lines())
                         .startsWith(
                                 "modified /project/Shapes.java",
-                                "modified /project/Circle.java",
                                 "created /project/Circle.java",
                                 "",
-                                "--- /project/Circle.java")
+                                "--- /dev/null",
+                                "+++ /project/Circle.java")
                         .contains("+public class Circle {");
                 assertThat(err()).isEmpty();
             }
