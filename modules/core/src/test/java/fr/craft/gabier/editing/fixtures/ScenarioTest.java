@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import fr.craft.gabier.editing.domain.ChangeSet;
+import fr.craft.gabier.editing.domain.CleanUp;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.FileChange.CreateFile;
@@ -98,6 +99,60 @@ class ScenarioTest {
                 .isThrownBy(() -> scenario(organize, new Answer.Renamed(changes)));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> scenario(organize, new Answer.Diagnosed(List.of())));
+    }
+
+    @Test
+    void rejectsACleanUpAnswerForAnotherRequestAndAnotherAnswerForACleanUp() {
+        Request.Rename rename = new Request.Rename(FILE, POSITION, "B");
+        Request.CleanUpFile cleanUp = new Request.CleanUpFile(FILE, List.of(CleanUp.ADD_OVERRIDE));
+        ChangeSet changes = set(new CreateFile(FILE));
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(rename, new Answer.CleanedUp(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(rename, new Answer.AlreadyClean()));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(cleanUp, new Answer.Organized(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(cleanUp, new Answer.AlreadyOrganized()));
+        assertThat(scenario(cleanUp, new Answer.CleanedUp(changes)).answer()).isEqualTo(new Answer.CleanedUp(changes));
+        assertThat(scenario(cleanUp, new Answer.AlreadyClean()).answer()).isEqualTo(new Answer.AlreadyClean());
+    }
+
+    @Test
+    void rejectsACleanUpRequestWithoutCleanUps() {
+        assertThatExceptionOfType(MissingMandatoryValueException.class)
+                .isThrownBy(() -> new Request.CleanUpFile(FILE, List.of()))
+                .satisfies(exception -> assertThat(exception.field()).isEqualTo("cleanUps"));
+    }
+
+    @Test
+    void buildsTheRefusalOfACleanUpRequest() {
+        Request.CleanUpFile cleanUp = new Request.CleanUpFile(FILE, List.of(CleanUp.ADD_OVERRIDE));
+
+        assertThat(cleanUp.refusal(LanguageServerErrorKey.NOT_READY).key()).isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(cleanUp.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
+                .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(cleanUp.refusal(LanguageServerErrorKey.FILE_MISSING).key())
+                .isEqualTo(LanguageServerErrorKey.FILE_MISSING);
+        assertThat(cleanUp.refusal(LanguageServerErrorKey.NOT_A_FILE).key())
+                .isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> cleanUp.refusal(LanguageServerErrorKey.UNRESOLVED_IMPORTS));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> cleanUp.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+    }
+
+    @Test
+    void resolvesACleanUpRequestAndAnswerAgainstARoot() {
+        TextEdit edit = new TextEdit(new Range(POSITION, POSITION), "class A {}\n");
+        List<CleanUp> cleanUps = List.of(CleanUp.ADD_OVERRIDE);
+
+        assertThat(new Request.CleanUpFile(FILE, cleanUps).resolvedIn(ROOT))
+                .isEqualTo(new Request.CleanUpFile(Path.of("/project/src/A.java"), cleanUps));
+        assertThat(new Answer.CleanedUp(set(new EditFile(FILE, List.of(edit)))).resolvedIn(ROOT))
+                .isEqualTo(new Answer.CleanedUp(set(new EditFile(Path.of("/project/src/A.java"), List.of(edit)))));
+        assertThat(new Answer.AlreadyClean().resolvedIn(ROOT)).isEqualTo(new Answer.AlreadyClean());
     }
 
     @Test

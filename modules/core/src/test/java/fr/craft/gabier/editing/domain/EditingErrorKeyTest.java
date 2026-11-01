@@ -22,6 +22,7 @@ class EditingErrorKeyTest {
                         "editing-rollback-incomplete",
                         "editing-stale-edit",
                         "editing-token-not-found",
+                        "editing-unknown-clean-up",
                         "editing-unsupported-encoding",
                         "editing-write-failed");
     }

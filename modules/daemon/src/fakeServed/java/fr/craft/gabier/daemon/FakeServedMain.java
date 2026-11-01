@@ -1,12 +1,14 @@
 package fr.craft.gabier.daemon;
 
 import fr.craft.gabier.editing.domain.ChangeSet;
+import fr.craft.gabier.editing.domain.CleanUp;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.domain.TypeKind;
+import fr.craft.gabier.editing.fixtures.CleanUpScenarios;
 import fr.craft.gabier.editing.fixtures.FakeJavaLanguageServer;
 import fr.craft.gabier.editing.fixtures.PackageMoveScenarios;
 import fr.craft.gabier.editing.fixtures.Scenario;
@@ -69,6 +71,10 @@ public final class FakeServedMain {
                 Scenarios.ORGANIZE_IMPORTS,
                 Scenarios.ORGANIZE_IMPORTS_IN_ORDER,
                 Scenarios.ORGANIZE_IMPORTS_OUTSIDE_THE_PROJECT,
+                CleanUpScenarios.CLEAN_UP_A_CONCATENATION_INTO_A_TEXT_BLOCK,
+                CleanUpScenarios.CLEAN_UP_WITH_TWO_CLEAN_UPS,
+                CleanUpScenarios.CLEAN_UP_A_FILE_THAT_IS_CLEAN,
+                CleanUpScenarios.CLEAN_UP_OUTSIDE_THE_PROJECT,
                 Scenarios.EXTRACT_VARIABLE,
                 Scenarios.EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION,
                 Scenarios.EXTRACT_VARIABLE_TO_AN_INVALID_NAME,
@@ -194,6 +200,11 @@ public final class FakeServedMain {
         @Override
         public Optional<ChangeSet> organizeImports(Path file) {
             return server.organizeImports(file);
+        }
+
+        @Override
+        public Optional<ChangeSet> cleanUp(Path file, List<CleanUp> cleanUps) {
+            return server.cleanUp(file, cleanUps);
         }
 
         @Override

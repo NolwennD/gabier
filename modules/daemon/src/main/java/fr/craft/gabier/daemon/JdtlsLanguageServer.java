@@ -1,6 +1,7 @@
 package fr.craft.gabier.daemon;
 
 import fr.craft.gabier.editing.domain.ChangeSet;
+import fr.craft.gabier.editing.domain.CleanUp;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.Diagnostic.Severity;
 import fr.craft.gabier.editing.domain.FileChange;
@@ -1050,6 +1051,48 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             Thread.currentThread().interrupt();
             throw new JdtlsException(
                     "Interrupted while waiting for the organization of the imports of " + path, interrupted);
+        }
+    }
+
+    /**
+     * Applies the clean-ups to the file with {@code java/cleanup}, which runs the identifiers of the setting {@code
+     * java.cleanup.actions} in the order of the list: the adapter sets it to the identifiers asked for ({@link
+     * JdtlsSettings#withCleanUps}), and back to none once jdtls has answered, whatever the answer. jdtls reads the file
+     * as it knows it (nothing is opened), after it has been told of the changes on disk, and answers one edit that
+     * covers the whole text, or none when no clean-up changes it: that is not a refusal, the answer is none. It does not
+     * refuse an identifier it does not know (it logs it), which is why {@link CleanUp} decides before the adapter is
+     * asked.
+     *
+     * @throws LanguageServerException if jdtls is not ready or the file is not in its project (outside it, missing or a
+     *     folder)
+     * @throws JdtlsException if jdtls dies or does not answer in time
+     */
+    @Override
+    public synchronized Optional<ChangeSet> cleanUp(Path file, List<CleanUp> cleanUps) {
+        JdtlsSession session = ready();
+        Path path = normalized(file);
+        textInProject(session, path);
+        var identifier = new TextDocumentIdentifier(path.toUri().toString());
+        JdtlsWatch watch = session.newWatch();
+        try {
+            takeInChangesOnDisk(session, watch);
+            session.configure(JdtlsSettings.withCleanUps(
+                    cleanUps.stream().map(CleanUp::id).toList()));
+            Optional<WorkspaceEdit> answer;
+            try {
+                answer = watch.await(
+                        "the clean-ups of " + path,
+                        () -> JdtlsRequests.unlessDeclined(session.server().cleanup(identifier)));
+            } finally {
+                session.configure(JdtlsSettings.withCleanUps(List.of()));
+            }
+            List<FileChange> changes = answer.map(edit -> WorkspaceEdits.of(edit, JdtlsLanguageServer::textOnDisk))
+                    .orElse(List.of());
+
+            return changes.isEmpty() ? Optional.empty() : Optional.of(new ChangeSet(changes));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException("Interrupted while waiting for the clean-ups of " + path, interrupted);
         }
     }
 

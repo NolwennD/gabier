@@ -1,5 +1,6 @@
 package fr.craft.gabier.daemon;
 
+import fr.craft.gabier.editing.application.CleanUpFile;
 import fr.craft.gabier.editing.application.CreateType;
 import fr.craft.gabier.editing.application.Diagnose;
 import fr.craft.gabier.editing.application.ExtractConstant;
@@ -70,6 +71,7 @@ final class DaemonServer implements AutoCloseable {
                 new RenameMethod(rename),
                 new RenameTokenMethod(rename),
                 new OrganizeImportsMethod(new OrganizeImports(project, new NioFileStore())),
+                new CleanUpMethod(new CleanUpFile(project, new NioFileStore())),
                 new ExtractVariableMethod(new ExtractVariable(project, new NioFileStore())),
                 new ExtractMethodMethod(new ExtractMethod(project, new NioFileStore())),
                 new ExtractConstantMethod(new ExtractConstant(project, new NioFileStore())),

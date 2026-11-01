@@ -90,6 +90,7 @@ class ScenarioReplayTest {
         return scenario.request() instanceof Request.Diagnostics
                 || scenario.request() instanceof Request.Rename
                 || scenario.request() instanceof Request.OrganizeImports
+                || scenario.request() instanceof Request.CleanUpFile
                 || scenario.request() instanceof Request.ExtractVariable
                 || scenario.request() instanceof Request.ExtractMethod
                 || scenario.request() instanceof Request.ExtractConstant
@@ -288,6 +289,25 @@ class ScenarioReplayTest {
                         .as("%s: jdtls has no edit to give", scenario.name())
                         .isEmpty();
             }
+            case Answer.CleanedUp cleaned -> {
+                var answer = (Optional<?>) ask(server, request);
+                System.out.println(scenario.name() + ": jdtls answered " + answer);
+                differences
+                        .assertThat(answer)
+                        .as("%s: the change set jdtls answers", scenario.name())
+                        .isEqualTo(Optional.of(cleaned.changes()));
+                if (answer.isPresent()) {
+                    compile(scenario, root, (ChangeSet) answer.get(), differences);
+                }
+            }
+            case Answer.AlreadyClean _ -> {
+                var answer = (Optional<?>) ask(server, request);
+                System.out.println(scenario.name() + ": jdtls answered " + answer);
+                differences
+                        .assertThat(answer)
+                        .as("%s: jdtls has no edit to give", scenario.name())
+                        .isEmpty();
+            }
             case Answer.Refused refused -> {
                 LanguageServerException expected = request.refusal(refused.key(), refused.details());
                 try {
@@ -319,6 +339,7 @@ class ScenarioReplayTest {
             case Request.Diagnostics diagnostics -> server.diagnostics(diagnostics.file());
             case Request.Rename rename -> server.rename(rename.file(), rename.position(), rename.newName());
             case Request.OrganizeImports organize -> server.organizeImports(organize.file());
+            case Request.CleanUpFile cleanUp -> server.cleanUp(cleanUp.file(), cleanUp.cleanUps());
             case Request.ExtractVariable extract ->
                 server.extractVariable(extract.file(), extract.selection(), extract.name());
             case Request.ExtractMethod extract ->

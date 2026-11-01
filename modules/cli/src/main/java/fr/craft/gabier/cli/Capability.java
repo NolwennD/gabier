@@ -9,6 +9,7 @@ sealed interface Capability
         permits Diagnostics,
                 Rename,
                 OrganizeImports,
+                Cleanup,
                 ExtractVariable,
                 ExtractMethod,
                 ExtractConstant,

@@ -1,6 +1,7 @@
 package fr.craft.gabier.editing.fixtures;
 
 import fr.craft.gabier.editing.domain.ChangeSet;
+import fr.craft.gabier.editing.domain.CleanUp;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.editing.domain.PackageName;
@@ -154,6 +155,17 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
             case Answer.Organized organized -> Optional.of(organized.changes());
             case Answer.AlreadyOrganized _ -> Optional.empty();
             default -> throw new AssertionError("An organize imports request got a different kind of answer");
+        };
+    }
+
+    @Override
+    public Optional<ChangeSet> cleanUp(Path file, List<CleanUp> cleanUps) {
+        Request request = new Request.CleanUpFile(file, cleanUps).resolvedIn(root);
+
+        return switch (answerTo(request)) {
+            case Answer.CleanedUp cleaned -> Optional.of(cleaned.changes());
+            case Answer.AlreadyClean _ -> Optional.empty();
+            default -> throw new AssertionError("A clean-up request got a different kind of answer");
         };
     }
 

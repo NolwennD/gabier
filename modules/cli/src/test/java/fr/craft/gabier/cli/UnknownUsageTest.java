@@ -17,6 +17,7 @@ class UnknownUsageTest extends CliTest {
                         renamesThatNameNeitherAPositionNorAnIdentifierCompletely(),
                         renamesWithALineOrAColumnThatIsNotANumberFromOne(),
                         organizeImportsWithoutExactlyOneFile(),
+                        cleanupWithoutAFileAndACleanUp(),
                         extractVariableWithoutAFileTwoPositionsAndAName(),
                         extractVariableWithAPositionThatIsNotLineColonColumnFromOne(),
                         extractMethodWithoutAFileTwoPositionsAndAName(),
@@ -75,6 +76,14 @@ class UnknownUsageTest extends CliTest {
                 List.of("organize-imports", "A.java", "B.java"),
                 List.of("organize-imports", "--dry-run", "A.java", "B.java"),
                 List.of("organize-imports", "--token", "A.java"));
+    }
+
+    private static List<List<String>> cleanupWithoutAFileAndACleanUp() {
+        return List.of(
+                List.of("cleanup"),
+                List.of("cleanup", "--dry-run"),
+                List.of("cleanup", "A.java"),
+                List.of("cleanup", "--dry-run", "A.java"));
     }
 
     private static List<List<String>> extractVariableWithoutAFileTwoPositionsAndAName() {

@@ -15,6 +15,7 @@ public enum EditingErrorKey implements ErrorKey {
     ROLLBACK_INCOMPLETE("editing-rollback-incomplete"),
     STALE_EDIT("editing-stale-edit"),
     TOKEN_NOT_FOUND("editing-token-not-found"),
+    UNKNOWN_CLEAN_UP("editing-unknown-clean-up"),
     UNSUPPORTED_ENCODING("editing-unsupported-encoding"),
     WRITE_FAILED("editing-write-failed");
 

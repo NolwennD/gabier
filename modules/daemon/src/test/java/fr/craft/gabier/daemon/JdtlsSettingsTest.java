@@ -1,5 +1,6 @@
 package fr.craft.gabier.daemon;
 
+import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
@@ -7,6 +8,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 
 class JdtlsSettingsTest {
@@ -71,5 +73,27 @@ class JdtlsSettingsTest {
                                 Map.of("typeComment", List.of(" ")),
                                 "references",
                                 Map.of("includeAccessors", false, "includeDecompiledSources", false))));
+    }
+
+    @Test
+    void thePreferencesWithCleanUpsAreTheOnesJdtlsIsStartedWithPlusTheIdentifiersOfTheSettingJavaCleanupActions() {
+        // java.cleanup.actions is what java/cleanup runs, in the order of the list (Eclipse JDT LS, SaveActionHandler).
+        // The others are sent again: none must fall back to its default.
+        var started =
+                assertThat(JdtlsSettings.javaPreferences()).extractingByKey("java", as(InstanceOfAssertFactories.MAP));
+
+        assertThat(JdtlsSettings.withCleanUps(List.of("stringConcatToTextBlock", "addOverride")))
+                .extractingByKey("java", as(InstanceOfAssertFactories.MAP))
+                .containsEntry("cleanup", Map.of("actions", List.of("stringConcatToTextBlock", "addOverride")))
+                .containsKeys("sources", "completion", "templates", "references")
+                .hasSize(5);
+        started.hasSize(4).doesNotContainKey("cleanup");
+    }
+
+    @Test
+    void thePreferencesWithoutCleanUpsSetTheSettingToAnEmptyList() {
+        assertThat(JdtlsSettings.withCleanUps(List.of()))
+                .extractingByKey("java", as(InstanceOfAssertFactories.MAP))
+                .containsEntry("cleanup", Map.of("actions", List.of()));
     }
 }

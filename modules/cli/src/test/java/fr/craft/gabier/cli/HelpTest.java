@@ -19,6 +19,7 @@ class HelpTest extends CliTest {
             "diagnostics",
             "rename",
             "organize-imports",
+            "cleanup",
             "extract-variable",
             "extract-method",
             "extract-constant",
@@ -159,8 +160,9 @@ class HelpTest extends CliTest {
         assertThat(out()).isEmpty();
         assertThat(err())
                 .startsWith("Usage error: Unknown command; the commands are diagnostics, rename, organize-imports,"
-                        + " extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move,"
-                        + " inline, create, references, status, stop, help (usage-error; command=frobnicate)");
+                        + " cleanup, extract-variable, extract-method, extract-constant, extract-field,"
+                        + " move-type-to-file, move, inline, create, references, status, stop, help"
+                        + " (usage-error; command=frobnicate)");
     }
 
     @Test

@@ -153,4 +153,16 @@ public interface JavaLanguageServer {
      * @throws LanguageServerException if the server is not ready or the file is not a file of its project (outside it, missing or a folder)
      */
     Optional<ChangeSet> organizeImports(Path file);
+
+    /**
+     * What applying clean-ups to a file changes: each clean-up rewrites the text as the one before left it, in the order
+     * given (a clean-up is a rewrite of the whole file, for instance of string concatenations into text blocks). Only
+     * the file itself is edited.
+     *
+     * @param cleanUps the clean-ups to apply, at least one
+     * @return the change set to apply, none when the file has nothing to clean up for them
+     * @throws LanguageServerException if the server is not ready or the file is not a file of its project (outside it,
+     *     missing or a folder)
+     */
+    Optional<ChangeSet> cleanUp(Path file, List<CleanUp> cleanUps);
 }

@@ -133,6 +133,9 @@ import java.util.stream.Stream;
  *       ("The package p is not accessible") are deleted by its edit; the adapter refuses them, which the catalogue
  *       cannot show (a package that is not accessible needs a class path that a scenario project does not have) and
  *       {@code JdtlsProbeTest} replays on the source set {@code fakeServed} of the checkout.
+ *   <li>the clean-ups of a file ({@link CleanUpScenarios}, {@code gabier cleanup}): {@code java/cleanup} runs the
+ *       identifiers of the setting {@code java.cleanup.actions}, which the adapter sets before the request; jdtls
+ *       answers one edit of the whole text, or none.
  *   <li>the creation of a type ({@link #CREATE_A_CLASS}, {@link #CREATE_AN_INTERFACE}, {@link #CREATE_A_RECORD}, {@link
  *       #CREATE_AN_ENUM}): the file need not exist. The adapter opens it in jdtls with no text and asks for the
  *       completion at its start: the snippet of the kind is the text of the file, with the {@code package} line that
@@ -1562,9 +1565,10 @@ public final class Scenarios {
 
     private Scenarios() {}
 
-    /** Every scenario of the catalogue, those of {@link PackageMoveScenarios} included. */
+    /** Every scenario of the catalogue, those of {@link PackageMoveScenarios} and {@link CleanUpScenarios} included. */
     public static List<Scenario> all() {
-        return Stream.concat(own().stream(), PackageMoveScenarios.all().stream())
+        return Stream.of(own(), PackageMoveScenarios.all(), CleanUpScenarios.all())
+                .flatMap(List::stream)
                 .toList();
     }
 

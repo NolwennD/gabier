@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import fr.craft.gabier.editing.fixtures.CleanUpScenarios;
 import fr.craft.gabier.editing.fixtures.FakeJavaLanguageServer;
 import fr.craft.gabier.editing.fixtures.PackageMoveScenarios;
 import fr.craft.gabier.editing.fixtures.Scenarios;
@@ -88,6 +89,8 @@ class DaemonServerTest {
                         .scripted(Scenarios.RENAME_WHERE_THERE_IS_NO_SYMBOL)
                         .scripted(Scenarios.ORGANIZE_IMPORTS)
                         .scripted(Scenarios.ORGANIZE_IMPORTS_IN_ORDER)
+                        .scripted(CleanUpScenarios.CLEAN_UP_A_CONCATENATION_INTO_A_TEXT_BLOCK)
+                        .scripted(CleanUpScenarios.CLEAN_UP_A_FILE_THAT_IS_CLEAN)
                         .scripted(Scenarios.EXTRACT_VARIABLE)
                         .scripted(Scenarios.EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION)
                         .scripted(Scenarios.EXTRACT_METHOD_THAT_USES_A_LOCAL_VARIABLE)
@@ -464,6 +467,34 @@ class DaemonServerTest {
         private static String organizeImportsRequest(Path file, boolean dryRun) {
             return """
                 {"jsonrpc":"2.0","id":3,"method":"organize-imports","params":{"file":"%s","dryRun":"%s"}}
+                """.formatted(file, dryRun);
+        }
+
+        @Test
+        void cleanupAnswersWhatChangedAndWritesTheFileUnlessItIsADryRun() throws IOException {
+            serving();
+            CleanUpScenarios.CLEAN_UP_A_CONCATENATION_INTO_A_TEXT_BLOCK.writeProject(directory);
+            var banner = directory.resolve("src/main/java/demo/Banner.java");
+            var plain = directory.resolve("src/main/java/demo/Plain.java");
+
+            try (var client = connect(socket())) {
+                var dryRun = client.ask(cleanupRequest(banner, true));
+
+                assertThat(dryRun).contains("\"modified\":[").contains("Hello");
+                assertThat(Files.readString(banner)).contains("+ \"Welcome");
+
+                var done = client.ask(cleanupRequest(banner, false));
+
+                assertThat(done).contains("\"modified\":[");
+                assertThat(Files.readString(banner)).doesNotContain("+ \"Welcome");
+                assertThat(client.ask(cleanupRequest(plain, false))).contains("\"modified\":[]");
+                assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
+            }
+        }
+
+        private static String cleanupRequest(Path file, boolean dryRun) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"cleanup","params":{"file":"%s","cleanUps":"stringConcatToTextBlock","dryRun":"%s"}}
                 """.formatted(file, dryRun);
         }
 

@@ -12,6 +12,7 @@ final class Capabilities {
             new Diagnostics(),
             new Rename(),
             new OrganizeImports(),
+            new Cleanup(),
             new ExtractVariable(),
             new ExtractMethod(),
             new ExtractConstant(),

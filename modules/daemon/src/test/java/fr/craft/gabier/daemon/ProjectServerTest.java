@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import fr.craft.gabier.editing.domain.ChangeSet;
+import fr.craft.gabier.editing.domain.CleanUp;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
@@ -201,6 +202,11 @@ class ProjectServerTest {
             return Optional.of(RENAMED);
         }
 
+        @Override
+        public Optional<ChangeSet> cleanUp(Path file, List<CleanUp> cleanUps) {
+            return Optional.of(RENAMED);
+        }
+
         /** jdtls was ready and is dead now: nobody asked it to end. */
         void dies() {
             failure = "it was killed";
@@ -279,6 +285,13 @@ class ProjectServerTest {
         }
 
         @Test
+        void aCleanUpStartsItToo() {
+            assertThat(project.cleanUp(FILE, List.of(CleanUp.ADD_OVERRIDE))).contains(ScriptedServer.RENAMED);
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
         void anExtractionOfAVariableStartsItToo() {
             assertThat(project.extractVariable(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x"))
                     .isEqualTo(ScriptedServer.RENAMED);
@@ -352,6 +365,7 @@ class ProjectServerTest {
             project.diagnostics(FILE);
             project.rename(FILE, new Position(0, 0), "Other");
             project.organizeImports(FILE);
+            project.cleanUp(FILE, List.of(CleanUp.ADD_OVERRIDE));
             project.extractVariable(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x");
             project.extractConstant(FILE, new Range(new Position(0, 0), new Position(0, 1)), "X");
             project.extractField(FILE, new Range(new Position(0, 0), new Position(0, 1)), "x");

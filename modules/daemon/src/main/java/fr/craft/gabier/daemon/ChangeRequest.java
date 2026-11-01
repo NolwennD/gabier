@@ -1,5 +1,6 @@
 package fr.craft.gabier.daemon;
 
+import fr.craft.gabier.editing.application.CleanUpFile;
 import fr.craft.gabier.editing.application.CreateType;
 import fr.craft.gabier.editing.application.ExtractConstant;
 import fr.craft.gabier.editing.application.ExtractField;
@@ -32,6 +33,7 @@ final class ChangeRequest {
 
     static final String FILE = "file";
     static final String FILES = "files";
+    static final String CLEAN_UPS = "cleanUps";
     static final String NEW_NAME = "newName";
     static final String NAME = "name";
     static final String KIND = "kind";
@@ -65,6 +67,16 @@ final class ChangeRequest {
         } catch (InvalidPathException e) {
             throw ParameterException.invalid(method, FILES);
         }
+    }
+
+    /** The identifiers of the clean-ups of a request that takes some: one per line, none of them blank. */
+    List<String> cleanUps() {
+        List<String> ids = text(CLEAN_UPS).lines().toList();
+        if (ids.isEmpty() || ids.stream().anyMatch(String::isBlank)) {
+            throw ParameterException.invalid(method, CLEAN_UPS);
+        }
+
+        return ids;
     }
 
     /** A number from 0, as the protocol counts lines and columns. */
@@ -177,6 +189,15 @@ final class ChangeRequest {
     DaemonMethod.Outcome run(OrganizeImports organize) {
         Path file = file();
         ChangeReport report = dryRun() ? organize.dryRun(file) : organize.apply(file);
+
+        return DaemonMethod.Outcome.of(changed(report).toJson());
+    }
+
+    /** What applying the clean-ups to the file does, written unless the request is a dry run. */
+    DaemonMethod.Outcome run(CleanUpFile cleanUp) {
+        Path file = file();
+        List<String> ids = cleanUps();
+        ChangeReport report = dryRun() ? cleanUp.dryRun(file, ids) : cleanUp.apply(file, ids);
 
         return DaemonMethod.Outcome.of(changed(report).toJson());
     }

@@ -43,6 +43,7 @@ daemon ([help](commands/help.md)).
 | `rename`           | `file`, `line`, `column`, `newName`, `dryRun`                               | [rename](commands/rename.md)                               |
 | `rename-token`     | `file`, `token`, `newName`, `dryRun`                                        | [rename](commands/rename.md)                               |
 | `organize-imports` | `file`, `dryRun`                                                            | [organize-imports](commands/organize-imports.md)           |
+| `cleanup`          | `file`, `cleanUps`, `dryRun`                                                | [cleanup](commands/cleanup.md)                             |
 | `extract-variable` | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-variable](commands/extract-variable.md)           |
 | `extract-method`   | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-method](commands/extract-method.md)               |
 | `extract-constant` | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-constant](commands/extract-constant.md)           |

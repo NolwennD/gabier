@@ -52,6 +52,20 @@ public final class EditingException extends GeneratorException {
                 .addParameter("token", token));
     }
 
+    /**
+     * The language server has no clean-up of this identifier. The organization of the imports, which the server offers
+     * as a clean-up, is {@code organize-imports} for gabier, and the message says so.
+     */
+    static EditingException unknownCleanUp(String id, List<String> known) {
+        String names = String.join(", ", known);
+        String hint = "organizeImports".equals(id) ? " (to organize the imports, use organize-imports)" : "";
+
+        return new EditingException(GeneratorException.badRequest(EditingErrorKey.UNKNOWN_CLEAN_UP)
+                .message("\"" + id + "\" is not a clean-up of the language server: it knows " + names + hint)
+                .addParameter("cleanUp", id)
+                .addParameter("known", names));
+    }
+
     static EditingException fileMissing(Path file) {
         return new EditingException(GeneratorException.badRequest(EditingErrorKey.FILE_MISSING)
                 .message("The file " + file + " does not exist")

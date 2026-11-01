@@ -1,6 +1,7 @@
 package fr.craft.gabier.daemon;
 
 import fr.craft.gabier.editing.domain.ChangeSet;
+import fr.craft.gabier.editing.domain.CleanUp;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.PackageName;
@@ -153,6 +154,11 @@ final class ProjectServer implements ServedProject {
     @Override
     public Optional<ChangeSet> organizeImports(Path file) {
         return ready().organizeImports(file);
+    }
+
+    @Override
+    public Optional<ChangeSet> cleanUp(Path file, List<CleanUp> cleanUps) {
+        return ready().cleanUp(file, cleanUps);
     }
 
     @Override

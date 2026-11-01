@@ -54,6 +54,7 @@ import org.eclipse.lsp4j.RegistrationParams;
 import org.eclipse.lsp4j.RenameParams;
 import org.eclipse.lsp4j.ServerCapabilities;
 import org.eclipse.lsp4j.SymbolInformation;
+import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.eclipse.lsp4j.WorkspaceEdit;
 import org.eclipse.lsp4j.jsonrpc.Launcher;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
@@ -137,6 +138,9 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private final List<CodeAction> resolveRequests = new CopyOnWriteArrayList<>();
     private CompletableFuture<JdtlsServer.RefactorEdit> refactorEditAnswer = new CompletableFuture<>();
     private final List<JdtlsServer.RefactorEditParams> refactorEditRequests = new CopyOnWriteArrayList<>();
+    private CompletableFuture<WorkspaceEdit> cleanupAnswer = new CompletableFuture<>();
+    private final List<TextDocumentIdentifier> cleanupRequests = new CopyOnWriteArrayList<>();
+    private final List<Object> configurations = new CopyOnWriteArrayList<>();
     private CompletableFuture<JdtlsServer.RefactorEdit> moveAnswer = new CompletableFuture<>();
     private final List<JdtlsServer.MoveParams> moveRequests = new CopyOnWriteArrayList<>();
     private volatile Consumer<JdtlsServer.MoveParams> onMove = params -> {};
@@ -297,6 +301,25 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     FakeJdtls refactorEditAnswers(CompletableFuture<JdtlsServer.RefactorEdit> answer) {
         this.refactorEditAnswer = answer;
         return this;
+    }
+
+    /**
+     * The answer to {@code java/cleanup}, whatever the request: the edit, null or a failed future (a refusal). Unscripted,
+     * the request never gets an answer.
+     */
+    FakeJdtls cleanupAnswers(CompletableFuture<WorkspaceEdit> answer) {
+        this.cleanupAnswer = answer;
+        return this;
+    }
+
+    /** The {@code java/cleanup} requests received, in order. */
+    List<TextDocumentIdentifier> cleanupRequests() {
+        return cleanupRequests;
+    }
+
+    /** The settings of the {@code workspace/didChangeConfiguration} notifications received, in order. */
+    List<Object> configurations() {
+        return configurations;
     }
 
     /**
@@ -651,6 +674,13 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         }
 
         @Override
+        public CompletableFuture<WorkspaceEdit> cleanup(TextDocumentIdentifier params) {
+            received.add("cleanup " + named(params.getUri()));
+            cleanupRequests.add(params);
+            return cleanupAnswer;
+        }
+
+        @Override
         public CompletableFuture<RefactorEdit> move(MoveParams params) {
             CodeActionParams ofType = params.params();
             received.add("move "
@@ -797,7 +827,10 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                 }
 
                 @Override
-                public void didChangeConfiguration(DidChangeConfigurationParams params) {}
+                public void didChangeConfiguration(DidChangeConfigurationParams params) {
+                    received.add("didChangeConfiguration");
+                    configurations.add(params.getSettings());
+                }
 
                 @Override
                 public void didChangeWatchedFiles(DidChangeWatchedFilesParams params) {

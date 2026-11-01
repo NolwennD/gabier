@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
+import org.eclipse.lsp4j.DidChangeConfigurationParams;
 import org.eclipse.lsp4j.DidChangeWatchedFilesParams;
 import org.eclipse.lsp4j.ExecuteCommandParams;
 import org.eclipse.lsp4j.FileEvent;
@@ -207,6 +208,15 @@ final class JdtlsSession implements AutoCloseable {
     void tell(List<FileEvent> changes) {
         log.accept("jdtls told of the changes on disk: " + changes);
         server.getWorkspaceService().didChangeWatchedFiles(new DidChangeWatchedFilesParams(changes));
+    }
+
+    /**
+     * Gives jdtls a configuration, as {@code workspace/didChangeConfiguration}: a notification, which jdtls handles
+     * before it reads the next message, so a request sent after it is answered with the new settings.
+     */
+    void configure(Map<String, Object> settings) {
+        log.accept("jdtls configured: " + settings);
+        server.getWorkspaceService().didChangeConfiguration(new DidChangeConfigurationParams(settings));
     }
 
     private void awaitReady() throws InterruptedException {

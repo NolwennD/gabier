@@ -3,6 +3,7 @@ package fr.craft.gabier.editing.fixtures;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import fr.craft.gabier.editing.domain.ChangeApplier;
+import fr.craft.gabier.editing.domain.CleanUp;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.FileChange.EditFile;
@@ -218,7 +219,51 @@ class ScenariosTest {
                         "move-a-file-that-does-not-exist",
                         "move-a-folder",
                         "move-a-file-outside-the-project",
-                        "move-while-the-server-imports");
+                        "move-while-the-server-imports",
+                        "clean-up-a-concatenation-into-a-text-block",
+                        "clean-up-with-two-clean-ups",
+                        "clean-up-a-file-that-is-clean",
+                        "clean-up-while-the-server-imports",
+                        "clean-up-a-file-outside-the-project");
+    }
+
+    @Test
+    void refusesForEachReasonOfThePortOnACleanUp() {
+        assertThat(answeredWith(Answer.Refused.class).stream()
+                        .filter(scenario -> scenario.request() instanceof Request.CleanUpFile)
+                        .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.NOT_READY, LanguageServerErrorKey.FILE_OUTSIDE_PROJECT);
+    }
+
+    @Test
+    void replacesTheWholeTextOfTheFileByTheCleanedUpOneWithNoConcatenationLeft(@TempDir Path directory)
+            throws IOException {
+        for (Scenario scenario : answeredWith(Answer.CleanedUp.class)) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+            String before = Files.readString(inside.request().file());
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.CleanedUp) inside.answer()).changes());
+
+            String after = Files.readString(inside.request().file());
+            assertThat(after)
+                    .as(scenario.name())
+                    .isNotEqualTo(before)
+                    .contains("\"\"\"")
+                    .doesNotContain("+ \"");
+            assertThat(before).as(scenario.name()).contains("+ \"");
+        }
+    }
+
+    @Test
+    void asksTheCleanUpsInTheOrderTheyAreAppliedAndKeepsTheCleanFileFreeOfConcatenations() {
+        assertThat(((Request.CleanUpFile) CleanUpScenarios.CLEAN_UP_WITH_TWO_CLEAN_UPS.request()).cleanUps())
+                .containsExactly(CleanUp.ADD_FINAL_MODIFIER, CleanUp.STRING_CONCAT_TO_TEXT_BLOCK);
+        Scenario clean = CleanUpScenarios.CLEAN_UP_A_FILE_THAT_IS_CLEAN;
+
+        assertThat(clean.files().get(clean.request().file())).doesNotContain("+ \"");
     }
 
     @Test

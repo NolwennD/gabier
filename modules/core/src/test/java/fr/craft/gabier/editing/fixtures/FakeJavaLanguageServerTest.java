@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import fr.craft.gabier.editing.domain.ChangeSet;
+import fr.craft.gabier.editing.domain.CleanUp;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
@@ -317,6 +318,47 @@ class FakeJavaLanguageServerTest {
                 .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
         assertThatExceptionOfType(LanguageServerException.class)
                 .isThrownBy(() -> server.organizeImports(Path.of("/outside/Elsewhere.java")))
+                .satisfies(exception ->
+                        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+    }
+
+    @Test
+    void answersTheChangeSetOfACleanUpScenarioWithPathsUnderItsRoot() {
+        server.scripted(CleanUpScenarios.CLEAN_UP_A_CONCATENATION_INTO_A_TEXT_BLOCK);
+        Path banner = ROOT.resolve("src/main/java/demo/Banner.java");
+
+        Optional<ChangeSet> changes = server.cleanUp(banner, List.of(CleanUp.STRING_CONCAT_TO_TEXT_BLOCK));
+
+        assertThat(changes)
+                .contains(((Answer.CleanedUp) CleanUpScenarios.CLEAN_UP_A_CONCATENATION_INTO_A_TEXT_BLOCK
+                                .inside(ROOT)
+                                .answer())
+                        .changes());
+        assertThat(server.asked())
+                .containsExactly(new Request.CleanUpFile(banner, List.of(CleanUp.STRING_CONCAT_TO_TEXT_BLOCK)));
+    }
+
+    @Test
+    void answersNothingForAFileWithNothingToCleanUp() {
+        server.scripted(CleanUpScenarios.CLEAN_UP_A_FILE_THAT_IS_CLEAN);
+
+        assertThat(server.cleanUp(
+                        ROOT.resolve("src/main/java/demo/Plain.java"), List.of(CleanUp.STRING_CONCAT_TO_TEXT_BLOCK)))
+                .isEmpty();
+    }
+
+    @Test
+    void throwsTheRefusalOfACleanUpScenario() {
+        server.scripted(CleanUpScenarios.CLEAN_UP_WHILE_THE_SERVER_IMPORTS)
+                .scripted(CleanUpScenarios.CLEAN_UP_OUTSIDE_THE_PROJECT);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.cleanUp(
+                        ROOT.resolve("src/main/java/demo/Banner.java"), List.of(CleanUp.STRING_CONCAT_TO_TEXT_BLOCK)))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.cleanUp(
+                        Path.of("/outside/Elsewhere.java"), List.of(CleanUp.STRING_CONCAT_TO_TEXT_BLOCK)))
                 .satisfies(exception ->
                         assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
     }

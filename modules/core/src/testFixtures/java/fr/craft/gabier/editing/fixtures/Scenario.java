@@ -1,6 +1,7 @@
 package fr.craft.gabier.editing.fixtures;
 
 import fr.craft.gabier.editing.domain.ChangeSet;
+import fr.craft.gabier.editing.domain.CleanUp;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.FileChange.CreateFile;
@@ -91,6 +92,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             case Answer.Organized _ -> require(request instanceof Request.OrganizeImports, "organized", request);
             case Answer.AlreadyOrganized _ ->
                 require(request instanceof Request.OrganizeImports, "already organized", request);
+            case Answer.CleanedUp _ -> require(request instanceof Request.CleanUpFile, "cleaned up", request);
+            case Answer.AlreadyClean _ -> require(request instanceof Request.CleanUpFile, "already clean", request);
             case Answer.Refused refused -> request.refusal(refused.key(), refused.details());
         }
     }
@@ -193,6 +196,44 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_MOVABLE_TO_PACKAGE,
                             NOT_CREATABLE ->
                         throw new IllegalArgumentException("A request to organize imports cannot get " + key);
+                };
+            }
+        }
+
+        /**
+         * The clean-ups of a file, applied in the order given.
+         *
+         * @param cleanUps the clean-ups to apply, at least one
+         */
+        record CleanUpFile(Path file, List<CleanUp> cleanUps) implements Request {
+
+            public CleanUpFile {
+                Assert.notNull("file", file);
+                Assert.field("cleanUps", cleanUps).notNull().notEmpty().noNullElement();
+                cleanUps = List.copyOf(cleanUps);
+            }
+
+            @Override
+            public CleanUpFile resolvedIn(Path root) {
+                return new CleanUpFile(resolve(root, file), cleanUps);
+            }
+
+            @Override
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
+                return switch (key) {
+                    case NOT_READY -> LanguageServerException.notReady();
+                    case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
+                    case FILE_MISSING -> LanguageServerException.fileMissing(file);
+                    case NOT_A_FILE -> LanguageServerException.notAFile(file);
+                    case NO_SUCH_SYMBOL,
+                            INVALID_NAME,
+                            NOT_EXTRACTABLE,
+                            NOT_INLINABLE,
+                            NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
+                            AMBIGUOUS_IMPORTS,
+                            UNRESOLVED_IMPORTS,
+                            NOT_CREATABLE -> throw new IllegalArgumentException("A clean-up cannot get " + key);
                 };
             }
         }
@@ -726,6 +767,28 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
 
             @Override
             public AlreadyOrganized resolvedIn(Path root) {
+                return this;
+            }
+        }
+
+        /** The change set that cleans a file up: only edits of that file, one that covers the whole text. */
+        record CleanedUp(ChangeSet changes) implements Answer {
+
+            public CleanedUp {
+                Assert.notNull("changes", changes);
+            }
+
+            @Override
+            public CleanedUp resolvedIn(Path root) {
+                return new CleanedUp(Renamed.resolvedIn(root, changes));
+            }
+        }
+
+        /** The file has nothing to clean up for the clean-ups asked: the server has no edit to give. */
+        record AlreadyClean() implements Answer {
+
+            @Override
+            public AlreadyClean resolvedIn(Path root) {
                 return this;
             }
         }

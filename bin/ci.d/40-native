@@ -21,7 +21,8 @@ import java.util.stream.Stream;
  * against it (with no jdtls to start, so refused as a failed start, which {@code status} then shows) and against the
  * daemon served by the fake language server, {@code :daemon:installFakeServed}, so that no jdtls runs in this stage;
  * {@code rename} is run against the latter too (a dry run, a rename by token, by position and of a type, and refusals),
- * and so are {@code organize-imports} (a dry run, a file organized, a file in order, a refusal) and {@code
+ * and so are {@code organize-imports} (a dry run, a file organized, a file in order, a refusal), {@code cleanup} (a dry
+ * run, a concatenation rewritten into a text block, a file with nothing to clean, refusals) and {@code
  * extract-variable} (a dry run, a variable extracted under the name given, refusals), {@code extract-method} (a dry run,
  * a method extracted under the name given, refusals), {@code extract-constant} (a dry run, a constant extracted under the
  * name given, refusals), {@code extract-field} (a dry run, a field extracted under the name given, refusals), {@code move-type-to-file} (a dry run, a type moved to a file of
@@ -65,7 +66,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, help, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move and inline included, the daemon started on demand)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move and inline included, the daemon started on demand)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -250,6 +251,7 @@ public final class Native {
                 diagnosticsWithTheFakeServer();
                 renameWithTheFakeServer();
                 organizeImportsWithTheFakeServer();
+                cleanupWithTheFakeServer();
                 extractVariableWithTheFakeServer();
                 extractMethodWithTheFakeServer();
                 extractConstantWithTheFakeServer();
@@ -633,6 +635,66 @@ public final class Native {
                     "gabier --json organize-imports gives the result as the daemon gave it");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after organizing the imports");
+        }
+
+        /**
+         * {@code gabier cleanup} against the daemon served by the fake language server: the dry run writes nothing, the
+         * concatenation of the file is rewritten into a text block, a file with nothing to clean says so, an identifier
+         * the language server does not know and a file outside the project are refused as problem objects and write
+         * nothing.
+         */
+        private void cleanupWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("cleanup-project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            Path source = project.resolve("src/main/java/demo");
+            String banner = "cleanup-project/src/main/java/demo/Banner.java";
+            String original = Files.readString(source.resolve("Banner.java"));
+
+            Run dryRun = gabier("cleanup", "--dry-run", banner, "stringConcatToTextBlock");
+            expect(
+                    dryRun.exit() == 0
+                            && dryRun.err().isEmpty()
+                            && dryRun.out().lines().findFirst().orElse("").equals("dry run, nothing written")
+                            && dryRun.out().contains("modified " + source.resolve("Banner.java"))
+                            && dryRun.out().contains("+        return \"\"\"")
+                            && Files.readString(source.resolve("Banner.java")).equals(original),
+                    "gabier cleanup --dry-run lists the file and the diff and writes nothing");
+
+            Run unknown = gabier("cleanup", banner, "textBlocks");
+            expect(
+                    unknown.exit() == 2
+                            && unknown.out().isEmpty()
+                            && unknown.err().contains("(editing-unknown-clean-up; ")
+                            && Files.readString(source.resolve("Banner.java")).equals(original),
+                    "cleanup with an identifier the language server does not know is refused as a problem object, exit 2");
+
+            Run outside = gabier("cleanup", "outside/Elsewhere.java", "stringConcatToTextBlock");
+            expect(
+                    outside.exit() == 2
+                            && outside.out().isEmpty()
+                            && outside.err().contains("(language-server-file-outside-project; "),
+                    "cleanup of a file outside the project is refused as a problem object, exit 2");
+
+            Run cleaned = gabier("cleanup", banner, "stringConcatToTextBlock");
+            String text = Files.readString(source.resolve("Banner.java"));
+            expect(
+                    cleaned.exit() == 0
+                            && cleaned.out().contains("modified " + source.resolve("Banner.java"))
+                            && text.contains("return \"\"\"")
+                            && text.contains("Hello, \"world\"!")
+                            && !text.contains("+ \""),
+                    "gabier cleanup writes the file, with the concatenation rewritten into a text block");
+
+            Run clean = gabier("cleanup", "cleanup-project/src/main/java/demo/Plain.java", "stringConcatToTextBlock");
+            expect(
+                    clean.exit() == 0 && clean.out().equals("nothing to change"),
+                    "gabier cleanup of a file with nothing to clean says there is nothing to change");
+            gabier("stop");
+            expect(ends(process), "the daemon served by the fake stops after the clean-up");
         }
 
         /**

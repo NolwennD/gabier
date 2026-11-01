@@ -2,6 +2,7 @@ package fr.craft.gabier.daemon;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -68,15 +69,36 @@ record JdtlsSettings(
      * </ul>
      */
     static Map<String, Object> javaPreferences() {
+        return Map.of("java", javaSection());
+    }
+
+    private static Map<String, Object> javaSection() {
         Map<String, Object> thresholds =
                 Map.of("starThreshold", Integer.MAX_VALUE, "staticStarThreshold", Integer.MAX_VALUE);
 
         return Map.of(
-                "java",
-                Map.of(
-                        "sources", Map.of("organizeImports", thresholds),
-                        "completion", Map.of("importOrder", List.of("#", "")),
-                        "templates", Map.of("typeComment", List.of(" ")),
-                        "references", Map.of("includeAccessors", false, "includeDecompiledSources", false)));
+                "sources", Map.of("organizeImports", thresholds),
+                "completion", Map.of("importOrder", List.of("#", "")),
+                "templates", Map.of("typeComment", List.of(" ")),
+                "references", Map.of("includeAccessors", false, "includeDecompiledSources", false));
+    }
+
+    /**
+     * The preferences of {@link #javaPreferences} with the clean-ups of the setting {@code java.cleanup.actions}: the
+     * identifiers that {@code java/cleanup} runs on a file, in the order of the list ({@code
+     * SaveActionHandler.performManualCleanupActions} and {@code CleanUpRegistry} of Eclipse JDT LS). It is sent with
+     * {@code workspace/didChangeConfiguration}, together with the preferences of the start, so that none falls back to
+     * its default whatever jdtls does with a configuration that lacks it. The clean-ups run on save only with {@code
+     * java.saveActions.cleanup}, which stays false, and the client does not declare {@code canUseInternalSettings}
+     * (see {@link JdtlsCapabilities#extended}), which would make jdtls read the clean-ups from the JDT UI preferences of
+     * the project instead.
+     *
+     * @param ids the identifiers of the clean-ups, none to clear the setting
+     */
+    static Map<String, Object> withCleanUps(List<String> ids) {
+        Map<String, Object> java = new HashMap<>(javaSection());
+        java.put("cleanup", Map.of("actions", List.copyOf(ids)));
+
+        return Map.of("java", java);
     }
 }

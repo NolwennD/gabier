@@ -20,6 +20,7 @@ class DaemonAnswersTest extends CliTest {
                 List.of("diagnostics", "/project/Main.java"),
                 List.of("rename", "/project/Greeter.java", "6", "18", "welcome"),
                 List.of("organize-imports", "/project/Untidy.java"),
+                List.of("cleanup", "/project/Banner.java", "stringConcatToTextBlock"),
                 List.of("extract-variable", "/project/Greeter.java", "7:26", "7:48", "joined"),
                 List.of("extract-method", "/project/Totals.java", "6:9", "6:47", "printCount"),
                 List.of("extract-constant", "/project/Totals.java", "6:28", "6:37", "COUNT_LABEL"),

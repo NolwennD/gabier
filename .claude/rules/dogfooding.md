@@ -9,6 +9,10 @@ repository does it with `gabier` (installed on the PATH by `mise run install`; t
 - `gabier organize-imports <file>` after adding or removing a usage, instead of editing the import lines by hand (it keeps
   the order of the formatter and never writes a star import; run `gabier diagnostics <file>` first, a file whose imports
   jdtls cannot resolve loses them);
+- `gabier cleanup [--dry-run] <file> <cleanup>...` to rewrite a whole file with clean-ups of jdtls, applied in the order
+  given, instead of editing the text (for instance `stringConcatToTextBlock` for a concatenation of string literals that
+  should be a text block; the identifiers are in `gabier help cleanup`; a file with nothing to clean answers `nothing to
+  change`; `organizeImports` is not one of them, use `organize-imports`);
 - `gabier extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>` to turn an expression into a local
   variable, `gabier extract-method [--dry-run] <file> <line>:<column> <line>:<column> <name>` to turn statements, or an
   expression, into a method, and `gabier extract-constant [--dry-run] <file> <line>:<column> <line>:<column> <name>` to

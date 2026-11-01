@@ -3,21 +3,30 @@ package fr.craft.gabier.daemon;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import org.eclipse.lsp4j.CodeActionParams;
+import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.eclipse.lsp4j.WorkspaceEdit;
 import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
 import org.eclipse.lsp4j.services.LanguageServer;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The language server of the protocol plus the requests of jdtls that are not in it. The only one gabier uses is {@code
- * java/getRefactorEdit}: the edit of a refactoring that jdtls offers as a code action, asked for by its name, together
- * with the place where the client is expected to rename what the refactoring introduced.
+ * The language server of the protocol plus the requests of jdtls that are not in it: {@code java/getRefactorEdit}, the
+ * edit of a refactoring that jdtls offers as a code action, asked for by its name, together with the place where the
+ * client is expected to rename what the refactoring introduced; {@code java/move}; and {@code java/cleanup}.
  */
 interface JdtlsServer extends LanguageServer {
 
     /** The edit of a refactoring; jdtls answers null when it cannot do it where it is asked. */
     @JsonRequest("java/getRefactorEdit")
     CompletableFuture<RefactorEdit> getRefactorEdit(RefactorEditParams params);
+
+    /**
+     * The clean-ups of a file, the ones of the setting {@code java.cleanup.actions} in the order of the list: one edit
+     * of the whole text, none (or a null answer) when nothing changes. jdtls offers no way to name the clean-ups in the
+     * request.
+     */
+    @JsonRequest("java/cleanup")
+    CompletableFuture<WorkspaceEdit> cleanup(TextDocumentIdentifier file);
 
     /**
      * The edit of a move, in the same shape as a refactoring: when jdtls cannot do it, there is no edit and a message
