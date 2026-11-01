@@ -22,6 +22,9 @@ Done when:
       coverage stays at 100%. A test that cannot fail is a reason to stop and report.
 - [ ] No test class of the module `cli` over 400 lines, no copy of `socket()` or `runWithSocket()` left.
 - [ ] Adding a command that returns changed files is one `@Nested` class of about twenty lines (shown on the last command added).
+- [ ] The duplication measured by `ripwire modules/cli --clones` (`dup_pct=` in the `<clones>` line) falls from 39.2% (01-11-2026,
+      before the split, `GabierTest` alone holding most of the groups). The resolution gives the figure after, and says for every
+      group left in `GabierTest*` why it stays. Links are by name, so the figure is a floor: it is a measure, not a gate.
 - [ ] `bin/ci`: `format`, `build` and `test` are enough (no production code changes); the worker says so.
 
 The nested classes are taken out with `gabier move-type-to-file` (dogfooding), not by cutting and pasting. A moved class
