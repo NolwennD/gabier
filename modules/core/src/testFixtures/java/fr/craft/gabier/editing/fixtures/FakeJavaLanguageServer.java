@@ -91,6 +91,13 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
     }
 
     @Override
+    public ChangeSet extractConstant(Path file, Range selection, String name) {
+        Request request = new Request.ExtractConstant(file, selection, name).resolvedIn(root);
+
+        return ((Answer.Extracted) answerTo(request)).changes();
+    }
+
+    @Override
     public ChangeSet extractMethod(Path file, Range selection, String name) {
         Request request = new Request.ExtractMethod(file, selection, name).resolvedIn(root);
 

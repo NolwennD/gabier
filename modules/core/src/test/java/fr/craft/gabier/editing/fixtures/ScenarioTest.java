@@ -115,6 +115,9 @@ class ScenarioTest {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(
                         () -> scenario(new Request.ExtractMethod(FILE, SELECTION, "b"), new Answer.Renamed(changes)));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(
+                        () -> scenario(new Request.ExtractConstant(FILE, SELECTION, "B"), new Answer.Renamed(changes)));
     }
 
     @Test
@@ -268,6 +271,32 @@ class ScenarioTest {
                         Map.of("file", FILE.toString(), "line", "0", "column", "6", "endLine", "0", "endColumn", "7"));
         assertThat(extract.refusal(LanguageServerErrorKey.INVALID_NAME).parameters())
                 .isEqualTo(Map.of("file", FILE.toString(), "line", "0", "column", "6", "name", "1st"));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.AMBIGUOUS_IMPORTS));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.UNRESOLVED_IMPORTS));
+    }
+
+    @Test
+    void buildsTheRefusalOfAnExtractConstantRequest() {
+        Request.ExtractConstant extract = new Request.ExtractConstant(FILE, SELECTION, "1ST");
+
+        assertThat(extract.refusal(LanguageServerErrorKey.NOT_READY).key()).isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(extract.refusal(LanguageServerErrorKey.FILE_MISSING).key())
+                .isEqualTo(LanguageServerErrorKey.FILE_MISSING);
+        assertThat(extract.refusal(LanguageServerErrorKey.NOT_A_FILE).key())
+                .isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
+        assertThat(extract.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
+                .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(extract.refusal(LanguageServerErrorKey.NOT_EXTRACTABLE).parameters())
+                .isEqualTo(
+                        Map.of("file", FILE.toString(), "line", "0", "column", "6", "endLine", "0", "endColumn", "7"));
+        assertThat(extract.refusal(LanguageServerErrorKey.INVALID_NAME).parameters())
+                .isEqualTo(Map.of("file", FILE.toString(), "line", "0", "column", "6", "name", "1ST"));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
         assertThatExceptionOfType(IllegalArgumentException.class)
@@ -435,6 +464,8 @@ class ScenarioTest {
                 .isEqualTo(new Request.ExtractVariable(Path.of("/project/src/A.java"), SELECTION, "b"));
         assertThat(new Request.ExtractMethod(FILE, SELECTION, "b").resolvedIn(ROOT))
                 .isEqualTo(new Request.ExtractMethod(Path.of("/project/src/A.java"), SELECTION, "b"));
+        assertThat(new Request.ExtractConstant(FILE, SELECTION, "B").resolvedIn(ROOT))
+                .isEqualTo(new Request.ExtractConstant(Path.of("/project/src/A.java"), SELECTION, "B"));
         assertThat(new Request.MoveTypeToFile(FILE, POSITION).resolvedIn(ROOT))
                 .isEqualTo(new Request.MoveTypeToFile(Path.of("/project/src/A.java"), POSITION));
         assertThat(new Request.MoveToPackage(List.of(FILE, Path.of("src/B.java")), PackageName.of("demo.b"))

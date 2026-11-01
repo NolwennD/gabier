@@ -92,6 +92,7 @@ class ScenarioReplayTest {
                 || scenario.request() instanceof Request.OrganizeImports
                 || scenario.request() instanceof Request.ExtractVariable
                 || scenario.request() instanceof Request.ExtractMethod
+                || scenario.request() instanceof Request.ExtractConstant
                 || scenario.request() instanceof Request.MoveTypeToFile
                 || scenario.request() instanceof Request.MoveToPackage
                 || scenario.request() instanceof Request.Inline
@@ -321,6 +322,8 @@ class ScenarioReplayTest {
                 server.extractVariable(extract.file(), extract.selection(), extract.name());
             case Request.ExtractMethod extract ->
                 server.extractMethod(extract.file(), extract.selection(), extract.name());
+            case Request.ExtractConstant extract ->
+                server.extractConstant(extract.file(), extract.selection(), extract.name());
             case Request.MoveTypeToFile move -> server.moveTypeToFile(move.file(), move.position());
             case Request.MoveToPackage move -> server.moveToPackage(move.files(), move.target());
             case Request.Inline inline -> server.inline(inline.file(), inline.position());

@@ -21,6 +21,7 @@ class HelpTest extends CliTest {
             "organize-imports",
             "extract-variable",
             "extract-method",
+            "extract-constant",
             "move-type-to-file",
             "move",
             "inline",
@@ -146,8 +147,8 @@ class HelpTest extends CliTest {
         assertThat(out()).isEmpty();
         assertThat(err())
                 .startsWith("Usage error: Unknown command; the commands are diagnostics, rename, organize-imports,"
-                        + " extract-variable, extract-method, move-type-to-file, move, inline, create, references,"
-                        + " status, stop, help (usage-error; command=frobnicate)");
+                        + " extract-variable, extract-method, extract-constant, move-type-to-file, move,"
+                        + " inline, create, references, status, stop, help (usage-error; command=frobnicate)");
     }
 
     @Test

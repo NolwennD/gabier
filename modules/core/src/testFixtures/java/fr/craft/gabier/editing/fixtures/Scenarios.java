@@ -73,6 +73,13 @@ import java.util.stream.Stream;
  *       parameters: it answers an edit that leaves two methods of one signature. The adapter refuses it, from the
  *       methods that jdtls lists for the text ({@code textDocument/documentSymbol}), as {@code invalid-name} ({@link
  *       #EXTRACT_METHOD_TO_A_NAME_IN_USE});
+ *   <li>the extraction of a constant: {@code java/getRefactorEdit} with the command {@code extractConstant} (no client
+ *       capability, no setting) answers the declaration at the top of the class and the replacement of the expression;
+ *       the name it proposes is renamed as for a variable, and the answer holds the one edit that results from both
+ *       ({@link #EXTRACT_CONSTANT}). For an expression that reads a local variable ({@link
+ *       #EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE}) it answers nothing, no message either, which the adapter maps to
+ *       {@code not-extractable}; a name that is not an identifier is declined by the rename ({@link
+ *       #EXTRACT_CONSTANT_TO_AN_INVALID_NAME});
  *   <li>the move of a nested type to a file of its own: {@code java/move} with the move kind {@code moveTypeToNewFile}
  *       answers the edits of the files that refer to the type, of the outer class, the creation of the new file
  *       (because the client declares the resource operations) and the edit that gives it its text ({@link
@@ -891,6 +898,51 @@ public final class Scenarios {
             new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
 
     /**
+     * {@code "count: "} in {@code print}, extracted as {@code COUNT_LABEL}: the constant is declared at the top of the
+     * class and the literal is replaced by its name. jdtls proposes a name of its own and expects the client to rename
+     * it; the answer holds the one edit that results of both.
+     */
+    public static final Scenario EXTRACT_CONSTANT = new Scenario(
+            "extract-a-constant",
+            PROJECT,
+            new Request.ExtractConstant(TOTALS, new Range(new Position(5, 27), new Position(5, 36)), "COUNT_LABEL"),
+            new Answer.Extracted(new ChangeSet(List.of(edits(TOTALS, replace(3, 5, 5, 36, """
+                rivate static final String COUNT_LABEL = "count: ";
+
+                    public void print(int[] values) {
+                        int count = values.length;
+                        System.out.println(COUNT_LABEL\
+                """))))));
+
+    /** {@code "count: " + count}: it reads a local variable, so it cannot be a constant. */
+    public static final Scenario EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE = new Scenario(
+            "extract-a-constant-that-uses-a-local-variable",
+            PROJECT,
+            new Request.ExtractConstant(TOTALS, new Range(new Position(5, 27), new Position(5, 44)), "COUNT_LABEL"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_EXTRACTABLE));
+
+    /** A name that begins with a digit is not an identifier: jdtls declines the rename that gives the name. */
+    public static final Scenario EXTRACT_CONSTANT_TO_AN_INVALID_NAME = new Scenario(
+            "extract-a-constant-to-an-invalid-name",
+            PROJECT,
+            new Request.ExtractConstant(TOTALS, new Range(new Position(5, 27), new Position(5, 36)), "1ST"),
+            new Answer.Refused(LanguageServerErrorKey.INVALID_NAME));
+
+    /** The project is still being imported: the server cannot say what an extraction changes. */
+    public static final Scenario EXTRACT_CONSTANT_WHILE_THE_SERVER_IMPORTS = new Scenario(
+            "extract-a-constant-while-the-server-imports",
+            PROJECT,
+            new Request.ExtractConstant(TOTALS, new Range(new Position(5, 27), new Position(5, 36)), "COUNT_LABEL"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_READY));
+
+    /** A file that is not in the project the server was started on. */
+    public static final Scenario EXTRACT_CONSTANT_OUTSIDE_THE_PROJECT = new Scenario(
+            "extract-a-constant-of-a-file-outside-the-project",
+            PROJECT,
+            new Request.ExtractConstant(ELSEWHERE, new Range(new Position(0, 0), new Position(0, 1)), "ANYTHING"),
+            new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+
+    /**
      * {@code Shapes.Circle}, a static nested class, from its name. jdtls creates {@code Circle.java} in the package, takes
      * the type out of {@code Shapes} (the edit reaches the next members, which it repeats) and updates {@code Drawing},
      * which imported {@code Shapes} and now imports {@code Circle} as well. The new file has no line break at its end.
@@ -1479,6 +1531,11 @@ public final class Scenarios {
                 EXTRACT_METHOD_TO_A_NAME_IN_USE,
                 EXTRACT_METHOD_WHILE_THE_SERVER_IMPORTS,
                 EXTRACT_METHOD_OUTSIDE_THE_PROJECT,
+                EXTRACT_CONSTANT,
+                EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE,
+                EXTRACT_CONSTANT_TO_AN_INVALID_NAME,
+                EXTRACT_CONSTANT_WHILE_THE_SERVER_IMPORTS,
+                EXTRACT_CONSTANT_OUTSIDE_THE_PROJECT,
                 MOVE_A_STATIC_NESTED_TYPE,
                 MOVE_AN_INNER_TYPE_THAT_DOES_NOT_USE_THE_OUTER_INSTANCE,
                 MOVE_AN_INNER_TYPE_THAT_USES_THE_OUTER_INSTANCE,

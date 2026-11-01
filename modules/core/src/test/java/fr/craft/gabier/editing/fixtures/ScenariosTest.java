@@ -153,6 +153,11 @@ class ScenariosTest {
                         "extract-a-method-to-a-name-in-use",
                         "extract-a-method-while-the-server-imports",
                         "extract-a-method-of-a-file-outside-the-project",
+                        "extract-a-constant",
+                        "extract-a-constant-that-uses-a-local-variable",
+                        "extract-a-constant-to-an-invalid-name",
+                        "extract-a-constant-while-the-server-imports",
+                        "extract-a-constant-of-a-file-outside-the-project",
                         "move-a-static-nested-type",
                         "move-an-inner-type-that-does-not-use-the-outer-instance",
                         "move-an-inner-type-that-uses-the-outer-instance",
@@ -256,6 +261,18 @@ class ScenariosTest {
                         LanguageServerErrorKey.INVALID_NAME,
                         LanguageServerErrorKey.INVALID_NAME,
                         LanguageServerErrorKey.NOT_EXTRACTABLE,
+                        LanguageServerErrorKey.NOT_EXTRACTABLE,
+                        LanguageServerErrorKey.NOT_READY);
+    }
+
+    @Test
+    void refusesForEachReasonOfThePortOnAnExtractConstant() {
+        assertThat(answeredWith(Answer.Refused.class).stream()
+                        .filter(scenario -> scenario.request() instanceof Request.ExtractConstant)
+                        .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
+                        LanguageServerErrorKey.INVALID_NAME,
                         LanguageServerErrorKey.NOT_EXTRACTABLE,
                         LanguageServerErrorKey.NOT_READY);
     }
@@ -660,6 +677,29 @@ class ScenariosTest {
                     .as(scenario.name())
                     .containsPattern("\\b" + request.name() + "\\([a-z]*\\);")
                     .containsPattern("private \\w+(\\[\\])? " + request.name() + "\\(");
+        }
+    }
+
+    @Test
+    void declaresTheConstantWithTheNameAskedForAndUsesItInPlaceOfTheSelectedExpression(@TempDir Path directory)
+            throws IOException {
+        List<Scenario> extractions = answeredWith(Answer.Extracted.class).stream()
+                .filter(scenario -> scenario.request() instanceof Request.ExtractConstant)
+                .toList();
+        assertThat(extractions).hasSize(1);
+        for (Scenario scenario : extractions) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+            var request = (Request.ExtractConstant) inside.request();
+            String expression = selected(Files.readString(request.file()), request.selection());
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.Extracted) inside.answer()).changes());
+
+            assertThat(Files.readString(request.file()))
+                    .as(scenario.name())
+                    .contains(" static final String " + request.name() + " = " + expression + ";")
+                    .contains("(" + request.name() + " + ");
         }
     }
 

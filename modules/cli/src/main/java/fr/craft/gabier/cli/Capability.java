@@ -11,6 +11,7 @@ sealed interface Capability
                 OrganizeImports,
                 ExtractVariable,
                 ExtractMethod,
+                ExtractConstant,
                 MoveTypeToFile,
                 Move,
                 Inline,

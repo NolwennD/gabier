@@ -92,6 +92,8 @@ class DaemonServerTest {
                         .scripted(Scenarios.EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION)
                         .scripted(Scenarios.EXTRACT_METHOD_THAT_USES_A_LOCAL_VARIABLE)
                         .scripted(Scenarios.EXTRACT_METHOD_FROM_HALF_A_STATEMENT)
+                        .scripted(Scenarios.EXTRACT_CONSTANT)
+                        .scripted(Scenarios.EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE)
                         .scripted(Scenarios.MOVE_A_STATIC_NESTED_TYPE)
                         .scripted(Scenarios.MOVE_A_TOP_LEVEL_TYPE)
                         .scripted(PackageMoveScenarios.MOVE_A_CLASS_TO_A_NEW_PACKAGE)
@@ -545,6 +547,52 @@ class DaemonServerTest {
                 boolean dryRun) {
             return """
                 {"jsonrpc":"2.0","id":3,"method":"extract-method","params":{"file":"%s","startLine":"%s",\
+                "startColumn":"%s","endLine":"%s","endColumn":"%s","name":"%s","dryRun":"%s"}}
+                """.formatted(file, startLine, startColumn, endLine, endColumn, name, dryRun);
+        }
+
+        @Test
+        void extractConstantAnswersWhatChangedAndWritesTheFileUnlessItIsADryRun() throws IOException {
+            serving();
+            Scenarios.EXTRACT_CONSTANT.writeProject(directory);
+            var totals = directory.resolve("src/main/java/demo/Totals.java");
+
+            try (var client = connect(socket())) {
+                var dryRun = client.ask(extractConstantRequest(totals, "5", "27", "5", "36", "COUNT_LABEL", true));
+
+                assertThat(dryRun).contains("\"modified\":[").contains("private static final String COUNT_LABEL");
+                assertThat(Files.readString(totals)).doesNotContain("COUNT_LABEL");
+
+                var done = client.ask(extractConstantRequest(totals, "5", "27", "5", "36", "COUNT_LABEL", false));
+
+                assertThat(done).contains("\"modified\":[");
+                assertThat(Files.readString(totals)).contains("System.out.println(COUNT_LABEL + count);");
+            }
+        }
+
+        @Test
+        void anExpressionThatCannotBeAConstantIsRefusedWithItsProblemObject() throws IOException {
+            serving();
+            Scenarios.EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE.writeProject(directory);
+            var totals = directory.resolve("src/main/java/demo/Totals.java");
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask(extractConstantRequest(totals, "5", "27", "5", "44", "COUNT_LABEL", false)))
+                        .contains("\"key\":\"language-server-not-extractable\"");
+                assertThat(Files.readString(totals)).doesNotContain("COUNT_LABEL");
+            }
+        }
+
+        private static String extractConstantRequest(
+                Path file,
+                String startLine,
+                String startColumn,
+                String endLine,
+                String endColumn,
+                String name,
+                boolean dryRun) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"extract-constant","params":{"file":"%s","startLine":"%s",\
                 "startColumn":"%s","endLine":"%s","endColumn":"%s","name":"%s","dryRun":"%s"}}
                 """.formatted(file, startLine, startColumn, endLine, endColumn, name, dryRun);
         }

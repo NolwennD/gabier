@@ -76,6 +76,9 @@ public final class FakeServedMain {
                 Scenarios.EXTRACT_METHOD_THAT_USES_A_LOCAL_VARIABLE,
                 Scenarios.EXTRACT_METHOD_FROM_HALF_A_STATEMENT,
                 Scenarios.EXTRACT_METHOD_TO_AN_INVALID_NAME,
+                Scenarios.EXTRACT_CONSTANT,
+                Scenarios.EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE,
+                Scenarios.EXTRACT_CONSTANT_TO_AN_INVALID_NAME,
                 Scenarios.MOVE_A_STATIC_NESTED_TYPE,
                 Scenarios.MOVE_A_TOP_LEVEL_TYPE,
                 PackageMoveScenarios.MOVE_A_CLASS_TO_A_NEW_PACKAGE,
@@ -143,6 +146,11 @@ public final class FakeServedMain {
         @Override
         public ChangeSet extractVariable(Path file, Range selection, String name) {
             return server.extractVariable(file, selection, name);
+        }
+
+        @Override
+        public ChangeSet extractConstant(Path file, Range selection, String name) {
+            return server.extractConstant(file, selection, name);
         }
 
         @Override

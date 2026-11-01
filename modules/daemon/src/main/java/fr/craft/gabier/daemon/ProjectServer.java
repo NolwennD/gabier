@@ -111,6 +111,11 @@ final class ProjectServer implements ServedProject {
     }
 
     @Override
+    public ChangeSet extractConstant(Path file, Range selection, String name) {
+        return ready().extractConstant(file, selection, name);
+    }
+
+    @Override
     public ChangeSet extractMethod(Path file, Range selection, String name) {
         return ready().extractMethod(file, selection, name);
     }

@@ -81,6 +81,22 @@ class LanguageServerExceptionTest {
     }
 
     @Test
+    void saysWhichSelectionCannotBeExtractedIntoAConstant() {
+        LanguageServerException exception =
+                LanguageServerException.notAConstant(FILE, new Range(new Position(4, 7), new Position(5, 2)));
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters())
+                .isEqualTo(
+                        Map.of("file", FILE.toString(), "line", "4", "column", "7", "endLine", "5", "endColumn", "2"));
+        assertThat(exception)
+                .hasMessage("The selection 4:7-5:2 of " + FILE
+                        + " is not an expression that can be a constant (it reads no local variable and no instance"
+                        + " member)");
+    }
+
+    @Test
     void saysWhichTypeCannotBeMovedToAFileOfItsOwn() {
         LanguageServerException exception = LanguageServerException.notMovable(FILE, new Position(4, 7));
 

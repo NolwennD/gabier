@@ -14,6 +14,7 @@ final class Capabilities {
             new OrganizeImports(),
             new ExtractVariable(),
             new ExtractMethod(),
+            new ExtractConstant(),
             new MoveTypeToFile(),
             new Move(),
             new Inline(),

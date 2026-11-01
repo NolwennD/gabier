@@ -2353,6 +2353,222 @@ class JdtlsLanguageServerTest {
         }
     }
 
+    /**
+     * The extraction of a constant: as for a variable, jdtls proposes a name of its own and says where it is, the adapter
+     * has it renamed to the name asked for on the text the edit gives, and answers one edit on the file as it is on disk.
+     */
+    @Nested
+    class ExtractingAConstant {
+
+        private static final String ORIGINAL = """
+            class Totals {
+                void print(int count) {
+                    System.out.println("count: " + count);
+                }
+            }
+            """;
+
+        /** The text once jdtls' edit is applied: the constant carries the name jdtls proposed. */
+        private static final String PROPOSED = """
+            class Totals {
+                private static final String COUNT = "count: ";
+
+                void print(int count) {
+                    System.out.println(COUNT + count);
+                }
+            }
+            """;
+
+        private final fr.craft.gabier.editing.domain.Range selection =
+                new fr.craft.gabier.editing.domain.Range(new Position(2, 27), new Position(2, 36));
+        private Path totals;
+
+        @BeforeEach
+        void writeTheSources() throws IOException {
+            totals = write("src/main/java/demo/Totals.java", ORIGINAL);
+        }
+
+        private static org.eclipse.lsp4j.Position at(int line, int column) {
+            return new org.eclipse.lsp4j.Position(line, column);
+        }
+
+        private WorkspaceEdit workspaceEdit(TextEdit... edits) {
+            return new WorkspaceEdit(List.of(Either.forLeft(new TextDocumentEdit(
+                    new VersionedTextDocumentIdentifier(totals.toUri().toString(), 1),
+                    Arrays.stream(edits)
+                            .map(Either::<TextEdit, SnippetTextEdit>forLeft)
+                            .toList()))));
+        }
+
+        /** What jdtls answers: the declaration is inserted before the first member, the literal is replaced. */
+        private WorkspaceEdit declaresTheConstant() {
+            return workspaceEdit(
+                    new TextEdit(
+                            new Range(at(1, 4), at(1, 4)), "private static final String COUNT = \"count: \";\n\n    "),
+                    new TextEdit(new Range(at(2, 27), at(2, 36)), "COUNT"));
+        }
+
+        /** What jdtls answers to the rename, for the text it was given: the declaration and the use. */
+        private WorkspaceEdit renamesTo(String name) {
+            return workspaceEdit(
+                    new TextEdit(new Range(at(1, 32), at(1, 37)), name),
+                    new TextEdit(new Range(at(4, 27), at(4, 32)), name));
+        }
+
+        private CompletableFuture<JdtlsServer.RefactorEdit> proposal() {
+            var where = new JdtlsServer.RenamePosition(
+                    totals.toUri().toString(), PROPOSED.indexOf("COUNT"), "COUNT".length());
+            var follow = new JdtlsServer.FollowUp("java.action.rename", List.of(where));
+
+            return CompletableFuture.completedFuture(new JdtlsServer.RefactorEdit(declaresTheConstant(), follow, null));
+        }
+
+        private void scriptTheExtraction(String name) {
+            fake.refactorEditAnswers(proposal())
+                    .publishesOnOpen(totals, List.of())
+                    .renameAnswers(CompletableFuture.completedFuture(renamesTo(name)));
+        }
+
+        private static String applied(String text, ChangeSet changes) {
+            var edit = (FileChange.EditFile) changes.changes().getFirst();
+
+            return SourceText.edited(edit.file(), text, edit.edits());
+        }
+
+        @Test
+        void asksJdtlsForTheExtractionOfTheSelectionIntoAConstantAsGiven() throws Exception {
+            scriptTheExtraction("COUNT_LABEL");
+
+            try (var server = started()) {
+                server.extractConstant(totals, selection, "COUNT_LABEL");
+
+                assertThat(fake.refactorEditRequests()).hasSize(1);
+                var request = fake.refactorEditRequests().getFirst();
+                assertThat(request.command()).isEqualTo("extractConstant");
+                assertThat(request.context().getTextDocument().getUri())
+                        .isEqualTo(totals.toUri().toString());
+                assertThat(request.context().getRange()).isEqualTo(new Range(at(2, 27), at(2, 36)));
+            }
+        }
+
+        @Test
+        void renamesTheConstantToTheNameAskedForOnTheTextThatJdtlsGave() throws Exception {
+            scriptTheExtraction("COUNT_LABEL");
+
+            try (var server = started()) {
+                server.extractConstant(totals, selection, "COUNT_LABEL");
+
+                assertThat(fake.opened())
+                        .containsExactly(new FakeJdtls.Opened(totals.toUri().toString(), PROPOSED));
+                assertThat(fake.renamed()).hasSize(1);
+                assertThat(fake.renamed().getFirst().getPosition()).isEqualTo(at(1, 32));
+                assertThat(fake.renamed().getFirst().getNewName()).isEqualTo("COUNT_LABEL");
+                assertThat(fake.closed(1)).containsExactly(totals.toUri().toString());
+                assertThat(totals).hasContent(ORIGINAL);
+            }
+        }
+
+        @Test
+        void answersOneEditOfTheFileAsItIsOnDiskWithTheNameAskedFor() throws Exception {
+            scriptTheExtraction("COUNT_LABEL");
+
+            try (var server = started()) {
+                ChangeSet changes = server.extractConstant(totals, selection, "COUNT_LABEL");
+
+                assertThat(changes.changes()).hasSize(1);
+                assertThat(applied(ORIGINAL, changes)).isEqualTo(PROPOSED.replace("COUNT", "COUNT_LABEL"));
+            }
+        }
+
+        @Test
+        void keepsTheNameJdtlsProposedWhenThatIsTheNameAskedForWithoutRenamingAnything() throws Exception {
+            fake.refactorEditAnswers(proposal());
+
+            try (var server = started()) {
+                ChangeSet changes = server.extractConstant(totals, selection, "COUNT");
+
+                assertThat(applied(ORIGINAL, changes)).isEqualTo(PROPOSED);
+                assertThat(fake.renamed()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesAnExpressionJdtlsHasNoExtractionFor() throws Exception {
+            fake.refactorEditAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractConstant(totals, selection, "COUNT_LABEL"))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE);
+                            assertThat(refusal.parameters())
+                                    .containsEntry("file", totals.toString())
+                                    .containsEntry("line", "2")
+                                    .containsEntry("column", "27")
+                                    .containsEntry("endLine", "2")
+                                    .containsEntry("endColumn", "36");
+                        })
+                        .hasMessageContaining("is not an expression that can be a constant");
+                assertThat(fake.opened()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesAnExpressionForWhichJdtlsGivesNoEdit() throws Exception {
+            fake.refactorEditAnswers(CompletableFuture.completedFuture(
+                    new JdtlsServer.RefactorEdit(null, null, "Cannot extract this expression")));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractConstant(totals, selection, "COUNT_LABEL"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE));
+            }
+        }
+
+        @Test
+        void refusesANameJdtlsDeclinesForTheConstant() throws Exception {
+            fake.refactorEditAnswers(proposal())
+                    .publishesOnOpen(totals, List.of())
+                    .renameAnswers(CompletableFuture.failedFuture(new ResponseErrorException(
+                            new ResponseError(ResponseErrorCode.InvalidRequest, "not an identifier", null))));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractConstant(totals, selection, "1ST"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME));
+                assertThat(fake.closed(1)).containsExactly(totals.toUri().toString());
+            }
+        }
+
+        @Test
+        void refusesAFileOutsideTheProjectWithoutAskingJdtls() throws Exception {
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractConstant(root.resolve("../Elsewhere.java"), selection, "ANY"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key())
+                                        .isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+                assertThat(fake.refactorEditRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
+            scriptTheExtraction("COUNT_LABEL");
+
+            try (var server = started()) {
+                Thread.currentThread().interrupt();
+
+                assertThatThrownBy(() -> server.extractConstant(totals, selection, "COUNT_LABEL"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining(
+                                "Interrupted while waiting for the extraction of the expression into a constant");
+                assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+    }
+
     @Nested
     class MovingATypeToAFile {
 

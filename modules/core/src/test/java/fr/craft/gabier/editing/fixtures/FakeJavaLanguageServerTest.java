@@ -153,6 +153,34 @@ class FakeJavaLanguageServerTest {
     }
 
     @Test
+    void answersTheChangeSetOfAnExtractConstantScenarioWithPathsUnderItsRoot() {
+        server.scripted(Scenarios.EXTRACT_CONSTANT);
+
+        ChangeSet changes =
+                server.extractConstant(TOTALS, new Range(new Position(5, 27), new Position(5, 36)), "COUNT_LABEL");
+
+        assertThat(changes)
+                .isEqualTo(((Answer.Extracted)
+                                Scenarios.EXTRACT_CONSTANT.inside(ROOT).answer())
+                        .changes());
+        assertThat(changes.changes())
+                .singleElement()
+                .isInstanceOfSatisfying(
+                        FileChange.EditFile.class,
+                        edit -> assertThat(edit.file()).isEqualTo(TOTALS));
+    }
+
+    @Test
+    void throwsTheRefusalOfAnExtractConstantScenario() {
+        server.scripted(Scenarios.EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.extractConstant(
+                        TOTALS, new Range(new Position(5, 27), new Position(5, 44)), "COUNT_LABEL"))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE));
+    }
+
+    @Test
     void answersTheChangeSetOfAMoveScenarioWithPathsUnderItsRoot() {
         server.scripted(Scenarios.MOVE_AN_INNER_TYPE_THAT_USES_THE_OUTER_INSTANCE);
 

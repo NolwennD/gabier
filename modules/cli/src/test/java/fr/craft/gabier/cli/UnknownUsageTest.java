@@ -20,6 +20,7 @@ class UnknownUsageTest extends CliTest {
                         extractVariableWithoutAFileTwoPositionsAndAName(),
                         extractVariableWithAPositionThatIsNotLineColonColumnFromOne(),
                         extractMethodWithoutAFileTwoPositionsAndAName(),
+                        extractConstantWithoutAFileTwoPositionsAndAName(),
                         withoutAFileAndOnePosition("move-type-to-file"),
                         moveWithoutAFileAndAPackage(),
                         withoutAFileAndOnePosition("inline"),
@@ -106,6 +107,13 @@ class UnknownUsageTest extends CliTest {
                 List.of("extract-method", "A.java", "3:4", "3:9"),
                 List.of("extract-method", "A.java", "3:4", "3:9", "name", "more"),
                 List.of("extract-method", "A.java", "3", "3:9", "name"));
+    }
+
+    private static List<List<String>> extractConstantWithoutAFileTwoPositionsAndAName() {
+        return List.of(
+                List.of("extract-constant"),
+                List.of("extract-constant", "A.java", "3:4", "3:9"),
+                List.of("extract-constant", "A.java", "3", "3:9", "NAME"));
     }
 
     private static List<List<String>> createWithoutAFileAndAKind() {

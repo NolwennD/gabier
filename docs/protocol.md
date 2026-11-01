@@ -45,6 +45,7 @@ daemon ([help](commands/help.md)).
 | `organize-imports` | `file`, `dryRun`                                                            | [organize-imports](commands/organize-imports.md)           |
 | `extract-variable` | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-variable](commands/extract-variable.md)           |
 | `extract-method`   | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-method](commands/extract-method.md)               |
+| `extract-constant` | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-constant](commands/extract-constant.md)           |
 | `move-type-to-file` | `file`, `line`, `column`, `dryRun`                                          | [move-type-to-file](commands/move-type-to-file.md)         |
 | `move`             | `files` (absolute paths, one per line), `package`, `dryRun`                 | [move](commands/move.md)                                   |
 | `inline`           | `file`, `line`, `column`, `dryRun`                                          | [inline](commands/inline.md)                               |

@@ -143,6 +143,11 @@ final class ScriptedProject implements ServedProject {
     }
 
     @Override
+    public ChangeSet extractConstant(Path file, Range selection, String name) {
+        return server.extractConstant(file, selection, name);
+    }
+
+    @Override
     public ChangeSet extractMethod(Path file, Range selection, String name) {
         return server.extractMethod(file, selection, name);
     }

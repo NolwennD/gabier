@@ -22,6 +22,7 @@ class DaemonAnswersTest extends CliTest {
                 List.of("organize-imports", "/project/Untidy.java"),
                 List.of("extract-variable", "/project/Greeter.java", "7:26", "7:48", "joined"),
                 List.of("extract-method", "/project/Totals.java", "6:9", "6:47", "printCount"),
+                List.of("extract-constant", "/project/Totals.java", "6:28", "6:37", "COUNT_LABEL"),
                 List.of("move-type-to-file", "/project/Shapes.java", "6:25"),
                 List.of("move", "/project/Invoice.java", "/project/Payment.java", "demo.billing"),
                 List.of("inline", "/project/Prices.java", "4:22"),

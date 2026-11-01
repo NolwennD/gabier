@@ -56,6 +56,19 @@ public final class LanguageServerException extends GeneratorException {
     }
 
     /**
+     * The selection is not an expression the server can extract into a constant: it reads a local variable or an
+     * instance member, or it is not an expression. The server does not tell which.
+     */
+    public static LanguageServerException notAConstant(Path file, Range selection) {
+        return new LanguageServerException(positioned(LanguageServerErrorKey.NOT_EXTRACTABLE, file, selection.start())
+                .message("The selection " + format(selection.start()) + "-" + format(selection.end()) + " of " + file
+                        + " is not an expression that can be a constant (it reads no local variable and no instance"
+                        + " member)")
+                .addParameter("endLine", String.valueOf(selection.end().line()))
+                .addParameter("endColumn", String.valueOf(selection.end().column())));
+    }
+
+    /**
      * The server cannot move to a file of its own the type at the position: there is no type there, it is a top-level
      * type, or the file of its name exists in its package (the server does not tell which).
      */
