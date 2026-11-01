@@ -6,7 +6,7 @@ import java.util.Optional;
 
 /**
  * The commands of the cli and their help text, written once, here: {@code gabier help} prints it, the dispatch of
- * {@link Gabier} switches on it (so a command added here and not handled does not compile), and the usage error points to
+ * {@link Capabilities} switches on it (so a command added here and given no capability does not compile), and the usage error points to
  * {@code gabier help}. A command without a summary, a usage, an example or a refusal does not pass {@code CommandTest}.
  * To add a command, add its constant here, in the order {@code gabier help} lists them.
  */

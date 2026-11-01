@@ -55,21 +55,32 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    (`DaemonStatus.jdtlsFailure`, the reason jdtls failed, is the model). A text that comes from jdtls (a reason, a
    message) is hostile input: the result carries it exactly, and whatever prints it for a person goes through
    `TerminalText.neutralise`, as the text of `gabier status` does.
-5. **The cli command**, if there is one: in `Gabier.execute` (`modules/cli`), through `DaemonClient`. A command of the
-   catalogue (it asks for work on the project) takes `starting(environment)`, which starts `gabier-daemon` when nothing
-   answers (`DaemonLauncher`); an administrative command that must not start one (`status`, `stop`) takes
-   `waiting(environment)`. Its output is text by default and the result with `--json`, a refusal of the daemon printed as its problem object with the exit code
-   of its category (`DaemonRefusal`). Test it in `GabierTest` against `ScriptedDaemon` (a real socket, scripted answers).
-   Document it: a page `docs/commands/<command>.md` (modelled on the existing ones: usage, example in text and `--json`,
-   refusals, the daemon method and its parameters), one line in the "Capabilities" list of the README that links to it,
-   and a row in the table of methods of `docs/protocol.md`. Then give the command its **help text**, once, as a constant of the enum `Command` (`modules/cli`): its name, a one-line
-   summary, the usage (one line per form), an example of a call and its answer, and its refusals (`<key>: <meaning>`).
-   `Gabier.execute` switches on that enum, so a command that is in it and not handled does not compile, and `CommandTest`
-   fails on a command without one of the five. `gabier help` and `gabier help <command>` print it, and `UsageException`
-   points to them: nothing else lists the commands, so the usage text is not edited. A command that does not talk to the
-   daemon (`help`) takes no `DaemonClient` and has no row in `docs/protocol.md`. A file given on the command
-   line is sent as an absolute path (the daemon's working directory is not the cli's), and a position is shown from 1
-   in the text and kept from 0 with `--json`.
+5. **The cli command**, if there is one: a **capability** of `modules/cli`, a class of its own. Three things, and no other
+   file changes:
+   - a constant of the enum `Command`, with the **help text** written once: its name, a one-line summary, the usage (one
+     line per form), an example of a call and its answer, and its refusals (`<key>: <meaning>`), in the order `gabier help`
+     lists them. `CommandTest` fails on a command without one of the five. `gabier help` and `gabier help <command>`
+     print it, and `UsageException` points to them: nothing else lists the commands, so the usage text is not edited;
+   - a final class implementing `Capability` (`command()`, `run(Invocation)`), named after the command (`Rename`,
+     `OrganizeImports`; `Diagnostics`, `Status` are the models). `run` reads the words with `invocation.arguments()`
+     (`Arguments`: `dryRun()`, `has(option)`, `operands(count, options...)` which takes `--dry-run` and the options out
+     and refuses a wrong count, `exactly(count)` which keeps every word, `file(i)` as an absolute path, `position(i)` for
+     `line:column` and `position(i, j)` for two numbers, both counted from 1 by the user and kept from 0; every refusal is
+     the one usage error), asks the daemon and prints. A command of the catalogue (it asks for work on the project) calls
+     `invocation.ask(method, params)`, which starts `gabier-daemon` when nothing answers (`DaemonLauncher`); an
+     administrative command that must not start one (`status`, `stop`) calls `invocation.askRunning(method, awaitEnd)`.
+     A command that answers with changed files shares `ChangedFilesReply` (`ask`, `print`, `isEmpty`: the list of files,
+     the diff, the dry run), by composition, not by inheritance. A command that does not talk to the daemon (`help`)
+     asks nothing and has no row in `docs/protocol.md`. Its output is text by default and the result with `--json`, a
+     refusal of the daemon printed as its problem object with the exit code of its category (`DaemonRefusal`);
+   - one `case` in `Capabilities.of`, an exhaustive `switch` on `Command`: a command that is in the enum and has no
+     capability does not compile, and `CapabilitiesTest` checks that each capability runs its own command.
+   Test the rules of reading in `ArgumentsTest` when they are new (no socket), and the command in `GabierTest` against
+   `ScriptedDaemon` (a real socket, scripted answers). Document it: a page `docs/commands/<command>.md` (modelled on the
+   existing ones: usage, example in text and `--json`, refusals, the daemon method and its parameters), one line in the
+   "Capabilities" list of the README that links to it, and a row in the table of methods of `docs/protocol.md`. A file
+   given on the command line is sent as an absolute path (the daemon's working directory is not the cli's), and a
+   position is shown from 1 in the text and kept from 0 with `--json`.
 6. **Prove it end to end**: add the command to `Daemon.check` in `bin/ci.d/40-native`, which runs the native `gabier`
    against the installed `gabier-daemon`, then run `bin/ci` (the `native` stage). A command of the catalogue is run there
    against the daemon served by the fake language server (`:daemon:installFakeServed`, main class `FakeServedMain` in

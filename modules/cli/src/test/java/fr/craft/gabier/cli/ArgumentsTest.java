@@ -1,0 +1,110 @@
+package fr.craft.gabier.cli;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
+
+import fr.craft.gabier.shared.error.domain.GeneratorException;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+
+class ArgumentsTest {
+
+    private static Stream<org.junit.jupiter.params.provider.Arguments> dryRunPlaces() {
+        return Stream.of(
+                arguments(List.of("organize-imports", "--dry-run", "A.java"), true),
+                arguments(List.of("organize-imports", "A.java", "--dry-run"), true),
+                arguments(List.of("organize-imports", "A.java"), false));
+    }
+
+    @ParameterizedTest
+    @MethodSource("dryRunPlaces")
+    void theDryRunOptionMayStandAnywhereAfterTheCommandAndIsNoOperand(List<String> words, boolean dryRun) {
+        var arguments = Arguments.of(words);
+
+        assertThat(arguments.dryRun()).isEqualTo(dryRun);
+        assertThat(arguments.operands(1).operand(0)).isEqualTo("A.java");
+    }
+
+    @Test
+    void theDryRunOptionMayStandInTheMiddle() {
+        var arguments = Arguments.of(List.of("rename", "A.java", "--dry-run", "3", "4", "x"));
+
+        assertThat(arguments.dryRun()).isTrue();
+        assertThat(arguments.operands(4).operands()).containsExactly("A.java", "3", "4", "x");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 2})
+    void anOperandMissingOrInExcessIsAUsageErrorNamingTheArguments(int count) {
+        var arguments = Arguments.of(List.of("organize-imports", "--dry-run", "A.java"));
+
+        assertThatThrownBy(() -> arguments.operands(count))
+                .isInstanceOf(UsageException.class)
+                .satisfies(failure -> assertThat(((GeneratorException) failure).parameters())
+                        .containsEntry("arguments", "organize-imports --dry-run A.java"));
+    }
+
+    @Test
+    void theOptionsNamedByTheCommandAreNoOperandsEither() {
+        var arguments = Arguments.of(List.of("rename", "--token", "A.java", "x", "--dry-run", "y"));
+
+        assertThat(arguments.has("--token")).isTrue();
+        assertThat(arguments.operands(3, "--token").operands()).containsExactly("A.java", "x", "y");
+        assertThatThrownBy(() -> arguments.operands(3)).isInstanceOf(UsageException.class);
+    }
+
+    @Test
+    void anOptionNotGivenIsNotThere() {
+        assertThat(Arguments.of(List.of("rename", "A.java")).has("--token")).isFalse();
+    }
+
+    @Test
+    void exactlyKeepsEveryWordAsAnOperand() {
+        var arguments = Arguments.of(List.of("diagnostics", "--dry-run"));
+
+        assertThat(arguments.exactly(1).operand(0)).isEqualTo("--dry-run");
+        assertThatThrownBy(() -> arguments.exactly(0)).isInstanceOf(UsageException.class);
+        assertThatThrownBy(() -> arguments.exactly(2)).isInstanceOf(UsageException.class);
+    }
+
+    @Test
+    void aFileIsAnAbsolutePathNotCleaned() {
+        var arguments = Arguments.of(List.of("diagnostics", "src/../A.java"));
+
+        assertThat(arguments.file(0)).isEqualTo(Path.of("src/../A.java").toAbsolutePath());
+    }
+
+    @Test
+    void aPositionIsCountedFromOneAndKeptFromZero() {
+        var arguments = Arguments.of(List.of("extract-method", "A.java", "3:5", "1", "2"));
+
+        assertThat(arguments.position(1)).isEqualTo(new Arguments.Position(2, 4));
+        assertThat(arguments.position(2, 3)).isEqualTo(new Arguments.Position(0, 1));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0:1", "1:0", "-1:1", "1:-1", "x:1", "1:x", "1:2:3", "1", "1:", ":1", ""})
+    void aPositionThatIsNotTwoNumbersFromOneIsAUsageError(String position) {
+        var arguments = Arguments.of(List.of("extract-method", "A.java", position));
+
+        assertThatThrownBy(() -> arguments.position(1))
+                .isInstanceOf(UsageException.class)
+                .satisfies(failure -> assertThat(((GeneratorException) failure).parameters())
+                        .containsEntry("arguments", "extract-method A.java " + position));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0", "-1", "x", "1.5", ""})
+    void twoNumbersWhereOneIsNotFromOneAreAUsageError(String number) {
+        var arguments = Arguments.of(List.of("rename", "A.java", "1", number));
+
+        assertThatThrownBy(() -> arguments.position(1, 2)).isInstanceOf(UsageException.class);
+        assertThatThrownBy(() -> arguments.position(2, 1)).isInstanceOf(UsageException.class);
+    }
+}
