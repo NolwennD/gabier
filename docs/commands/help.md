@@ -42,7 +42,11 @@ and read its refusals. When a command changes, change its constant and its page 
 the pages hold too: each page has a `## Refusals` section, one bullet per key (`` - `key`: what it means ``), and
 `CommandRefusalsTest` reads the section and fails when the keys of the help of a command are not exactly those of its
 page (`status` and `stop` share one page). The usage error of a call that
-gabier does not understand does not repeat the usage: it points to `gabier help` and `gabier help <command>`.
+gabier does not understand does not repeat the usage: it points to `gabier help` and `gabier help <command>`. When the
+first word is one typo away from a command (a letter changed, added or removed, or two letters swapped), the usage error
+also names it: `gabier organise-imports x.java` answers `did you mean organize-imports?` and carries a `suggestion`
+parameter (`"suggestion":"organize-imports"` with `--json`). A word further than that gets no suggestion, and a typo
+starts no daemon. The candidates are the names of `Command`.
 
 ## Refusals
 

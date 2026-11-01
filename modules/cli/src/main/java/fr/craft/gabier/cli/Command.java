@@ -161,6 +161,13 @@ enum Command {
                 .findFirst();
     }
 
+    /** The command a word with one typo (a letter changed, added or removed, two swapped) was meant for, if any. */
+    static Optional<Command> nearestTo(String word) {
+        return Arrays.stream(values())
+                .filter(command -> EditDistance.between(command.commandName, word) == 1)
+                .findFirst();
+    }
+
     /** The word that names it on the command line. */
     String commandName() {
         return commandName;

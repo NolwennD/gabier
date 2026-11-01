@@ -12,6 +12,9 @@ $ gabier --json --bogus
 {"type":"urn:gabier:error:usage-error","title":"Usage error","detail":"Unsupported arguments; run gabier help for the commands, and gabier help <command> for the usage of one","key":"usage-error","parameters":{"arguments":"--bogus"}}
 ```
 
+A first word one typo away from a command (`gabier organise-imports x.java`) is refused with the command it meant, in the
+detail (`did you mean organize-imports?`) and in the `suggestion` parameter; see [help](commands/help.md).
+
 `gabier help` lists the commands and `gabier help <command>` explains one, as does `gabier <command> --help` (or `-h`):
 see [help](commands/help.md).
 

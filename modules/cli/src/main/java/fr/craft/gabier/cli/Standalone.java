@@ -3,6 +3,7 @@ package fr.craft.gabier.cli;
 import fr.craft.gabier.protocol.ProtocolVersion;
 import java.io.PrintStream;
 import java.util.List;
+import java.util.Optional;
 
 /** The arguments that name no command: {@code --version}, {@code --help} and {@code -h}, alone, else a usage error. */
 final class Standalone {
@@ -28,6 +29,11 @@ final class Standalone {
                     // A usage error, below.
                 }
             }
+        }
+
+        var meant = arguments.isEmpty() ? Optional.<Command>empty() : Command.nearestTo(arguments.getFirst());
+        if (meant.isPresent()) {
+            throw UsageException.unknownCommandTypo(arguments, meant.get());
         }
 
         throw UsageException.unsupportedArguments(arguments);
