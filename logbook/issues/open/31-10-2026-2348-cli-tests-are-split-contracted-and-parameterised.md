@@ -33,3 +33,5 @@ above): a top-level class still annotated `@Nested` would silently not run. A fr
 
 Depends on: 01-11-2026-0855-gabier-moves-a-nested-type-to-its-own-file.md (the command used to move the nested classes, same
 module). The structure it builds on, `31-10-2026-2348-gabier-is-composed-of-capabilities.md`, is closed.
+Depends on: 01-11-2026-1041-gabier-inlines-a-variable-a-method-or-a-constant.md (same files: the tests of the cli grow with each command; the split
+is done once the combo extract-variable, extract-method and inline is complete).
