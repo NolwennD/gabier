@@ -29,3 +29,18 @@ Done when:
   on one line is unchanged);
 - no site is rewritten by hand when jdtls offers the action;
 - `bin/ci` green, Checkstyle included.
+
+## Resolution
+
+Commit 5c0010d. `bin/ci` (worker, full, once, after `hk fix --all`): format 15s, build 12s, test 187s, native 166s, jdtls 445s, all passed. Not reviewed: small ticket, the only production change is the help text of `Move.java` (a few lines, text unchanged), the rest is tests and fixtures, and the existing tests prove that the text compared or written on one line is unchanged.
+
+- Done with `gabier cleanup <file> stringConcatToTextBlock`, run for real on the 121 Java files that hold `\"` or `\n` in a literal: 117 answered "nothing to change", 5 changed (`ProblemTest`, `cli/Move.java`, `HelpTest`, `Scenarios.java`, `JdtlsLanguageServerTest`, the last twice). The worker built gabier from the ticket's worktree in a scratch folder (same code as `main` at c3ff4d8); the installed one was stale and was rebuilt by the supervisor meanwhile.
+- By hand, because jdtls offers nothing for a two-literal concatenation (a dry run answers "nothing to change"): `JsonRpcTest:31-32, 369-376, 389-390` and `SelfCheckTest:243, 252`.
+- Left, with the reason: concatenations with a non-literal operand (`JsonRpcTest:232`, `CliTest:33`, `GabierTest:125-127`, `HelpText.java:23-26, 56-60`: a text block would need `.formatted(...)`, a restructuring); `CleanUpScenarios:41-54` and `ProblemTest:136` (the escape is the point); single literals with several `\n` (`JdtlsLauncherTest:22, 39`, `TextFileTest:343`, `JdtlsLanguageServerTest:431`, others), which are not concatenations: jdtls answers "nothing to change".
+- Friction met: the text diff of `gabier cleanup --dry-run` doubles each backslash (`\\"` for `\"`); this is the known ticket `31-10-2026-1604-text-diff-of-rename-keeps-tabs-and-backslashes.md` (on hold, `TerminalText.neutralise`), reproduced here on `ProblemTest.java`. jdtls writes trailing indentation on a blank line of a text block, which the format hook strips. First `cleanup` call 24 s (jdtls start).
+- Not opened: two-literal and non-literal-operand concatenations stay as they are (no use blocked, value first).
+
+Tokens:
+- worker: 96493 (`subagent_tokens`).
+- reviewer: none, not reviewed.
+- supervisor: 16 calls, output 8817, input + cache write 22302 (cache read 3005879); covers the supervisor session over the period of the ticket (launch of the worker to now), other work included (the stale install rebuilt); exchanges with the user: 1 message.
