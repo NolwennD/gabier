@@ -68,6 +68,40 @@ class NioFileStoreTest {
     }
 
     @Nested
+    class MakingAFolder {
+
+        @Test
+        void makesOneFolderInAFolderThatExists() throws IOException {
+            Path folder = directory.resolve("fresh");
+
+            store.createFolder(folder);
+
+            assertThat(folder).isDirectory();
+            assertThat(names(folder)).isEmpty();
+        }
+
+        @Test
+        void neverReplacesWhatIsThere() throws IOException {
+            Path folder = Files.createDirectory(directory.resolve("folder"));
+            Files.writeString(folder.resolve("a.txt"), "a");
+            Path file = Files.writeString(directory.resolve("b.txt"), "b");
+
+            assertThatExceptionOfType(FileAlreadyExistsException.class).isThrownBy(() -> store.createFolder(folder));
+            assertThatExceptionOfType(FileAlreadyExistsException.class).isThrownBy(() -> store.createFolder(file));
+            assertThat(names(folder)).containsExactly("a.txt");
+            assertThat(file).hasContent("b");
+        }
+
+        @Test
+        void doesNotMakeTheParentsOfTheFolder() {
+            Path folder = directory.resolve("missing/fresh");
+
+            assertThatExceptionOfType(NoSuchFileException.class).isThrownBy(() -> store.createFolder(folder));
+            assertThat(directory.resolve("missing")).doesNotExist();
+        }
+    }
+
+    @Nested
     class Reading {
 
         @Test

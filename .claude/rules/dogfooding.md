@@ -19,7 +19,7 @@ repository does it with `gabier` (installed on the PATH by `mise run install`; t
   remove its declaration (1-based; on the declaration of a method or a constant every use is inlined, on one use that use
   only: see its help);
 - `gabier create [--dry-run] <file> <class|interface|record|enum>` to create a Java file that holds an empty type, with the
-  right `package` line and no comment, instead of writing the file by hand (the folder of the file must exist);
+  right `package` line and no comment, instead of writing the file by hand (the folders of a new package are made with it);
 - `gabier references [--include-declaration] <file> <line>:<column>` to list where a symbol is used (1-based; a type, a
   method, a field, a local variable or a parameter of the project, tests included; the accessors of a field are not
   listed), instead of searching the text. A Java refactoring that gabier has a command for goes through it.

@@ -143,6 +143,7 @@ class CreateTypeMethodTest {
 
         assertThat(failure.problem().key()).isEqualTo("language-server-file-outside-project");
         assertThat(failure.problem().parameters()).containsEntry("file", outside.toString());
+        assertThat(outside.getParent()).doesNotExist();
     }
 
     @Test
@@ -160,13 +161,41 @@ class CreateTypeMethodTest {
     }
 
     @Test
-    void aFolderThatDoesNotExistIsRefusedAndNotCreated() throws IOException {
+    void aFolderThatDoesNotExistIsMadeWithTheFileAndTheAnswerListsTheFile() throws IOException {
         var handler = handler(Scenarios.CREATE_A_TYPE_IN_A_NEW_PACKAGE);
         var gadget = project.resolve("src/main/java/fresh/Gadget.java");
+
+        var answer = changed(handler.handle(create(gadget, "class", "false")));
+
+        assertThat(gadget).content().isEqualTo("package fresh;\n\npublic class Gadget {\n\n}\n");
+        assertThat(answer.created()).containsExactly(gadget);
+        assertThat(answer.diff()).contains("--- /dev/null\n+++ " + gadget).contains("+package fresh;");
+    }
+
+    @Test
+    void aDryRunOnAFolderThatDoesNotExistMakesNothing() throws IOException {
+        var handler = handler(Scenarios.CREATE_A_TYPE_IN_A_NEW_PACKAGE);
+        var gadget = project.resolve("src/main/java/fresh/Gadget.java");
+
+        var answer = changed(handler.handle(create(gadget, "class", "true")));
+
+        assertThat(answer.created()).containsExactly(gadget);
+        assertThat(gadget.getParent()).doesNotExist();
+    }
+
+    @Test
+    void aFileWhereTheFolderWouldGoIsRefusedWithItsProblemObjectAndLeftAsItWas() throws IOException {
+        var handler = handler(Scenarios.CREATE_A_TYPE_IN_A_NEW_PACKAGE);
+        var inTheWay = Files.writeString(project.resolve("src/main/java/fresh"), "in the way");
+        var gadget = inTheWay.resolve("Gadget.java");
 
         var failure = refused(handler.handle(create(gadget, "class", "false")));
 
         assertThat(failure.problem().key()).isEqualTo("editing-folder-missing");
-        assertThat(gadget.getParent()).doesNotExist();
+        assertThat(failure.problem().category()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(failure.problem().parameters())
+                .containsEntry("file", gadget.toString())
+                .containsEntry("folder", inTheWay.toString());
+        assertThat(inTheWay).isRegularFile().content().isEqualTo("in the way");
     }
 }

@@ -13,8 +13,10 @@ import fr.craft.gabier.shared.error.domain.Assert;
  *
  * <p>A file is known by its path made absolute and normalized (no {@code .} nor {@code ..} segment), so two spellings of
  * one path are one file, and the reports give it in that form. The cleaning is on the text of the path: a link in it is
- * not followed. A set creates files and never folders: a created or renamed-to file whose folder does not exist is
- * refused (its folder missing, or not a folder) when the set is planned, by the dry run as by the application.
+ * not followed. The folders of a created file that do not exist are made with it: each is a step of the plan before the
+ * creation of the file, so the dry run makes none and a failed write puts them back with the files. A file in the way of
+ * a folder is refused when the set is planned, by the dry run as by the application. A renamed-to file goes into a folder
+ * that exists: no folder is made for it, and a missing one is refused the same way.
  *
  * <p>Applying and previewing a set is all it does, so it lives in the domain; the use cases of the application layer
  * ({@code Rename}) ask a language server for a set and hand it to this class.

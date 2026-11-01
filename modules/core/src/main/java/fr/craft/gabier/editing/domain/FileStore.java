@@ -33,6 +33,14 @@ public interface FileStore {
      */
     void create(Path file, byte[] content) throws IOException;
 
+    /**
+     * Creates one folder at a path where nothing exists, a link included; its parent must exist. It never makes the
+     * parents, so that each folder made is one that can be removed again: it fails with a {@link
+     * java.nio.file.FileAlreadyExistsException} if something is there, and with a {@link
+     * java.nio.file.NoSuchFileException} if the parent is not.
+     */
+    void createFolder(Path folder) throws IOException;
+
     /** The POSIX permissions of the file, which must exist. */
     Set<PosixFilePermission> permissions(Path file) throws IOException;
 
@@ -42,5 +50,6 @@ public interface FileStore {
     /** Moves a file to a path where nothing exists; its directory must exist. */
     void move(Path from, Path to) throws IOException;
 
+    /** Deletes a file, or a folder that is empty. */
     void delete(Path file) throws IOException;
 }

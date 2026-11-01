@@ -77,12 +77,15 @@ class HelpFlagTest {
     }
 
     @Test
-    void theHelpOfCreateSaysWhereThePackageComesFromAndThatTheFolderMustExist() {
+    void theHelpOfCreateSaysWhereThePackageComesFromAndThatTheFoldersAreMade() {
         for (var help : new String[][] {{"help", "create"}, {"create", "--help"}}) {
             assertThat(printedBy(help))
                     .contains("Notes:")
                     .contains("the package line comes from the folder of the file")
-                    .contains("The folder of the file must exist")
+                    .contains("The folders of the file that do not exist are made with it")
+                    .contains("A dry run makes none")
+                    .contains("A file where a folder would go is refused")
+                    .doesNotContain("must exist")
                     .contains("editing-file-exists")
                     .contains("language-server-not-creatable")
                     .contains("Refusals");

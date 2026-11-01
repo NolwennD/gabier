@@ -1247,8 +1247,9 @@ public final class Scenarios {
                 """)));
 
     /**
-     * A file in a folder that does not exist yet: the server derives the package from the path all the same, but a
-     * change set creates files and never folders, so the application of the answer is refused.
+     * A file in a folder that does not exist yet: the server derives the package from the path all the same, and the
+     * change set it answers holds the file only. The application of the set makes the folders ({@code
+     * ChangeApplier}); the replay on jdtls applies the answer to a copy of the project to prove it.
      */
     public static final Scenario CREATE_A_TYPE_IN_A_NEW_PACKAGE = new Scenario(
             "create-a-type-in-a-new-package",

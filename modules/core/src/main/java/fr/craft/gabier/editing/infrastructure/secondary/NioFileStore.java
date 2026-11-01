@@ -59,6 +59,11 @@ public final class NioFileStore implements FileStore {
     }
 
     @Override
+    public void createFolder(Path folder) throws IOException {
+        Files.createDirectory(folder);
+    }
+
+    @Override
     public Set<PosixFilePermission> permissions(Path file) throws IOException {
         return Files.getPosixFilePermissions(file);
     }

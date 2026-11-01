@@ -176,8 +176,34 @@ class CreateTypeTest {
     }
 
     @Test
-    void createsTheFolderOfTheFileNever() throws IOException {
+    void makesTheFolderOfAFileInANewPackage() throws IOException {
         project(Scenarios.CREATE_A_TYPE_IN_A_NEW_PACKAGE);
+        Path gadget = path("src/main/java/fresh/Gadget.java");
+
+        ChangeReport report = create.apply(gadget, TypeKind.CLASS);
+
+        assertThat(report.created()).containsExactly(gadget);
+        assertThat(gadget).content().isEqualTo("package fresh;\n\npublic class Gadget {\n\n}\n");
+    }
+
+    @Test
+    void makesNoFolderOnADryRunAndShowsTheFileAndItsPackage() throws IOException {
+        project(Scenarios.CREATE_A_TYPE_IN_A_NEW_PACKAGE);
+        Map<String, String> before = snapshot();
+        Path gadget = path("src/main/java/fresh/Gadget.java");
+
+        ChangeReport report = create.dryRun(gadget, TypeKind.CLASS);
+
+        assertThat(report.created()).containsExactly(gadget);
+        assertThat(report.diff()).contains("+package fresh;");
+        assertThat(snapshot()).isEqualTo(before);
+        assertThat(path("src/main/java/fresh")).doesNotExist();
+    }
+
+    @Test
+    void refusesAFileUnderAFileAndMakesNoFolder() throws IOException {
+        project(Scenarios.CREATE_A_TYPE_IN_A_NEW_PACKAGE);
+        Files.writeString(path("src/main/java/fresh"), "in the way");
         Map<String, String> before = snapshot();
 
         assertThatExceptionOfType(EditingException.class)

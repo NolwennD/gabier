@@ -28,8 +28,7 @@ final class Create implements Capability {
                 """)
             .asksTheDaemon(
                     "editing-file-exists: a file is already there; nothing is overwritten",
-                    "editing-folder-missing: the folder of the file does not exist; create it first, gabier creates"
-                            + " no folder",
+                    "editing-folder-missing: a file is where a folder of the file would go; nothing is made",
                     "editing-not-a-type-name: the name of the file, without .java, is not the name of a type",
                     "language-server-not-creatable: the file is under no source folder of the project, or the Java"
                             + " level of the project has no such type",
@@ -40,7 +39,8 @@ final class Create implements Capability {
                 The name of the type is the name of the file; the package line comes from the folder of the file.
                 A file in the default package has no package line.
                 The new type has no comment and an empty body.
-                The folder of the file must exist: gabier creates a file, not a folder.\
+                The folders of the file that do not exist are made with it: a new package needs no mkdir.
+                A dry run makes none. A file where a folder would go is refused and nothing is made.\
                 """);
 
     @Override

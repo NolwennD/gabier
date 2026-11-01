@@ -72,6 +72,38 @@ sealed interface Step {
         }
     }
 
+    /**
+     * Makes one folder, whose parent exists. It is deleted on undo only if this step made it: a folder that was there
+     * when the step ran stays, and so does the target when the step did not even try.
+     */
+    final class MakeFolder implements Step {
+
+        private final Path target;
+        private boolean made;
+
+        MakeFolder(Path target) {
+            this.target = target;
+        }
+
+        @Override
+        public Path target() {
+            return target;
+        }
+
+        @Override
+        public void apply(FileStore store) throws IOException {
+            store.createFolder(target);
+            made = true;
+        }
+
+        @Override
+        public void undo(FileStore store) throws IOException {
+            if (made) {
+                store.delete(target);
+            }
+        }
+    }
+
     /** Moves a file. It is moved back only if this step moved it: a target that is not its work stays. */
     final class Move implements Step {
 

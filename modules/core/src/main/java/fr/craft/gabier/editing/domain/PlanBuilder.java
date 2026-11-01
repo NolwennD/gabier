@@ -7,8 +7,11 @@ import fr.craft.gabier.editing.domain.FileChange.EditFile;
 import fr.craft.gabier.editing.domain.FileChange.RenameFile;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +31,9 @@ final class PlanBuilder {
     private final FileStore store;
     /** The files the changes have read or written: their bytes, or empty for a file that is not there any more. */
     private final Map<Path, Optional<byte[]>> files = new HashMap<>();
+
+    /** The folders the changes make, so that a second file in a new folder does not plan it again. */
+    private final Set<Path> folders = new HashSet<>();
 
     private final List<Step> steps = new ArrayList<>();
     private final List<Path> created = new ArrayList<>();
@@ -91,7 +97,7 @@ final class PlanBuilder {
         if (exists(file)) {
             throw EditingException.fileExists(file);
         }
-        requireFolder(file);
+        makeFolders(file);
         byte[] empty = new byte[0];
         steps.add(new Step.Create(file, empty));
         files.put(file, Optional.of(empty));
@@ -132,14 +138,36 @@ final class PlanBuilder {
         return file.toAbsolutePath().normalize();
     }
 
-    /** The set creates files, never folders: the folder of a new file must be there already,
-     * and be a folder. */
-    private void requireFolder(Path file) {
+    /**
+     * The folder of a file that is to be created is made when it is not there: every missing folder, from the first
+     * that exists down to the folder of the file, is a step before the one that creates the file. What is in the way
+     * (a file, a link to nothing, where a folder would go) cannot be made a folder and is refused.
+     */
+    private void makeFolders(Path file) {
+        Deque<Path> missing = new ArrayDeque<>();
         // A file that is to be created is not the root, which exists: it has a folder.
+        Path folder = Objects.requireNonNull(file.getParent());
+        while (!folders.contains(folder) && !store.isFolder(folder)) {
+            if (exists(folder)) {
+                throw EditingException.folderMissing(file, folder);
+            }
+            missing.push(folder);
+            folder = Objects.requireNonNull(folder.getParent());
+        }
+        missing.forEach(this::makeFolder);
+    }
+
+    /** A file that is renamed to a path goes into a folder that exists: the set makes no folder for it. */
+    private void requireFolder(Path file) {
         Path folder = Objects.requireNonNull(file.getParent());
         if (!store.isFolder(folder)) {
             throw EditingException.folderMissing(file, folder);
         }
+    }
+
+    private void makeFolder(Path folder) {
+        steps.add(new Step.MakeFolder(folder));
+        folders.add(folder);
     }
 
     /** One file header of the unified diff, with the two texts it compares. */
@@ -148,7 +176,7 @@ final class PlanBuilder {
     private boolean exists(Path file) {
         Optional<byte[]> known = files.get(file);
 
-        return known != null ? known.isPresent() : store.exists(file);
+        return known != null ? known.isPresent() : folders.contains(file) || store.exists(file);
     }
 
     private byte[] content(Path file) {

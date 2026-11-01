@@ -102,6 +102,79 @@ class ChangeApplierRollbackTest {
         }
 
         @Test
+        void removesTheFoldersAlreadyMadeWhenTheFileCannotBeCreated() throws IOException {
+            Files.createDirectory(path("src"));
+            Path impossible = path("src/fresh/deeper/New.txt");
+            Map<String, String> before = snapshot();
+            ChangeApplier applier = new ChangeApplier(new FaultyFileStore(files).failing(Operation.CREATE, impossible));
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> applier.apply(set(new CreateFile(impossible))))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(EditingErrorKey.WRITE_FAILED);
+                        assertThat(exception.parameters()).isEqualTo(Map.of("file", impossible.toString()));
+                    });
+
+            assertThat(snapshot()).isEqualTo(before);
+            assertThat(path("src")).isDirectory();
+        }
+
+        @Test
+        void removesTheFirstFolderWhenTheSecondCannotBeMade() throws IOException {
+            Path impossible = path("fresh/deeper");
+            Map<String, String> before = snapshot();
+            FaultyFileStore store = new FaultyFileStore(files).failing(Operation.CREATE_FOLDER, impossible);
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> new ChangeApplier(store).apply(set(new CreateFile(path("fresh/deeper/New.txt")))))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(EditingErrorKey.WRITE_FAILED);
+                        assertThat(exception.parameters()).isEqualTo(Map.of("file", impossible.toString()));
+                    });
+
+            assertThat(snapshot()).isEqualTo(before);
+        }
+
+        @Test
+        void leavesAFolderThatAppearedMeanwhileAndItsFiles() throws IOException {
+            Path appearing = path("fresh");
+            FaultyFileStore store = new FaultyFileStore(files)
+                    .failing(Operation.CREATE_FOLDER, appearing, 1, Failure.FOREIGN_FILE_APPEARS);
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> new ChangeApplier(store).apply(set(new CreateFile(path("fresh/New.txt")))))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(EditingErrorKey.WRITE_FAILED);
+                        assertThat(exception).hasCauseInstanceOf(FileAlreadyExistsException.class);
+                    });
+
+            assertThat(appearing).isDirectory();
+            assertThat(path("fresh/New.txt")).doesNotExist();
+        }
+
+        @Test
+        void reportsTheRollbackIncompleteWhenAFolderMadeCannotBeRemoved() throws IOException {
+            Path folder = path("fresh");
+            Path impossible = path("fresh/New.txt");
+            FaultyFileStore store = new FaultyFileStore(files)
+                    .failing(Operation.CREATE, impossible)
+                    .failing(Operation.DELETE, folder);
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> new ChangeApplier(store).apply(set(new CreateFile(impossible))))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(EditingErrorKey.ROLLBACK_INCOMPLETE);
+                        assertThat(exception.parameters())
+                                .isEqualTo(Map.of(
+                                        "file", impossible.toString(),
+                                        "notRestored", folder.toString()));
+                    });
+
+            assertThat(folder).isDirectory();
+            assertThat(impossible).doesNotExist();
+        }
+
+        @Test
         void restoresTheFirstFileWhenTheSecondEditFails() throws IOException {
             Path first = file("A.txt", "a\n");
             Path second = file("B.txt", "b\n");

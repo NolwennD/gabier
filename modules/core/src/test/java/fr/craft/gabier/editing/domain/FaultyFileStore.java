@@ -22,6 +22,7 @@ final class FaultyFileStore implements FileStore {
     enum Operation {
         WRITE,
         CREATE,
+        CREATE_FOLDER,
         MOVE,
         DELETE
     }
@@ -33,7 +34,7 @@ final class FaultyFileStore implements FileStore {
         HALF_WRITTEN,
         /** A runtime exception that is not the store's to throw. */
         RUNTIME,
-        /** Someone else's file appears at the target, and the call fails because it is there (a move or a create). */
+        /** Someone else's file or folder appears at the target, and the call fails because it is there. */
         FOREIGN_FILE_APPEARS,
         /** The call succeeds, then someone else's file appears at the path (a delete). */
         FOREIGN_FILE_APPEARS_AFTER
@@ -120,6 +121,18 @@ final class FaultyFileStore implements FileStore {
         }
         fail(failure, to);
         delegate.move(from, to);
+    }
+
+    @Override
+    public void createFolder(Path folder) throws IOException {
+        Failure failure = check(Operation.CREATE_FOLDER, folder);
+        if (failure == Failure.FOREIGN_FILE_APPEARS) {
+            // The real call below then fails because the folder is there.
+            delegate.createFolder(folder);
+        } else {
+            fail(failure, folder);
+        }
+        delegate.createFolder(folder);
     }
 
     @Override

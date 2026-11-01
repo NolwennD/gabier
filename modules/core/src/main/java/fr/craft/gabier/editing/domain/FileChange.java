@@ -30,7 +30,8 @@ public sealed interface FileChange {
      * The creation of an empty file, to which a later {@link EditFile} of the same set gives its text, as in the
      * Language Server Protocol.
      *
-     * @param file the file to create, which must not exist; its directory must
+     * @param file the file to create, which must not exist; its directory is made if it does not, but no file may be
+     *     where a directory of the path would go
      */
     record CreateFile(Path file) implements FileChange {
 

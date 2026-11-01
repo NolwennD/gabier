@@ -565,23 +565,16 @@ class ChangeApplierTest {
     class MissingFolders {
 
         @Test
-        void refusesACreateInAFolderThatDoesNotExistAndSaysWhich() throws IOException {
-            Map<String, String> before = snapshot();
-            Path file = path("missing/New.java");
+        void makesTheFoldersOfACreatedFileThatDoNotExistYet() throws IOException {
+            Files.createDirectory(path("src"));
+            Path file = path("src/fresh/deeper/New.java");
 
-            assertThatExceptionOfType(EditingException.class)
-                    .isThrownBy(() -> applier.apply(set(new CreateFile(file))))
-                    .satisfies(exception -> {
-                        assertThat(exception.key()).isEqualTo(EditingErrorKey.FOLDER_MISSING);
-                        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
-                        assertThat(exception.parameters())
-                                .isEqualTo(Map.of(
-                                        "file",
-                                        file.toString(),
-                                        "folder",
-                                        path("missing").toString()));
-                    });
-            assertThat(snapshot()).isEqualTo(before);
+            ChangeReport report = applier.apply(set(new CreateFile(file)));
+
+            assertThat(path("src/fresh")).isDirectory();
+            assertThat(path("src/fresh/deeper")).isDirectory();
+            assertThat(file).isRegularFile().hasContent("");
+            assertThat(report.created()).containsExactly(file);
         }
 
         @Test
@@ -596,21 +589,95 @@ class ChangeApplierTest {
         void refusesBeforeWritingTheChangesThatComeFirst() throws IOException {
             Path edited = file("A.java", "a");
 
+            Path notAFolder = file("B.java", "b");
+
             assertRefusedAndUntouched(
-                    set(new EditFile(edited, List.of(edit(0, 0, 0, 0, "x"))), new CreateFile(path("missing/B.java"))),
+                    set(
+                            new EditFile(edited, List.of(edit(0, 0, 0, 0, "x"))),
+                            new CreateFile(notAFolder.resolve("C.java"))),
                     EditingErrorKey.FOLDER_MISSING);
         }
 
         @Test
-        void givesTheSameVerdictInTheDryRun() throws IOException {
-            Path file = path("missing/New.java");
+        void makesNoFolderInTheDryRunAndReportsTheSameFile() throws IOException {
+            Path file = path("fresh/deeper/New.java");
+            Map<String, String> before = snapshot();
+
+            ChangeReport report = applier.dryRun(set(new CreateFile(file)));
+
+            assertThat(report.created()).containsExactly(file);
+            assertThat(report.diff()).contains("+++ " + file);
+            assertThat(snapshot()).isEqualTo(before);
+        }
+
+        @Test
+        void makesAFolderOnceForTheFilesThatShareIt() throws IOException {
+            ChangeReport report = applier.apply(set(
+                    new CreateFile(path("fresh/A.java")),
+                    new CreateFile(path("fresh/deeper/B.java")),
+                    new CreateFile(path("fresh/C.java"))));
+
+            assertThat(path("fresh/A.java")).exists();
+            assertThat(path("fresh/deeper/B.java")).exists();
+            assertThat(path("fresh/C.java")).exists();
+            assertThat(report.created()).hasSize(3);
+        }
+
+        @Test
+        void keepsTheFoldersThatWereThereAndTheirFiles() throws IOException {
+            Files.createDirectories(path("src/fresh"));
+            Path other = Files.writeString(path("src/fresh/Other.java"), "other");
+
+            applier.apply(set(new CreateFile(path("src/fresh/deeper/New.java"))));
+
+            assertThat(other).hasContent("other");
+            assertThat(path("src/fresh/deeper/New.java")).exists();
+        }
+
+        @Test
+        void refusesAFileWhereTheFolderOfAnotherCreatedFileWouldGo() throws IOException {
+            assertRefusedAndUntouched(
+                    set(new CreateFile(path("fresh/A.java")), new CreateFile(path("fresh"))),
+                    EditingErrorKey.FILE_EXISTS);
+        }
+
+        @Test
+        void refusesAFolderUnderAFileThatAnEarlierChangeCreates() throws IOException {
+            assertRefusedAndUntouched(
+                    set(new CreateFile(path("top")), new CreateFile(path("top/deeper/A.java"))),
+                    EditingErrorKey.FOLDER_MISSING);
+        }
+
+        @Test
+        void refusesAFolderUnderAFileFurtherUpAndSaysWhichIsInTheWay() throws IOException {
+            Path inTheWay = file("A.java", "a");
+            Map<String, String> before = snapshot();
 
             assertThatExceptionOfType(EditingException.class)
-                    .isThrownBy(() -> applier.dryRun(set(new CreateFile(file))))
+                    .isThrownBy(() -> applier.apply(set(new CreateFile(inTheWay.resolve("sub/deeper/New.java")))))
                     .satisfies(exception -> {
                         assertThat(exception.key()).isEqualTo(EditingErrorKey.FOLDER_MISSING);
+                        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
                         assertThat(exception.parameters())
-                                .containsEntry("folder", path("missing").toString());
+                                .isEqualTo(Map.of(
+                                        "file",
+                                        inTheWay.resolve("sub/deeper/New.java").toString(),
+                                        "folder",
+                                        inTheWay.toString()));
+                    });
+            assertThat(snapshot()).isEqualTo(before);
+        }
+
+        @Test
+        void refusesAFolderUnderALinkToNothingInTheDryRunToo() throws IOException {
+            Path link = Files.createSymbolicLink(path("link"), path("gone"));
+            ChangeSet changes = set(new CreateFile(link.resolve("sub/New.java")));
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> applier.dryRun(changes))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(EditingErrorKey.FOLDER_MISSING);
+                        assertThat(exception.parameters()).containsEntry("folder", link.toString());
                     });
         }
 

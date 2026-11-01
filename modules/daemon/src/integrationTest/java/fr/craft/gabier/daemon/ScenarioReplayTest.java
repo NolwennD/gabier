@@ -328,12 +328,15 @@ class ScenarioReplayTest {
         try {
             copyProject(root, copy);
             ChangeSet onTheCopy = rebased(answer, root, copy);
-            for (FileChange change : onTheCopy.changes()) {
-                if (change instanceof FileChange.CreateFile create) {
-                    Files.createDirectories(create.file().getParent());
-                }
-            }
             new ChangeApplier(new NioFileStore()).apply(onTheCopy);
+            // The folders of a created file are made by the application of the set, not by the test.
+            onTheCopy.changes().stream()
+                    .filter(FileChange.CreateFile.class::isInstance)
+                    .map(change -> ((FileChange.CreateFile) change).file())
+                    .forEach(created -> differences
+                            .assertThat(created)
+                            .as("%s: the file the change set creates, and its folders", scenario.name())
+                            .isRegularFile());
             differences
                     .assertThat(compilationErrors(copy))
                     .as("%s: the errors of the project once the change set of jdtls is applied", scenario.name())
