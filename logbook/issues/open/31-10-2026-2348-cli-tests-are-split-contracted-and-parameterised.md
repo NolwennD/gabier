@@ -14,7 +14,7 @@ Shape aimed at: a base `CliTest` (or an extension) with `@TempDir`, `out()`, `er
 `WithoutADaemonTest`) and a `GabierTest` of the dispatch under 200 lines; a test interface `ChangesCommandContract` with default `@Test`
 methods, implemented by a `@Nested` class per command that gives only its command line and its expected request;
 `@ParameterizedTest` + `@MethodSource` for the refusals and invalid answers common to the commands that talk to the daemon and for
-the usage-error loops, `@EnumSource(Command.class)` for the help of each command. AssertJ only; style of reference:
+the usage-error loops, `@MethodSource` on `Capabilities.all()` for the help of each command. AssertJ only; style of reference:
 `RequestHandlerTest.java:258` in the module `daemon`.
 
 Done when:
@@ -35,3 +35,5 @@ Depends on: 01-11-2026-0855-gabier-moves-a-nested-type-to-its-own-file.md (the c
 module). The structure it builds on, `31-10-2026-2348-gabier-is-composed-of-capabilities.md`, is closed.
 Depends on: 01-11-2026-1041-gabier-inlines-a-variable-a-method-or-a-constant.md (same files: the tests of the cli grow with each command; the split
 is done once the combo extract-variable, extract-method and inline is complete).
+Depends on: 01-11-2026-1100-a-command-is-declared-in-its-own-class.md (same files: `Command` stops being an enum, and the tests that read it
+change source; the split is done after).
