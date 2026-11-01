@@ -252,6 +252,7 @@ class CreateTypeTest {
                 .satisfies(exception ->
                         assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
         assertThat(snapshot()).isEqualTo(before);
+        assertThat(path("../outside")).doesNotExist();
     }
 
     @Test
