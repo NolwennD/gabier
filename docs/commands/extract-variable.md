@@ -43,3 +43,19 @@ rename left the rest of the declaration line as it was, and refuses as `language
 another collision that jdtls renames cleanly is not caught. The daemon method is `extract-variable` (parameters `file`, `startLine`, `startColumn`,
 `endLine`, `endColumn`, from 0, `name`, `dryRun`). The `java.codeGeneration.addFinalForNewDeclaration` setting of jdtls
 (`none` by default, which gabier leaves) would make the variable `final`.
+
+## Refusals
+
+A refusal is the problem object on the standard error, exit code 2, and nothing is written. These are the keys the
+command can answer, and the help of the command (`gabier help extract-variable`) lists them:
+
+- `language-server-not-an-expression`: the selection is not an expression jdtls can extract.
+- `language-server-invalid-name`: the name is not a Java identifier, or is a parameter of the method.
+- `language-server-file-outside-project`: the file is not in the project the daemon serves.
+- `language-server-file-missing`: the path is under the project and no file is there.
+- `language-server-not-a-file`: the path is a folder.
+- `editing-stale-edit`: the change cannot be applied to the file as it is.
+- `language-server-not-ready`: the Java language server is not ready.
+- `usage-error`: the arguments are not those of the command.
+- `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.
+- `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.

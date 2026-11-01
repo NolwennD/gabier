@@ -20,3 +20,12 @@ Daemon not running: No daemon answers on /run/user/1000/gabier/gabier.sock: star
 `gabier stop` returns once the daemon has removed its socket and hung up. With no daemon, or with a socket file that
 nobody answers on, `status` and `stop` do not wait and do not start one: they report `daemon-not-running` at once, with
 exit code 2.
+
+## Refusals
+
+A refusal is the problem object on the standard error, exit code 2. `gabier status` and `gabier stop` answer the same
+keys, and the help of each (`gabier help status`, `gabier help stop`) lists them:
+
+- `daemon-not-running`: no daemon answers; the command never starts one.
+- `usage-error`: the arguments are not those of the command.
+- `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.

@@ -8,8 +8,6 @@ import java.util.List;
 final class Standalone {
 
     private static final String VERSION_OPTION = "--version";
-    private static final String HELP_OPTION = "--help";
-    private static final String SHORT_HELP_OPTION = "-h";
 
     private Standalone() {}
 
@@ -21,7 +19,7 @@ final class Standalone {
 
                     return;
                 }
-                case HELP_OPTION, SHORT_HELP_OPTION -> {
+                case Arguments.HELP, Arguments.SHORT_HELP -> {
                     out.println(HelpText.index(json));
 
                     return;

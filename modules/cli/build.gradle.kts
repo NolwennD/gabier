@@ -9,6 +9,13 @@ dependencies {
   testRuntimeOnly(libs.junit.platform.launcher)
 }
 
+// The pages of the commands: the refusals in the help of a command are checked against the ones of its page.
+tasks.test {
+  val commandPages = rootProject.layout.projectDirectory.dir("docs/commands")
+  inputs.dir(commandPages).withPropertyName("commandPages")
+  systemProperty("gabier.docs.commands", commandPages.asFile.path)
+}
+
 graalvmNative {
   binaries {
     named("main") {

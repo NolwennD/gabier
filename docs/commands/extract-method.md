@@ -54,3 +54,21 @@ name asked for is the one jdtls proposed, the rename and the overlay are skipped
 
 The daemon method is `extract-method` (parameters `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, from 0,
 `name`, `dryRun`).
+
+## Refusals
+
+A refusal is the problem object on the standard error, exit code 2, and nothing is written. These are the keys the
+command can answer, and the help of the command (`gabier help extract-method`) lists them:
+
+- `language-server-not-extractable`: the selection is not statements or an expression jdtls can extract (half a
+  statement, an `if` whose branch returns).
+- `language-server-invalid-name`: the name is not a Java identifier, or another method of the class has it with the
+  same parameters.
+- `language-server-file-outside-project`: the file is not in the project the daemon serves.
+- `language-server-file-missing`: the path is under the project and no file is there.
+- `language-server-not-a-file`: the path is a folder.
+- `editing-stale-edit`: the change cannot be applied to the file as it is.
+- `language-server-not-ready`: the Java language server is not ready.
+- `usage-error`: the arguments are not those of the command.
+- `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.
+- `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.

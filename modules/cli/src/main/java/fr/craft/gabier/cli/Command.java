@@ -3,6 +3,7 @@ package fr.craft.gabier.cli;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * The commands of the cli and their help text, written once, here: {@code gabier help} prints it, the dispatch of
@@ -20,7 +21,7 @@ enum Command {
             $ gabier diagnostics src/main/java/demo/Broken.java
             src/main/java/demo/Broken.java:5:16: error: Type mismatch: cannot convert from String to int\
             """,
-            List.of(
+            requestRefusals(
                     "language-server-file-outside-project: the file is not in the project the daemon serves",
                     "language-server-file-missing: the path is under the project and no file is there",
                     "language-server-not-a-file: the path is a folder",
@@ -39,11 +40,14 @@ enum Command {
             modified /work/demo/src/main/java/demo/Main.java
             ...\
             """,
-            List.of(
+            requestRefusals(
                     "language-server-no-such-symbol: no symbol at the position",
                     "language-server-invalid-name: the language server declines the new name",
                     "editing-token-not-found: the identifier is not in the file (--token)",
+                    "editing-file-missing: with --token, no file is at the path",
                     "language-server-file-outside-project: the file is not in the project the daemon serves",
+                    "language-server-file-missing: the path is under the project and no file is there",
+                    "language-server-not-a-file: the path is a folder",
                     "editing-stale-edit: the change cannot be applied to the files as they are",
                     "language-server-not-ready: the Java language server is not ready")),
     ORGANIZE_IMPORTS(
@@ -54,12 +58,14 @@ enum Command {
             $ gabier organize-imports src/main/java/demo/Tidy.java
             nothing to change\
             """,
-            List.of(
+            requestRefusals(
                     "language-server-ambiguous-imports: several packages declare a type the file uses without"
                             + " importing it; the candidates are in the problem",
                     "language-server-unresolved-imports: jdtls would delete imports it reports an error on",
                     "language-server-file-outside-project: the file is not in the project the daemon serves",
                     "language-server-file-missing: the path is under the project and no file is there",
+                    "language-server-not-a-file: the path is a folder",
+                    "editing-stale-edit: the change cannot be applied to the file as it is",
                     "language-server-not-ready: the Java language server is not ready")),
     EXTRACT_VARIABLE(
             "extract-variable",
@@ -71,10 +77,13 @@ enum Command {
             modified /work/demo/src/main/java/demo/Greeter.java
             ...\
             """,
-            List.of(
+            requestRefusals(
                     "language-server-not-an-expression: the selection is not an expression jdtls can extract",
                     "language-server-invalid-name: the name is not a Java identifier, or is a parameter of the method",
                     "language-server-file-outside-project: the file is not in the project the daemon serves",
+                    "language-server-file-missing: the path is under the project and no file is there",
+                    "language-server-not-a-file: the path is a folder",
+                    "editing-stale-edit: the change cannot be applied to the file as it is",
                     "language-server-not-ready: the Java language server is not ready")),
     EXTRACT_METHOD(
             "extract-method",
@@ -86,12 +95,15 @@ enum Command {
             modified /work/demo/src/main/java/demo/Totals.java
             ...\
             """,
-            List.of(
+            requestRefusals(
                     "language-server-not-extractable: the selection is not statements or an expression jdtls can"
                             + " extract (half a statement, an if whose branch returns)",
                     "language-server-invalid-name: the name is not a Java identifier, or another method of the class"
                             + " has it with the same parameters",
                     "language-server-file-outside-project: the file is not in the project the daemon serves",
+                    "language-server-file-missing: the path is under the project and no file is there",
+                    "language-server-not-a-file: the path is a folder",
+                    "editing-stale-edit: the change cannot be applied to the file as it is",
                     "language-server-not-ready: the Java language server is not ready")),
     STATUS(
             "status",
@@ -101,30 +113,20 @@ enum Command {
             $ gabier status
             gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls not-started\
             """,
-            List.of("daemon-not-running: no daemon answers; status never starts one")),
-    STOP(
-            "stop",
-            "stop the daemon",
-            "gabier [--json] stop",
-            """
-            $ gabier stop
-            gabier-daemon stopped\
-            """,
-            List.of("daemon-not-running: no daemon answers; stop never starts one")),
-    HELP(
-            "help",
-            "list the commands, or explain one",
-            """
-            gabier [--json] help [<command>]
-            gabier [--json] --help
-            gabier [--json] -h\
-            """,
-            """
+            runningDaemonRefusals()),
+    STOP("stop", "stop the daemon", "gabier [--json] stop", """
+        $ gabier stop
+        gabier-daemon stopped\
+        """, runningDaemonRefusals()),
+    HELP("help", "list the commands, or explain one", """
+        gabier [--json] help [<command>]
+        gabier [--json] --help
+        gabier [--json] -h\
+        """, """
             $ gabier help rename
             gabier [--json] rename [--dry-run] <file> <line> <column> <new-name>
             ...\
-            """,
-            List.of("usage-error: the command is unknown (the problem lists the known ones)"));
+            """, List.of(Refusal.USAGE));
 
     private final String commandName;
     private final String summary;
@@ -138,6 +140,18 @@ enum Command {
         this.usage = usage;
         this.example = example;
         this.refusals = refusals;
+    }
+
+    /** The refusals of a command that asks the daemon, starting it if need be: its own, then the ones of every such command. */
+    private static List<String> requestRefusals(String... own) {
+        return Stream.concat(
+                        Arrays.stream(own), Stream.of(Refusal.USAGE, Refusal.START_FAILED, Refusal.CONNECTION_FAILED))
+                .toList();
+    }
+
+    /** The refusals of a command that asks a daemon that is running and never starts one. */
+    private static List<String> runningDaemonRefusals() {
+        return List.of(Refusal.NOT_RUNNING, Refusal.USAGE, Refusal.CONNECTION_FAILED);
     }
 
     /** The command whose name this is, if any. */
@@ -170,5 +184,19 @@ enum Command {
     /** The refusals of the command, each as the key of its problem, a colon and what it means. */
     List<String> refusals() {
         return refusals;
+    }
+
+    /** The refusals that more than one command answers, each as the key of its problem, a colon and what it means. */
+    private static final class Refusal {
+
+        static final String USAGE =
+                "usage-error: the arguments are not those of the command (gabier help <command> gives its usage)";
+        static final String START_FAILED =
+                "daemon-start-failed: no daemon answered and gabier-daemon could not be started";
+        static final String CONNECTION_FAILED =
+                "daemon-connection-failed: the connection to the daemon was lost, or it hung up without answering";
+        static final String NOT_RUNNING = "daemon-not-running: no daemon answers; the command never starts one";
+
+        private Refusal() {}
     }
 }

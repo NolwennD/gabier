@@ -51,7 +51,13 @@ public final class Gabier {
 
             return;
         }
-        Capabilities.of(command.get()).run(new Invocation(Arguments.of(arguments), json, out, environment));
+        var words = Arguments.of(arguments);
+        if (words.wantsHelp()) {
+            out.println(HelpText.of(command.get(), json));
+
+            return;
+        }
+        Capabilities.of(command.get()).run(new Invocation(words, json, out, environment));
     }
 
     /** Reports the failure as a problem object on the standard error, as JSON or as text, and gives the exit code. */

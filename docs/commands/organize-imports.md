@@ -53,3 +53,20 @@ is written:
 
 The daemon method is `organize-imports` (parameters `file`,
 `dryRun`).
+
+## Refusals
+
+A refusal is the problem object on the standard error, exit code 2, and nothing is written. These are the keys the
+command can answer, and the help of the command (`gabier help organize-imports`) lists them:
+
+- `language-server-ambiguous-imports`: several packages declare a type the file uses without importing it; the
+  candidates are in the problem.
+- `language-server-unresolved-imports`: jdtls would delete imports it reports an error on.
+- `language-server-file-outside-project`: the file is not in the project the daemon serves.
+- `language-server-file-missing`: the path is under the project and no file is there.
+- `language-server-not-a-file`: the path is a folder.
+- `editing-stale-edit`: the change cannot be applied to the file as it is.
+- `language-server-not-ready`: the Java language server is not ready.
+- `usage-error`: the arguments are not those of the command.
+- `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.
+- `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.

@@ -36,3 +36,21 @@ modified /work/demo/src/main/java/demo/Main.java
 
 The daemon's methods are `rename` (parameters `file`, `line`, `column`, `newName`, `dryRun`) and `rename-token`
 (`file`, `token`, `newName`, `dryRun`); `dryRun` is `true` or `false`, and line and column are numbers from 0.
+
+## Refusals
+
+A refusal is the problem object on the standard error, exit code 2, and nothing is written. These are the keys the
+command can answer, and the help of the command (`gabier help rename`) lists them:
+
+- `language-server-no-such-symbol`: no symbol at the position.
+- `language-server-invalid-name`: the language server declines the new name.
+- `editing-token-not-found`: the identifier is not in the file (`--token`).
+- `editing-file-missing`: with `--token`, no file is at the path.
+- `language-server-file-outside-project`: the file is not in the project the daemon serves.
+- `language-server-file-missing`: the path is under the project and no file is there.
+- `language-server-not-a-file`: the path is a folder.
+- `editing-stale-edit`: the change cannot be applied to the files as they are.
+- `language-server-not-ready`: the Java language server is not ready.
+- `usage-error`: the arguments are not those of the command.
+- `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.
+- `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.

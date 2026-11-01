@@ -16,6 +16,8 @@ record Arguments(List<String> all, List<String> operands) {
 
     static final String DRY_RUN = "--dry-run";
     static final String TOKEN = "--token";
+    static final String HELP = "--help";
+    static final String SHORT_HELP = "-h";
 
     Arguments {
         all = List.copyOf(all);
@@ -25,6 +27,11 @@ record Arguments(List<String> all, List<String> operands) {
     /** The words of a command line whose first word names the command; every other word is an operand. */
     static Arguments of(List<String> all) {
         return new Arguments(all, all.subList(1, all.size()));
+    }
+
+    /** Whether {@code --help} or {@code -h} stands anywhere after the command: the help of the command is asked. */
+    boolean wantsHelp() {
+        return has(HELP) || has(SHORT_HELP);
     }
 
     /** Whether {@code --dry-run} stands anywhere after the command. */

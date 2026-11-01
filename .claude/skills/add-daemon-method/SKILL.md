@@ -59,8 +59,12 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    file changes:
    - a constant of the enum `Command`, with the **help text** written once: its name, a one-line summary, the usage (one
      line per form), an example of a call and its answer, and its refusals (`<key>: <meaning>`), in the order `gabier help`
-     lists them. `CommandTest` fails on a command without one of the five. `gabier help` and `gabier help <command>`
-     print it, and `UsageException` points to them: nothing else lists the commands, so the usage text is not edited;
+     lists them. `CommandTest` fails on a command without one of the five. `gabier help`, `gabier help <command>` and
+     `gabier <command> --help` (handled once, in the dispatch of `Gabier`, for every command) print it, and
+     `UsageException` points to them: nothing else lists the commands, so the usage text is not edited. The refusals are
+     the keys of the `## Refusals` section of the command's page (below): `CommandRefusalsTest` fails when they differ.
+     Every command that asks the daemon also answers `usage-error`, `daemon-start-failed` and `daemon-connection-failed`
+     (`requestRefusals` in `Command` adds them);
    - a final class implementing `Capability` (`command()`, `run(Invocation)`), named after the command (`Rename`,
      `OrganizeImports`; `Diagnostics`, `Status` are the models). `run` reads the words with `invocation.arguments()`
      (`Arguments`: `dryRun()`, `has(option)`, `operands(count, options...)` which takes `--dry-run` and the options out
@@ -77,7 +81,8 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      capability does not compile, and `CapabilitiesTest` checks that each capability runs its own command.
    Test the rules of reading in `ArgumentsTest` when they are new (no socket), and the command in `GabierTest` against
    `ScriptedDaemon` (a real socket, scripted answers). Document it: a page `docs/commands/<command>.md` (modelled on the
-   existing ones: usage, example in text and `--json`, refusals, the daemon method and its parameters), one line in the
+   existing ones: usage, example in text and `--json`, a `## Refusals` section with one bullet `` - `key`: meaning `` per
+   refusal, the daemon method and its parameters), one line in the
    "Capabilities" list of the README that links to it, and a row in the table of methods of `docs/protocol.md`. A file
    given on the command line is sent as an absolute path (the daemon's working directory is not the cli's), and a
    position is shown from 1 in the text and kept from 0 with `--json`.

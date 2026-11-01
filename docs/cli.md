@@ -12,7 +12,8 @@ $ gabier --json --bogus
 {"type":"urn:gabier:error:usage-error","title":"Usage error","detail":"Unsupported arguments; run gabier help for the commands, and gabier help <command> for the usage of one","key":"usage-error","parameters":{"arguments":"--bogus"}}
 ```
 
-`gabier help` lists the commands and `gabier help <command>` explains one: see [help](commands/help.md).
+`gabier help` lists the commands and `gabier help <command>` explains one, as does `gabier <command> --help` (or `-h`):
+see [help](commands/help.md).
 
 The JSON object follows the data model of [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) (problem details)
 without its HTTP side: `type` (a URI that is not meant to be resolved, `urn:gabier:error:<key>`), `title`, `detail`,

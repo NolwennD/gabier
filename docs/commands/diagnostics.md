@@ -21,3 +21,16 @@ src/main/java/demo/Broken.java:5:16: error: Type mismatch: cannot convert from S
 $ gabier --json diagnostics src/main/java/demo/Main.java
 {"diagnostics":[]}
 ```
+
+## Refusals
+
+A refusal is the problem object on the standard error, exit code 2. These are the keys the command can answer, and
+the help of the command (`gabier help diagnostics`) lists them:
+
+- `language-server-file-outside-project`: the file is not in the project the daemon serves.
+- `language-server-file-missing`: the path is under the project and no file is there.
+- `language-server-not-a-file`: the path is a folder.
+- `language-server-not-ready`: the Java language server is not ready.
+- `usage-error`: the arguments are not those of the command.
+- `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.
+- `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.
