@@ -27,3 +27,27 @@ Done when:
 - [ ] `bin/ci` green.
 
 Depends on: 31-10-2026-2259-gabier-extracts-a-method (same file, `Gabier.java`).
+
+## Resolution
+
+Done in 2bddcd0. `Gabier.java` is 67 lines (from 391); each command is a `Capability` class, `Capabilities.of(Command)` is an
+exhaustive `switch`, the arguments are read in `Arguments`, the printing of changed files is shared by composition
+(`ChangedFilesReply`). The skill `add-daemon-method` (step 5) describes the new way to add a command.
+
+Checked (worker's `bin/ci`, last run): format 10s, build 12s, test 173s (JaCoCo 100%), native 195s, jdtls 367s, all passed.
+`GabierTest`, `CommandTest`, `DaemonClientTest` and `DaemonLauncherTest` are unchanged (`git diff` empty). `ArgumentsTest`: 27
+tests, no socket. The skill was applied on a throwaway `ping` command (it passed; without its `case`, `compileJava` fails on the
+non-exhaustive `switch`), then removed.
+
+Review (once): no blocking finding. Order of two errors changed on purpose-free grounds: on a request command, the usage error
+now comes before the socket resolution (an overlong socket path no longer hides a usage error); no test pins it.
+- `Command.java:9` Javadoc line over 120 columns: fixed in 25c4728.
+- `ArgumentsTest`: "dry-run first / middle / last" spread over two tests: a matter of taste, no ticket.
+- `Arguments` canonical constructor accepts operands that are not a sublist of `all`: no case shows a bug today, no ticket.
+
+Friction: moving code between classes was a text edit (gabier has no move or extract-class command); not opened, no use yet.
+
+Tokens:
+- worker: 131067 (subagent_tokens)
+- reviewer: 74086 (subagent_tokens)
+- supervisor: 15 calls, 7640 output, 32420 input + cache write (1007003 cache read), over the period of the ticket, the opening of the other work included; exchanges with the user: 1 messages
