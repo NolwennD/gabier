@@ -19,9 +19,9 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * What the methods that change files share, and {@code references} with them: how their parameters are read (every refusal names the parameter, as an
- * {@code invalid-parameter}), and how the report of the core becomes the result of the protocol. The request carries
- * the parameters that the method declares, so none is checked for presence here.
+ * What the methods that change files share, and {@code references} with them: how their parameters are read (every
+ * refusal names the parameter, as an {@code invalid-parameter}), and how the report of the core becomes the result of the
+ * protocol. The request carries the parameters that the method declares, so none is checked for presence here.
  */
 final class ChangeRequest {
 

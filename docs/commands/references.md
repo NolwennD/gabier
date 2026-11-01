@@ -47,8 +47,9 @@ cleans it.
   find the callers of a getter, ask for the getter.
 - **Only the symbols of the project have references.** The command asks jdtls whether there is a symbol to rename at the
   position (`textDocument/prepareRename`) before it asks for the references, and jdtls declines for a type of the JDK or of
-  a library, as for a blank, a comment, a keyword or a literal: all are refused as `language-server-no-such-symbol`. This
-  is a limit: the uses of `String` in the project are not listed.
+  a library, as for a blank, a comment, a keyword, a literal, a package (`demo` in `import demo.Ledger;`) or a generated
+  method: all are refused as `language-server-no-such-symbol`. This is a limit: the uses of `String` in the project are not
+  listed.
 - **No place in a library is listed.** gabier does not declare `classFileContentsSupport`, so jdtls never answers a location
   in a class file or a jar, and `java.references.includeDecompiledSources` is set to false. Such a place is not listed
   and not refused.
