@@ -1,6 +1,7 @@
 # The daemon starts jdtls without Python
 
 Opened: 01-11-2026 22:19
+On hold: the user does not want it started (01-11-2026); lifted by the user.
 
 An agent or a person installs gabier on a machine with a JDK and no Python, and `gabier` works: the daemon starts the
 Equinox launcher of jdtls itself, instead of running `bin/jdtls`, a Python 3 script of the Eclipse archive that does
