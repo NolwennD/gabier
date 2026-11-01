@@ -9,6 +9,4 @@ Done when:
 - [ ] `JdtlsLanguageServer.java:551-558`: a field renamed to a name that collides with a parameter (`extract-field` of `"count: "` as `count` in `print(int count)`) is refused, shown by a scenario replayed on jdtls; or the claim that the line check guards it is dropped.
 - [ ] `JdtlsLanguageServer.java:429`: the message "jdtls extracted the variable but did not say where its name is" names the operation (constant, field, method), not only the variable.
 - [ ] `JavaLanguageServer.java:55` and `docs/commands/extract-constant.md`: an expression reading an instance member is refused, shown by a scenario replayed on jdtls; or the claim is removed.
-- [ ] `LanguageServerException.notAConstant` (`:58-69`): a `null` literal or a keyword selection does not get the text "it reads no local variable and no instance member".
-- [ ] `Scenarios.java` (`EXTRACT_FIELD_FROM_OUTSIDE_A_CLASS_BODY`): `demo` in the `package` line is not reported as "not an expression".
 - [ ] `bin/ci.d/40-native`: the added comment lines wrap at 120 columns.
