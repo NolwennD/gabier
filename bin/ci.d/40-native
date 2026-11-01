@@ -666,7 +666,7 @@ public final class Native {
             expect(
                     notAnExpression.exit() == 2
                             && notAnExpression.out().isEmpty()
-                            && notAnExpression.err().contains("(language-server-not-an-expression; ")
+                            && notAnExpression.err().contains("(language-server-not-extractable; ")
                             && Files.readString(greeter).equals(original),
                     "extract-variable of a selection that is not an expression is refused as a problem object, exit 2");
 
@@ -861,7 +861,7 @@ public final class Native {
             expect(
                     notAnExpression.exit() == 2
                             && notAnExpression.out().isEmpty()
-                            && notAnExpression.err().contains("(language-server-not-an-expression; ")
+                            && notAnExpression.err().contains("(language-server-not-extractable; ")
                             && Files.readString(totals).equals(original)
                             && !Files.readString(greeter).contains("label"),
                     "extract-field of a selection that is not an expression is refused as a problem object, exit 2");

@@ -17,7 +17,7 @@ final class ExtractVariable implements Capability {
                 ...\
                 """)
             .asksTheDaemon(
-                    "language-server-not-an-expression: the selection is not an expression jdtls can extract",
+                    Refusal.NOT_EXTRACTABLE,
                     "language-server-invalid-name: the name is not a Java identifier, or is a parameter of the method",
                     Refusal.FILE_OUTSIDE_PROJECT,
                     Refusal.FILE_MISSING,

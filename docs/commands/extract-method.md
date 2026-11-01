@@ -12,9 +12,10 @@ the command) writes nothing and shows what would change. The answer is that of `
 
 A refusal is the problem object, exit code 2, and nothing is written:
 
-- `language-server-not-extractable`: the selection is not statements or an expression jdtls can extract, such as half a
-  statement (from the middle of one to the middle of the next) or an `if` whose branch returns while the code after it
-  still runs;
+- `language-server-not-extractable`: the selection is not statements or an expression that can be extracted, such as half
+  a statement (from the middle of one to the middle of the next) or an `if` whose branch returns while the code after it
+  still runs. It is the refusal of the other three extractions, in the same words: jdtls does not say why, and the
+  sentence says no more than that;
 - `language-server-invalid-name`: the name is not a Java identifier (`1st`), or another method of the same class already
   has that name **with the parameter types of the extracted method** (the parameters jdtls worked out, such as `int`
   for `doubled(int)`), which would not compile. The same name with other parameter types is an overload and is accepted;
@@ -60,8 +61,8 @@ The daemon method is `extract-method` (parameters `file`, `startLine`, `startCol
 A refusal is the problem object on the standard error, exit code 2, and nothing is written. These are the keys the
 command can answer, and the help of the command (`gabier help extract-method`) lists them:
 
-- `language-server-not-extractable`: the selection is not statements or an expression jdtls can extract (half a
-  statement, an `if` whose branch returns).
+- `language-server-not-extractable`: the selection is not an expression or statements that can be extracted, and jdtls
+  does not say why.
 - `language-server-invalid-name`: the name is not a Java identifier, or another method of the class has it with the
   same parameters.
 - `language-server-file-outside-project`: the file is not in the project the daemon serves.

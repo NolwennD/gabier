@@ -16,8 +16,7 @@ final class ExtractConstant implements Capability {
                 ...\
                 """)
             .asksTheDaemon(
-                    "language-server-not-extractable: the selection is not an expression that can be a constant (it"
-                            + " reads a local variable or an instance member, or it is not an expression)",
+                    Refusal.NOT_EXTRACTABLE,
                     "language-server-invalid-name: the name is not a Java identifier",
                     Refusal.FILE_OUTSIDE_PROJECT,
                     Refusal.FILE_MISSING,

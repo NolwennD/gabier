@@ -147,6 +147,7 @@ class ScenariosTest {
                         "extract-a-method-that-uses-a-local-variable",
                         "extract-a-method-that-assigns-a-local-variable",
                         "extract-a-method-from-an-expression",
+                        "extract-a-method-from-something-that-is-not-an-expression",
                         "extract-a-method-from-half-a-statement",
                         "extract-a-method-from-a-branch-that-returns",
                         "extract-a-method-to-an-invalid-name",
@@ -154,6 +155,7 @@ class ScenariosTest {
                         "extract-a-method-while-the-server-imports",
                         "extract-a-method-of-a-file-outside-the-project",
                         "extract-a-constant",
+                        "extract-a-constant-from-something-that-is-not-an-expression",
                         "extract-a-constant-that-uses-a-local-variable",
                         "extract-a-constant-to-an-invalid-name",
                         "extract-a-constant-while-the-server-imports",
@@ -251,9 +253,9 @@ class ScenariosTest {
                         LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
                         LanguageServerErrorKey.INVALID_NAME,
                         LanguageServerErrorKey.INVALID_NAME,
-                        LanguageServerErrorKey.NOT_AN_EXPRESSION,
-                        LanguageServerErrorKey.NOT_AN_EXPRESSION,
-                        LanguageServerErrorKey.NOT_AN_EXPRESSION,
+                        LanguageServerErrorKey.NOT_EXTRACTABLE,
+                        LanguageServerErrorKey.NOT_EXTRACTABLE,
+                        LanguageServerErrorKey.NOT_EXTRACTABLE,
                         LanguageServerErrorKey.NOT_READY);
     }
 
@@ -268,6 +270,7 @@ class ScenariosTest {
                         LanguageServerErrorKey.INVALID_NAME,
                         LanguageServerErrorKey.NOT_EXTRACTABLE,
                         LanguageServerErrorKey.NOT_EXTRACTABLE,
+                        LanguageServerErrorKey.NOT_EXTRACTABLE,
                         LanguageServerErrorKey.NOT_READY);
     }
 
@@ -280,6 +283,7 @@ class ScenariosTest {
                         LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
                         LanguageServerErrorKey.INVALID_NAME,
                         LanguageServerErrorKey.NOT_EXTRACTABLE,
+                        LanguageServerErrorKey.NOT_EXTRACTABLE,
                         LanguageServerErrorKey.NOT_READY);
     }
 
@@ -291,8 +295,8 @@ class ScenariosTest {
                 .containsExactlyInAnyOrder(
                         LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
                         LanguageServerErrorKey.INVALID_NAME,
-                        LanguageServerErrorKey.NOT_AN_EXPRESSION,
-                        LanguageServerErrorKey.NOT_AN_EXPRESSION,
+                        LanguageServerErrorKey.NOT_EXTRACTABLE,
+                        LanguageServerErrorKey.NOT_EXTRACTABLE,
                         LanguageServerErrorKey.NOT_READY);
     }
 

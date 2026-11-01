@@ -7,13 +7,21 @@ that holds it. Both positions are **from 1**, as `diagnostics` shows them, and a
 (anywhere after the command) writes nothing and shows what would change. The answer is that of `rename`, for the one file:
 `modified <file>` and the unified diff, preceded by `dry run, nothing written` for a dry run; with `--json`, the same
 `ChangedFiles` object. A refusal is the problem object, exit code 2, and nothing is written: a selection that is not an
-expression jdtls can extract (a keyword, a whole statement, a call of a `void` method; `language-server-not-an-expression`),
-a name that is not a Java identifier, or that is the name of a parameter of the method, such as `name` in
+expression or statements that can be extracted, such as a keyword, a whole statement or a call of a `void` method
+(`language-server-not-extractable`, the same refusal as the other three extractions, in the same words), a name that is not a Java identifier, or that is the name of a parameter of the method, such as `name` in
 `greet(String name)` (`language-server-invalid-name`), a file outside the project, a server that is not ready, a change
 set that cannot be applied to the file as it is. The refusals for a keyword, a whole statement, a call of a `void`
 method, a name that is not an identifier, the name of a parameter, a file outside the project and a server that is not
 ready are contract scenarios replayed on the real jdtls; so is the name `string`, which jdtls proposes for a `String`
 and which is accepted without a rename.
+
+**One refusal for the four extractions.** jdtls answers `java/getRefactorEdit` with nothing, and no message, for every
+selection it cannot extract (jdtls 1.63: the keyword, the statement and the call of a `void` method here, and the same
+selections asked of the other three commands, are scenarios replayed on the real jdtls). The adapter takes the other
+shapes of a refusal for the same one (an answer with no edit, with or without an `errorMessage`; a response error
+`InvalidRequest`), shown with a fake language server for each command, and the message of jdtls is never carried: the
+sentence of the problem is gabier's, the same for the four commands, with the same parameters (`file`, `line`, `column`,
+`endLine`, `endColumn`, from 0).
 
 ```text
 $ gabier extract-variable --dry-run src/main/java/demo/Greeter.java 7:26 7:48 joined
@@ -49,7 +57,8 @@ another collision that jdtls renames cleanly is not caught. The daemon method is
 A refusal is the problem object on the standard error, exit code 2, and nothing is written. These are the keys the
 command can answer, and the help of the command (`gabier help extract-variable`) lists them:
 
-- `language-server-not-an-expression`: the selection is not an expression jdtls can extract.
+- `language-server-not-extractable`: the selection is not an expression or statements that can be extracted, and jdtls
+  does not say why.
 - `language-server-invalid-name`: the name is not a Java identifier, or is a parameter of the method.
 - `language-server-file-outside-project`: the file is not in the project the daemon serves.
 - `language-server-file-missing`: the path is under the project and no file is there.

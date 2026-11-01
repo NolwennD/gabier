@@ -139,16 +139,18 @@ class ExtractFieldTest {
     void refusesAKeyword() throws IOException {
         assertRefused(
                 Scenarios.EXTRACT_FIELD_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION,
-                LanguageServerErrorKey.NOT_AN_EXPRESSION,
-                "The selection 7:8-7:14 of {root}/src/main/java/demo/Greeter.java is not an expression");
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                "The selection 7:8-7:14 of {root}/src/main/java/demo/Greeter.java cannot be extracted: it is not an"
+                        + " expression or statements that can be extracted here");
     }
 
     @Test
     void refusesWhatIsOutsideAClassBody() throws IOException {
         assertRefused(
                 Scenarios.EXTRACT_FIELD_FROM_OUTSIDE_A_CLASS_BODY,
-                LanguageServerErrorKey.NOT_AN_EXPRESSION,
-                "The selection 0:8-0:12 of {root}/" + TOTALS + " is not an expression");
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                "The selection 0:8-0:12 of {root}/" + TOTALS
+                        + " cannot be extracted: it is not an expression or statements that can be extracted here");
     }
 
     @Test

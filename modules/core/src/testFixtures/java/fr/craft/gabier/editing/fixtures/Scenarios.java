@@ -56,39 +56,41 @@ import java.util.stream.Stream;
  *       not one small edit per occurrence. The replay compares the answer to the scenario exactly, and the project
  *       with jdtls' answer applied to a copy must compile. The order of the changes counts, as it does in the
  *       application: the edits of a renamed type come first, the move of its file last, under its old path.
- *   <li>the extraction of a variable: jdtls answers {@code java/getRefactorEdit} with no edit and a message for a
- *       statement and for a call of a {@code void} method ({@link #EXTRACT_VARIABLE_FROM_A_STATEMENT}, {@link
- *       #EXTRACT_VARIABLE_FROM_A_VOID_CALL}), which the adapter maps to {@code not-an-expression}. The name it proposes
- *       ({@code string}) is kept without a rename ({@link #EXTRACT_VARIABLE_TO_THE_NAME_JDTLS_PROPOSES}). A name that the
- *       method already uses ({@link #EXTRACT_VARIABLE_TO_A_NAME_IN_USE}) is not declined by jdtls: its rename answers an
- *       edit that corrupts the declaration ({@code name= ...}), which the adapter detects and refuses as {@code
- *       invalid-name};
- *   <li>the extraction of a method: {@code java/getRefactorEdit} with the command {@code extractMethod} answers no edit
- *       for a selection it cannot extract (half a statement, an {@code if} whose branch returns), which the adapter maps
- *       to {@code not-extractable} ({@link #EXTRACT_METHOD_FROM_HALF_A_STATEMENT}, {@link
- *       #EXTRACT_METHOD_FROM_A_BRANCH_THAT_RETURNS}). The name it proposes is renamed to the one asked for, and the
- *       answer holds the one edit that results from both, from the first character that differs from the file to the
- *       last. The rename of jdtls declines a name that is not an identifier ({@link
+ *   <li>the extraction of a variable: {@code java/getRefactorEdit} with the command {@code extractVariable}. The name it
+ *       proposes ({@code string}) is kept without a rename ({@link #EXTRACT_VARIABLE_TO_THE_NAME_JDTLS_PROPOSES}). A name
+ *       that the method already uses ({@link #EXTRACT_VARIABLE_TO_A_NAME_IN_USE}) is not declined by jdtls: its rename
+ *       answers an edit that corrupts the declaration ({@code name= ...}), which the adapter detects and refuses as
+ *       {@code invalid-name};
+ *   <li>the extraction of a method: the command {@code extractMethod}. The name it proposes is renamed to the one asked
+ *       for, and the answer holds the one edit that results from both, from the first character that differs from the
+ *       file to the last. The rename of jdtls declines a name that is not an identifier ({@link
  *       #EXTRACT_METHOD_TO_AN_INVALID_NAME}) but not the name of a method the class already has with the same
  *       parameters: it answers an edit that leaves two methods of one signature. The adapter refuses it, from the
  *       methods that jdtls lists for the text ({@code textDocument/documentSymbol}), as {@code invalid-name} ({@link
  *       #EXTRACT_METHOD_TO_A_NAME_IN_USE});
- *   <li>the extraction of a constant: {@code java/getRefactorEdit} with the command {@code extractConstant} (no client
- *       capability, no setting) answers the declaration at the top of the class and the replacement of the expression;
- *       the name it proposes is renamed as for a variable, and the answer holds the one edit that results from both
- *       ({@link #EXTRACT_CONSTANT}). For an expression that reads a local variable ({@link
- *       #EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE}) it answers nothing, no message either, which the adapter maps to
- *       {@code not-extractable}; a name that is not an identifier is declined by the rename ({@link
- *       #EXTRACT_CONSTANT_TO_AN_INVALID_NAME});
- *   <li>the extraction of a field: {@code java/getRefactorEdit} with the command {@code extractField} (no client
- *       capability, no setting; its optional argument, the place of the initialisation, is not sent) answers the
- *       declaration at the top of the class, the assignment in the current method, which is jdtls's default, and the
- *       replacement of the expression. The place it gives for the name to rename is the assignment, below the
- *       declaration; the rename changes the text before it and the answer holds the one edit that results from both
- *       ({@link #EXTRACT_FIELD}). jdtls answers nothing, no message either, for a keyword and for an expression outside a
- *       class body, which the adapter maps to {@code not-an-expression} ({@link
- *       #EXTRACT_FIELD_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION}, {@link #EXTRACT_FIELD_FROM_OUTSIDE_A_CLASS_BODY}); a
- *       name that is not an identifier is declined by the rename ({@link #EXTRACT_FIELD_TO_AN_INVALID_NAME});
+ *   <li>the extraction of a constant: the command {@code extractConstant} (no client capability, no setting) answers the
+ *       declaration at the top of the class and the replacement of the expression; the name it proposes is renamed as
+ *       for a variable, and the answer holds the one edit that results from both ({@link #EXTRACT_CONSTANT}). A name
+ *       that is not an identifier is declined by the rename ({@link #EXTRACT_CONSTANT_TO_AN_INVALID_NAME});
+ *   <li>the extraction of a field: the command {@code extractField} (no client capability, no setting; its optional
+ *       argument, the place of the initialisation, is not sent) answers the declaration at the top of the class, the
+ *       assignment in the current method, which is jdtls's default, and the replacement of the expression. The place it
+ *       gives for the name to rename is the assignment, below the declaration; the rename changes the text before it
+ *       and the answer holds the one edit that results from both ({@link #EXTRACT_FIELD}). A name that is not an
+ *       identifier is declined by the rename ({@link #EXTRACT_FIELD_TO_AN_INVALID_NAME});
+ *   <li>a selection that cannot be extracted: the four extractions refuse it in one way, {@code not-extractable}, with
+ *       one text written by gabier, never the message of jdtls. jdtls (1.63) answers {@code java/getRefactorEdit} with
+ *       nothing, and no message, for all of them: a keyword, a statement, a call of a {@code void} method, half a
+ *       statement, an {@code if} whose branch returns, an expression that reads a local variable, an expression outside
+ *       a class body ({@link #EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION}, {@link
+ *       #EXTRACT_VARIABLE_FROM_A_STATEMENT}, {@link #EXTRACT_VARIABLE_FROM_A_VOID_CALL}, {@link
+ *       #EXTRACT_METHOD_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION}, {@link #EXTRACT_METHOD_FROM_HALF_A_STATEMENT}, {@link
+ *       #EXTRACT_METHOD_FROM_A_BRANCH_THAT_RETURNS}, {@link #EXTRACT_CONSTANT_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION},
+ *       {@link #EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE}, {@link
+ *       #EXTRACT_FIELD_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION}, {@link #EXTRACT_FIELD_FROM_OUTSIDE_A_CLASS_BODY}). The
+ *       handler of jdtls has no message for these commands, but the adapter takes the other shapes of a refusal for the
+ *       same one (an edit that is null with an {@code errorMessage}, a response error {@code InvalidRequest}), which
+ *       the adapter's unit tests show with a fake;
  *   <li>the move of a nested type to a file of its own: {@code java/move} with the move kind {@code moveTypeToNewFile}
  *       answers the edits of the files that refer to the type, of the outer class, the creation of the new file
  *       (because the client declares the resource operations) and the edit that gives it its text ({@link
@@ -756,21 +758,21 @@ public final class Scenarios {
             "extract-a-variable-from-something-that-is-not-an-expression",
             PROJECT,
             new Request.ExtractVariable(GREETER, new Range(new Position(7, 8), new Position(7, 14)), "joined"),
-            new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+            new Answer.Refused(LanguageServerErrorKey.NOT_EXTRACTABLE));
 
     /** A whole statement, {@code ;} included: jdtls has no extraction for it. */
     public static final Scenario EXTRACT_VARIABLE_FROM_A_STATEMENT = new Scenario(
             "extract-a-variable-from-a-statement",
             PROJECT,
             new Request.ExtractVariable(GREETER, new Range(new Position(6, 8), new Position(6, 48)), "joined"),
-            new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+            new Answer.Refused(LanguageServerErrorKey.NOT_EXTRACTABLE));
 
     /** {@code System.out.println(...)}, a call of a {@code void} method: it has no value to keep in a variable. */
     public static final Scenario EXTRACT_VARIABLE_FROM_A_VOID_CALL = new Scenario(
             "extract-a-variable-from-a-void-call",
             PROJECT,
             new Request.ExtractVariable(MAIN, new Range(new Position(5, 8), new Position(5, 50)), "printed"),
-            new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+            new Answer.Refused(LanguageServerErrorKey.NOT_EXTRACTABLE));
 
     /**
      * {@code string}, the name jdtls proposes for a {@code String}: no rename is needed, the answer is the edit of
@@ -861,6 +863,13 @@ public final class Scenarios {
                         return\s\
                 """))))));
 
+    /** The keyword {@code return}: a selection that is not statements or an expression, as for the other extractions. */
+    public static final Scenario EXTRACT_METHOD_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION = new Scenario(
+            "extract-a-method-from-something-that-is-not-an-expression",
+            PROJECT,
+            new Request.ExtractMethod(GREETER, new Range(new Position(7, 8), new Position(7, 14)), "joined"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_EXTRACTABLE));
+
     /** From the middle of one statement to the middle of the next: not statements, jdtls offers no extraction. */
     public static final Scenario EXTRACT_METHOD_FROM_HALF_A_STATEMENT = new Scenario(
             "extract-a-method-from-half-a-statement",
@@ -923,6 +932,13 @@ public final class Scenarios {
                         System.out.println(COUNT_LABEL\
                 """))))));
 
+    /** The keyword {@code return}: a selection that is not an expression, as for the other extractions. */
+    public static final Scenario EXTRACT_CONSTANT_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION = new Scenario(
+            "extract-a-constant-from-something-that-is-not-an-expression",
+            PROJECT,
+            new Request.ExtractConstant(GREETER, new Range(new Position(7, 8), new Position(7, 14)), "LABEL"),
+            new Answer.Refused(LanguageServerErrorKey.NOT_EXTRACTABLE));
+
     /** {@code "count: " + count}: it reads a local variable, so it cannot be a constant. */
     public static final Scenario EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE = new Scenario(
             "extract-a-constant-that-uses-a-local-variable",
@@ -974,14 +990,14 @@ public final class Scenarios {
             "extract-a-field-from-something-that-is-not-an-expression",
             PROJECT,
             new Request.ExtractField(GREETER, new Range(new Position(7, 8), new Position(7, 14)), "label"),
-            new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+            new Answer.Refused(LanguageServerErrorKey.NOT_EXTRACTABLE));
 
     /** {@code demo}, in the {@code package} line: outside any class body, so no field can hold it. */
     public static final Scenario EXTRACT_FIELD_FROM_OUTSIDE_A_CLASS_BODY = new Scenario(
             "extract-a-field-from-outside-a-class-body",
             PROJECT,
             new Request.ExtractField(TOTALS, new Range(new Position(0, 8), new Position(0, 12)), "label"),
-            new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+            new Answer.Refused(LanguageServerErrorKey.NOT_EXTRACTABLE));
 
     /** A name that begins with a digit is not an identifier: jdtls declines the rename that gives the name. */
     public static final Scenario EXTRACT_FIELD_TO_AN_INVALID_NAME = new Scenario(
@@ -1587,6 +1603,7 @@ public final class Scenarios {
                 EXTRACT_METHOD_THAT_USES_A_LOCAL_VARIABLE,
                 EXTRACT_METHOD_THAT_ASSIGNS_A_LOCAL_VARIABLE,
                 EXTRACT_METHOD_FROM_AN_EXPRESSION,
+                EXTRACT_METHOD_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION,
                 EXTRACT_METHOD_FROM_HALF_A_STATEMENT,
                 EXTRACT_METHOD_FROM_A_BRANCH_THAT_RETURNS,
                 EXTRACT_METHOD_TO_AN_INVALID_NAME,
@@ -1594,6 +1611,7 @@ public final class Scenarios {
                 EXTRACT_METHOD_WHILE_THE_SERVER_IMPORTS,
                 EXTRACT_METHOD_OUTSIDE_THE_PROJECT,
                 EXTRACT_CONSTANT,
+                EXTRACT_CONSTANT_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION,
                 EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE,
                 EXTRACT_CONSTANT_TO_AN_INVALID_NAME,
                 EXTRACT_CONSTANT_WHILE_THE_SERVER_IMPORTS,

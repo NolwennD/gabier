@@ -39,7 +39,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionContext;
@@ -273,8 +272,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * what a client does after the edit. The two edits are folded into one on the text as it is on disk
      * ({@link SourceText#replacing}), so that the answer shows the final name only.
      *
-     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, there is no expression to
-     *     extract in the selection or jdtls declines the name
+     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, jdtls cannot extract the
+     *     selection or declines the name
      * @throws JdtlsException if jdtls dies, does not answer in time or answers what the adapter cannot apply
      */
     @Override
@@ -287,11 +286,10 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * the class) named as asked, and replaces it by the constant. As for the variable, jdtls proposes a name of its own
      * ({@code java/getRefactorEdit}, command {@code extractConstant}, which needs no client capability and no setting)
      * and says where it is for the client to rename: the constant is renamed with {@code textDocument/rename} on the text
-     * the edit gives, and the two edits are folded into one. jdtls gives no answer, and no message, for an expression
-     * that cannot be a constant (it reads a local variable or an instance member).
+     * the edit gives, and the two edits are folded into one. A selection that jdtls cannot extract is refused in the same way by the four extractions.
      *
-     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, the selection cannot be a
-     *     constant or jdtls declines the name
+     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, jdtls cannot extract the
+     *     selection or declines the name
      * @throws JdtlsException if jdtls dies, does not answer in time or answers what the adapter cannot apply
      */
     @Override
@@ -307,8 +305,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * one. Where the field is initialised is left to jdtls: the command takes the place as an optional argument, which the
      * adapter does not send, so jdtls takes its default, the current method.
      *
-     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, the selection cannot be a
-     *     field or jdtls declines the name
+     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, jdtls cannot extract the
+     *     selection or declines the name
      * @throws JdtlsException if jdtls dies, does not answer in time or answers what the adapter cannot apply
      */
     @Override
@@ -332,56 +330,35 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     }
 
     /**
-     * The refactorings of {@code java/getRefactorEdit} that introduce a name for the client to rename.
-     *
-     * @param command the refactoring
-     * @param what how the extraction is called in the messages
-     * @param refusal the refusal when jdtls has no extraction for the selection
+     * The refactorings of {@code java/getRefactorEdit} that introduce a name for the client to rename: the command of
+     * the refactoring, how the extraction is called in the messages, and what it introduces.
      */
     private enum Extraction {
-        VARIABLE(
-                "extractVariable",
-                "the extraction of the expression",
-                "the extracted variable",
-                LanguageServerException::notAnExpression),
-        CONSTANT(
-                "extractConstant",
-                "the extraction of the expression into a constant",
-                "the extracted constant",
-                LanguageServerException::notAConstant),
-        FIELD(
-                "extractField",
-                "the extraction of the expression into a field",
-                "the extracted field",
-                LanguageServerException::notAnExpression),
-        METHOD(
-                "extractMethod",
-                "the extraction of the selection into a method",
-                "the extracted method",
-                LanguageServerException::notExtractable);
+        VARIABLE("extractVariable", "the extraction of the expression", "the extracted variable"),
+        CONSTANT("extractConstant", "the extraction of the expression into a constant", "the extracted constant"),
+        FIELD("extractField", "the extraction of the expression into a field", "the extracted field"),
+        METHOD("extractMethod", "the extraction of the selection into a method", "the extracted method");
 
         private final String command;
         private final String what;
         private final String extracted;
-        private final BiFunction<Path, Range, LanguageServerException> refusal;
 
-        Extraction(
-                String command,
-                String what,
-                String extracted,
-                BiFunction<Path, Range, LanguageServerException> refusal) {
+        Extraction(String command, String what, String extracted) {
             this.command = command;
             this.what = what;
             this.extracted = extracted;
-            this.refusal = refusal;
         }
     }
 
-    /** The extraction that jdtls offers as a command of {@code java/getRefactorEdit}, with the name asked for. */
+    /**
+     * The extraction that jdtls offers as a command of {@code java/getRefactorEdit}, with the name asked for. A selection
+     * jdtls cannot extract is refused the same way by the four extractions, whatever jdtls answers: nothing at all (what
+     * it answers for these commands), a response error {@code InvalidRequest}, or an answer with no edit, with a message
+     * or without. The refusal is gabier's text; the message of jdtls, when there is one, is not carried.
+     */
     private ChangeSet extract(Extraction extraction, Path file, Range selection, String name) {
         String command = extraction.command;
         String what = extraction.what;
-        BiFunction<Path, Range, LanguageServerException> refusal = extraction.refusal;
         JdtlsSession session = ready();
         Path path = normalized(file);
         String original = textInProject(session, path);
@@ -394,12 +371,10 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             var proposal = watch.await(
                     what + " at " + selection + " of " + path,
                     () -> JdtlsRequests.unlessDeclined(session.server().getRefactorEdit(refactoring)));
-            var refactor = proposal.orElseThrow(() -> refusal.apply(path, selection));
-            // jdtls gives no edit, and says why in errorMessage, for a selection it cannot extract: a statement, a call
-            // of a void method.
+            var refactor = proposal.orElseThrow(() -> LanguageServerException.notExtractable(path, selection));
             var proposed = refactor.edit();
             if (proposed == null) {
-                throw refusal.apply(path, selection);
+                throw LanguageServerException.notExtractable(path, selection);
             }
             String extracted = SourceText.edited(path, original, editsOf(path, proposed, original));
             var introduced = introducedName(refactor, extracted);

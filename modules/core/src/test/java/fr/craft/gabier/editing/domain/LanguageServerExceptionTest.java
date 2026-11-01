@@ -22,7 +22,6 @@ class LanguageServerExceptionTest {
                         "language-server-file-outside-project",
                         "language-server-invalid-name",
                         "language-server-no-such-symbol",
-                        "language-server-not-an-expression",
                         "language-server-not-creatable",
                         "language-server-not-inlinable",
                         "language-server-not-extractable",
@@ -54,20 +53,7 @@ class LanguageServerExceptionTest {
     }
 
     @Test
-    void saysWhichSelectionIsNotAnExpression() {
-        LanguageServerException exception =
-                LanguageServerException.notAnExpression(FILE, new Range(new Position(4, 7), new Position(5, 2)));
-
-        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION);
-        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
-        assertThat(exception.parameters())
-                .isEqualTo(
-                        Map.of("file", FILE.toString(), "line", "4", "column", "7", "endLine", "5", "endColumn", "2"));
-        assertThat(exception).hasMessage("The selection 4:7-5:2 of " + FILE + " is not an expression");
-    }
-
-    @Test
-    void saysWhichSelectionCannotBeExtractedIntoAMethod() {
+    void saysWhichSelectionCannotBeExtracted() {
         LanguageServerException exception =
                 LanguageServerException.notExtractable(FILE, new Range(new Position(4, 7), new Position(5, 2)));
 
@@ -77,23 +63,8 @@ class LanguageServerExceptionTest {
                 .isEqualTo(
                         Map.of("file", FILE.toString(), "line", "4", "column", "7", "endLine", "5", "endColumn", "2"));
         assertThat(exception)
-                .hasMessage("The selection 4:7-5:2 of " + FILE + " is not statements or an expression to extract");
-    }
-
-    @Test
-    void saysWhichSelectionCannotBeExtractedIntoAConstant() {
-        LanguageServerException exception =
-                LanguageServerException.notAConstant(FILE, new Range(new Position(4, 7), new Position(5, 2)));
-
-        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE);
-        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
-        assertThat(exception.parameters())
-                .isEqualTo(
-                        Map.of("file", FILE.toString(), "line", "4", "column", "7", "endLine", "5", "endColumn", "2"));
-        assertThat(exception)
                 .hasMessage("The selection 4:7-5:2 of " + FILE
-                        + " is not an expression that can be a constant (it reads no local variable and no instance"
-                        + " member)");
+                        + " cannot be extracted: it is not an expression or statements that can be extracted here");
     }
 
     @Test

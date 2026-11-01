@@ -25,6 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 class ExtractConstantTest {
 
+    private static final String GREETER = "src/main/java/demo/Greeter.java";
     private static final String TOTALS = "src/main/java/demo/Totals.java";
     private static final Range LABEL = new Range(new Position(5, 27), new Position(5, 36));
 
@@ -134,13 +135,21 @@ class ExtractConstantTest {
     }
 
     @Test
+    void refusesAKeyword() throws IOException {
+        assertRefused(
+                Scenarios.EXTRACT_CONSTANT_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION,
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                "The selection 7:8-7:14 of {root}/" + GREETER
+                        + " cannot be extracted: it is not an expression or statements that can be extracted here");
+    }
+
+    @Test
     void refusesAnExpressionThatReadsALocalVariable() throws IOException {
         assertRefused(
                 Scenarios.EXTRACT_CONSTANT_THAT_USES_A_LOCAL_VARIABLE,
                 LanguageServerErrorKey.NOT_EXTRACTABLE,
                 "The selection 5:27-5:44 of {root}/" + TOTALS
-                        + " is not an expression that can be a constant (it reads no local variable and no instance"
-                        + " member)");
+                        + " cannot be extracted: it is not an expression or statements that can be extracted here");
     }
 
     @Test

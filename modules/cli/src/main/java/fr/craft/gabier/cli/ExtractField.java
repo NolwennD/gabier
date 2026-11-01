@@ -16,8 +16,7 @@ final class ExtractField implements Capability {
                 ...\
                 """)
             .asksTheDaemon(
-                    "language-server-not-an-expression: the selection is not an expression jdtls can extract into a"
-                            + " field (a keyword, a statement), or it is outside a class body",
+                    Refusal.NOT_EXTRACTABLE,
                     "language-server-invalid-name: the name is not a Java identifier",
                     Refusal.FILE_OUTSIDE_PROJECT,
                     Refusal.FILE_MISSING,

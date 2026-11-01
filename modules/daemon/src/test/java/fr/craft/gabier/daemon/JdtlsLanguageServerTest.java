@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionKind;
@@ -64,7 +65,9 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
@@ -1718,7 +1721,7 @@ class JdtlsLanguageServerTest {
             try (var server = started()) {
                 assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
                         .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
-                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION);
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE);
                             assertThat(refusal.parameters())
                                     .containsEntry("file", greeter.toString())
                                     .containsEntry("line", "2")
@@ -1738,8 +1741,7 @@ class JdtlsLanguageServerTest {
                 assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
                         .isInstanceOfSatisfying(
                                 LanguageServerException.class,
-                                refusal ->
-                                        assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE));
             }
         }
 
@@ -1785,7 +1787,7 @@ class JdtlsLanguageServerTest {
             try (var server = started()) {
                 assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
                         .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
-                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION);
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE);
                             assertThat(refusal.parameters()).containsEntry("file", greeter.toString());
                         });
                 assertThat(fake.opened()).isEmpty();
@@ -2507,7 +2509,9 @@ class JdtlsLanguageServerTest {
                                     .containsEntry("endLine", "2")
                                     .containsEntry("endColumn", "36");
                         })
-                        .hasMessageContaining("is not an expression that can be a constant");
+                        .hasMessageContaining(
+                                "cannot be extracted: it is not an expression or statements that can be extracted"
+                                        + " here");
                 assertThat(fake.opened()).isEmpty();
             }
         }
@@ -2731,7 +2735,7 @@ class JdtlsLanguageServerTest {
             try (var server = started()) {
                 assertThatThrownBy(() -> server.extractField(totals, selection, "label"))
                         .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
-                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION);
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE);
                             assertThat(refusal.parameters())
                                     .containsEntry("file", totals.toString())
                                     .containsEntry("line", "2")
@@ -2752,8 +2756,7 @@ class JdtlsLanguageServerTest {
                 assertThatThrownBy(() -> server.extractField(totals, selection, "label"))
                         .isInstanceOfSatisfying(
                                 LanguageServerException.class,
-                                refusal ->
-                                        assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE));
             }
         }
 
@@ -2797,6 +2800,84 @@ class JdtlsLanguageServerTest {
                         .hasMessageContaining(
                                 "Interrupted while waiting for the extraction of the expression into a field");
                 assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+    }
+
+    /** What an extraction does with a selection that jdtls cannot extract: the same, for the four, whatever jdtls says. */
+    @Nested
+    class ExtractingWhatJdtlsCannotExtract {
+
+        @FunctionalInterface
+        interface Extractor {
+            ChangeSet extract(
+                    JdtlsLanguageServer server, Path file, fr.craft.gabier.editing.domain.Range selection, String name);
+        }
+
+        private final fr.craft.gabier.editing.domain.Range selection =
+                new fr.craft.gabier.editing.domain.Range(new Position(2, 15), new Position(2, 31));
+        private Path greeter;
+
+        @BeforeEach
+        void writeTheSources() throws IOException {
+            greeter = write("src/main/java/demo/Greeter.java", """
+                class Greeter {
+                    String greet(String name) {
+                        return "Hello, " + name;
+                    }
+                }
+                """);
+        }
+
+        static Stream<Arguments> everyExtraction() {
+            return Stream.of(
+                    Arguments.of("variable", (Extractor) JdtlsLanguageServer::extractVariable),
+                    Arguments.of("method", (Extractor) JdtlsLanguageServer::extractMethod),
+                    Arguments.of("constant", (Extractor) JdtlsLanguageServer::extractConstant),
+                    Arguments.of("field", (Extractor) JdtlsLanguageServer::extractField));
+        }
+
+        static Stream<Arguments> everyAnswerThatIsNoEdit() {
+            return Stream.of(
+                    Arguments.of("nothing", (Supplier<CompletableFuture<JdtlsServer.RefactorEdit>>)
+                            () -> CompletableFuture.completedFuture(null)),
+                    Arguments.of("an error message and no edit", (Supplier<CompletableFuture<JdtlsServer.RefactorEdit>>)
+                            () -> CompletableFuture.completedFuture(
+                                    new JdtlsServer.RefactorEdit(null, null, "Cannot extract this selection"))),
+                    Arguments.of("no edit and no message", (Supplier<CompletableFuture<JdtlsServer.RefactorEdit>>)
+                            () -> CompletableFuture.completedFuture(new JdtlsServer.RefactorEdit(null, null, null))),
+                    Arguments.of("a refusal of the request", (Supplier<CompletableFuture<JdtlsServer.RefactorEdit>>)
+                            () -> CompletableFuture.failedFuture(new ResponseErrorException(new ResponseError(
+                                    ResponseErrorCode.InvalidRequest, "Cannot extract this selection", null)))));
+        }
+
+        static Stream<Arguments> everyExtractionWithEveryAnswer() {
+            return everyExtraction()
+                    .flatMap(extraction -> everyAnswerThatIsNoEdit()
+                            .map(answer -> Arguments.of(
+                                    extraction.get()[0], extraction.get()[1], answer.get()[0], answer.get()[1])));
+        }
+
+        @ParameterizedTest(name = "{0}, jdtls answers {2}")
+        @MethodSource("everyExtractionWithEveryAnswer")
+        void refusesInOneWayWhateverTheCommandAndTheAnswer(
+                String command,
+                Extractor extractor,
+                String answerName,
+                Supplier<CompletableFuture<JdtlsServer.RefactorEdit>> answer)
+                throws Exception {
+            fake.refactorEditAnswers(answer.get());
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> extractor.extract(server, greeter, selection, "name"))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            var expected = LanguageServerException.notExtractable(greeter, selection);
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE);
+                            assertThat(refusal.parameters()).isEqualTo(expected.parameters());
+                            assertThat(refusal).hasMessage(expected.getMessage());
+                            assertThat(refusal.getMessage()).doesNotContain("Cannot extract this selection");
+                        });
+                assertThat(fake.opened()).isEmpty();
             }
         }
     }

@@ -185,8 +185,6 @@ class ScenarioTest {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> scenario(diagnostics, new Answer.Refused(LanguageServerErrorKey.INVALID_NAME)));
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> scenario(diagnostics, new Answer.Refused(LanguageServerErrorKey.NOT_AN_EXPRESSION)));
-        assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> scenario(diagnostics, new Answer.Refused(LanguageServerErrorKey.NOT_EXTRACTABLE)));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> scenario(diagnostics, new Answer.Refused(LanguageServerErrorKey.AMBIGUOUS_IMPORTS)));
@@ -220,8 +218,6 @@ class ScenarioTest {
         LanguageServerException invalidName = rename.refusal(LanguageServerErrorKey.INVALID_NAME);
         assertThat(invalidName.parameters()).containsEntry("name", "1st");
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> rename.refusal(LanguageServerErrorKey.NOT_AN_EXPRESSION));
-        assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> rename.refusal(LanguageServerErrorKey.NOT_EXTRACTABLE));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> rename.refusal(LanguageServerErrorKey.AMBIGUOUS_IMPORTS));
@@ -240,15 +236,13 @@ class ScenarioTest {
                 .isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
         assertThat(extract.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
                 .isEqualTo(Map.of("file", FILE.toString()));
-        assertThat(extract.refusal(LanguageServerErrorKey.NOT_AN_EXPRESSION).parameters())
+        assertThat(extract.refusal(LanguageServerErrorKey.NOT_EXTRACTABLE).parameters())
                 .isEqualTo(
                         Map.of("file", FILE.toString(), "line", "0", "column", "6", "endLine", "0", "endColumn", "7"));
         assertThat(extract.refusal(LanguageServerErrorKey.INVALID_NAME).parameters())
                 .isEqualTo(Map.of("file", FILE.toString(), "line", "0", "column", "6", "name", "1st"));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NOT_EXTRACTABLE));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.AMBIGUOUS_IMPORTS));
         assertThatExceptionOfType(IllegalArgumentException.class)
@@ -274,8 +268,6 @@ class ScenarioTest {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NOT_AN_EXPRESSION));
-        assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.AMBIGUOUS_IMPORTS));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.UNRESOLVED_IMPORTS));
@@ -300,8 +292,6 @@ class ScenarioTest {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NOT_AN_EXPRESSION));
-        assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.AMBIGUOUS_IMPORTS));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.UNRESOLVED_IMPORTS));
@@ -318,7 +308,7 @@ class ScenarioTest {
                 .isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
         assertThat(extract.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
                 .isEqualTo(Map.of("file", FILE.toString()));
-        assertThat(extract.refusal(LanguageServerErrorKey.NOT_AN_EXPRESSION).parameters())
+        assertThat(extract.refusal(LanguageServerErrorKey.NOT_EXTRACTABLE).parameters())
                 .isEqualTo(
                         Map.of("file", FILE.toString(), "line", "0", "column", "6", "endLine", "0", "endColumn", "7"));
         assertThat(extract.refusal(LanguageServerErrorKey.INVALID_NAME).parameters())
@@ -326,11 +316,24 @@ class ScenarioTest {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.NOT_EXTRACTABLE));
-        assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.AMBIGUOUS_IMPORTS));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> extract.refusal(LanguageServerErrorKey.UNRESOLVED_IMPORTS));
+    }
+
+    @Test
+    void refusesASelectionTheFourExtractionsCannotExtractInOneWay() {
+        var refusals = List.of(
+                new Request.ExtractVariable(FILE, SELECTION, "name").refusal(LanguageServerErrorKey.NOT_EXTRACTABLE),
+                new Request.ExtractMethod(FILE, SELECTION, "name").refusal(LanguageServerErrorKey.NOT_EXTRACTABLE),
+                new Request.ExtractConstant(FILE, SELECTION, "NAME").refusal(LanguageServerErrorKey.NOT_EXTRACTABLE),
+                new Request.ExtractField(FILE, SELECTION, "name").refusal(LanguageServerErrorKey.NOT_EXTRACTABLE));
+
+        assertThat(refusals).allSatisfy(refusal -> {
+            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE);
+            assertThat(refusal.parameters()).isEqualTo(refusals.getFirst().parameters());
+            assertThat(refusal).hasMessage(refusals.getFirst().getMessage());
+        });
     }
 
     @Test
@@ -348,7 +351,6 @@ class ScenarioTest {
         for (var key : List.of(
                 LanguageServerErrorKey.NO_SUCH_SYMBOL,
                 LanguageServerErrorKey.INVALID_NAME,
-                LanguageServerErrorKey.NOT_AN_EXPRESSION,
                 LanguageServerErrorKey.NOT_EXTRACTABLE,
                 LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
                 LanguageServerErrorKey.UNRESOLVED_IMPORTS)) {
@@ -386,7 +388,6 @@ class ScenarioTest {
         for (var key : List.of(
                 LanguageServerErrorKey.NO_SUCH_SYMBOL,
                 LanguageServerErrorKey.INVALID_NAME,
-                LanguageServerErrorKey.NOT_AN_EXPRESSION,
                 LanguageServerErrorKey.NOT_EXTRACTABLE,
                 LanguageServerErrorKey.NOT_MOVABLE,
                 LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
@@ -411,7 +412,6 @@ class ScenarioTest {
                 LanguageServerErrorKey.NOT_A_FILE,
                 LanguageServerErrorKey.NO_SUCH_SYMBOL,
                 LanguageServerErrorKey.INVALID_NAME,
-                LanguageServerErrorKey.NOT_AN_EXPRESSION,
                 LanguageServerErrorKey.NOT_EXTRACTABLE,
                 LanguageServerErrorKey.NOT_INLINABLE,
                 LanguageServerErrorKey.NOT_MOVABLE,
@@ -439,7 +439,6 @@ class ScenarioTest {
         for (var key : List.of(
                 LanguageServerErrorKey.NO_SUCH_SYMBOL,
                 LanguageServerErrorKey.INVALID_NAME,
-                LanguageServerErrorKey.NOT_AN_EXPRESSION,
                 LanguageServerErrorKey.NOT_EXTRACTABLE,
                 LanguageServerErrorKey.NOT_MOVABLE,
                 LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
@@ -472,8 +471,6 @@ class ScenarioTest {
                 .isThrownBy(() -> organize.refusal(LanguageServerErrorKey.NO_SUCH_SYMBOL));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> organize.refusal(LanguageServerErrorKey.INVALID_NAME));
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> organize.refusal(LanguageServerErrorKey.NOT_AN_EXPRESSION));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> organize.refusal(LanguageServerErrorKey.NOT_EXTRACTABLE));
     }
@@ -670,7 +667,6 @@ class ScenarioTest {
                 .isEqualTo(Map.of("file", FILE.toString(), "line", "0", "column", "6"));
         for (var key : List.of(
                 LanguageServerErrorKey.INVALID_NAME,
-                LanguageServerErrorKey.NOT_AN_EXPRESSION,
                 LanguageServerErrorKey.NOT_EXTRACTABLE,
                 LanguageServerErrorKey.NOT_INLINABLE,
                 LanguageServerErrorKey.NOT_MOVABLE,

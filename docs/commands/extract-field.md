@@ -14,9 +14,9 @@ declaration and the constructors, when the expression allows them; the command t
 
 A refusal is the problem object, exit code 2, and nothing is written:
 
-- `language-server-not-an-expression`: the selection is not an expression jdtls can extract into a field, such as a keyword
-  or a whole statement, or it lies outside a class body (the name in the `package` line). jdtls answers nothing, and no
-  message, so the refusal is gabier's own sentence and does not tell which of the reasons it is;
+- `language-server-not-extractable`: the selection is not an expression that can be extracted into a field, such as a
+  keyword or a whole statement, or it lies outside a class body (the name in the `package` line). It is the refusal of the
+  other three extractions, in the same words: jdtls does not say why, and the sentence says no more than that;
 - `language-server-invalid-name`: the name is not a Java identifier (`1st`);
 - a file outside the project, a server that is not ready, a change set that cannot be applied to the file as it is.
 
@@ -59,8 +59,8 @@ that the rename left it as it was. The daemon method is `extract-field` (paramet
 A refusal is the problem object on the standard error, exit code 2, and nothing is written. These are the keys the
 command can answer, and the help of the command (`gabier help extract-field`) lists them:
 
-- `language-server-not-an-expression`: the selection is not an expression jdtls can extract into a field, or it is outside
-  a class body.
+- `language-server-not-extractable`: the selection is not an expression or statements that can be extracted, and jdtls
+  does not say why.
 - `language-server-invalid-name`: the name is not a Java identifier.
 - `language-server-file-outside-project`: the file is not in the project the daemon serves.
 - `language-server-file-missing`: the path is under the project and no file is there.

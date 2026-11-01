@@ -129,7 +129,18 @@ class HelpTest extends CliTest {
         assertThat((String) help.get("usage")).contains("extract-variable [--dry-run] <file>");
         assertThat((String) help.get("example")).startsWith("$ gabier extract-variable");
         assertThat(strings(help.get("refusals")))
-                .anySatisfy(refusal -> assertThat(refusal).startsWith("language-server-not-an-expression"));
+                .anySatisfy(refusal -> assertThat(refusal).startsWith("language-server-not-extractable"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"extract-variable", "extract-method", "extract-constant", "extract-field"})
+    void helpOfTheFourExtractionsListsTheSameRefusalOfASelectionThatCannotBeExtracted(String command) {
+        assertThat(run("help", "--json", command)).isZero();
+
+        assertThat(strings(object(Json.parse(out())).get("refusals")))
+                .contains("language-server-not-extractable: the selection is not an expression or statements that can"
+                        + " be extracted, and jdtls does not say why")
+                .noneSatisfy(refusal -> assertThat(refusal).startsWith("language-server-not-an-expression"));
     }
 
     @Test

@@ -39,8 +39,8 @@ public interface JavaLanguageServer {
      *
      * @param selection the expression, from its first character to the end of its last
      * @return the change set to apply
-     * @throws LanguageServerException if the server is not ready, the file is not a file of its project (outside it, missing or a folder), the selection is not
-     *     an expression that can be extracted or the name is not valid for the variable
+     * @throws LanguageServerException if the server is not ready, the file is not a file of its project (outside it, missing or a folder), the selection cannot
+     *     be extracted or the name is not valid for the variable
      */
     ChangeSet extractVariable(Path file, Range selection, String name);
 
@@ -52,8 +52,8 @@ public interface JavaLanguageServer {
      * @param selection the expression, from its first character to the end of its last
      * @return the change set to apply
      * @throws LanguageServerException if the server is not ready, the file is not a file of its project (outside it,
-     *     missing or a folder), the selection cannot be a constant (it reads a local variable or an instance member, or
-     *     it is not an expression) or the name is not valid for the constant
+     *     missing or a folder), the selection cannot be
+     *     extracted or the name is not valid for the constant
      */
     ChangeSet extractConstant(Path file, Range selection, String name);
 
@@ -66,8 +66,8 @@ public interface JavaLanguageServer {
      * @param selection the expression, from its first character to the end of its last
      * @return the change set to apply
      * @throws LanguageServerException if the server is not ready, the file is not a file of its project (outside it,
-     *     missing or a folder), the selection cannot be a field (it is not an expression, or it is outside a class body)
-     *     or the name is not valid for the field
+     *     missing or a folder), the selection cannot be
+     *     extracted or the name is not valid for the field
      */
     ChangeSet extractField(Path file, Range selection, String name);
 
@@ -79,7 +79,7 @@ public interface JavaLanguageServer {
      * @param selection the statements or the expression, from the first character to the end of the last
      * @return the change set to apply
      * @throws LanguageServerException if the server is not ready, the file is not a file of its project (outside it, missing or a folder), the selection cannot
-     *     be extracted (half a statement, a {@code return} of a branch) or the name is not valid for the method
+     *     be extracted or the name is not valid for the method
      */
     ChangeSet extractMethod(Path file, Range selection, String name);
 

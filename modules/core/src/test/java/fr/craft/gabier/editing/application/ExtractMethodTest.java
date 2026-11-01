@@ -25,6 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 class ExtractMethodTest {
 
+    private static final String GREETER = "src/main/java/demo/Greeter.java";
     private static final String TOTALS = "src/main/java/demo/Totals.java";
     private static final Range PRINT = new Range(new Position(5, 8), new Position(5, 46));
     private static final Range SUM = new Range(new Position(10, 8), new Position(13, 9));
@@ -159,11 +160,21 @@ class ExtractMethodTest {
     }
 
     @Test
+    void refusesAKeyword() throws IOException {
+        assertRefused(
+                Scenarios.EXTRACT_METHOD_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION,
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                "The selection 7:8-7:14 of {root}/" + GREETER
+                        + " cannot be extracted: it is not an expression or statements that can be extracted here");
+    }
+
+    @Test
     void refusesHalfAStatement() throws IOException {
         assertRefused(
                 Scenarios.EXTRACT_METHOD_FROM_HALF_A_STATEMENT,
                 LanguageServerErrorKey.NOT_EXTRACTABLE,
-                "The selection 5:30-6:20 of {root}/" + TOTALS + " is not statements or an expression to extract");
+                "The selection 5:30-6:20 of {root}/" + TOTALS
+                        + " cannot be extracted: it is not an expression or statements that can be extracted here");
     }
 
     @Test
@@ -171,7 +182,8 @@ class ExtractMethodTest {
         assertRefused(
                 Scenarios.EXTRACT_METHOD_FROM_A_BRANCH_THAT_RETURNS,
                 LanguageServerErrorKey.NOT_EXTRACTABLE,
-                "The selection 18:8-20:9 of {root}/" + TOTALS + " is not statements or an expression to extract");
+                "The selection 18:8-20:9 of {root}/" + TOTALS
+                        + " cannot be extracted: it is not an expression or statements that can be extracted here");
     }
 
     @Test

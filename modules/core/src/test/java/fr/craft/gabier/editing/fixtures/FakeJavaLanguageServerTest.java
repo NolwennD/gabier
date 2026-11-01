@@ -115,8 +115,7 @@ class FakeJavaLanguageServerTest {
         assertThatExceptionOfType(LanguageServerException.class)
                 .isThrownBy(() ->
                         server.extractVariable(GREETER, new Range(new Position(7, 8), new Position(7, 14)), "joined"))
-                .satisfies(
-                        exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE));
         assertThatExceptionOfType(LanguageServerException.class)
                 .isThrownBy(() ->
                         server.extractVariable(GREETER, new Range(new Position(6, 25), new Position(6, 47)), "1st"))
@@ -203,8 +202,7 @@ class FakeJavaLanguageServerTest {
         assertThatExceptionOfType(LanguageServerException.class)
                 .isThrownBy(
                         () -> server.extractField(GREETER, new Range(new Position(7, 8), new Position(7, 14)), "label"))
-                .satisfies(
-                        exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_AN_EXPRESSION));
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_EXTRACTABLE));
     }
 
     @Test

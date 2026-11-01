@@ -10,9 +10,9 @@ written` for a dry run; with `--json`, the same `ChangedFiles` object.
 
 A refusal is the problem object, exit code 2, and nothing is written:
 
-- `language-server-not-extractable`: the selection is not an expression that can be a constant. jdtls refuses an
-  expression that reads a local variable or a parameter, such as `"count: " + count` when `count` is a local variable. It
-  answers nothing, and no message, so the refusal is gabier's own sentence and does not tell which of the reasons it is;
+- `language-server-not-extractable`: the selection is not an expression that can be extracted into a constant, such as
+  `"count: " + count` when `count` is a local variable, or a keyword. It is the refusal of the other three extractions, in
+  the same words: jdtls does not say why, and the sentence says no more than that;
 - `language-server-invalid-name`: the name is not a Java identifier (`1ST`);
 - a file outside the project, a server that is not ready, a change set that cannot be applied to the file as it is.
 
@@ -53,8 +53,8 @@ other occurrences. The daemon method is `extract-constant` (parameters `file`, `
 A refusal is the problem object on the standard error, exit code 2, and nothing is written. These are the keys the
 command can answer, and the help of the command (`gabier help extract-constant`) lists them:
 
-- `language-server-not-extractable`: the selection is not an expression that can be a constant (it reads a local variable
-  or an instance member, or it is not an expression).
+- `language-server-not-extractable`: the selection is not an expression or statements that can be extracted, and jdtls
+  does not say why.
 - `language-server-invalid-name`: the name is not a Java identifier.
 - `language-server-file-outside-project`: the file is not in the project the daemon serves.
 - `language-server-file-missing`: the path is under the project and no file is there.

@@ -110,7 +110,7 @@ class ExtractVariableMethodTest {
 
         var failure = refused(handler.handle(extract(greeterSource, "7:8", "7:14", "joined", "false")));
 
-        assertThat(failure.problem().key()).isEqualTo("language-server-not-an-expression");
+        assertThat(failure.problem().key()).isEqualTo("language-server-not-extractable");
         assertThat(failure.problem().category()).isEqualTo(ErrorStatus.BAD_REQUEST);
         assertThat(failure.problem().parameters())
                 .containsEntry("line", "7")

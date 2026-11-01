@@ -152,7 +152,6 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NO_SUCH_SYMBOL,
                             INVALID_NAME,
-                            NOT_AN_EXPRESSION,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
@@ -188,7 +187,6 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case UNRESOLVED_IMPORTS -> LanguageServerException.unresolvedImports(file, details);
                     case NO_SUCH_SYMBOL,
                             INVALID_NAME,
-                            NOT_AN_EXPRESSION,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
@@ -222,8 +220,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NO_SUCH_SYMBOL -> LanguageServerException.noSuchSymbol(file, position);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, position, newName);
-                    case NOT_AN_EXPRESSION,
-                            NOT_EXTRACTABLE,
+                    case NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             NOT_MOVABLE_TO_PACKAGE,
@@ -255,10 +252,9 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
-                    case NOT_AN_EXPRESSION -> LanguageServerException.notAnExpression(file, selection);
+                    case NOT_EXTRACTABLE -> LanguageServerException.notExtractable(file, selection);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, selection.start(), name);
                     case NO_SUCH_SYMBOL,
-                            NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             NOT_MOVABLE_TO_PACKAGE,
@@ -294,7 +290,6 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_EXTRACTABLE -> LanguageServerException.notExtractable(file, selection);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, selection.start(), name);
                     case NO_SUCH_SYMBOL,
-                            NOT_AN_EXPRESSION,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             NOT_MOVABLE_TO_PACKAGE,
@@ -327,10 +322,9 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
-                    case NOT_EXTRACTABLE -> LanguageServerException.notAConstant(file, selection);
+                    case NOT_EXTRACTABLE -> LanguageServerException.notExtractable(file, selection);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, selection.start(), name);
                     case NO_SUCH_SYMBOL,
-                            NOT_AN_EXPRESSION,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             NOT_MOVABLE_TO_PACKAGE,
@@ -363,10 +357,9 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
-                    case NOT_AN_EXPRESSION -> LanguageServerException.notAnExpression(file, selection);
+                    case NOT_EXTRACTABLE -> LanguageServerException.notExtractable(file, selection);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, selection.start(), name);
                     case NO_SUCH_SYMBOL,
-                            NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             NOT_MOVABLE_TO_PACKAGE,
@@ -401,7 +394,6 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_MOVABLE -> LanguageServerException.notMovable(file, position);
                     case NO_SUCH_SYMBOL,
                             INVALID_NAME,
-                            NOT_AN_EXPRESSION,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE_TO_PACKAGE,
@@ -451,7 +443,6 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_MOVABLE_TO_PACKAGE -> notMovable(details.getFirst());
                     case NO_SUCH_SYMBOL,
                             INVALID_NAME,
-                            NOT_AN_EXPRESSION,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
@@ -498,7 +489,6 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_INLINABLE -> LanguageServerException.notInlinable(file, position);
                     case NO_SUCH_SYMBOL,
                             INVALID_NAME,
-                            NOT_AN_EXPRESSION,
                             NOT_EXTRACTABLE,
                             NOT_MOVABLE,
                             NOT_MOVABLE_TO_PACKAGE,
@@ -531,7 +521,6 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NO_SUCH_SYMBOL -> LanguageServerException.noSuchSymbol(file, position);
                     case INVALID_NAME,
-                            NOT_AN_EXPRESSION,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
@@ -567,7 +556,6 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_A_FILE,
                             NO_SUCH_SYMBOL,
                             INVALID_NAME,
-                            NOT_AN_EXPRESSION,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,

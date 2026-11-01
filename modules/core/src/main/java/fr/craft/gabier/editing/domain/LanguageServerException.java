@@ -34,36 +34,15 @@ public final class LanguageServerException extends GeneratorException {
                 .message("There is no symbol at " + format(position) + " in " + file));
     }
 
-    /** The selection is not an expression the server can act on (nothing selected, a statement, a type, a void call). */
-    public static LanguageServerException notAnExpression(Path file, Range selection) {
-        return new LanguageServerException(positioned(LanguageServerErrorKey.NOT_AN_EXPRESSION, file, selection.start())
-                .message("The selection " + format(selection.start()) + "-" + format(selection.end()) + " of " + file
-                        + " is not an expression")
-                .addParameter("endLine", String.valueOf(selection.end().line()))
-                .addParameter("endColumn", String.valueOf(selection.end().column())));
-    }
-
     /**
-     * The selection is not statements or an expression the server can extract into a method (half a statement, a
-     * {@code return} of a branch that the rest of the method needs, a type).
+     * The server cannot extract the selection, whichever of the four extractions was asked (variable, method, constant,
+     * field): it is not an expression, or statements, that can be extracted there. The server does not tell why, and
+     * the text says no more than that.
      */
     public static LanguageServerException notExtractable(Path file, Range selection) {
         return new LanguageServerException(positioned(LanguageServerErrorKey.NOT_EXTRACTABLE, file, selection.start())
                 .message("The selection " + format(selection.start()) + "-" + format(selection.end()) + " of " + file
-                        + " is not statements or an expression to extract")
-                .addParameter("endLine", String.valueOf(selection.end().line()))
-                .addParameter("endColumn", String.valueOf(selection.end().column())));
-    }
-
-    /**
-     * The selection is not an expression the server can extract into a constant: it reads a local variable or an
-     * instance member, or it is not an expression. The server does not tell which.
-     */
-    public static LanguageServerException notAConstant(Path file, Range selection) {
-        return new LanguageServerException(positioned(LanguageServerErrorKey.NOT_EXTRACTABLE, file, selection.start())
-                .message("The selection " + format(selection.start()) + "-" + format(selection.end()) + " of " + file
-                        + " is not an expression that can be a constant (it reads no local variable and no instance"
-                        + " member)")
+                        + " cannot be extracted: it is not an expression or statements that can be extracted here")
                 .addParameter("endLine", String.valueOf(selection.end().line()))
                 .addParameter("endColumn", String.valueOf(selection.end().column())));
     }

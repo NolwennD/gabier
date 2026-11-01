@@ -138,8 +138,9 @@ class ExtractVariableTest {
     void refusesASelectionThatIsNotAnExpression() throws IOException {
         assertRefused(
                 Scenarios.EXTRACT_VARIABLE_FROM_SOMETHING_THAT_IS_NOT_AN_EXPRESSION,
-                LanguageServerErrorKey.NOT_AN_EXPRESSION,
-                "The selection 7:8-7:14 of {root}/" + GREETER + " is not an expression");
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                "The selection 7:8-7:14 of {root}/" + GREETER
+                        + " cannot be extracted: it is not an expression or statements that can be extracted here");
     }
 
     @Test
@@ -154,16 +155,18 @@ class ExtractVariableTest {
     void refusesAWholeStatement() throws IOException {
         assertRefused(
                 Scenarios.EXTRACT_VARIABLE_FROM_A_STATEMENT,
-                LanguageServerErrorKey.NOT_AN_EXPRESSION,
-                "The selection 6:8-6:48 of {root}/" + GREETER + " is not an expression");
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                "The selection 6:8-6:48 of {root}/" + GREETER
+                        + " cannot be extracted: it is not an expression or statements that can be extracted here");
     }
 
     @Test
     void refusesACallOfAVoidMethod() throws IOException {
         assertRefused(
                 Scenarios.EXTRACT_VARIABLE_FROM_A_VOID_CALL,
-                LanguageServerErrorKey.NOT_AN_EXPRESSION,
-                "The selection 5:8-5:50 of {root}/src/main/java/demo/Main.java is not an expression");
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                "The selection 5:8-5:50 of {root}/src/main/java/demo/Main.java cannot be extracted: it is not an"
+                        + " expression or statements that can be extracted here");
     }
 
     @Test

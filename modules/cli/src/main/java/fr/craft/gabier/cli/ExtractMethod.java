@@ -16,8 +16,7 @@ final class ExtractMethod implements Capability {
                 ...\
                 """)
             .asksTheDaemon(
-                    "language-server-not-extractable: the selection is not statements or an expression jdtls can"
-                            + " extract (half a statement, an if whose branch returns)",
+                    Refusal.NOT_EXTRACTABLE,
                     "language-server-invalid-name: the name is not a Java identifier, or another method of the class"
                             + " has it with the same parameters",
                     Refusal.FILE_OUTSIDE_PROJECT,

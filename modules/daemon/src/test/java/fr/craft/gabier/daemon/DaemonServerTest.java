@@ -494,7 +494,7 @@ class DaemonServerTest {
 
             try (var client = connect(socket())) {
                 assertThat(client.ask(extractVariableRequest(greeter, "7", "8", "7", "14", false)))
-                        .contains("\"key\":\"language-server-not-an-expression\"");
+                        .contains("\"key\":\"language-server-not-extractable\"");
                 assertThat(Files.readString(greeter)).doesNotContain("joined");
             }
         }
@@ -626,7 +626,7 @@ class DaemonServerTest {
 
             try (var client = connect(socket())) {
                 assertThat(client.ask(extractFieldRequest(greeter, "7", "8", "7", "14", "label", false)))
-                        .contains("\"key\":\"language-server-not-an-expression\"");
+                        .contains("\"key\":\"language-server-not-extractable\"");
                 assertThat(Files.readString(greeter)).doesNotContain("label");
             }
         }

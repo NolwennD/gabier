@@ -17,6 +17,9 @@ final class Refusal {
     static final String FILE_MISSING =
             "language-server-file-missing: the path is under the project and no file is there";
     static final String NOT_A_FILE = "language-server-not-a-file: the path is a folder";
+    static final String NOT_EXTRACTABLE =
+            "language-server-not-extractable: the selection is not an expression or statements that can be extracted,"
+                    + " and jdtls does not say why";
     static final String NOT_READY = "language-server-not-ready: the Java language server is not ready";
     static final String STALE_EDIT_OF_A_FILE = "editing-stale-edit: the change cannot be applied to the file as it is";
     static final String STALE_EDIT_OF_FILES =
