@@ -136,6 +136,17 @@ the work goes to what an agent can then do that it could not before.
   answer; a workaround of the Python driver is taken over only when the documentation shows no setting that makes it
   useless.
 
+## Orientation (decision of the user, 01-11-2026)
+
+Before reading code to find where something is, in gabier or in the jdtls clone
+(`/home/nolwenn/dev/projects/eclipse.jdt.ls`), ask `ripwire <root> --for="<question in English>"` and read only the
+files it points to.
+
+- Its links are by name, so its counts are floors. What must be exact (callers, references) goes through jdtls, and a
+  refactoring goes through gabier (`.claude/rules/dogfooding.md`).
+- It writes its cache outside the project (`$TMPDIR/ripwire`, then `$XDG_CACHE_HOME/ripwire`). `.ripwire_notes` and
+  `.ripwire_quality_acks` are not created without a decision of the user.
+
 ## Exchanges between agents
 
 Every message between agents, in both directions and including the supervisor's own to the workers and the reviewer

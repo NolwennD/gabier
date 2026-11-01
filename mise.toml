@@ -5,6 +5,11 @@ hk = "2.9.0"
 [tools."github:openjavaformat/open-java-format"]
 version = "2.98.0.6"
 
+# ripwire: a read-only map of a codebase (links by name, not semantics) to orient an agent before it reads code.
+# Never run its install.sh: it activates skills for the whole account.
+[tools."github:redhat-et/ripwire"]
+version = "0.6.9"
+
 [vars]
 # jdtls (the Eclipse JDT language server) has no mise registry entry and no GitHub release: Eclipse publishes tarballs.
 # scripts/jdtls-install.sh installs this milestone after checking the archive against the sha256 pinned here. To bump

@@ -5,7 +5,7 @@ Instructions for an agent (or a person) who changes this repository. What gabier
 
 ## Setup
 
-The tools (hk, open-java-format, jdtls) are pinned in `mise.toml`. One command installs them and the Git
+The tools (hk, open-java-format, ripwire, jdtls) are pinned in `mise.toml`. One command installs them and the Git
 pre-commit hook:
 
 ```sh
