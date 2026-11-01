@@ -8,10 +8,11 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class HelpFlagTest {
@@ -21,6 +22,10 @@ class HelpFlagTest {
 
     private final ByteArrayOutputStream out = new ByteArrayOutputStream();
     private final ByteArrayOutputStream err = new ByteArrayOutputStream();
+
+    static Stream<Command> commands() {
+        return Capabilities.all().stream().map(Capability::command);
+    }
 
     private int run(Map<String, String> environment, String... args) {
         return Gabier.run(args, environment, printStream(out), printStream(err));
@@ -76,19 +81,19 @@ class HelpFlagTest {
     }
 
     @ParameterizedTest
-    @EnumSource(Command.class)
+    @MethodSource("commands")
     void theLongFlagGivesTheSameTextAsHelpOfTheCommand(Command command) {
         assertThat(printedBy(command.commandName(), "--help")).isEqualTo(printedBy("help", command.commandName()));
     }
 
     @ParameterizedTest
-    @EnumSource(Command.class)
+    @MethodSource("commands")
     void theShortFlagGivesTheSameTextAsHelpOfTheCommand(Command command) {
         assertThat(printedBy(command.commandName(), "-h")).isEqualTo(printedBy("help", command.commandName()));
     }
 
     @ParameterizedTest
-    @EnumSource(Command.class)
+    @MethodSource("commands")
     void withJsonTheFlagGivesTheSameObjectAsHelpOfTheCommand(Command command) {
         var help = printedBy("--json", "help", command.commandName());
 
@@ -113,7 +118,7 @@ class HelpFlagTest {
         var socket = directory.resolve("gabier.sock");
         var environment = Map.of("GABIER_SOCKET", socket.toString(), "PATH", bin.toString());
 
-        for (var command : Command.values()) {
+        for (var command : commands().toList()) {
             printedBy(environment, command.commandName(), "--help");
             printedBy(environment, command.commandName(), "-h");
         }

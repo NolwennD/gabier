@@ -6,9 +6,23 @@ package fr.craft.gabier.cli;
  */
 final class Help implements Capability {
 
+    static final Command COMMAND = Command.called("help")
+            .summary("list the commands, or explain one")
+            .usage("""
+                gabier [--json] help [<command>]
+                gabier [--json] --help
+                gabier [--json] -h\
+                """)
+            .example("""
+                $ gabier help rename
+                gabier [--json] rename [--dry-run] <file> <line> <column> <new-name>
+                ...\
+                """)
+            .standalone(Refusal.USAGE);
+
     @Override
     public Command command() {
-        return Command.HELP;
+        return COMMAND;
     }
 
     @Override
@@ -20,7 +34,8 @@ final class Help implements Capability {
             return;
         }
         var name = arguments.exactly(1).operand(0);
-        var command = Command.named(name).orElseThrow(() -> UsageException.unknownCommand(name, HelpText.names()));
-        invocation.out().println(HelpText.of(command, invocation.json()));
+        var capability =
+                Capabilities.named(name).orElseThrow(() -> UsageException.unknownCommand(name, HelpText.names()));
+        invocation.out().println(HelpText.of(capability.command(), invocation.json()));
     }
 }

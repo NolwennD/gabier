@@ -1,34 +1,37 @@
 package fr.craft.gabier.cli;
 
 import fr.craft.gabier.protocol.Json;
-import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 
-/** What {@code gabier help} prints, from the text of {@link Command}: plain text, or the same content as a JSON object. */
+/**
+ * What {@code gabier help} prints, from the commands of {@link Capabilities}: plain text, or the same content as a JSON
+ * object.
+ */
 final class HelpText {
 
     private HelpText() {}
 
     /** The names of all the commands, in the order of {@code gabier help}. */
     static String names() {
-        return Arrays.stream(Command.values()).map(Command::commandName).collect(Collectors.joining(", "));
+        return commands().stream().map(Command::commandName).collect(Collectors.joining(", "));
     }
 
     /** Every command with its summary, and how to ask for more. */
     static String index(boolean json) {
         if (json) {
             return "{\"commands\":["
-                    + Arrays.stream(Command.values())
+                    + commands().stream()
                             .map(command -> "{\"name\":" + Json.quote(command.commandName()) + ",\"summary\":"
                                     + Json.quote(command.summary()) + ",\"usage\":" + Json.quote(command.usage()) + "}")
                             .collect(Collectors.joining(","))
                     + "]}";
         }
-        var width = Arrays.stream(Command.values())
+        var width = commands().stream()
                 .mapToInt(command -> command.commandName().length())
                 .max()
                 .orElse(0);
-        var lines = Arrays.stream(Command.values())
+        var lines = commands().stream()
                 .map(command -> "  " + command.commandName()
                         + " ".repeat(width - command.commandName().length()) + "  " + command.summary())
                 .collect(Collectors.joining("\n"));
@@ -79,6 +82,10 @@ final class HelpText {
                         indented(command.example()),
                         notes,
                         indented(String.join("\n", command.refusals())));
+    }
+
+    private static List<Command> commands() {
+        return Capabilities.all().stream().map(Capability::command).toList();
     }
 
     private static String capitalised(String text) {

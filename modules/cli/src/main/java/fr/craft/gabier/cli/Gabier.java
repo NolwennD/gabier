@@ -45,19 +45,19 @@ public final class Gabier {
     /** Runs the capability of the command the first word names; without one, only {@link Standalone} applies. */
     private static void execute(
             List<String> arguments, Map<String, String> environment, boolean json, PrintStream out) {
-        var command = arguments.isEmpty() ? Optional.<Command>empty() : Command.named(arguments.getFirst());
-        if (command.isEmpty()) {
+        var capability = arguments.isEmpty() ? Optional.<Capability>empty() : Capabilities.named(arguments.getFirst());
+        if (capability.isEmpty()) {
             Standalone.run(arguments, json, out);
 
             return;
         }
         var words = Arguments.of(arguments);
         if (words.wantsHelp()) {
-            out.println(HelpText.of(command.get(), json));
+            out.println(HelpText.of(capability.get().command(), json));
 
             return;
         }
-        Capabilities.of(command.get()).run(new Invocation(words, json, out, environment));
+        capability.get().run(new Invocation(words, json, out, environment));
     }
 
     /** Reports the failure as a problem object on the standard error, as JSON or as text, and gives the exit code. */

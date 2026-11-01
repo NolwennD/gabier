@@ -6,8 +6,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * The refusals in the help of a command are those of its page in {@code docs/commands}: the keys under the heading
@@ -17,8 +18,12 @@ class CommandRefusalsTest {
 
     private static final String HEADING = "## Refusals";
 
+    static Stream<Command> commands() {
+        return Capabilities.all().stream().map(Capability::command);
+    }
+
     @ParameterizedTest
-    @EnumSource(Command.class)
+    @MethodSource("commands")
     void theRefusalsInTheHelpOfACommandAreThoseOfItsPage(Command command) throws IOException {
         var keysInTheHelp = command.refusals().stream()
                 .map(refusal -> refusal.substring(0, refusal.indexOf(':')))

@@ -13,9 +13,18 @@ import java.util.Map;
  */
 final class Diagnostics implements Capability {
 
+    static final Command COMMAND = Command.called("diagnostics")
+            .summary("the errors and warnings of a Java file, without a build")
+            .usage("gabier [--json] diagnostics <file>")
+            .example("""
+                $ gabier diagnostics src/main/java/demo/Broken.java
+                src/main/java/demo/Broken.java:5:16: error: Type mismatch: cannot convert from String to int\
+                """)
+            .asksTheDaemon(Refusal.FILE_OUTSIDE_PROJECT, Refusal.FILE_MISSING, Refusal.NOT_A_FILE, Refusal.NOT_READY);
+
     @Override
     public Command command() {
-        return Command.DIAGNOSTICS;
+        return COMMAND;
     }
 
     @Override

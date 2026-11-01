@@ -9,9 +9,18 @@ import fr.craft.gabier.protocol.TerminalText;
  */
 final class Status implements Capability {
 
+    static final Command COMMAND = Command.called("status")
+            .summary("the project the daemon serves, and where jdtls is")
+            .usage("gabier [--json] status")
+            .example("""
+                $ gabier status
+                gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls not-started\
+                """)
+            .asksARunningDaemon();
+
     @Override
     public Command command() {
-        return Command.STATUS;
+        return COMMAND;
     }
 
     @Override

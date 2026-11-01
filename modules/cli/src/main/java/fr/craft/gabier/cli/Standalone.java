@@ -31,9 +31,9 @@ final class Standalone {
             }
         }
 
-        var meant = arguments.isEmpty() ? Optional.<Command>empty() : Command.nearestTo(arguments.getFirst());
+        var meant = arguments.isEmpty() ? Optional.<Capability>empty() : Capabilities.nearestTo(arguments.getFirst());
         if (meant.isPresent()) {
-            throw UsageException.unknownCommandTypo(arguments, meant.get());
+            throw UsageException.unknownCommandTypo(arguments, meant.get().command());
         }
 
         throw UsageException.unsupportedArguments(arguments);

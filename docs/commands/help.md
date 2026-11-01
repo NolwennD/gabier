@@ -35,9 +35,10 @@ $ gabier help frobnicate
 Usage error: Unknown command; the commands are diagnostics, rename, organize-imports, extract-variable, extract-method, move-type-to-file, inline, status, stop, help (usage-error; command=frobnicate)
 ```
 
-**Where the text lives.** The help text of every command is written once, in the enum `Command` of the cli
-(`modules/cli`), next to the name that `Capabilities.of` switches on: a command added to the enum and given no capability
-does not compile, and `CommandTest` fails on a command with no summary, usage, example or refusal (the notes are optional). It is not
+**Where the text lives.** The help text of every command is written once, in the class of its capability in the cli
+(`modules/cli`), as the constant `COMMAND` built by `Command.called(...)`: a step builder asks for the summary, the usage,
+the example and the family of refusals one after the other, so a command without one of them does not compile (the notes
+are optional). The order of `gabier help` is the order of the list in `Capabilities`. It is not
 copied from these pages, which say more (the reasons, the limits); the help says what an agent needs to call the command
 and read its refusals. When a command changes, change its constant and its page together. The refusals are the one part
 the pages hold too: each page has a `## Refusals` section, one bullet per key (`` - `key`: what it means ``), and

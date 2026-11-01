@@ -55,20 +55,27 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    (`DaemonStatus.jdtlsFailure`, the reason jdtls failed, is the model). A text that comes from jdtls (a reason, a
    message) is hostile input: the result carries it exactly, and whatever prints it for a person goes through
    `TerminalText.neutralise`, as the text of `gabier status` does.
-5. **The cli command**, if there is one: a **capability** of `modules/cli`, a class of its own. Three things, and no other
-   file changes:
-   - a constant of the enum `Command`, with the **help text** written once: its name, a one-line summary, the usage (one
-     line per form), an example of a call and its answer, and its refusals (`<key>: <meaning>`), in the order `gabier help`
-     lists them. `CommandTest` fails on a command without one of the five. A warning to read before the call goes in the
-     optional **notes** (the constructor with six arguments; `move-type-to-file` is the model), printed by `help` between
-     the example and the refusals and added to the JSON of `help` when there are some. `gabier help`, `gabier help <command>` and
-     `gabier <command> --help` (handled once, in the dispatch of `Gabier`, for every command) print it, and
-     `UsageException` points to them: nothing else lists the commands, so the usage text is not edited. The refusals are
-     the keys of the `## Refusals` section of the command's page (below): `CommandRefusalsTest` fails when they differ.
-     Every command that asks the daemon also answers `usage-error`, `daemon-start-failed` and `daemon-connection-failed`
-     (`requestRefusals` in `Command` adds them);
+5. **The cli command**, if there is one: a **capability** of `modules/cli`, a class of its own that holds its help text.
+   Three things, and no other file changes:
    - a final class implementing `Capability` (`command()`, `run(Invocation)`), named after the command (`Rename`,
-     `OrganizeImports`; `Diagnostics`, `Status` are the models). `run` reads the words with `invocation.arguments()`
+     `OrganizeImports`; `Diagnostics`, `Status` are the models). It declares its **help text** once, as the constant
+     `static final Command COMMAND = Command.called("<name>")`, which a step builder fills one part after the other, so
+     that a part left out does not compile: `.summary(...)` (one line), `.usage(...)` (one line per form, each starting
+     with `gabier [--json] <name>`), `.example(...)` (a call on a line that starts with `$ gabier `, and its answer),
+     then the family of refusals: `.asksTheDaemon(own...)` for a command that asks the daemon, starting it if need be
+     (its own refusals, `<key>: <meaning>`, in the order `gabier help` lists them; `usage-error`, `daemon-start-failed`
+     and `daemon-connection-failed` are added), `.asksARunningDaemon()` for one that never starts it (`status`, `stop`),
+     or `.standalone(refusals...)` for one that never talks to it (`help`). A refusal that more than one command
+     answers is a constant of `Refusal` (the file, the language server and the stale edit ones), not a copy. The
+     invariants (non-blank parts, the usage names the command, the example starts with `$ gabier `) are `Assert`s of the
+     compact constructor of `Command`. A warning to read before the call goes in the optional **notes**, `.withNotes(...)`
+     on the built command (`move-type-to-file` and `inline` are the models), printed by `help` between the example and
+     the refusals and added to the JSON of `help` when there are some. A new optional datum of the help text is a default
+     of the builder and a `withXxx(...)` of `Command`, called only by the commands that have it. `command()` returns
+     `COMMAND`. `gabier help`, `gabier help <command>` and `gabier <command> --help` (handled once, in the dispatch of
+     `Gabier`, for every command) print it, and `UsageException` points to them: nothing else lists the commands, so the
+     usage text is not edited. The refusals are the keys of the `## Refusals` section of the command's page (below):
+     `CommandRefusalsTest` fails when they differ. `run` reads the words with `invocation.arguments()`
      (`Arguments`: `dryRun()`, `has(option)`, `operands(count, options...)` which takes `--dry-run` and the options out
      and refuses a wrong count, `exactly(count)` which keeps every word, `file(i)` as an absolute path, `position(i)` for
      `line:column` and `position(i, j)` for two numbers, both counted from 1 by the user and kept from 0; every refusal is
@@ -79,8 +86,9 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      the diff, the dry run), by composition, not by inheritance. A command that does not talk to the daemon (`help`)
      asks nothing and has no row in `docs/protocol.md`. Its output is text by default and the result with `--json`, a
      refusal of the daemon printed as its problem object with the exit code of its category (`DaemonRefusal`);
-   - one `case` in `Capabilities.of`, an exhaustive `switch` on `Command`: a command that is in the enum and has no
-     capability does not compile, and `CapabilitiesTest` checks that each capability runs its own command.
+   - its name in the `permits` clause of the sealed interface `Capability`: a capability left out does not compile;
+   - one `new` in the list of `Capabilities`, at its place in the order of `gabier help`. The list rejects two
+     capabilities with one name when the class loads; no test compares it with `permits`.
    Test the rules of reading in `ArgumentsTest` when they are new (no socket), and the command in `GabierTest` against
    `ScriptedDaemon` (a real socket, scripted answers). Document it: a page `docs/commands/<command>.md` (modelled on the
    existing ones: usage, example in text and `--json`, a `## Refusals` section with one bullet `` - `key`: meaning `` per

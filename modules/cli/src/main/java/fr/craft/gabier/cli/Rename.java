@@ -10,9 +10,33 @@ import java.util.Map;
  */
 final class Rename implements Capability {
 
+    static final Command COMMAND = Command.called("rename")
+            .summary("rename a symbol, and everything that refers to it, in every file")
+            .usage("""
+                gabier [--json] rename [--dry-run] <file> <line> <column> <new-name>
+                gabier [--json] rename [--dry-run] --token <file> <identifier> <new-name>\
+                """)
+            .example("""
+                $ gabier rename --dry-run src/main/java/demo/Greeter.java 6 19 welcome
+                dry run, nothing written
+                modified /work/demo/src/main/java/demo/Greeter.java
+                modified /work/demo/src/main/java/demo/Main.java
+                ...\
+                """)
+            .asksTheDaemon(
+                    "language-server-no-such-symbol: no symbol at the position",
+                    "language-server-invalid-name: the language server declines the new name",
+                    "editing-token-not-found: the identifier is not in the file (--token)",
+                    "editing-file-missing: with --token, no file is at the path",
+                    Refusal.FILE_OUTSIDE_PROJECT,
+                    Refusal.FILE_MISSING,
+                    Refusal.NOT_A_FILE,
+                    Refusal.STALE_EDIT_OF_FILES,
+                    Refusal.NOT_READY);
+
     @Override
     public Command command() {
-        return Command.RENAME;
+        return COMMAND;
     }
 
     @Override

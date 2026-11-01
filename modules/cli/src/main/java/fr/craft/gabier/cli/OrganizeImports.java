@@ -8,9 +8,26 @@ import java.util.Map;
  */
 final class OrganizeImports implements Capability {
 
+    static final Command COMMAND = Command.called("organize-imports")
+            .summary("add the missing imports, remove the unused ones and order the rest, never with a star import")
+            .usage("gabier [--json] organize-imports [--dry-run] <file>")
+            .example("""
+                $ gabier organize-imports src/main/java/demo/Tidy.java
+                nothing to change\
+                """)
+            .asksTheDaemon(
+                    "language-server-ambiguous-imports: several packages declare a type the file uses without"
+                            + " importing it; the candidates are in the problem",
+                    "language-server-unresolved-imports: jdtls would delete imports it reports an error on",
+                    Refusal.FILE_OUTSIDE_PROJECT,
+                    Refusal.FILE_MISSING,
+                    Refusal.NOT_A_FILE,
+                    Refusal.STALE_EDIT_OF_A_FILE,
+                    Refusal.NOT_READY);
+
     @Override
     public Command command() {
-        return Command.ORGANIZE_IMPORTS;
+        return COMMAND;
     }
 
     @Override
