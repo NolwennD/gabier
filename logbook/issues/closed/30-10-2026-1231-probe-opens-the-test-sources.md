@@ -19,3 +19,7 @@ Done when:
 - the time added to the probe is stated in the resolution.
 
 Depends on: diagnostics-of-a-file-through-jdtls (the code of the probe moves to the adapter there).
+
+## Resolution
+
+Closed as obsolete, not done: the probe of the project that this issue wanted to widen was deleted by `02-11-2026-0826-the-jdtls-stage-drops-the-probe-of-the-project.md` (4e07f9c), by the user's decision that gabier working on its own project is proven by use.
