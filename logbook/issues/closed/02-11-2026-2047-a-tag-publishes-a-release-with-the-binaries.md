@@ -36,8 +36,10 @@ Checked: the worker's `bin/ci`, not in one run: format, build, test (cli 598, co
 alone after the fix. Then the check `bin-ci` of pull request #2 on `64066c0`: format 6s, build 76s, test 125s, native 77s,
 jdtls 219s, all passed. Locally, native builds at `0.1.0` and `0.1.0-rc.1` packaged by the script: `sha256sum --check` OK,
 the cli prints `gabier 0.1.0` / `gabier 0.1.0-rc.1`, the daemon of the archive prints its version. `actionlint` was not run
-(its install was refused to the worker). The GitHub release itself is proven by the first tag, `v0.1.0-rc.1`, after this
-close.
+(its install was refused to the worker). The GitHub release is proven by the first tag, `v0.1.0-rc.1` on `b6c1e12`, pushed
+after this close: jobs `version`, `check / bin-ci` and `release` passed; the release `gabier 0.1.0-rc.1` is marked
+pre-release and holds the three assets; downloaded, `sha256sum --check SHA256SUMS` is OK on both, the cli prints
+`gabier 0.1.0-rc.1` and the daemon of the archive `gabier-daemon 0.1.0-rc.1`.
 
 Reviewed once: nothing blocking. Suggestions, opened on hold: `release-workflow-review-suggestions` (a `-` in build
 metadata marks a pre-release; the write token reaches the whole build; a tag off `main` is released) and
