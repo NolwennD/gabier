@@ -25,8 +25,8 @@ public final class Effect {
     private Effect() {}
 
     /**
-     * The sources of the project (the files under its {@link #sourceFolders(Path) source folders}) once the change set is applied to a copy of it. The
-     * project is not touched.
+     * The sources of the project (the files under its {@link #sourceFolders(Path) source folders}) once the change set
+     * is applied to a copy of it. The project is not touched.
      *
      * @param root the folder of the project, which holds {@code src}, or of the projects, each of which holds one
      * @param changes the changes, with the paths under the root
