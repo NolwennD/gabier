@@ -28,9 +28,14 @@ for the project; both are written in Java.
 4. exports, in a shell where mise is active, `GABIER_JDTLS` (the path of the jdtls launcher) and adds that launcher to
    the `PATH`.
 
-Then `mise run install` builds the native `gabier` and the daemon `gabier-daemon` and links both into `~/.local/bin`
-(`GABIER_BIN_DIR` to change it), so that `gabier` is called by name in any project. The native image takes a few
-minutes. The details are in [The daemon](docs/daemon.md). The daemon starts by itself at the first command.
+Then `mise run install` builds the native `gabier` and the daemon `gabier-daemon`, **copies** them into
+`~/.local/share/gabier/<version>` (`GABIER_INSTALL_DIR` to change it; `<version>` is what `gabier --version` prints) and
+links `gabier` and `gabier-daemon` from `~/.local/bin` to that copy (`GABIER_BIN_DIR` to change it; the arguments of
+`scripts/install.sh` are the two folders, links first), so that `gabier` is called by name in any project. The copy does
+not depend on the checkout: `./gradlew clean`, or a checkout of another version, leaves the install working, and the cli
+starts the daemon of the same copy. A second install of a version replaces its copy; a file of the links folder that is
+not a link is never touched. The native image takes a few minutes. The details are in [The daemon](docs/daemon.md). The
+daemon starts by itself at the first command.
 
 In a new Git worktree, run `mise trust` once first: mise trusts a configuration per path.
 

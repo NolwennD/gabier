@@ -6,13 +6,19 @@ It can also be started by hand, with `gabier-daemon` from the installed distribu
 then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until `gabier stop` or a SIGTERM; it
 answers `status`, `stop`, `diagnostics`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions` and `apply-action`, and nothing else yet.
 
-**Installing both by name.** `mise run install` builds the native cli and the daemon of the checkout it is run in and
-links `gabier` and `gabier-daemon` into `~/.local/bin` (`GABIER_BIN_DIR` or the argument of `scripts/install.sh` names
-another folder, which must be in the `PATH`): then `gabier` is called by name in any checkout. The links point into the
-checkout that was built, so the daemon of a worktree that is removed is gone with it: install from the checkout the
-tools should come from, and again after a change. A file that is not a link is never replaced. The build needs the
-GraalVM 25 of `./gradlew :cli:nativeCompile` and a JDK for the daemon's start script (`JAVA_HOME`, else `java` on the
-`PATH`).
+**Installing both by name.** `mise run install` builds the native cli and the daemon of the checkout it is run in,
+**copies** them into `~/.local/share/gabier/<version>` (`<version>` is the one `gabier --version` prints; the folder is
+`GABIER_INSTALL_DIR`, or the second argument of `scripts/install.sh`) and links `gabier` and `gabier-daemon` into
+`~/.local/bin` to that copy (`GABIER_BIN_DIR`, or the first argument, names another folder, which must be in the
+`PATH`): then `gabier` is called by name in any checkout. The copy holds `gabier`, the distribution of the daemon
+(`daemon/bin`, `daemon/lib`) and `gabier-daemon`, a link to its start script, so the cli, which looks for the daemon next
+to its own binary (the real file behind the link) before the `PATH`, starts the daemon of its own install, never another
+`gabier-daemon` of the `PATH`. Nothing points into the checkout: `./gradlew clean`, a removed worktree or a checkout of
+another version leaves the install working; install again to take a new build. A second install of a version replaces
+its copy (a build with no `gabierVersion` is `0.0.0-dev`, always the same folder); the copies of other versions stay. An
+existing link of the links folder is replaced; a file that is not a link is never touched, and the install stops before
+building. The build needs the GraalVM 25 of `./gradlew :cli:nativeCompile`, and the daemon a JDK for its start script
+(`JAVA_HOME`, else `java` on the `PATH`).
 
 **Starting on demand.** A request command (`diagnostics`, `rename`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions`, `apply-action`) first connects to the socket: a daemon that answers is
 used, never started a second time. Otherwise the cli launches `gabier-daemon` as a process, found **next to the binary

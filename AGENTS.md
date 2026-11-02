@@ -25,6 +25,12 @@ tests (`./gradlew jdtlsProbe`) read. In a shell where mise is not activated, run
 The launcher is a Python 3 script (the project itself uses no Python) and needs a JDK 21 or later: it runs
 `$JAVA_HOME/bin/java` if that file exists, otherwise the `java` found on the `PATH`, and fails under an older JDK.
 
+`mise run install` puts `gabier` on the `PATH` for the agents of the machine: it builds the native cli and the daemon of
+the checkout, **copies** them into `~/.local/share/gabier/<version>` (`GABIER_INSTALL_DIR` to change it) and links
+`gabier` and `gabier-daemon` from `~/.local/bin` to that copy (`GABIER_BIN_DIR`). The install does not depend on the
+checkout (`./gradlew clean` or another branch leaves it working), the cli starts the daemon of its own copy, and a new
+install is what takes a new build ([the daemon](docs/daemon.md)).
+
 The JDK of the project is the one `.sdkmanrc` pins, for [SDKMAN!](https://sdkman.io). With `sdkman_auto_env=true` in
 `~/.sdkman/etc/config`, entering the directory selects it (`sdk env install` once to fetch it, `sdk env` to select it by
 hand). The native cli also needs a GraalVM of the same release, which Gradle finds among the SDKMAN! candidates.
