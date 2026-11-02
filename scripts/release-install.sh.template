@@ -1,0 +1,173 @@
+#!/bin/sh
+# Install gabier @VERSION@ from the files of its release: the native cli, the daemon, and the jdtls milestone it is tested
+# against. Written by scripts/package-release.sh from scripts/release-install.sh.template, which fills in the version
+# of the release and the jdtls pins of mise.toml; this file is attached to the release as `install.sh`.
+#
+# Run it in the folder that holds the files of the release (they are checked against SHA256SUMS first; a file that does
+# not match, or is missing, stops the script before anything is installed):
+#   sh install.sh [<folder of the links> [<folder of the copies>]]
+#   links:   $GABIER_BIN_DIR, else ~/.local/bin
+#   copies:  $GABIER_INSTALL_DIR, else ${XDG_DATA_HOME:-~/.local/share}/gabier; the copy is <folder>/<version>/
+#   jdtls:   $JDTLS_HOME, else ~/.local/share/jdtls/<jdtls version>, where the daemon looks for it. It is downloaded
+#            from $JDTLS_DOWNLOAD_BASE, else https://download.eclipse.org/jdtls/milestones, and its archive is checked
+#            against the sha256 below. A jdtls already installed there is left alone.
+# The cli starts the `gabier-daemon` next to itself, so the copy keeps the two together (docs/daemon.md). A second run
+# of the same version replaces its copy; an existing link of the folder of the links is replaced; a file that is not a
+# link is never touched.
+set -eu
+
+version='@VERSION@'
+jdtls_version='@JDTLS_VERSION@'
+jdtls_sha256='@JDTLS_SHA256@'
+base=${JDTLS_DOWNLOAD_BASE:-https://download.eclipse.org/jdtls/milestones}
+
+cli_asset=gabier-linux-x86_64
+daemon_asset=gabier-daemon-$version.tar.gz
+sums=SHA256SUMS
+
+fail() {
+  echo "install: $1" >&2
+  exit 1
+}
+
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+# verify <file of the release>: its sha256 must be the one SHA256SUMS lists for it.
+verify() {
+  [ -f "$here/$1" ] || fail "$here/$1 is missing: run this script in the folder of the release"
+  want=$(awk -v name="$1" '$2 == name || $2 == "*" name { print $1; exit }' "$here/$sums" | tr 'A-F' 'a-f')
+  [ -n "$want" ] || fail "$sums does not list $1"
+  have=$(sha256_of "$here/$1")
+  [ "$want" = "$have" ] || fail "checksum mismatch for $1 (expected '$want', got '$have'): nothing was installed"
+  echo "checked $1"
+}
+
+if [ "$(uname -s)" != Linux ] || [ "$(uname -m)" != x86_64 ]; then
+  fail "this release is for Linux on x86-64, not $(uname -s) on $(uname -m)"
+fi
+for tool in curl tar awk; do
+  command -v "$tool" >/dev/null 2>&1 || fail "$tool is needed and was not found"
+done
+printf '%s' "$jdtls_sha256" | grep -Eq '^[0-9a-f]{64}$' || fail "the pinned jdtls checksum is not a sha256"
+case $version in
+  ''|*[!A-Za-z0-9._+-]*|.*) fail "cannot take a folder name from the version '$version'" ;;
+esac
+
+here=$(cd "$(dirname "$0")" && pwd)
+folder=${1:-${GABIER_BIN_DIR:-$HOME/.local/bin}}
+home=${2:-${GABIER_INSTALL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/gabier}}
+jdtls_home=${JDTLS_HOME:-$HOME/.local/share/jdtls/$jdtls_version}
+
+# Everything is checked before anything is written.
+[ -f "$here/$sums" ] || fail "$here/$sums is missing: run this script in the folder of the release"
+verify "$cli_asset"
+verify "$daemon_asset"
+for name in gabier gabier-daemon; do
+  if [ -e "$folder/$name" ] && [ ! -L "$folder/$name" ]; then
+    fail "$folder/$name exists and is not a link: not replaced"
+  fi
+done
+
+# JDTLS_HOME may name any folder: one that is not a usable jdtls is replaced only when it is missing, empty, or a broken
+# install (it holds a bin/jdtls that cannot be run). Anything else is refused, never deleted.
+if [ ! -x "$jdtls_home/bin/jdtls" ] && [ -e "$jdtls_home" ]; then
+  if [ ! -d "$jdtls_home" ] || { [ ! -e "$jdtls_home/bin/jdtls" ] && [ -n "$(ls -A "$jdtls_home")" ]; }; then
+    fail "$jdtls_home exists and is not a jdtls install (no bin/jdtls) nor empty: not replaced, nothing was installed"
+  fi
+fi
+
+work=$(mktemp -d)
+staging=
+previous=
+target=
+jdtls_staging=
+# Whatever stops the install (a failed download, Ctrl-C) removes what was staged and puts the previous copy back if it
+# was moved aside.
+cleanup() {
+  rm -rf "$work" "$staging" "$jdtls_staging"
+  if [ -n "$previous" ] && [ ! -e "$target" ] && [ -e "$previous" ]; then
+    mv "$previous" "$target"
+  fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM HUP
+
+# jdtls: downloaded and checked first, and installed only if it is not there yet.
+if [ -x "$jdtls_home/bin/jdtls" ]; then
+  echo "jdtls $jdtls_version is already installed in $jdtls_home: left alone"
+else
+  # latest.txt names the archive of the milestone (it carries a build timestamp)
+  curl -fsSL -o "$work/latest.txt" "$base/$jdtls_version/latest.txt"
+  archive=$(tr -d '[:space:]' <"$work/latest.txt")
+  case $archive in
+    ''|*/*) fail "jdtls $jdtls_version: latest.txt does not name an archive" ;;
+  esac
+  curl -fsSL -o "$work/$archive" "$base/$jdtls_version/$archive"
+  have=$(sha256_of "$work/$archive")
+  [ "$jdtls_sha256" = "$have" ] ||
+    fail "jdtls $jdtls_version: checksum mismatch for $archive (expected '$jdtls_sha256', got '$have'): nothing was installed"
+  echo "checked $archive"
+  mkdir -p "$(dirname "$jdtls_home")"
+  jdtls_staging=$(mktemp -d "$jdtls_home.XXXXXX")
+  tar -xzf "$work/$archive" -C "$jdtls_staging"
+  [ -x "$jdtls_staging/bin/jdtls" ] || fail "jdtls $jdtls_version: $archive holds no bin/jdtls launcher"
+  chmod 755 "$jdtls_staging"
+fi
+
+mkdir -p "$folder" "$home"
+folder=$(cd "$folder" && pwd)
+home=$(cd "$home" && pwd)
+
+# The copy is made beside its place, the previous one is moved aside, and the new one moved in.
+target="$home/$version"
+staging="$home/.$version.new"
+previous="$home/.$version.old"
+rm -rf "$staging" "$previous"
+mkdir "$staging"
+cp "$here/$cli_asset" "$staging/gabier"
+chmod 755 "$staging/gabier"
+mkdir "$staging/unpacked"
+tar -xzf "$here/$daemon_asset" -C "$staging/unpacked"
+[ -x "$staging/unpacked/gabier-daemon/bin/gabier-daemon" ] || fail "$daemon_asset holds no gabier-daemon/bin/gabier-daemon"
+mv "$staging/unpacked/gabier-daemon" "$staging/daemon"
+rmdir "$staging/unpacked"
+ln -s daemon/bin/gabier-daemon "$staging/gabier-daemon"
+if [ -e "$target" ]; then
+  mv "$target" "$previous"
+fi
+mv "$staging" "$target"
+rm -rf "$previous"
+previous=
+echo "copied gabier and gabier-daemon into $target"
+
+if [ -n "$jdtls_staging" ]; then
+  # a broken install or an empty folder (checked above) is replaced, so that mv never moves the staging directory inside it
+  rm -rf "$jdtls_home"
+  mv "$jdtls_staging" "$jdtls_home"
+  jdtls_staging=
+  echo "jdtls $jdtls_version installed in $jdtls_home"
+fi
+
+for name in gabier gabier-daemon; do
+  ln -sfn "$target/$name" "$folder/$name"
+  echo "linked $folder/$name -> $target/$name"
+done
+
+case ":$PATH:" in
+  *":$folder:"*) ;;
+  *) echo "install: $folder is not in the PATH: add it to call gabier by name" >&2 ;;
+esac
+if [ -n "${JDTLS_HOME:-}" ] && [ "$jdtls_home" != "$HOME/.local/share/jdtls/$jdtls_version" ]; then
+  echo "install: the daemon looks for jdtls under ~/.local/share/jdtls/$jdtls_version: set GABIER_JDTLS=$jdtls_home/bin/jdtls" >&2
+fi
+command -v python3 >/dev/null 2>&1 || echo "install: python3 was not found: jdtls needs it to start" >&2
+if [ ! -x "${JAVA_HOME:-/nonexistent}/bin/java" ] && ! command -v java >/dev/null 2>&1; then
+  echo "install: no java was found (JAVA_HOME, else the PATH): the daemon needs a JDK 25 or later" >&2
+fi
+echo "gabier $version is installed"

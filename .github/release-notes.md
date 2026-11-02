@@ -5,7 +5,9 @@ gabier @VERSION@: Java refactorings for a coding agent, through a language serve
 - `gabier-linux-x86_64`: the native `gabier` cli (Linux, x86-64).
 - `gabier-daemon-@VERSION@.tar.gz`: the daemon `gabier-daemon` (its start script and its jars), which needs a JDK 25
   or later.
-- `SHA256SUMS`: the checksums of the two files above.
+- `install.sh`: installs the two files above and jdtls, in one command. It carries the version of this release and the
+  jdtls pins below.
+- `SHA256SUMS`: the checksums of the three files above.
 
 ## Requires
 
@@ -13,5 +15,6 @@ gabier @VERSION@: Java refactorings for a coding agent, through a language serve
 - jdtls @JDTLS_VERSION@, the milestone this release is tested against, not attached. The sha256 of its archive is
   `@JDTLS_SHA256@`.
 
-The install, jdtls included, is in the
+Download the four files into one folder and run `sh install.sh`: it checks the files, installs gabier
+and jdtls, and links `gabier` and `gabier-daemon` from `~/.local/bin`. The details are in the
 [README](https://github.com/NolwennD/gabier/blob/v@VERSION@/README.md#use-gabier-on-your-project).

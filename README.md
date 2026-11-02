@@ -22,37 +22,30 @@ You need:
 - a JDK 25 or later, which runs the daemon (`JAVA_HOME`, else the `java` of the `PATH`);
 - Python 3, which runs the launcher of jdtls.
 
-Each [release](https://github.com/NolwennD/gabier/releases) holds three files:
+Each [release](https://github.com/NolwennD/gabier/releases) holds four files:
 
 - `gabier-linux-x86_64`, the native cli;
 - `gabier-daemon-<version>.tar.gz`, the daemon: its start script and its jars;
-- `SHA256SUMS`, the checksums of the two files above.
+- `install.sh`, which installs the two files above and jdtls;
+- `SHA256SUMS`, the checksums of the three files above.
 
 Download them into one folder, then:
 
 ```sh
-sha256sum --check --ignore-missing SHA256SUMS
-mkdir -p ~/.local/bin ~/.local/share/gabier
-install -m 755 gabier-linux-x86_64 ~/.local/bin/gabier
-tar -C ~/.local/share/gabier -xzf gabier-daemon-<version>.tar.gz
-ln -sf ~/.local/share/gabier/gabier-daemon/bin/gabier-daemon ~/.local/bin/gabier-daemon
+sh install.sh
 gabier --version
 ```
 
-`~/.local/bin` must be in the `PATH`.
+`install.sh` checks the files against `SHA256SUMS` and installs nothing if one does not match. It **copies** the cli and
+the daemon into `~/.local/share/gabier/<version>`, links `gabier` and `gabier-daemon` from `~/.local/bin` to that copy,
+and installs the jdtls milestone that gabier is tested against (named in the release notes) into
+`~/.local/share/jdtls/<version>`, where the daemon looks for it. It downloads that jdtls from Eclipse and checks its
+archive against the sha256 the script carries; a jdtls already installed there is left alone. `~/.local/bin` must be in
+the `PATH`.
 
-jdtls (the Eclipse JDT Language Server) is not in the release. Install the milestone that gabier is tested against
-into `~/.local/share/jdtls/<version>`, where the daemon looks for it. The notes of each release name that milestone and
-the sha256 of its archive:
-
-```sh
-version=<jdtls version>; sha256=<sha256 of its archive>
-base=https://download.eclipse.org/jdtls/milestones/$version
-archive=$(curl -fsSL "$base/latest.txt" | tr -d '[:space:]')
-curl -fsSLO "$base/$archive"
-echo "$sha256  $archive" | sha256sum --check
-mkdir -p ~/.local/share/jdtls/$version && tar -xzf "$archive" -C ~/.local/share/jdtls/$version
-```
+`GABIER_BIN_DIR` and `GABIER_INSTALL_DIR` change the folder of the links and the one of the copies, as for
+[`mise run install`](#build-gabier-from-its-sources). `JDTLS_HOME` changes the folder of jdtls; then name its launcher
+for the daemon with `GABIER_JDTLS=<JDTLS_HOME>/bin/jdtls`, since the daemon looks only in `~/.local/share/jdtls`.
 
 `GABIER_JDTLS` can name another launcher instead.
 

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Package the release assets of a version, from the build of this checkout, into a folder: the native cli, the archive of
-# the daemon (the folder `installDist` makes, `gabier-daemon/bin` and `gabier-daemon/lib`), `SHA256SUMS`, and the release
-# notes. It first checks that the two programs print the version they were built with: a release that says another
+# the daemon (the folder `installDist` makes, `gabier-daemon/bin` and `gabier-daemon/lib`), `install.sh` (written from
+# scripts/release-install.sh.template), `SHA256SUMS` (which lists the three), and the release notes. It first checks that the two programs print the version they were built with: a release that says another
 # version than its tag is refused.
 #
 # The build is made with the same version beforehand (what .github/workflows/release.yml does):
@@ -43,24 +43,32 @@ mkdir -p "$out"
 out=$(cd "$out" && pwd)
 cli_asset=gabier-linux-x86_64
 daemon_asset=gabier-daemon-$version.tar.gz
-rm -f "$out/$cli_asset" "$out/$daemon_asset" "$out/SHA256SUMS" "$out/release-notes.md"
+rm -f "$out/$cli_asset" "$out/$daemon_asset" "$out/install.sh" "$out/SHA256SUMS" "$out/release-notes.md"
 
 cp "$cli" "$out/$cli_asset"
 chmod 755 "$out/$cli_asset"
 tar -C "$install" -czf "$out/$daemon_asset" gabier-daemon
-(cd "$out" && sha256sum "$cli_asset" "$daemon_asset" > SHA256SUMS)
-
-# The jdtls that gabier is built and tested against: the pins of mise.toml, which the notes quote.
+# The jdtls that gabier is built and tested against: the pins of mise.toml, which the notes quote and install.sh carries.
 jdtls_version=$(sed -n 's/^jdtls_version = "\(.*\)"$/\1/p' "$root/mise.toml")
 jdtls_sha256=$(sed -n 's/^jdtls_sha256 = "\(.*\)"$/\1/p' "$root/mise.toml")
 if [ -z "$jdtls_version" ] || [ -z "$jdtls_sha256" ]; then
   echo "package-release: mise.toml does not pin jdtls (jdtls_version, jdtls_sha256)" >&2
   exit 1
 fi
-sed -e "s|@VERSION@|$version|g" \
-    -e "s|@JDTLS_VERSION@|$jdtls_version|g" \
-    -e "s|@JDTLS_SHA256@|$jdtls_sha256|g" \
-    "$root/.github/release-notes.md" > "$out/release-notes.md"
+fill() {
+  sed -e "s|@VERSION@|$version|g" \
+      -e "s|@JDTLS_VERSION@|$jdtls_version|g" \
+      -e "s|@JDTLS_SHA256@|$jdtls_sha256|g" \
+      "$1" > "$2"
+}
+fill "$root/scripts/release-install.sh.template" "$out/install.sh"
+if grep -q '@[A-Z_]*@' "$out/install.sh"; then
+  echo "package-release: install.sh still holds a placeholder: scripts/release-install.sh.template and this script disagree" >&2
+  exit 1
+fi
+chmod 755 "$out/install.sh"
+fill "$root/.github/release-notes.md" "$out/release-notes.md"
+(cd "$out" && sha256sum "$cli_asset" "$daemon_asset" install.sh > SHA256SUMS)
 
 echo "package-release: gabier $version packaged in $out"
-(cd "$out" && ls -l "$cli_asset" "$daemon_asset" SHA256SUMS release-notes.md)
+(cd "$out" && ls -l "$cli_asset" "$daemon_asset" install.sh SHA256SUMS release-notes.md)

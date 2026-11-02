@@ -1,5 +1,5 @@
 # A tag `v<version>` (semantic version: v0.1.0, v1.2.0-rc.1) publishes a GitHub release with the native cli, the archive of
-# the daemon and SHA256SUMS. Steps, in order, each one needing the one before:
+# the daemon, `install.sh` and SHA256SUMS. Steps, in order, each one needing the one before:
 #   1. version: the tag is checked, the version is the tag without its `v`;
 #   2. check: the full bin/ci (ci.yml, the same job as the pull requests) on the tagged commit;
 #   3. release: the build with that version, the version the programs print is checked, the assets are packaged
@@ -73,5 +73,5 @@ jobs:
         run: |
           prerelease=
           case "$VERSION" in *-*) prerelease=--prerelease ;; esac
-          gh release create "$TAG" dist/gabier-linux-x86_64 "dist/gabier-daemon-$VERSION.tar.gz" dist/SHA256SUMS \
+          gh release create "$TAG" dist/gabier-linux-x86_64 "dist/gabier-daemon-$VERSION.tar.gz" dist/install.sh dist/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" --verify-tag --title "gabier $VERSION" --notes-file dist/release-notes.md $prerelease

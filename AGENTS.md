@@ -51,12 +51,15 @@ The way of working, the quality gates, the logbook of issues and the use of gabi
 
 Pushing a tag `v<semantic version>` (`v0.1.0-rc.1`, then `v0.1.0`) runs `.github/workflows/release.yml`. It runs the
 full `bin/ci` on the tagged commit (the check of the pull requests), builds with the version of the tag, checks that the
-cli and the daemon print it, and attaches the assets to the release of the tag, with the notes of
-`.github/release-notes.md`.
+cli and the daemon print it, and attaches the assets to the release of the tag (the cli, the daemon archive, `install.sh`
+and `SHA256SUMS`), with the notes of `.github/release-notes.md`.
 
 - A version with a pre-release suffix (`-rc.1`, any `-...`) gives a release marked pre-release, and the programs print
   the whole version (`0.1.0-rc.1`). A version with no suffix gives a normal release.
 - The version that `gabier --version` and `gabier status` print is the Gradle property `gabierVersion`
   (`-PgabierVersion=0.1.0`), written in a resource of the `protocol` module at build time. A build made with no such
   property, such as `mise run install`, is `0.0.0-dev`.
-- `scripts/package-release.sh <version> <folder>` makes the assets from a build made with that property.
+- `scripts/package-release.sh <version> <folder>` makes the assets from a build made with that property. It writes the
+  `install.sh` of the release from `scripts/release-install.sh.template`, filling the version and the jdtls pins of
+  `mise.toml` (the placeholders `@VERSION@`, `@JDTLS_VERSION@`, `@JDTLS_SHA256@`, as in the release notes). Change the
+  template, not a release's file; a bump of the jdtls pin reaches the next release by itself.
