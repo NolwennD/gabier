@@ -31,6 +31,12 @@ renamed /work/demo/src/main/java/demo/Invoice.java -> /work/demo/src/main/java/d
 ...
 ```
 
+**The folders it empties.** A move that leaves the folder of a package empty removes it, and its parents up to the
+source folder (`src/main/java`, which stays) when they are empty too: moving the one class of `demo.old.legacy` removes
+`demo/old/legacy` and `demo/old`. A folder that still holds a file stays, whatever the file is (a `package-info.java`
+that is not moved, a resource). The removal is part of the move: if it fails, the files and the folders are put back as
+they were. A dry run removes nothing, and the answer does not list the folders removed.
+
 **Several modules.** The files of the other projects of the build that use a moved class (the modules that require its
 module) are rewritten too, imports and qualified names, provided jdtls knows that the projects are linked. jdtls takes the
 links from the build: a Gradle build whose plugin `org.gradlex.extra-java-module-info` transforms the jars of its own

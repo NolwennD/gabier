@@ -1,6 +1,8 @@
 package fr.craft.gabier.editing.domain;
 
 import fr.craft.gabier.shared.error.domain.Assert;
+import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Applies a {@link ChangeSet} to the files of a {@link FileStore}, all or nothing.
@@ -48,6 +50,26 @@ public final class ChangeApplier {
      */
     public ChangeReport apply(ChangeSet changes) {
         ChangePlan plan = plan(changes);
+        plan.execute(store);
+
+        return plan.report();
+    }
+
+    /**
+     * Writes the set, then removes each of the folders that it leaves empty, in the order given (a folder before its
+     * parent), and leaves the others. A removal is part of the set: if it fails, the files and the folders are as they
+     * were. The dry run of the same set is {@link #dryRun(ChangeSet)}, which removes nothing.
+     *
+     * @return what was done to the files, the same report as for the set alone
+     * @throws EditingException if the set is refused or a write or a removal fails; in both cases the files are as they
+     *     were
+     */
+    public ChangeReport apply(ChangeSet changes, List<Path> foldersToRemoveWhenEmptied) {
+        Assert.field("foldersToRemoveWhenEmptied", foldersToRemoveWhenEmptied)
+                .notNull()
+                .noNullElement();
+
+        ChangePlan plan = plan(changes).removingWhenEmptied(foldersToRemoveWhenEmptied);
         plan.execute(store);
 
         return plan.report();

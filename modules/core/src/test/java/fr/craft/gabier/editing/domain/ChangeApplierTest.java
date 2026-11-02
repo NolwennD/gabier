@@ -866,4 +866,40 @@ class ChangeApplierTest {
             assertThat(snapshot()).isEqualTo(before);
         }
     }
+
+    @Nested
+    class RemovingTheFoldersEmptied {
+
+        @Test
+        void removesTheFoldersTheSetLeavesEmptyFromTheDeepest() throws IOException {
+            Files.createDirectories(path("old/legacy"));
+            Path moved = file("old/legacy/A.java", "class A {}\n");
+
+            applier.apply(set(new RenameFile(moved, path("A.java"))), List.of(path("old/legacy"), path("old")));
+
+            assertThat(path("A.java")).hasContent("class A {}\n");
+            assertThat(path("old")).doesNotExist();
+        }
+
+        @Test
+        void leavesAFolderThatStillHoldsAFileAndOneThatIsNotThere() throws IOException {
+            Files.createDirectories(path("kept"));
+            Path moved = file("kept/A.java", "class A {}\n");
+            file("kept/notes.txt", "kept\n");
+
+            ChangeReport report = applier.apply(
+                    set(new RenameFile(moved, path("A.java"))), List.of(path("kept"), path("never-there")));
+
+            assertThat(path("kept/notes.txt")).hasContent("kept\n");
+            assertThat(path("never-there")).doesNotExist();
+            assertThat(report.renamed()).containsExactly(new Renamed(moved, path("A.java")));
+        }
+
+        @Test
+        void rejectsMissingFolders() {
+            assertThatExceptionOfType(MissingMandatoryValueException.class)
+                    .isThrownBy(() -> applier.apply(set(new CreateFile(path("A.java"))), null))
+                    .satisfies(exception -> assertThat(exception.field()).isEqualTo("foldersToRemoveWhenEmptied"));
+        }
+    }
 }

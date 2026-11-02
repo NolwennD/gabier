@@ -25,6 +25,14 @@ final class ChangePlan {
         return report;
     }
 
+    /** The same plan, then the removal of each folder that its steps leave empty, in the order given; same report. */
+    ChangePlan removingWhenEmptied(List<Path> folders) {
+        List<Step> all = new ArrayList<>(steps);
+        folders.forEach(folder -> all.add(new Step.RemoveFolderIfEmpty(folder)));
+
+        return new ChangePlan(all, report);
+    }
+
     /**
      * Runs the steps in order. When one fails, every step tried so far, the failed one included (it may have written
      * half of its file), is undone from the last to the first.

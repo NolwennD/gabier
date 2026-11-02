@@ -478,4 +478,28 @@ class ChangeApplierRollbackTest {
                             assertThat(exception.parameters()).containsEntry("notRestored", second + ", " + first));
         }
     }
+
+    @Nested
+    class WhenAFolderCannotBeRemoved {
+
+        @Test
+        void makesAgainTheFoldersAlreadyRemovedAndPutsTheFilesBack() throws IOException {
+            Files.createDirectories(path("old/legacy"));
+            Path moved = file("old/legacy/A.txt", "a\n");
+            Map<String, String> before = snapshot();
+            ChangeApplier applier =
+                    new ChangeApplier(new FaultyFileStore(files).failing(Operation.DELETE, path("old")));
+
+            assertThatExceptionOfType(EditingException.class)
+                    .isThrownBy(() -> applier.apply(
+                            set(new RenameFile(moved, path("A.txt"))), List.of(path("old/legacy"), path("old"))))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(EditingErrorKey.WRITE_FAILED);
+                        assertThat(exception.parameters())
+                                .isEqualTo(Map.of("file", path("old").toString()));
+                    });
+
+            assertThat(snapshot()).isEqualTo(before);
+        }
+    }
 }

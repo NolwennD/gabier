@@ -50,6 +50,9 @@ public interface FileStore {
     /** Moves a file to a path where nothing exists; its directory must exist. */
     void move(Path from, Path to) throws IOException;
 
-    /** Deletes a file, or a folder that is empty. */
+    /**
+     * Deletes a file, or a folder that is empty: a folder that holds anything fails with a {@link
+     * java.nio.file.DirectoryNotEmptyException} and stays as it was.
+     */
     void delete(Path file) throws IOException;
 }

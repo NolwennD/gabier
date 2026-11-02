@@ -1,6 +1,7 @@
 package fr.craft.gabier.editing.domain;
 
 import java.io.IOException;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -100,6 +101,46 @@ sealed interface Step {
         public void undo(FileStore store) throws IOException {
             if (made) {
                 store.delete(target);
+            }
+        }
+    }
+
+    /**
+     * Removes a folder if it is empty once the steps before it have run, and leaves it otherwise: a folder that still
+     * holds a file, or that is not there, is not this step's business. It is made again on undo only if this step
+     * removed it.
+     */
+    final class RemoveFolderIfEmpty implements Step {
+
+        private final Path target;
+        private boolean removed;
+
+        RemoveFolderIfEmpty(Path target) {
+            this.target = target;
+        }
+
+        @Override
+        public Path target() {
+            return target;
+        }
+
+        @Override
+        public void apply(FileStore store) throws IOException {
+            if (!store.isFolder(target)) {
+                return;
+            }
+            try {
+                store.delete(target);
+                removed = true;
+            } catch (DirectoryNotEmptyException notEmpty) {
+                // A file is left in it: the folder stays.
+            }
+        }
+
+        @Override
+        public void undo(FileStore store) throws IOException {
+            if (removed) {
+                store.createFolder(target);
             }
         }
     }

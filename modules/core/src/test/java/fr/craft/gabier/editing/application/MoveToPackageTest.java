@@ -135,6 +135,49 @@ class MoveToPackageTest {
     }
 
     @Test
+    void removesTheFolderItEmptiesAndItsEmptyParentsUpToTheSourceFolder() throws IOException {
+        project(PackageMoveScenarios.MOVE_THE_LAST_CLASS_OF_A_PACKAGE);
+
+        move.apply(List.of(path(MAIN + "old/legacy/Ledger.java")), BILLING);
+
+        assertThat(text(MAIN + "billing/Ledger.java")).startsWith("package demo.billing;\n");
+        assertThat(path(MAIN + "old/legacy")).doesNotExist();
+        assertThat(path(MAIN + "old")).doesNotExist();
+        assertThat(path(MAIN)).isDirectory();
+    }
+
+    @Test
+    void keepsTheFolderOfThePackageWhenItsPackageInfoStays() throws IOException {
+        project(PackageMoveScenarios.MOVE_THE_LAST_CLASS_OF_A_PACKAGE_THAT_HAS_A_PACKAGE_INFO);
+
+        move.apply(List.of(path(MAIN + "kept/Note.java")), BILLING);
+
+        assertThat(path(MAIN + "kept/Note.java")).doesNotExist();
+        assertThat(text(MAIN + "kept/package-info.java")).isEqualTo("package demo.kept;\n");
+    }
+
+    @Test
+    void keepsTheFolderOfThePackageWhenAResourceStaysInIt() throws IOException {
+        project(PackageMoveScenarios.MOVE_THE_LAST_CLASS_OF_A_PACKAGE);
+        Files.writeString(path(MAIN + "old/legacy/ledger.properties"), "kept=true\n");
+
+        move.apply(List.of(path(MAIN + "old/legacy/Ledger.java")), BILLING);
+
+        assertThat(path(MAIN + "old/legacy/Ledger.java")).doesNotExist();
+        assertThat(text(MAIN + "old/legacy/ledger.properties")).isEqualTo("kept=true\n");
+    }
+
+    @Test
+    void removesNoFolderOnADryRun() throws IOException {
+        project(PackageMoveScenarios.MOVE_THE_LAST_CLASS_OF_A_PACKAGE);
+        Map<String, String> before = snapshot();
+
+        move.dryRun(List.of(path(MAIN + "old/legacy/Ledger.java")), BILLING);
+
+        assertThat(snapshot()).isEqualTo(before);
+    }
+
+    @Test
     void asksTheServerOnceForTheFilesAndThePackageAsGiven() throws IOException {
         project(PackageMoveScenarios.MOVE_SEVERAL_CLASSES_TO_AN_EXISTING_PACKAGE);
 

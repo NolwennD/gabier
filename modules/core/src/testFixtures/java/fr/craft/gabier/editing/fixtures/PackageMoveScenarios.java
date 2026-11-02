@@ -65,6 +65,9 @@ public final class PackageMoveScenarios {
     private static final Path SHOP = Path.of("src/main/java/demo/app/Shop.java");
     private static final Path STATEMENT = Path.of("src/main/java/demo/Statement.java");
     private static final Path BILLING_STATEMENT = Path.of("src/main/java/demo/billing/Statement.java");
+    private static final Path LEDGER = Path.of("src/main/java/demo/old/legacy/Ledger.java");
+    private static final Path NOTE = Path.of("src/main/java/demo/kept/Note.java");
+    private static final Path KEPT_PACKAGE_INFO = Path.of("src/main/java/demo/kept/package-info.java");
     private static final Path NOTES = Path.of("src/main/resources/notes.txt");
     private static final Path INVOICE_TEST = Path.of("src/test/java/demo/InvoiceTest.java");
     private static final Path UNSOURCED = Path.of("src/main/other/Unsourced.java");
@@ -76,6 +79,8 @@ public final class PackageMoveScenarios {
     private static final Path BILLING_PAYMENT = Path.of("src/main/java/demo/billing/Payment.java");
     private static final Path ARCHIVE_INVOICE = Path.of("src/main/java/demo/archive/Invoice.java");
     private static final Path BILLING_INVOICE_TEST = Path.of("src/test/java/demo/billing/InvoiceTest.java");
+    private static final Path BILLING_LEDGER = Path.of("src/main/java/demo/billing/Ledger.java");
+    private static final Path BILLING_NOTE = Path.of("src/main/java/demo/billing/Note.java");
 
     private static final PackageName DEMO = PackageName.of("demo");
     private static final PackageName BILLING = PackageName.of("demo.billing");
@@ -140,6 +145,21 @@ public final class PackageMoveScenarios {
 
                 public class Statement {
                 }
+                """),
+            Map.entry(LEDGER, """
+                package demo.old.legacy;
+
+                public class Ledger {
+                }
+                """),
+            Map.entry(NOTE, """
+                package demo.kept;
+
+                public class Note {
+                }
+                """),
+            Map.entry(KEPT_PACKAGE_INFO, """
+                package demo.kept;
                 """),
             Map.entry(NOTES, "not Java\n"),
             Map.entry(INVOICE_TEST, """
@@ -331,6 +351,25 @@ public final class PackageMoveScenarios {
             new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
 
     /**
+     * {@code Ledger}, the one class of {@code demo.old.legacy}, to {@code demo.billing}: its folder and the folder of
+     * {@code demo.old} are left empty.
+     */
+    public static final Scenario MOVE_THE_LAST_CLASS_OF_A_PACKAGE = new Scenario(
+            "move-the-last-class-of-a-package",
+            PROJECT,
+            new Request.MoveToPackage(List.of(LEDGER), BILLING),
+            new Answer.MovedToPackage(new ChangeSet(List.of(
+                    edits(LEDGER, replace(0, 8, 0, 23, "demo.billing")), new RenameFile(LEDGER, BILLING_LEDGER)))));
+
+    /** {@code Note}, the one class of {@code demo.kept}, to {@code demo.billing}: its {@code package-info.java} stays. */
+    public static final Scenario MOVE_THE_LAST_CLASS_OF_A_PACKAGE_THAT_HAS_A_PACKAGE_INFO = new Scenario(
+            "move-the-last-class-of-a-package-that-has-a-package-info",
+            PROJECT,
+            new Request.MoveToPackage(List.of(NOTE), BILLING),
+            new Answer.MovedToPackage(new ChangeSet(
+                    List.of(edits(NOTE, replace(0, 8, 0, 17, "demo.billing")), new RenameFile(NOTE, BILLING_NOTE)))));
+
+    /**
      * {@code Money} of the module {@code demo.shared} to {@code demo.shared.money}: the module {@code demo.app}, a project
      * of its own that requires it, has its import and its qualified names rewritten.
      */
@@ -361,6 +400,8 @@ public final class PackageMoveScenarios {
                 MOVE_SEVERAL_CLASSES_TO_AN_EXISTING_PACKAGE,
                 MOVE_A_CLASS_TO_A_NEW_PACKAGE,
                 MOVE_A_TEST_CLASS_TO_A_NEW_PACKAGE,
+                MOVE_THE_LAST_CLASS_OF_A_PACKAGE,
+                MOVE_THE_LAST_CLASS_OF_A_PACKAGE_THAT_HAS_A_PACKAGE_INFO,
                 MOVE_A_CLASS_THAT_ANOTHER_MODULE_USES,
                 MOVE_A_CLASS_TO_THE_PACKAGE_IT_IS_IN,
                 MOVE_A_CLASS_TO_A_PACKAGE_THAT_HAS_A_FILE_OF_ITS_NAME,
