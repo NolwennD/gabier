@@ -16,4 +16,9 @@ Done when:
 - [ ] A second daemon on the same root while the first runs gets a refusal that says why (the lock of the Eclipse
       workspace), not an opaque jdtls failure.
 - [ ] The time of a restart is measured with and without the option and written in the `## Resolution`.
+- [ ] The option is on for this project (decision of the user, 02-11-2026: a warm cache): `mise.toml` sets the variable in its
+      `[env]`, so every worktree of gabier keeps its workspace. A kept workspace whose root no longer exists (a deleted
+      worktree) is removed, by the daemon at start or by `scripts/stop-stray-daemons.sh` (which the skills `ticket` and `ship`
+      already run), tested red first; the resolution gives the size of one kept workspace (about 227 Mo live) and says how many
+      stay on disk with the worktrees of a day.
 - [ ] `docs/daemon.md` documents the option, the place and how to clean it. `bin/ci` passes.
