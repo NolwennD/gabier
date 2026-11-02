@@ -5,11 +5,33 @@ a Java language server instead: it drives jdtls, which works on the syntax tree,
 their diff, or a structured refusal. It is a command-line tool, `gabier`, backed by a daemon that keeps jdtls running
 for the project; both are written in Java.
 
+## Prerequisites
+
+- A JDK 25 or later, to run the daemon (`JAVA_HOME`, else the `java` of the `PATH`).
+- Python 3, to run the launcher of jdtls (a Python script; it also needs that JDK).
+- GraalVM 25, to compile the native `gabier` binary.
+- [mise](https://mise.jdx.dev), which installs the pinned tools and jdtls (see below).
+- Optionally [SDKMAN!](https://sdkman.io), which selects the JDK pinned in `.sdkmanrc` when you enter the folder
+  (`sdk env install` once); the build finds the GraalVM among its candidates.
+
 ## Install
 
-`mise install`, then `mise run install`: it builds the native `gabier` and the daemon `gabier-daemon` and links both into
-`~/.local/bin`, so that `gabier` is called by name in any project. The build needs GraalVM 25 and a JDK; the details are
-in [The daemon](docs/daemon.md). The daemon starts by itself at the first command.
+`mise install` reads `mise.toml` and:
+
+1. installs the pinned tools of the project: [hk](https://github.com/jdx/hk) (the Git hooks),
+   [open-java-format](https://github.com/openjavaformat/open-java-format) (the formatter) and
+   [ripwire](https://github.com/redhat-et/ripwire) (code search);
+2. installs the Git pre-commit hook that formats the staged Java files (`hk install --mise`);
+3. downloads the pinned jdtls (Eclipse JDT Language Server), checks its archive against the sha256 written in
+   `mise.toml`, and unpacks it into `~/.local/share/jdtls/<version>`, outside the repository and shared by every checkout;
+4. exports, in a shell where mise is active, `GABIER_JDTLS` (the path of the jdtls launcher) and adds that launcher to
+   the `PATH`.
+
+Then `mise run install` builds the native `gabier` and the daemon `gabier-daemon` and links both into `~/.local/bin`
+(`GABIER_BIN_DIR` to change it), so that `gabier` is called by name in any project. The native image takes a few
+minutes. The details are in [The daemon](docs/daemon.md). The daemon starts by itself at the first command.
+
+In a new Git worktree, run `mise trust` once first: mise trusts a configuration per path.
 
 ## Capabilities
 
