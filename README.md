@@ -23,7 +23,8 @@ for the project; both are written in Java.
    [ripwire](https://github.com/redhat-et/ripwire) (code search);
 2. installs the Git pre-commit hook that formats the staged Java files (`hk install --mise`);
 3. downloads the pinned jdtls (Eclipse JDT Language Server), checks its archive against the sha256 written in
-   `mise.toml`, and unpacks it into `~/.local/share/jdtls/<version>`, outside the repository and shared by every checkout;
+   `mise.toml`, and unpacks it into `~/.local/share/jdtls/<version>`, outside the repository and shared by every checkout
+   (from `https://download.eclipse.org/jdtls/milestones/<version>/`; `mise run jdtls:install` does this step alone);
 4. exports, in a shell where mise is active, `GABIER_JDTLS` (the path of the jdtls launcher) and adds that launcher to
    the `PATH`.
 
