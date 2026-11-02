@@ -1,6 +1,6 @@
 # The daemon
 
-One daemon runs per user. `gabier diagnostics`, `gabier rename`, `gabier organize-imports`, `gabier cleanup`, `gabier extract-variable`, `gabier extract-method`, `gabier extract-constant`, `gabier extract-field`, `gabier move-type-to-file`, `gabier move`, `gabier inline`, `gabier create` and `gabier references` **start it when nothing answers on the socket**, so an
+One daemon runs per project. `gabier diagnostics`, `gabier rename`, `gabier organize-imports`, `gabier cleanup`, `gabier extract-variable`, `gabier extract-method`, `gabier extract-constant`, `gabier extract-field`, `gabier move-type-to-file`, `gabier move`, `gabier inline`, `gabier create` and `gabier references` **start it when nothing answers on the socket**, so an
 agent runs them in a project folder and gets the answer; `gabier status` and `gabier stop` never start one (see [status and stop](commands/status-and-stop.md)).
 It can also be started by hand, with `gabier-daemon` from the installed distribution (`./gradlew :daemon:installDist`,
 then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until `gabier stop` or a SIGTERM; it
@@ -21,18 +21,18 @@ daemon, and the two are installed by name. The daemon starts in the cli's workin
 so it serves the project the daemon rules below give (`GABIER_PROJECT`, else the current folder; `GABIER_SOCKET`,
 `GABIER_JDTLS` reach it too). It runs on after the command (no input; it stays in the process group of the cli, so a
 Ctrl-C of the terminal during a later command also stops it), and its standard output and error go to
-a log next to the socket, `<socket>.log` (`gabier.sock.log`; private to the user, replaced at each start, in the
+a log next to the socket, `<socket>.log` (`demo-6f1c0d4e.sock.log`; private to the user, replaced at each start, in the
 socket's folder, which the cli creates private if it is missing). The cli waits until the socket accepts a connection,
 **20 seconds** at most (the daemon binds first; jdtls starts later, at the first request, and that wait is the one
 described below), then sends the request. A daemon that is not found, cannot be launched, exits before it listens (its
 exit code is reported) or is silent for 20 seconds is the problem object `daemon-start-failed` (exit code 1; `socket`,
 `log` and, for an exit, `exitCode` in its parameters, the output of the daemon being in the log): the daemon that did
 not come up is killed, nothing is left running. A usage error starts nothing. A daemon that already runs keeps the
-project it was started for, whatever folder the command is run in (`gabier status` says which): `gabier stop` first to
-serve another.
+project it was started for (`gabier status` says which), and the command finds the one of its own project by its socket.
 
 It serves **one project**: `gabier-daemon [<project folder>]`, else the folder named by `GABIER_PROJECT`, else the
-directory it is started in (a relative folder is relative to that directory; one that is not a folder is a usage error).
+root of the directory it is started in, the nearest folder from it up that holds a `.git` (a relative folder is relative
+to that directory; one that is not a folder is a usage error).
 Starting the daemon starts nothing else. jdtls (the launcher `GABIER_JDTLS` names, as for the integration tests) is started by the
 first request that needs it, on that folder, and the request waits until it has imported the project: the first
 `diagnostics` takes seconds for a small project and about a minute and a half for this checkout. Requests that arrive
@@ -102,17 +102,27 @@ whoever wants its state kept (`GABIER_JDTLS_WORKSPACES=~/.cache/gabier/jdtls-wor
   never one that a daemon holds. To empty everything by hand, remove the folder: `rm -r ~/.cache/gabier/jdtls-workspaces`
   (with no daemon running).
 
-Two things to know before pointing the daemon at a folder. The project is **the directory the daemon is started in**
-when no folder and no `GABIER_PROJECT` is given, so a daemon started in the wrong place serves the wrong project. And
+Two things to know before pointing the daemon at a folder. The project is **the root of the directory the daemon is started in**
+(the nearest folder above it that holds a `.git`, else that directory) when no folder and no `GABIER_PROJECT` is given, so
+a daemon started in the wrong place serves the wrong project. And
 jdtls importing a checkout **runs its build** (the Gradle wrapper or script, Maven, their plugins) at the first request:
 do not serve a checkout you do not trust. Also, `gabier stop` usually returns at once, but it can last **about a
 minute** when jdtls ignores the shutdown: the daemon gives it 10 s to answer the shutdown and 10 s to exit, then 10 s
 for each process of its tree that it has to kill.
 
-**The socket** is per user, in a short place, because a Unix socket path holds at most 107 bytes (`sun_path` is 108,
+**The socket** is per project, in a short place, because a Unix socket path holds at most 107 bytes (`sun_path` is 108,
 one of them for the terminating zero) and a path under a checkout or a worktree easily exceeds it:
-`$XDG_RUNTIME_DIR/gabier/gabier.sock` (`/run/user/<uid>`), else `/tmp/gabier-<uid>/gabier.sock`. `GABIER_SOCKET` replaces
-the path, for the daemon and for the cli alike. A path over 107 bytes (counted in UTF-8: a multi-byte name counts for
+`$XDG_RUNTIME_DIR/gabier/<name>-<hash>.sock` (`/run/user/<uid>`), else `/tmp/gabier-<uid>/<name>-<hash>.sock`. The
+project is the folder `GABIER_PROJECT` names (relative to the working directory), else the nearest folder from the
+working directory up that holds a `.git` (a folder in a clone, a file in a worktree: the root of the project, whatever
+folder of it the command is run in), else the working directory; it is taken as its real path. `<name>` is the name of
+that folder, in plain characters (40 at most), so that the sockets can be told apart, and `<hash>` the first 8
+hexadecimal digits of a hash of its path, so that two worktrees of one name do not share one. The cli and the daemon
+compute it the same way (`SocketLocation`), so `gabier status` and `gabier stop` with no variable reach the daemon of
+the project they are run in, and two worktrees have two daemons: a command run in one never reaches the other, nor
+starts a second daemon over the first. The daemon serves the same folder (the one above, unless it is given another as
+its argument, which is then the project of its socket too). `GABIER_SOCKET` replaces the whole path, for the daemon and
+for the cli alike, and always wins. A path over 107 bytes (counted in UTF-8: a multi-byte name counts for
 its bytes) is refused before anything is bound, with the `socket-path-too-long` problem, which gives the path, its
 length, the limit and the variable to set. The folder of the socket must be the user's own and private to them
 (mode 700; it is created so, and an existing one that is not is refused, never changed), and the socket file is made

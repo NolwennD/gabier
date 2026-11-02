@@ -35,14 +35,15 @@ repository does it with `gabier` (installed on the PATH by `mise run install`; t
   listed), instead of searching the text. A Java refactoring that gabier has a command for goes through it.
 
 An operation gabier does not have yet is done as a text edit and becomes an issue (`.claude/rules/workflow.md`, step 4 of the
-development loop). The daemon serves one project, and there is one socket per user: two worktrees would share a daemon
-and a command run in one would change the files of the other. **In a worktree, a worker gives gabier a socket of its own**
-and runs the command in that worktree: prefix every call, the shell does not keep variables from one command to the next,
-with `GABIER_SOCKET="$XDG_RUNTIME_DIR/gabier/$(basename "$(git rev-parse --show-toplevel)").sock"` (the folder of the default
-socket, `/tmp/gabier-<uid>` when `XDG_RUNTIME_DIR` is not set; a socket path holds 107 bytes at most), `gabier status` and
-`gabier stop` included. The worker ends with `gabier stop` on that socket,
-before its report. The skills `ticket` and `ship` run `scripts/stop-stray-daemons.sh`, which stops the daemon of a worktree
-that no longer exists, for a worker that was stopped before it could.
+development loop). The daemon serves one project, and there is one socket per project: `gabier` picks the socket of the
+project it is run in (`GABIER_PROJECT`, else the nearest folder above the working directory that holds a `.git`, which
+is the root of a worktree), `<folder>/<name of the project>-<hash of its path>.sock` in `$XDG_RUNTIME_DIR/gabier`
+(`/tmp/gabier-<uid>` when it is not set), so **a worker runs `gabier` in its worktree with no prefix and no variable**:
+two worktrees have two daemons, and a command run in one never reaches the other. `GABIER_SOCKET` still replaces the
+socket, for a test. The worker ends with `gabier stop`, run in its worktree, before its report; the supervisor stops the
+daemon of another worktree with `GABIER_PROJECT=<worktree> gabier stop`. The skills `ticket` and `ship` run
+`scripts/stop-stray-daemons.sh`, which stops the daemon of a worktree that no longer exists, for a worker that was
+stopped before it could.
 
 The jdtls workspace is temporary by default (a folder of `/tmp` removed at each stop). `GABIER_JDTLS_WORKSPACES=<folder>`
 keeps it between daemons, but it is **off** for this project (decision of 02-11-2026: a restart is slower with it, 45 to

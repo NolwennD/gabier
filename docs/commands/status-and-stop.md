@@ -14,7 +14,7 @@ $ gabier --json status
 $ gabier stop
 gabier-daemon stopped
 $ gabier status
-Daemon not running: No daemon answers on /run/user/1000/gabier/gabier.sock: start it with gabier-daemon (daemon-not-running; socket=/run/user/1000/gabier/gabier.sock)
+Daemon not running: No daemon answers on /run/user/1000/gabier/demo-6f1c0d4e.sock: start it with gabier-daemon (daemon-not-running; socket=/run/user/1000/gabier/demo-6f1c0d4e.sock)
 ```
 
 `gabier stop` returns once the daemon has removed its socket and hung up. With no daemon, or with a socket file that

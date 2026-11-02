@@ -3,10 +3,14 @@ package fr.craft.gabier.cli;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import fr.craft.gabier.protocol.JsonRpc;
+import fr.craft.gabier.protocol.SocketLocation;
+import fr.craft.gabier.protocol.UserId;
+import java.io.IOException;
 import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -15,6 +19,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class WithoutADaemonTest extends CliTest {
+
+    private static final String STATUS = JsonRpc.success("1", """
+        {"version":"0.1","pid":1,"uptimeMillis":0,"project":"/p","jdtls":"not-started"}\
+        """);
 
     /** The run must come back: a client that waits for a daemon that is not there hangs the shell of the user. */
     private int runWithoutHanging(Map<String, String> environment, String... args) throws Exception {
@@ -89,19 +97,61 @@ class WithoutADaemonTest extends CliTest {
                 .contains("override=GABIER_SOCKET");
     }
 
+    /** A project the way Git makes one in a worktree: a folder with a {@code .git} file. */
+    private Path worktree(String name) throws IOException {
+        var root = Files.createDirectories(directory.resolve(name)).toRealPath();
+        Files.createFile(root.resolve(".git"));
+
+        return root;
+    }
+
+    private Map<String, String> inTheRuntimeDirectoryAndInTheProject(Path project) throws IOException {
+        var runtimeDirectory = Files.createDirectories(directory.resolve("run"));
+
+        return Map.of("XDG_RUNTIME_DIR", runtimeDirectory.toString(), "GABIER_PROJECT", project.toString());
+    }
+
     @Test
-    void looksForTheSocketInTheRuntimeDirectoryOfTheUserWithoutAnOverride() throws Exception {
+    void looksForTheSocketOfTheProjectInTheRuntimeDirectoryOfTheUserWithoutAnOverride() throws Exception {
         var runtimeDirectory = directory.resolve("run");
-        Files.createDirectories(runtimeDirectory.resolve("gabier"));
-        var expected = runtimeDirectory.resolve("gabier/gabier.sock");
-        var status = JsonRpc.success("1", """
-            {"version":"0.1","pid":1,"uptimeMillis":0,"project":"/p","jdtls":"not-started"}\
-            """);
-        try (var daemon = new ScriptedDaemon(expected, status)) {
-            var code = run(Map.of("XDG_RUNTIME_DIR", runtimeDirectory.toString()), "status");
+        var environment = Map.of("XDG_RUNTIME_DIR", runtimeDirectory.toString());
+        var expected = SocketLocation.resolve(
+                environment, UserId.current(), Path.of("").toAbsolutePath());
+        Files.createDirectories(expected.getParent());
+        try (var daemon = new ScriptedDaemon(expected, STATUS)) {
+            var code = run(environment, "status");
 
             assertThat(code).isZero();
             assertThat(daemon.requests()).hasSize(1);
+            assertThat(expected.getParent()).isEqualTo(runtimeDirectory.resolve("gabier"));
+        }
+    }
+
+    @Test
+    void reachesTheDaemonOfTheProjectTheVariableNamesWhateverTheFolderItIsRunIn() throws Exception {
+        var project = worktree("worktree");
+        var environment = inTheRuntimeDirectoryAndInTheProject(project);
+        var socket = SocketLocation.resolve(environment, UserId.current(), directory);
+        Files.createDirectories(socket.getParent());
+        try (var daemon = new ScriptedDaemon(socket, STATUS)) {
+            assertThat(run(environment, "status")).isZero();
+
+            assertThat(daemon.requests()).hasSize(1);
+        }
+    }
+
+    @Test
+    void doesNotReachTheDaemonOfAnotherProjectAndStartsNone() throws Exception {
+        var running = worktree("running");
+        var asked = worktree("asked");
+        var socket = SocketLocation.resolve(inTheRuntimeDirectoryAndInTheProject(running), UserId.current(), directory);
+        Files.createDirectories(socket.getParent());
+        try (var daemon = new ScriptedDaemon(socket, STATUS)) {
+            assertThat(runWithoutHanging(inTheRuntimeDirectoryAndInTheProject(asked), "status"))
+                    .isEqualTo(2);
+
+            assertThat(daemon.requests()).isEmpty();
+            assertThat(err()).contains("(daemon-not-running; ");
         }
     }
 }

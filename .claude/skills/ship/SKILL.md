@@ -145,7 +145,7 @@ git worktree remove <worktree> && git branch -d <branch>
 
 `gabier remove-workspace` talks to no daemon and has nothing to remove when the workspace is already gone. It is refused
 (`workspace-in-use`, exit code 2) while a daemon runs jdtls on that workspace, the worker's daemon that was not stopped:
-stop it (`gabier stop` on the socket of that worktree, `.claude/rules/dogfooding.md`), then run the command again. The
+stop it (`GABIER_PROJECT=<worktree> gabier stop`, `.claude/rules/dogfooding.md`), then run the command again. The
 daemon that starts jdtls next also removes the kept workspaces of projects that no longer exist, so a worktree removed
 without this step leaves nothing for long.
 

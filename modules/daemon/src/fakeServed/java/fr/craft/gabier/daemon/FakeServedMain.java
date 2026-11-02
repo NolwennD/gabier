@@ -49,7 +49,8 @@ public final class FakeServedMain {
             return;
         }
 
-        System.exit(Main.serve(System.getenv(), System.out, new Served(root, serving(root))));
+        System.exit(
+                Main.serve(System.getenv(), Path.of("").toAbsolutePath(), System.out, new Served(root, serving(root))));
     }
 
     /**

@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -18,7 +19,6 @@ public final class Main {
 
     private static final String VERSION_OPTION = "--version";
     private static final String SELF_CHECK_OPTION = "--self-check";
-    private static final String PROJECT_VARIABLE = "GABIER_PROJECT";
     private static final int FAILED = 1;
 
     private Main() {}
@@ -38,7 +38,9 @@ public final class Main {
 
     /**
      * Without argument, or with the folder of a project, serves that project on the socket until it is stopped; the
-     * project is the argument, else {@code GABIER_PROJECT}, else the working directory. A refusal (the project, the
+     * project is the argument, else {@code GABIER_PROJECT}, else the nearest folder that holds a {@code .git} from the
+     * working directory up, else the working directory, and the socket is the one of that project
+     * ({@link SocketLocation}). A refusal (the project, the
      * socket path, another daemon, a socket that is not the user's own) is reported as a problem object on the
      * standard error, with the exit code of its category.
      *
@@ -76,7 +78,8 @@ public final class Main {
 
             // What jdtls says is shown as text: a terminal that tails the log must not obey it.
             return serve(
-                    environment,
+                    socketEnvironment(arguments, environment, root),
+                    workingDirectory,
                     out,
                     ProjectServer.jdtls(
                             root, environment, line -> err.println("jdtls: " + TerminalText.neutralise(line))));
@@ -93,16 +96,32 @@ public final class Main {
         throw UsageException.unsupportedArguments(arguments);
     }
 
-    /** The folder of the project: the argument, else {@code GABIER_PROJECT}, else where the daemon was started. */
+    /**
+     * The folder of the project: the argument, else {@code GABIER_PROJECT}, else the nearest folder from where the daemon
+     * was started that holds a {@code .git}, else where it was started ({@link SocketLocation#projectRoot}).
+     */
     private static Path projectRoot(List<String> arguments, Map<String, String> environment, Path workingDirectory)
             throws IOException {
-        var given = arguments.isEmpty() ? environment.getOrDefault(PROJECT_VARIABLE, "") : arguments.getFirst();
-        var folder = given.isBlank() ? workingDirectory : workingDirectory.resolve(given);
+        var folder = arguments.isEmpty()
+                ? SocketLocation.projectRoot(environment, workingDirectory)
+                : workingDirectory.resolve(arguments.getFirst());
         if (!Files.isDirectory(folder)) {
             throw UsageException.notAFolder(folder);
         }
 
         return folder.toRealPath();
+    }
+
+    /** The environment the socket is placed by: a project given as the argument is the project of the socket too. */
+    private static Map<String, String> socketEnvironment(
+            List<String> arguments, Map<String, String> environment, Path root) {
+        if (arguments.isEmpty()) {
+            return environment;
+        }
+        var named = new HashMap<>(environment);
+        named.put(SocketLocation.PROJECT, root.toString());
+
+        return named;
     }
 
     /**
@@ -111,9 +130,10 @@ public final class Main {
      * native} stage of {@code bin/ci} runs calls it (source set {@code fakeServed}, with the fake language server): the
      * way the daemon picks its server is not in its command line nor in its requests.
      */
-    static int serve(Map<String, String> environment, PrintStream out, ServedProject project) throws IOException {
+    static int serve(Map<String, String> environment, Path workingDirectory, PrintStream out, ServedProject project)
+            throws IOException {
         var uid = UserId.current();
-        var socket = SocketLocation.resolve(environment, uid);
+        var socket = SocketLocation.resolve(environment, uid, workingDirectory);
         var server = DaemonServer.open(
                 socket, uid, System::nanoTime, ProcessHandle.current().pid(), project);
         // A signal (SIGTERM) ends the JVM without serve() returning: the hook removes the socket.

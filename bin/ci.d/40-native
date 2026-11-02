@@ -119,7 +119,7 @@ public final class Native {
         try {
             Files.copy(binary, copy);
             int failures = version(copy, empty) + usageError(copy, empty, false) + usageError(copy, empty, true)
-                    + help(copy, empty) + removeWorkspace(copy, empty);
+                    + help(copy, empty) + removeWorkspace(copy, empty) + socketOfTheProject(copy, empty);
             failures += new Daemon(copy, daemon, fakeDaemon, empty).check();
             return failures == 0 ? 0 : 1;
         } finally {
@@ -238,6 +238,37 @@ public final class Native {
         boolean unset = none.exit() == 0 && none.out().contains("GABIER_JDTLS_WORKSPACES is not set");
 
         return removed && idempotent && unset ? 0 : 1;
+    }
+
+    /**
+     * 0 when the native {@code gabier}, with no {@code GABIER_SOCKET}, looks for the socket of the project it is run in:
+     * the same one from the root of a worktree and from a subfolder of it, another one for another worktree, each named
+     * after its folder, in the runtime directory. {@code status} starts no daemon, and its refusal names the socket.
+     */
+    private static int socketOfTheProject(Path binary, Path directory) throws IOException, InterruptedException {
+        Path runtime = Files.createDirectory(directory.resolve("runtime"));
+        Path one = Files.createDirectories(directory.resolve("one-worktree"));
+        Files.createFile(one.resolve(".git"));
+        Path sub = Files.createDirectories(one.resolve("modules/daemon"));
+        Path two = Files.createDirectories(directory.resolve("two-worktree"));
+        Files.createFile(two.resolve(".git"));
+        List<String> environment = List.of("XDG_RUNTIME_DIR", runtime.toString());
+        Pattern named = Pattern.compile("socket=(" + Pattern.quote(runtime.toRealPath() + "/gabier/") + "(\\S+)-[0-9a-f]{8}\\.sock)\\)");
+
+        String[] sockets = new String[3];
+        Path[] folders = {one, sub, two};
+        String[] names = {"one-worktree", "one-worktree", "two-worktree"};
+        int failures = 0;
+        for (int i = 0; i < folders.length; i++) {
+            Run run = runBinary(binary, folders[i], environment, "status");
+            var match = named.matcher(run.err());
+            boolean found = run.exit() == 2 && match.find() && match.group(2).equals(names[i]);
+            System.out.println("gabier status in " + folders[i].getFileName() + " -> " + run.err() + " (exit " + run.exit() + ")");
+            sockets[i] = found ? match.group(1) : "";
+            failures += found ? 0 : 1;
+        }
+
+        return failures + (!sockets[0].isEmpty() && sockets[0].equals(sockets[1]) && !sockets[0].equals(sockets[2]) ? 0 : 1);
     }
 
     /** The native cli against the installed daemon, on a socket of its own. */

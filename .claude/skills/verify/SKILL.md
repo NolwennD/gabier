@@ -51,8 +51,9 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   fr.craft.gabier.core`): it is the composition root, and the architecture rule on the contexts exempts it only for the
   `editing` domain it implements (`IMPLEMENTED_DOMAINS` in `HexagonalArchTest`), not for the domain of any other context.
 - The daemon listens on a Unix socket (`gabier-daemon`, no argument): `Main` resolves the path
-  (`SocketLocation`, in `protocol`: `GABIER_SOCKET`, else `$XDG_RUNTIME_DIR/gabier/gabier.sock`, else
-  `/tmp/gabier-<uid>/gabier.sock`, at most 107 bytes), `DaemonServer` takes the socket (`SocketGuard`: private folder,
+  (`SocketLocation`, in `protocol`: `GABIER_SOCKET`, else `$XDG_RUNTIME_DIR/gabier/<project>-<hash>.sock`, else
+  `/tmp/gabier-<uid>/<project>-<hash>.sock`, the project being `GABIER_PROJECT` or the nearest folder with a `.git` above
+  the working directory, at most 107 bytes), `DaemonServer` takes the socket (`SocketGuard`: private folder,
   stale socket removed, another daemon refused) and serves the clients with `Connection` (lines in, lines out) and
   `RequestHandler` (the method table: `StatusMethod`, `StopMethod`, `DiagnosticsMethod`, `RenameMethod`,
   `RenameTokenMethod`, `OrganizeImportsMethod`, `CleanUpMethod`, `ExtractVariableMethod`, `ExtractMethodMethod`, `ExtractConstantMethod`, `ExtractFieldMethod`, `MoveTypeToFileMethod`, `InlineMethod`; adding one is

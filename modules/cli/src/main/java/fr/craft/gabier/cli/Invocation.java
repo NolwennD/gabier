@@ -40,7 +40,7 @@ record Invocation(Arguments arguments, boolean json, PrintStream out, Map<String
     }
 
     private Path socket() {
-        return SocketLocation.resolve(environment, UserId.current());
+        return SocketLocation.resolve(environment, UserId.current(), Path.of("").toAbsolutePath());
     }
 
     private static RpcResponse.Success call(

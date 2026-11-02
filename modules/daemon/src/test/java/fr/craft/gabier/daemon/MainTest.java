@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import fr.craft.gabier.protocol.DaemonStatus;
 import fr.craft.gabier.protocol.JdtlsState;
 import fr.craft.gabier.protocol.RpcResponse;
+import fr.craft.gabier.protocol.SocketLocation;
+import fr.craft.gabier.protocol.UserId;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -335,14 +337,47 @@ class MainTest {
         }
 
         @Test
-        void usesTheRuntimeDirectoryOfTheUserWhenTheEnvironmentHasNoOverride() throws Exception {
+        void listensOnTheSocketOfTheProjectInTheRuntimeDirectoryOfTheUserWhenTheEnvironmentHasNoOverride()
+                throws Exception {
             var runtimeDirectory = Files.createDirectory(directory.resolve("run"));
-            var daemon = start(
-                    Map.of("XDG_RUNTIME_DIR", runtimeDirectory.toString()),
-                    runtimeDirectory.resolve("gabier/gabier.sock"));
+            var environment = Map.of("XDG_RUNTIME_DIR", runtimeDirectory.toString());
+            var expected = SocketLocation.resolve(environment, UserId.current(), directory);
 
+            var daemon = start(environment, expected);
+
+            assertThat(expected.getParent()).isEqualTo(runtimeDirectory.resolve("gabier"));
+            assertThat(expected.getFileName().toString()).startsWith(directory.getFileName() + "-");
             ask(STOP);
+            assertThat(daemon.orTimeout(10, TimeUnit.SECONDS).join()).isZero();
+        }
 
+        @Test
+        void servesTheRootOfTheProjectFromASubfolderOnTheSocketOfThatRoot() throws Exception {
+            var runtimeDirectory = Files.createDirectory(directory.resolve("run"));
+            var root = Files.createDirectories(directory.resolve("worktree"));
+            Files.createFile(root.resolve(".git"));
+            var subfolder = Files.createDirectories(root.resolve("modules/daemon"));
+            var environment = Map.of("XDG_RUNTIME_DIR", runtimeDirectory.toString());
+            var expected = SocketLocation.resolve(environment, UserId.current(), root);
+
+            var daemon = start(() -> run(environment, subfolder, PASSING), expected);
+
+            assertThat(status().project()).isEqualTo(root.toRealPath());
+            ask(STOP);
+            assertThat(daemon.orTimeout(10, TimeUnit.SECONDS).join()).isZero();
+        }
+
+        @Test
+        void listensOnTheSocketOfTheProjectOfTheArgument() throws Exception {
+            var runtimeDirectory = Files.createDirectory(directory.resolve("run"));
+            var project = Files.createDirectory(directory.resolve("from-the-argument"));
+            var environment = Map.of("XDG_RUNTIME_DIR", runtimeDirectory.toString());
+            var expected = SocketLocation.resolve(environment, UserId.current(), project);
+
+            var daemon = start(() -> run(environment, directory, PASSING, "from-the-argument"), expected);
+
+            assertThat(status().project()).isEqualTo(project.toRealPath());
+            ask(STOP);
             assertThat(daemon.orTimeout(10, TimeUnit.SECONDS).join()).isZero();
         }
 
