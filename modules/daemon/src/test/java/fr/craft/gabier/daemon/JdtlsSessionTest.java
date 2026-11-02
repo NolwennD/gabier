@@ -1,9 +1,14 @@
 package fr.craft.gabier.daemon;
 
+import static fr.craft.gabier.daemon.FakeOnlyReasons.JDTLS_DIED;
+import static fr.craft.gabier.daemon.FakeOnlyReasons.JDTLS_FAILS;
+import static fr.craft.gabier.daemon.FakeOnlyReasons.MALFORMED_ANSWER;
+import static fr.craft.gabier.daemon.FakeOnlyReasons.NO_ANSWER_IN_TIME;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.google.gson.Gson;
+import fr.craft.gabier.editing.fixtures.FakeOnly;
 import fr.craft.gabier.protocol.WorkspaceLock;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -22,12 +27,14 @@ import org.eclipse.lsp4j.PublishDiagnosticsParams;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The start and the end of a jdtls session, against {@link FakeJdtls}: a language server in this process, over pipes,
  * and a child process standing in for the jdtls process. No jdtls is started.
  */
+@ExtendWith(FakeOnlyGuard.class)
 class JdtlsSessionTest {
 
     private static final Path PROJECT_ROOT = Path.of("/work/project");
@@ -230,6 +237,7 @@ class JdtlsSessionTest {
     @Nested
     class StartFailing {
 
+        @FakeOnly(reason = JDTLS_DIED)
         @Test
         void failsAtOnceWhenJdtlsSendsAnErrorStatus() throws Exception {
             fake.sendsStatus("Error");
@@ -332,6 +340,7 @@ class JdtlsSessionTest {
             assertNothingLeftBehind();
         }
 
+        @FakeOnly(reason = MALFORMED_ANSWER)
         @Test
         void aListOfProjectsThatIsNotAListIsAFailure() throws Exception {
             fake.answersNothingToProjects();
@@ -358,6 +367,7 @@ class JdtlsSessionTest {
             assertThat(data.get()).doesNotExist();
         }
 
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
         @Test
         void aFailureToCloseAfterAFailureToStartIsAddedToItNotInstead() throws Exception {
             Thread test = Thread.currentThread();
@@ -554,6 +564,7 @@ class JdtlsSessionTest {
             assertThat(session.dataDirectory()).doesNotExist();
         }
 
+        @FakeOnly(reason = JDTLS_FAILS)
         @Test
         void stillEndsJdtlsWhenItRefusesToShutDown() throws Exception {
             fake.listsProjects(URI_A).shutdown(FakeJdtls.Shutdown.FAILS);
@@ -606,6 +617,7 @@ class JdtlsSessionTest {
                     JdtlsWorkspace.temporary());
         }
 
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
         @Test
         void stillEndsJdtlsWhenItNeverAnswersTheShutdown() throws Exception {
             fake.listsProjects(URI_A).shutdown(FakeJdtls.Shutdown.NEVER_ANSWERS);
@@ -654,6 +666,7 @@ class JdtlsSessionTest {
             assertThat(fake.shutdownRequests()).isEqualTo(1);
         }
 
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
         @Test
         void anInterruptionDoesNotStopTheCleaningUp() throws Exception {
             fake.listsProjects(URI_A).shutdown(FakeJdtls.Shutdown.NEVER_ANSWERS);

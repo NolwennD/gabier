@@ -698,11 +698,42 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
         }
     }
 
+    /** What a replay compares between the answer of a scenario and the one of the real server. */
+    public enum Comparison {
+
+        /**
+         * The effect: the text of the files once a change set is applied, the places of a symbol, the key of a
+         * refusal. Another server that gets there with other edits passes.
+         */
+        EFFECT,
+
+        /** The severity and the position of each diagnostic, not the text of its message. */
+        SEVERITY_AND_POSITION,
+
+        /** The answer as the server words it (the titles of the actions it offers): the coupling that stays. */
+        EXACT
+    }
+
     /** What the server is expected to answer. */
     public sealed interface Answer {
 
         /** The same answer with the paths it holds put under the root and normalized. */
         Answer resolvedIn(Path root);
+
+        /**
+         * What a replay compares between this answer and the one of the real server. By default it is the effect: what
+         * the answer does to the project, the places or the refusal it gives, never the way a server chose to write
+         * it.
+         */
+        default Comparison comparison() {
+            return Comparison.EFFECT;
+        }
+
+        /** An answer that is a change set: its effect is the text of the files once the set is applied. */
+        sealed interface Changing extends Answer {
+
+            ChangeSet changes();
+        }
 
         /** The diagnostics of a file, none when it is clean. */
         record Diagnosed(List<Diagnostic> diagnostics) implements Answer {
@@ -713,13 +744,18 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             }
 
             @Override
+            public Comparison comparison() {
+                return Comparison.SEVERITY_AND_POSITION;
+            }
+
+            @Override
             public Diagnosed resolvedIn(Path root) {
                 return this;
             }
         }
 
         /** The change set of a rename. */
-        record Renamed(ChangeSet changes) implements Answer {
+        record Renamed(ChangeSet changes) implements Changing {
 
             public Renamed {
                 Assert.notNull("changes", changes);
@@ -748,7 +784,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
         }
 
         /** The change set that extracts an expression into a variable, or a selection into a method: only edits of its file. */
-        record Extracted(ChangeSet changes) implements Answer {
+        record Extracted(ChangeSet changes) implements Changing {
 
             public Extracted {
                 Assert.notNull("changes", changes);
@@ -764,7 +800,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
          * The change set that moves a nested type to a file of its own: the creation of the file, its text, and the edits
          * of the files that refer to the type.
          */
-        record Moved(ChangeSet changes) implements Answer {
+        record Moved(ChangeSet changes) implements Changing {
 
             public Moved {
                 Assert.notNull("changes", changes);
@@ -780,7 +816,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
          * The change set that moves files to a package: the edits of the {@code package} line of each file and of the
          * files that refer to it, and the move of each file to the folder of the package.
          */
-        record MovedToPackage(ChangeSet changes) implements Answer {
+        record MovedToPackage(ChangeSet changes) implements Changing {
 
             public MovedToPackage {
                 Assert.notNull("changes", changes);
@@ -793,7 +829,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
         }
 
         /** The change set that inlines a variable, a method or a constant: only edits, of the files that use it. */
-        record Inlined(ChangeSet changes) implements Answer {
+        record Inlined(ChangeSet changes) implements Changing {
 
             public Inlined {
                 Assert.notNull("changes", changes);
@@ -806,7 +842,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
         }
 
         /** The change set that creates a type in a new file: the creation of the file and the edit that holds its text. */
-        record Created(ChangeSet changes) implements Answer {
+        record Created(ChangeSet changes) implements Changing {
 
             public Created {
                 Assert.notNull("changes", changes);
@@ -830,13 +866,18 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             }
 
             @Override
+            public Comparison comparison() {
+                return Comparison.EXACT;
+            }
+
+            @Override
             public Offered resolvedIn(Path root) {
                 return this;
             }
         }
 
         /** The change set of one code action: the edits it makes, to the files it changes. */
-        record CodeActionApplied(ChangeSet changes) implements Answer {
+        record CodeActionApplied(ChangeSet changes) implements Changing {
 
             public CodeActionApplied {
                 Assert.notNull("changes", changes);
@@ -869,7 +910,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
         }
 
         /** The change set that organizes the imports of a file: only edits of that file. */
-        record Organized(ChangeSet changes) implements Answer {
+        record Organized(ChangeSet changes) implements Changing {
 
             public Organized {
                 Assert.notNull("changes", changes);
@@ -891,7 +932,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
         }
 
         /** The change set that cleans a file up: only edits of that file, one that covers the whole text. */
-        record CleanedUp(ChangeSet changes) implements Answer {
+        record CleanedUp(ChangeSet changes) implements Changing {
 
             public CleanedUp {
                 Assert.notNull("changes", changes);

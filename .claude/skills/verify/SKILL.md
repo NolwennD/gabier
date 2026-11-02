@@ -84,9 +84,14 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   class), and shows their output, which is the evidence:
   - `ScenarioReplayTest` replays the contract scenarios of the core (`Scenarios.all()`) that the adapter implements
     against a real jdtls started on each scenario's project (written in a temporary folder, with an Eclipse `.project`
-    and `.classpath` that jdtls imports without network), and fails on any difference. The answer of a rename is
-    compared exactly (jdtls merges the edits of a file, and the scenarios hold what it answered), must compile once
-    applied to a copy of the project, and no request may change the sources. The organization of the imports is replayed
+    and `.classpath` that jdtls imports without network), and fails on any difference. The answer that is a change
+    set is compared by its effect (`Effect`: the sources of the project once it is applied to a copy, equal to the ones
+    the scenario's set leaves, and compiled by javac; the edits themselves are not compared), a diagnostic by its
+    severity and its position (not its message), the titles of the offered actions exactly, and no request may change the
+    sources. The exact answer of jdtls is tested in `modules/daemon/src/test` against `FakeJdtls`; what no replay can show
+    is `@FakeOnly(reason = "...")` there (`FakeOnlyGuard` fails an unlabelled test that makes `FakeJdtls` play a failure,
+    `FakeOnlyReasonTest` a blank reason); `JdtlsCouplingTest` (core) counts what still couples the
+    scenarios to jdtls against ceilings that only go down, and `bin/ci` prints the figures (stage `test`). The organization of the imports is replayed
     on a project that includes `Wide`, which imports 100 types of one package and 100 constants of one class: with the
     default preferences of jdtls the replay fails (a star import, groups apart), which is what proves the settings. The small cases
     of the adapter's answers are scenarios too: not ready while jdtls imports (`diagnostics-while-the-server-imports`, asked

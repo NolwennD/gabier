@@ -1,5 +1,6 @@
 package fr.craft.gabier.daemon;
 
+import static fr.craft.gabier.daemon.FakeOnlyReasons.JDTLS_FAILS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -8,6 +9,7 @@ import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.PackageName;
+import fr.craft.gabier.editing.fixtures.FakeOnly;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
@@ -34,6 +36,7 @@ import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
@@ -42,6 +45,7 @@ import org.junit.jupiter.api.io.TempDir;
  * moves a file onto a file of its name), and the folder it makes for the time of the request when the package has none
  * (jdtls answers no change for a package whose folder it does not know).
  */
+@ExtendWith(FakeOnlyGuard.class)
 class JdtlsMoveToPackageTest {
 
     private static final Duration LONG = Duration.ofSeconds(30);
@@ -321,6 +325,7 @@ class JdtlsMoveToPackageTest {
         }
     }
 
+    @FakeOnly(reason = JDTLS_FAILS)
     @Test
     void removesTheFolderItMadeWhenJdtlsDeclinesOrFails() throws Exception {
         Path archive = main.resolve("demo/archive");

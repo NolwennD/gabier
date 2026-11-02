@@ -4,11 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import fr.craft.gabier.editing.domain.ChangeApplier;
 import fr.craft.gabier.editing.domain.ChangeSet;
-import fr.craft.gabier.editing.domain.FileChange;
+import fr.craft.gabier.editing.domain.Diagnostic;
+import fr.craft.gabier.editing.domain.Diagnostic.Severity;
+import fr.craft.gabier.editing.domain.EditingException;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.OfferedActions;
+import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.ReferenceLocations;
+import fr.craft.gabier.editing.fixtures.Effect;
 import fr.craft.gabier.editing.fixtures.Scenario;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
 import fr.craft.gabier.editing.fixtures.Scenario.Request;
@@ -48,8 +52,10 @@ import org.junit.jupiter.api.Test;
  * ./gradlew jdtlsProbe}, with {@code GABIER_JDTLS} set to the jdtls launcher.
  *
  * <p>Only the requests the adapter implements are replayed; {@link #replayed} says which, and the test prints the
- * scenarios it leaves out. The answer of a rename is compared to the scenario exactly, and must compile once applied
- * ({@link #compile}); whatever is asked, the sources of the project stay as they were ({@link #assertUntouched}).
+ * scenarios it leaves out. The answer that is a change set is compared by its effect ({@link #compareEffect}: the sources
+ * once it is applied to a copy of the project, which must compile), a diagnostic by its severity and its position, the
+ * places of a reference and the key of a refusal as they are; only the titles of the offered actions are compared as
+ * jdtls words them. Whatever is asked, the sources of the project stay as they were ({@link #assertUntouched}).
  */
 class ScenarioReplayTest {
 
@@ -203,73 +209,24 @@ class ScenarioReplayTest {
             case Answer.Diagnosed diagnosed -> {
                 var answer = (List<?>) ask(server, request);
                 System.out.println(scenario.name() + ": jdtls answered " + answer);
+                // The text of a message is the compiler's own: it is printed, not compared.
                 differences
-                        .assertThat(answer)
-                        .as("%s: the diagnostics jdtls answers", scenario.name())
-                        .isEqualTo(diagnosed.diagnostics());
+                        .assertThat(located(answer))
+                        .as("%s: the severity and the position of the diagnostics jdtls answers", scenario.name())
+                        .isEqualTo(located(diagnosed.diagnostics()));
             }
-            case Answer.Renamed renamed -> {
-                var answer = (ChangeSet) ask(server, request);
-                System.out.println(scenario.name() + ": jdtls answered " + answer);
-                differences
-                        .assertThat(answer)
-                        .as("%s: the change set jdtls answers", scenario.name())
-                        .isEqualTo(renamed.changes());
-                compile(scenario, root, answer, differences);
-            }
-            case Answer.Extracted extracted -> {
-                var answer = (ChangeSet) ask(server, request);
-                System.out.println(scenario.name() + ": jdtls answered " + answer);
-                differences
-                        .assertThat(answer)
-                        .as("%s: the change set jdtls answers", scenario.name())
-                        .isEqualTo(extracted.changes());
-                compile(scenario, root, answer, differences);
-            }
-            case Answer.Moved moved -> {
-                var answer = (ChangeSet) ask(server, request);
-                System.out.println(scenario.name() + ": jdtls answered " + answer);
-                differences
-                        .assertThat(answer)
-                        .as("%s: the change set jdtls answers", scenario.name())
-                        .isEqualTo(moved.changes());
-                compile(scenario, root, answer, differences);
-            }
-            case Answer.MovedToPackage moved -> {
-                var answer = (ChangeSet) ask(server, request);
-                System.out.println(scenario.name() + ": jdtls answered " + answer);
-                // jdtls does not answer the files of a move in a stable order (seen to change from one run to the next,
-                // the temporary folder differing): the order of the answer is the adapter's, the edits of the files by
-                // path, then the moves by path, and it is compared as it is.
-                differences
-                        .assertThat(answer)
-                        .as("%s: the change set jdtls answers", scenario.name())
-                        .isEqualTo(moved.changes());
-                compile(scenario, root, answer, differences);
-            }
-            case Answer.Inlined inlined -> {
-                var answer = (ChangeSet) ask(server, request);
-                System.out.println(scenario.name() + ": jdtls answered " + answer);
-                differences
-                        .assertThat(answer)
-                        .as("%s: the change set jdtls answers", scenario.name())
-                        .isEqualTo(inlined.changes());
-                compile(scenario, root, answer, differences);
-            }
-            case Answer.CodeActionApplied applied -> {
-                var answer = (ChangeSet) ask(server, request);
-                System.out.println(scenario.name() + ": jdtls answered " + answer);
-                differences
-                        .assertThat(answer)
-                        .as("%s: the change set jdtls answers", scenario.name())
-                        .isEqualTo(applied.changes());
-                compile(scenario, root, answer, differences);
+            case Answer.Changing changing -> {
+                Object asked = changing instanceof Answer.Organized
+                        ? askWithoutWaitingForDiagnostics(server, scenario, differences)
+                        : ask(server, request);
+                System.out.println(scenario.name() + ": jdtls answered " + asked);
+                compareEffect(scenario, root, changesIn(asked), changing.changes(), differences);
             }
             case Answer.Offered offered -> {
                 var answer = (OfferedActions) ask(server, request);
                 System.out.println(scenario.name() + ": jdtls answered " + answer);
-                // The titles are jdtls's text: the scenario names what it must offer, and it may offer more. Nothing
-                // offered is exact.
+                // The titles are jdtls's text, the one comparison that stays exact (Scenario.Comparison#EXACT): the
+                // scenario names what it must offer, and it may offer more. Nothing offered is exact.
                 if (offered.offered().actions().isEmpty()) {
                     differences
                             .assertThat(answer.actions())
@@ -282,15 +239,6 @@ class ScenarioReplayTest {
                             .containsAll(offered.offered().actions());
                 }
             }
-            case Answer.Created created -> {
-                var answer = (ChangeSet) ask(server, request);
-                System.out.println(scenario.name() + ": jdtls answered " + answer);
-                differences
-                        .assertThat(answer)
-                        .as("%s: the change set jdtls answers", scenario.name())
-                        .isEqualTo(created.changes());
-                compile(scenario, root, answer, differences);
-            }
             case Answer.Referenced referenced -> {
                 var answer = (ReferenceLocations) ask(server, request);
                 System.out.println(scenario.name() + ": jdtls answered " + answer);
@@ -299,17 +247,6 @@ class ScenarioReplayTest {
                         .as("%s: the places jdtls answers", scenario.name())
                         .isEqualTo(referenced.locations());
             }
-            case Answer.Organized organized -> {
-                var answer = (Optional<?>) askWithoutWaitingForDiagnostics(server, scenario, differences);
-                System.out.println(scenario.name() + ": jdtls answered " + answer);
-                differences
-                        .assertThat(answer)
-                        .as("%s: the change set jdtls answers", scenario.name())
-                        .isEqualTo(Optional.of(organized.changes()));
-                if (answer.isPresent()) {
-                    compile(scenario, root, (ChangeSet) answer.get(), differences);
-                }
-            }
             case Answer.AlreadyOrganized _ -> {
                 var answer = (Optional<?>) askWithoutWaitingForDiagnostics(server, scenario, differences);
                 System.out.println(scenario.name() + ": jdtls answered " + answer);
@@ -317,17 +254,6 @@ class ScenarioReplayTest {
                         .assertThat(answer)
                         .as("%s: jdtls has no edit to give", scenario.name())
                         .isEmpty();
-            }
-            case Answer.CleanedUp cleaned -> {
-                var answer = (Optional<?>) ask(server, request);
-                System.out.println(scenario.name() + ": jdtls answered " + answer);
-                differences
-                        .assertThat(answer)
-                        .as("%s: the change set jdtls answers", scenario.name())
-                        .isEqualTo(Optional.of(cleaned.changes()));
-                if (answer.isPresent()) {
-                    compile(scenario, root, (ChangeSet) answer.get(), differences);
-                }
             }
             case Answer.AlreadyClean _ -> {
                 var answer = (Optional<?>) ask(server, request);
@@ -360,6 +286,54 @@ class ScenarioReplayTest {
                 }
             }
         }
+    }
+
+    /** What matters of a diagnostic, whatever the words of the message. */
+    private record Located(Severity severity, Position position) {}
+
+    private static List<Located> located(List<?> diagnostics) {
+        return diagnostics.stream()
+                .map(Diagnostic.class::cast)
+                .map(diagnostic -> new Located(diagnostic.severity(), diagnostic.position()))
+                .toList();
+    }
+
+    /** The change set of an answer that is one, or of one that may be none. */
+    private static Optional<ChangeSet> changesIn(Object answer) {
+        return answer instanceof Optional<?> optional
+                ? optional.map(ChangeSet.class::cast)
+                : Optional.of((ChangeSet) answer);
+    }
+
+    /**
+     * The one comparison of the answers that are a change set: the sources of the project once the set jdtls answered is
+     * applied to a copy of it are the ones the scenario's set leaves ({@link Effect}), whatever edits each of them is
+     * made of, and they compile. The set of jdtls that cannot be applied is a difference.
+     */
+    private static void compareEffect(
+            Scenario scenario, Path root, Optional<ChangeSet> answer, ChangeSet expected, SoftAssertions differences)
+            throws IOException {
+        if (answer.isEmpty()) {
+            differences.fail("%s: jdtls has no edit to give, the scenario expects %s", scenario.name(), expected);
+
+            return;
+        }
+        Map<Path, String> actual;
+        try {
+            actual = Effect.of(root, answer.get());
+        } catch (EditingException cannotApply) {
+            differences.fail("%s: the change set jdtls answers cannot be applied: %s", scenario.name(), cannotApply);
+
+            return;
+        }
+        differences
+                .assertThat(actual)
+                .as("%s: the sources of the project once the change set jdtls answers is applied", scenario.name())
+                .isEqualTo(Effect.of(root, expected));
+        differences
+                .assertThat(compilationErrors(actual))
+                .as("%s: the errors of the project once the change set of jdtls is applied", scenario.name())
+                .isEmpty();
     }
 
     /**
@@ -445,63 +419,23 @@ class ScenarioReplayTest {
         return folders;
     }
 
-    /** The project with the change set applied (to a copy of it) is Java that compiles: every reference was changed. */
-    private static void compile(Scenario scenario, Path root, ChangeSet answer, SoftAssertions differences)
-            throws IOException {
-        Path copy = Files.createTempDirectory("gabier-renamed-").toRealPath();
+    /** What javac reports on the sources, by path under the root of the project, none when they compile. */
+    private static List<String> compilationErrors(Map<Path, String> sources) throws IOException {
+        Path project = Files.createTempDirectory("gabier-compiled-").toRealPath();
         try {
-            copyProject(root, copy);
-            ChangeSet onTheCopy = rebased(answer, root, copy);
-            new ChangeApplier(new NioFileStore()).apply(onTheCopy);
-            // The folders of a created file are made by the application of the set, not by the test.
-            onTheCopy.changes().stream()
-                    .filter(FileChange.CreateFile.class::isInstance)
-                    .map(change -> ((FileChange.CreateFile) change).file())
-                    .forEach(created -> differences
-                            .assertThat(created)
-                            .as("%s: the file the change set creates, and its folders", scenario.name())
-                            .isRegularFile());
-            differences
-                    .assertThat(compilationErrors(copy))
-                    .as("%s: the errors of the project once the change set of jdtls is applied", scenario.name())
-                    .isEmpty();
-        } finally {
-            delete(copy);
-        }
-    }
-
-    private static void copyProject(Path from, Path to) throws IOException {
-        try (var files = Files.walk(from.resolve("src"))) {
-            for (Path file : files.toList()) {
-                Path target = to.resolve(from.relativize(file));
-                if (Files.isDirectory(file)) {
-                    Files.createDirectories(target);
-                } else {
-                    Files.copy(file, target);
-                }
+            for (var source : sources.entrySet()) {
+                Path file = project.resolve(source.getKey());
+                Files.createDirectories(file.getParent());
+                Files.writeString(file, source.getValue());
             }
+
+            return compilationErrors(project);
+        } finally {
+            delete(project);
         }
     }
 
-    /** The same changes on the copy of the project. */
-    private static ChangeSet rebased(ChangeSet changes, Path root, Path copy) {
-        return new ChangeSet(changes.changes().stream()
-                .<FileChange>map(change -> switch (change) {
-                    case FileChange.EditFile edit ->
-                        new FileChange.EditFile(rebased(edit.file(), root, copy), edit.edits());
-                    case FileChange.CreateFile create -> new FileChange.CreateFile(rebased(create.file(), root, copy));
-                    case FileChange.RenameFile rename ->
-                        new FileChange.RenameFile(rebased(rename.from(), root, copy), rebased(rename.to(), root, copy));
-                    case FileChange.DeleteFile delete -> new FileChange.DeleteFile(rebased(delete.file(), root, copy));
-                })
-                .toList());
-    }
-
-    private static Path rebased(Path file, Path root, Path copy) {
-        return copy.resolve(root.relativize(file));
-    }
-
-    /** What javac reports on every source of the project, none when it compiles. */
+    /** What javac reports on every source under the project, none when it compiles. */
     private static List<String> compilationErrors(Path project) throws IOException {
         var javac = ToolProvider.getSystemJavaCompiler();
         var errors = new DiagnosticCollector<JavaFileObject>();

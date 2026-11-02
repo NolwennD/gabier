@@ -12,8 +12,10 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 /** What is awaited from jdtls, raced against its death. A child process stands in for jdtls: none is started. */
+@ExtendWith(FakeOnlyGuard.class)
 class JdtlsWatchTest {
 
     private static final Duration LONG = Duration.ofMinutes(5);

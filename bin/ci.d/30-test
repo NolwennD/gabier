@@ -13,8 +13,9 @@ import java.util.stream.Stream;
  * Stage {@code test} of the local CI (see {@code bin/ci}): the tests and the gates (coverage, architecture,
  * Checkstyle), from a clean test state so that a cached result never passes for a fresh one (the unit tests, which need
  * no jdtls), then the test counts per project and test task, read from the XML reports. A project that has test
- * sources but reports no test fails the stage: a green build that ran nothing is not a pass. Runs in the current
- * directory, the checkout under verification.
+ * sources but reports no test fails the stage: a green build that ran nothing is not a pass. The coupling of the
+ * scenarios to jdtls (written by {@code JdtlsCouplingTest}, which fails above its ceilings) is printed after them. Runs
+ * in the current directory, the checkout under verification.
  */
 public final class Test {
 
@@ -26,12 +27,32 @@ public final class Test {
             System.out.println("tests and gates (coverage, architecture, Checkstyle), from a clean test state");
             return;
         }
+        // The figures of an earlier run are not the ones of this run.
+        Files.deleteIfExists(Path.of("modules/core/build/jdtls-coupling.txt"));
         int status = run("./gradlew", "cleanTest", "check", "--console=plain");
         List<String> silent = printTestCounts(Path.of("."));
         if (!silent.isEmpty()) {
             System.err.println("These projects have test sources but ran no test: " + String.join(", ", silent));
         }
-        System.exit(status != 0 ? status : silent.isEmpty() ? 0 : 1);
+        boolean coupling = printCoupling(Path.of("."));
+        System.exit(status != 0 ? status : silent.isEmpty() && coupling ? 0 : 1);
+    }
+
+    /**
+     * The coupling of the scenarios to jdtls, as {@code JdtlsCouplingTest} wrote it (the test itself fails above its
+     * ceilings).
+     *
+     * @return whether the figures were there: a test that did not run is not a pass
+     */
+    private static boolean printCoupling(Path root) throws IOException {
+        Path report = root.resolve("modules/core/build/jdtls-coupling.txt");
+        System.out.println("-- coupling to jdtls (from " + report + ") --");
+        if (!Files.isRegularFile(report)) {
+            System.err.println("JdtlsCouplingTest wrote no figures: the coupling is not measured.");
+            return false;
+        }
+        System.out.print(Files.readString(report));
+        return true;
     }
 
     /**

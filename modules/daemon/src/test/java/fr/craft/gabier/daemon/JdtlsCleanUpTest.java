@@ -1,5 +1,6 @@
 package fr.craft.gabier.daemon;
 
+import static fr.craft.gabier.daemon.FakeOnlyReasons.JDTLS_FAILS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -11,6 +12,7 @@ import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
+import fr.craft.gabier.editing.fixtures.FakeOnly;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,6 +33,7 @@ import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
@@ -38,6 +41,7 @@ import org.junit.jupiter.api.io.TempDir;
  * identifiers asked for, in the order given, before {@code java/cleanup} is asked for the file, and set back to nothing
  * after; the answer, one edit of the whole text, is given in the terms of the domain.
  */
+@ExtendWith(FakeOnlyGuard.class)
 class JdtlsCleanUpTest {
 
     private static final Duration LONG = Duration.ofSeconds(30);
@@ -264,6 +268,7 @@ class JdtlsCleanUpTest {
         }
     }
 
+    @FakeOnly(reason = JDTLS_FAILS)
     @Test
     void saysWhatWentWrongWhenJdtlsFailsAndStillSetsTheCleanUpsBackToNothing() throws Exception {
         fake.cleanupAnswers(CompletableFuture.failedFuture(new IllegalStateException("the model is broken")));

@@ -59,8 +59,10 @@ import org.eclipse.lsp4j.SymbolInformation;
 import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.eclipse.lsp4j.WorkspaceEdit;
 import org.eclipse.lsp4j.jsonrpc.Launcher;
+import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.eclipse.lsp4j.jsonrpc.messages.Either3;
+import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification;
 import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
 import org.eclipse.lsp4j.launch.LSPLauncher;
@@ -194,11 +196,17 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /** The {@code language/status} sent after {@code initialized}: {@code ServiceReady} by default, or none. */
     FakeJdtls sendsStatus(String type) {
         this.status = type;
+        if (!type.isBlank() && !"ServiceReady".equals(type)) {
+            FakeOnlyGuard.failureScripted("the status is " + type);
+        }
         return this;
     }
 
     FakeJdtls shutdown(Shutdown shutdown) {
         this.shutdown = shutdown;
+        if (shutdown != Shutdown.ANSWERS) {
+            FakeOnlyGuard.failureScripted("shutdown " + shutdown);
+        }
         return this;
     }
 
@@ -215,6 +223,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /** {@code java.project.getAll} answers {@code null}, which is not a list of projects. */
     FakeJdtls answersNothingToProjects() {
         this.answersNothingToProjects = true;
+        FakeOnlyGuard.failureScripted("the projects are null");
         return this;
     }
 
@@ -250,7 +259,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     FakeJdtls prepareRenameAnswers(
             CompletableFuture<Either3<org.eclipse.lsp4j.Range, PrepareRenameResult, PrepareRenameDefaultBehavior>>
                     answer) {
-        this.prepareRenameAnswer = answer;
+        this.prepareRenameAnswer = scripted("prepareRename", answer);
         return this;
     }
 
@@ -259,7 +268,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
      * Unscripted, the request never gets an answer.
      */
     FakeJdtls renameAnswers(CompletableFuture<WorkspaceEdit> answer) {
-        this.renameAnswer = answer;
+        this.renameAnswer = scripted("rename", answer);
         return this;
     }
 
@@ -268,7 +277,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
      * null or a failed future. Unscripted, the request never gets an answer.
      */
     FakeJdtls referencesAnswers(boolean includeDeclaration, CompletableFuture<List<? extends Location>> answer) {
-        this.referencesAnswers.put(includeDeclaration, answer);
+        this.referencesAnswers.put(includeDeclaration, scripted("references", answer));
         return this;
     }
 
@@ -277,7 +286,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
      * Unscripted, the request never gets an answer.
      */
     FakeJdtls documentSymbolAnswers(CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> answer) {
-        this.documentSymbolAnswer = answer;
+        this.documentSymbolAnswer = scripted("documentSymbol", answer);
         return this;
     }
 
@@ -287,7 +296,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
      */
     FakeJdtls definitionAnswers(
             CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> answer) {
-        this.definitionAnswer = answer;
+        this.definitionAnswer = scripted("definition", answer);
         return this;
     }
 
@@ -301,7 +310,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
      * Unscripted, the request never gets an answer.
      */
     FakeJdtls codeActionAnswers(CompletableFuture<List<Either<Command, CodeAction>>> answer) {
-        this.codeActionAnswer = answer;
+        this.codeActionAnswer = scripted("codeAction", answer);
         return this;
     }
 
@@ -310,7 +319,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
      * future. Unscripted, the request never gets an answer.
      */
     FakeJdtls resolveAnswers(CompletableFuture<CodeAction> answer) {
-        this.resolveAnswer = answer;
+        this.resolveAnswer = scripted("codeAction/resolve", answer);
         return this;
     }
 
@@ -319,7 +328,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
      * a failed future (a refusal). Unscripted, the request never gets an answer.
      */
     FakeJdtls refactorEditAnswers(CompletableFuture<JdtlsServer.RefactorEdit> answer) {
-        this.refactorEditAnswer = answer;
+        this.refactorEditAnswer = scripted("getRefactorEdit", answer);
         return this;
     }
 
@@ -328,7 +337,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
      * the request never gets an answer.
      */
     FakeJdtls cleanupAnswers(CompletableFuture<WorkspaceEdit> answer) {
-        this.cleanupAnswer = answer;
+        this.cleanupAnswer = scripted("cleanup", answer);
         return this;
     }
 
@@ -347,7 +356,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
      * the request never gets an answer.
      */
     FakeJdtls moveAnswers(CompletableFuture<JdtlsServer.RefactorEdit> answer) {
-        this.moveAnswer = answer;
+        this.moveAnswer = scripted("move", answer);
         return this;
     }
 
@@ -356,7 +365,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
      * future. Unscripted, the request never gets an answer.
      */
     FakeJdtls completionAnswers(CompletableFuture<Either<List<CompletionItem>, CompletionList>> answer) {
-        this.completionAnswer = answer;
+        this.completionAnswer = scripted("completion", answer);
         return this;
     }
 
@@ -371,7 +380,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
      * Unscripted, the command never gets an answer.
      */
     FakeJdtls sourcePathsAnswers(CompletableFuture<Object> answer) {
-        this.sourcePathsAnswer = answer;
+        this.sourcePathsAnswer = scripted("listSourcePaths", answer);
         return this;
     }
 
@@ -458,6 +467,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /** The deletions of {@code workspace/didChangeWatchedFiles} are not acknowledged by a publication of diagnostics. */
     FakeJdtls neverAcknowledgesChanges() {
         this.acknowledgesChanges = false;
+        FakeOnlyGuard.failureScripted("the changes are never acknowledged");
         return this;
     }
 
@@ -492,6 +502,26 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /** The {@code workspace/didChangeWatchedFiles} notifications received, in order. */
     List<DidChangeWatchedFilesParams> watched() {
         return watched;
+    }
+
+    /**
+     * The answer, noting for {@link FakeOnlyGuard} when it is a failure that a real jdtls cannot produce on demand: a
+     * request that never gets an answer, or a failure other than the refusal {@code InvalidRequest}, which jdtls gives
+     * and the replay shows.
+     */
+    private static <T> CompletableFuture<T> scripted(String request, CompletableFuture<T> answer) {
+        if (!answer.isDone()) {
+            FakeOnlyGuard.failureScripted(request + " is never answered");
+        } else if (answer.isCompletedExceptionally() && !isInvalidRequest(answer.exceptionNow())) {
+            FakeOnlyGuard.failureScripted(request + " fails with " + answer.exceptionNow());
+        }
+
+        return answer;
+    }
+
+    private static boolean isInvalidRequest(Throwable failure) {
+        return failure instanceof ResponseErrorException refusal
+                && refusal.getResponseError().getCode() == ResponseErrorCode.InvalidRequest.getValue();
     }
 
     /** What {@code java.project.getAll} answers, in turn; the last answer is repeated. */

@@ -27,8 +27,36 @@ running jdtls for a point of the core is cut badly: split the core from the adap
 A fake is a promise about the real server, and it is kept by **contract scenarios**: each answer the core relies on is
 a scenario (the files of a small project, the request, the answer in domain types) written once in the test fixtures.
 The fake is scripted with the scenario's answer in `check`; the integration tests of the adapter replay the same
-scenario against the real server and fail if it answers differently. A scripted answer that no integration test
-replays is a guess, so a ticket that adds one adds its replay, or says in its resolution why it cannot.
+scenario against the real server and fail if it differs. A scripted answer that no integration test
+replays is a guess, so a ticket that adds one adds its replay, or says in its resolution why it cannot. The coupling to
+jdtls is mastered over time, so that another Java language server stays possible; four points hold it (decision of the
+user, 02-11-2026):
+
+1. **Observe first, then script.** A new answer of jdtls is observed on the real server before the scenario and the fake
+   are written (a throwaway replay that prints it), not guessed and corrected at the end. The guard stays: the scenario
+   states what the protocol and Java say, not a copy of a run; the observation is where it starts.
+2. **Compare the effect, not the answer.** A scenario of the core states the effect: the text of the files once the change
+   set is applied (rename, extract, move, inline, clean-up, organize-imports, code action, create), the places of a
+   reference, the key of a refusal; for diagnostics the severity and the position, never the text of a message. The replay
+   has one comparison for the change sets (`Effect`, in the test fixtures: apply to a copy of the project, compare the
+   files, compile them). The change set a scenario holds is a set that has that effect, the script of the fake: it is not
+   asked to be the edits jdtls wrote, so a new scenario holds the simplest edits that do it. The exact answer of jdtls
+   (edits, messages, command arguments) is the business of the adapter: its tests (`modules/daemon`, `FakeJdtls`) keep
+   the exchange, and the core never sees it. What stays compared exactly is counted (point 4).
+3. **The fake keeps the marginal cases**: faults that real jdtls cannot produce on demand (a null answer, `InvalidRequest`,
+   an edit with no message, a server that dies, a timeout, not ready). Each is labelled `@FakeOnly(reason = "...")`
+   (`fr.craft.gabier.editing.fixtures`) with the reason why no replay can show it, and checks the handling by the adapter
+   of a failure, never what jdtls answers when it is right. A test that makes `FakeJdtls` play such a failure (a request that never gets an
+   answer, a failure that is not the refusal `InvalidRequest`, an error status, a shutdown that fails, a null list of
+   projects, changes never acknowledged) fails (`FakeOnlyGuard`) unless it, or its enclosing class, is labelled; a blank
+   reason fails `FakeOnlyReasonTest`, as does a test class that uses the fake without the guard. The guard does not see a
+   value of the wrong shape (a null edit, an edit of another file) or a dead process: those are labelled by hand.
+4. **The coupling stays visible**: `JdtlsCouplingTest` (core, part of `check`) counts the scenarios that still compare an
+   exact answer of jdtls instead of an effect, and the values observed from jdtls that the fixtures hold (messages of the
+   compiler, titles of actions, edits that write an indented line); it fails above a ceiling and writes
+   `modules/core/build/jdtls-coupling.txt`, which the `test` stage of `bin/ci` prints. The ceilings only go down: a
+   ticket that raises one says why in its `## Resolution`. Scenarios written before this rule migrate when a ticket
+   touches them, and the count says how many remain.
 
 ## Absolute prohibitions
 

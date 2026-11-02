@@ -52,10 +52,11 @@ import java.util.stream.Stream;
  *       maps. The same error comes for any condition of the refactoring that is fatal, so it means "this name is not
  *       accepted";
  *   <li>the edits of a rename: jdtls merges the edits of a file into one that spans from the first occurrence to the
- *       last and repeats the text between them, so the scenarios hold that edit, copied from what jdtls answered, and
- *       not one small edit per occurrence. The replay compares the answer to the scenario exactly, and the project
- *       with jdtls' answer applied to a copy must compile. The order of the changes counts, as it does in the
- *       application: the edits of a renamed type come first, the move of its file last, under its old path.
+ *       last and repeats the text between them. The scenarios written before the replay compared effects hold that edit,
+ *       copied from what jdtls answered; a new one holds the simplest edits. The replay compares the effect, the sources
+ *       of the project once the answer is applied to a copy, which must compile (see {@link Effect}), not the edits. The
+ *       order of the changes still has to let the set apply, as it does in the application: the edits of a renamed type
+ *       come first, the move of its file last, under its old path.
  *   <li>the extraction of a variable: {@code java/getRefactorEdit} with the command {@code extractVariable}. The name it
  *       proposes ({@code string}) is kept without a rename ({@link #EXTRACT_VARIABLE_TO_THE_NAME_JDTLS_PROPOSES}). A name
  *       that the method already uses ({@link #EXTRACT_VARIABLE_TO_A_NAME_IN_USE}) is not declined by jdtls: its rename

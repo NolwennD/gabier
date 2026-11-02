@@ -1,5 +1,11 @@
 package fr.craft.gabier.daemon;
 
+import static fr.craft.gabier.daemon.FakeOnlyReasons.INTERRUPTED_WHILE_WAITING;
+import static fr.craft.gabier.daemon.FakeOnlyReasons.JDTLS_DIED;
+import static fr.craft.gabier.daemon.FakeOnlyReasons.JDTLS_FAILS;
+import static fr.craft.gabier.daemon.FakeOnlyReasons.MALFORMED_ANSWER;
+import static fr.craft.gabier.daemon.FakeOnlyReasons.NOTHING_IS_THE_ONLY_ANSWER;
+import static fr.craft.gabier.daemon.FakeOnlyReasons.NO_ANSWER_IN_TIME;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -13,6 +19,7 @@ import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.SourceText;
 import fr.craft.gabier.editing.domain.TypeKind;
+import fr.craft.gabier.editing.fixtures.FakeOnly;
 import fr.craft.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -64,6 +71,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -76,6 +84,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * in this process, over pipes. No jdtls is started. What the core does with the answers is proven with the fake of the
  * port; here is what the adapter does with jdtls: when it can answer, what it asks, how it reads the answer.
  */
+@ExtendWith(FakeOnlyGuard.class)
 class JdtlsLanguageServerTest {
 
     private static final Duration LONG = Duration.ofSeconds(30);
@@ -306,6 +315,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
         @Test
         void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
             try (var server = started()) {
@@ -428,6 +438,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
         @Test
         void aRetryAfterATimedOutWaitStillWaitsForJdtlsToTakeTheEarlierChangesIn() throws Exception {
             fake.neverAcknowledgesChanges();
@@ -453,6 +464,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
         @Test
         void tellsJdtlsOnlyOnceOfAChangeItHasAcknowledgedEvenAfterATimedOutWait() throws Exception {
             fake.neverAcknowledgesChanges();
@@ -470,6 +482,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
         @Test
         void failsWhenJdtlsDoesNotAcknowledgeTheChanges() throws Exception {
             fake.neverAcknowledgesChanges();
@@ -577,6 +590,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_DIED)
         @Test
         void saysThatJdtlsDiedWithItsExitCodeWhenAskedAfterItsDeath() throws Exception {
             try (var server = started()) {
@@ -603,6 +617,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_DIED)
         @Test
         void saysWhyJdtlsDidNotStartInsteadOfAnsweringNotReadyForEver() throws Exception {
             fake.sendsStatus("Error");
@@ -642,6 +657,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_DIED)
         @Test
         void isFailedWhenJdtlsDiedAfterItWasReady() throws Exception {
             try (var server = started()) {
@@ -651,6 +667,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_DIED)
         @Test
         void isFailedWhenJdtlsDoesNotStart() throws Exception {
             fake.sendsStatus("Error");
@@ -666,6 +683,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_DIED)
         @Test
         void saysWhyJdtlsFailedWhenItDiedAfterItWasReady() throws Exception {
             try (var server = started()) {
@@ -729,6 +747,7 @@ class JdtlsLanguageServerTest {
             assertThat(server.failure()).contains("jdtls did not start: the daemon is stopping");
         }
 
+        @FakeOnly(reason = JDTLS_DIED)
         @Test
         void closesWithoutFailingAfterAFailedStart() throws Exception {
             fake.sendsStatus("Error");
@@ -979,6 +998,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_FAILS)
         @Test
         void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
             var failure = new CompletableFuture<WorkspaceEdit>();
@@ -1020,6 +1040,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
         @Test
         void failsWhenJdtlsDoesNotAnswerInTime() throws Exception {
             // No answer is scripted.
@@ -1033,6 +1054,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
         @Test
         void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
             fake.prepareRenameAnswers(renamable()).renameAnswers(CompletableFuture.completedFuture(edit()));
@@ -1547,6 +1569,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_FAILS)
         @Test
         void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
             var failure = new CompletableFuture<List<Either<Command, CodeAction>>>();
@@ -1561,6 +1584,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
         @Test
         void failsWhenJdtlsDoesNotAnswerInTime() throws Exception {
             // No answer is scripted.
@@ -1574,6 +1598,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
         @Test
         void failsWhenJdtlsDoesNotResolveTheActionInTime() throws Exception {
             fake.codeActionAnswers(offers(lazyAction()));
@@ -1588,6 +1613,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
         @Test
         void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
             fake.codeActionAnswers(offers(resolvedAction(removeSet())));
@@ -1908,6 +1934,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = MALFORMED_ANSWER)
         @Test
         void failsWhenJdtlsDoesNotSayWhereTheNameIs() throws Exception {
             fake.refactorEditAnswers(
@@ -1920,6 +1947,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = MALFORMED_ANSWER)
         @Test
         void failsWhenTheCommandOfJdtlsHasNoPosition() throws Exception {
             var follow = new JdtlsServer.FollowUp("java.action.rename", List.of());
@@ -1933,6 +1961,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = MALFORMED_ANSWER)
         @Test
         void failsWhenTheExtractionEditsAnotherFile() throws Exception {
             fake.refactorEditAnswers(proposal(editsAnotherFile()));
@@ -1944,6 +1973,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = MALFORMED_ANSWER)
         @Test
         void failsWhenTheExtractionDoesMoreThanEditTheFile() throws Exception {
             var create = new org.eclipse.lsp4j.CreateFile(
@@ -1957,6 +1987,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = MALFORMED_ANSWER)
         @Test
         void failsWhenTheRenameEditsAnotherFile() throws Exception {
             fake.refactorEditAnswers(proposal(declaresString()))
@@ -2056,6 +2087,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_FAILS)
         @Test
         void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
             fake.refactorEditAnswers(CompletableFuture.failedFuture(new IllegalStateException("the model is broken")));
@@ -2068,6 +2100,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
         @Test
         void failsWhenJdtlsDoesNotAnswerTheExtractionInTime() throws Exception {
             // No answer is scripted.
@@ -2081,6 +2114,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
         @Test
         void failsAndClosesTheTextWhenJdtlsDoesNotTakeItInInTime() throws Exception {
             fake.refactorEditAnswers(proposal(declaresString()));
@@ -2096,6 +2130,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
         @Test
         void failsWhenJdtlsDoesNotAnswerTheRenameInTime() throws Exception {
             fake.refactorEditAnswers(proposal(declaresString())).publishesOnOpen(greeter, List.of());
@@ -2110,6 +2145,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
         @Test
         void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
             scriptTheExtraction();
@@ -2540,6 +2576,7 @@ class JdtlsLanguageServerTest {
             assertRefused();
         }
 
+        @FakeOnly(reason = MALFORMED_ANSWER)
         @Test
         void failsWhenJdtlsDoesNotListTheMethodItExtracted() throws Exception {
             fake.refactorEditAnswers(proposal())
@@ -2555,6 +2592,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = MALFORMED_ANSWER)
         @Test
         void failsWhenJdtlsListsNothingForTheText() throws Exception {
             fake.refactorEditAnswers(proposal())
@@ -2569,6 +2607,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = MALFORMED_ANSWER)
         @ParameterizedTest
         @ValueSource(booleans = {true, false})
         void failsWhenJdtlsDoesNotSayWhereTheNewMethodIsDeclared(boolean nothing) throws Exception {
@@ -2586,6 +2625,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = MALFORMED_ANSWER)
         @Test
         void failsWhenJdtlsGivesTheDeclarationOfTheNewMethodAsLinks() throws Exception {
             var link = new LocationLink(
@@ -2676,6 +2716,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
         @Test
         void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
             scriptTheExtraction("scaled");
@@ -2894,6 +2935,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
         @Test
         void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
             scriptTheExtraction("COUNT_LABEL");
@@ -3125,6 +3167,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
         @Test
         void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
             scriptTheExtraction(renamesTo("label"));
@@ -3142,6 +3185,7 @@ class JdtlsLanguageServerTest {
     }
 
     /** What an extraction does with a selection that jdtls cannot extract: the same, for the four, whatever jdtls says. */
+    @FakeOnly(reason = NOTHING_IS_THE_ONLY_ANSWER)
     @Nested
     class ExtractingWhatJdtlsCannotExtract {
 
@@ -3384,6 +3428,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_FAILS)
         @Test
         void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
             fake.moveAnswers(CompletableFuture.failedFuture(new IllegalStateException("the model is broken")));
@@ -3411,6 +3456,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
         @Test
         void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
             fake.moveAnswers(moves());
@@ -3685,6 +3731,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_FAILS)
         @Test
         void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
             fake.codeActionAnswers(CompletableFuture.failedFuture(new IllegalStateException("the model is broken")));
@@ -3697,6 +3744,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
         @Test
         void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
             fake.codeActionAnswers(offers(resolvedAction()));
@@ -3922,6 +3970,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_FAILS)
         @Test
         void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
             fake.publishesOnOpen(offers, List.of())
@@ -3963,6 +4012,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
         @Test
         void keepsTheInterruptionOfTheThreadThatWaitsForTheActions() throws Exception {
             fake.publishesOnOpen(offers, List.of()).codeActionAnswers(new CompletableFuture<>());
@@ -3977,6 +4027,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
         @Test
         void keepsTheInterruptionOfTheThreadThatWaitsForTheEditOfAnAction() throws Exception {
             fake.publishesOnOpen(offers, List.of())
@@ -4113,6 +4164,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_FAILS)
         @Test
         void saysWhatWentWrongWhenTheResolveFailsInsteadOfDeclining() throws Exception {
             fake.publishesOnOpen(offers, List.of())
@@ -4361,6 +4413,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_FAILS)
         @Test
         void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
             fake.completionAnswers(CompletableFuture.failedFuture(new IllegalStateException("the model is broken")));
@@ -4374,6 +4427,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
         @Test
         void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
             fake.completionAnswers(items(snippet("class", SNIPPET)));
@@ -4593,6 +4647,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = JDTLS_FAILS)
         @Test
         void saysWhatWentWrongWhenJdtlsFailsInsteadOfAnswering() throws Exception {
             fake.prepareRenameAnswers(renamable())
@@ -4607,6 +4662,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
         @Test
         void failsWhenJdtlsDoesNotAnswerInTime() throws Exception {
             fake.prepareRenameAnswers(renamable()).referencesAnswers(false, unanswered());
@@ -4621,6 +4677,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
         @Test
         void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
             fake.prepareRenameAnswers(renamable()).referencesAnswers(false, found());

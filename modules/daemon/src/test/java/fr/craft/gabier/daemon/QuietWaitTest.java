@@ -12,8 +12,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 /** The wait for a quiet subject, raced against the death of jdtls. A child process stands in for jdtls. */
+@ExtendWith(FakeOnlyGuard.class)
 class QuietWaitTest {
 
     private static final Duration LONG = Duration.ofMinutes(5);
