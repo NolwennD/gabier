@@ -14,5 +14,7 @@ Done when:
       (only then can code that is used be lost); a scenario replayed on the real jdtls shows that removing an unused import
       does not wait.
 - [ ] A file with an unused import of a class that does not exist is organized (the import removed), a scenario replayed on
-      the real jdtls; the file of the probe that jdtls cannot resolve (`FakeServedMain`) is still refused.
+      the real jdtls; an import that jdtls cannot resolve and whose name the file still uses is still refused, with the imports named, the file untouched,
+      a scenario replayed on the real jdtls (the probe of the project, which checked it on `FakeServedMain`, goes: ticket
+      `02-11-2026-0826`).
 - [ ] `docs/commands/organize-imports.md` says what the command waits for and when it refuses. `bin/ci` green, coverage 100%.
