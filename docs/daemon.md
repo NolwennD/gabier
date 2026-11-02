@@ -52,6 +52,20 @@ refused at once, not after five minutes, with the problem object `no-build-to-im
 while it is ready (killed, crashed) is seen as dead: `status` says `failed`, its exit code is on the standard error of
 the daemon, and the next request ends what is left of it and starts another.
 
+**The shared indexes.** jdtls indexes the JDK and every jar of the project (`~/.gradle`, `~/.m2`) so that a search or a
+rename can read them; alone, each jdtls does it again (about 210 Mo in its data folder for this checkout). The daemon
+starts jdtls with the system property `jdt.core.sharedIndexLocation` (through the launcher's `--jvm-arg=`), so that
+jdtls copies the index of each external jar to a folder shared by all projects once its import is over, and reads it from
+there in the next project instead of building it: `$GABIER_CACHE/jdtls-<version>/indexes`, else
+`$XDG_CACHE_HOME/gabier/jdtls-<version>/indexes`, else `~/.cache/gabier/jdtls-<version>/indexes` (a relative path is
+ignored). There is one folder per version of jdtls (the version of its `org.eclipse.jdt.ls.core` bundle, read in the
+distribution of the launcher), because an index is not readable by another version; a launcher whose distribution tells
+no version shares nothing, and the daemon says so in its log. The folder holds one file per jar (named by a hash of the
+path of the jar, under a folder of the version of the index format) and is only a cache: to empty it, remove the folder
+(`rm -r ~/.cache/gabier`), jdtls builds the indexes again and copies them back. What it saves is the indexing that
+follows the import, not the import: the first `diagnostics` of a project is not faster (about 31 s for this checkout
+with and without), the first `references` or `rename` that has to wait for the indexes is (about 29 s instead of 47 s).
+
 Two things to know before pointing the daemon at a folder. The project is **the directory the daemon is started in**
 when no folder and no `GABIER_PROJECT` is given, so a daemon started in the wrong place serves the wrong project. And
 jdtls importing a checkout **runs its build** (the Gradle wrapper or script, Maven, their plugins) at the first request:

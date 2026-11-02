@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.fail;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 /** The real jdtls that the integration tests start: the launcher of the distribution, as {@code GABIER_JDTLS} says. */
 final class RealJdtls {
@@ -26,6 +27,6 @@ final class RealJdtls {
             return fail("GABIER_JDTLS is " + path + ", which is not an executable file. "
                     + "It must be the path of the jdtls launcher: run `mise install` to install it.");
         }
-        return new JdtlsLauncher(launcher, Path.of(System.getProperty("java.home")));
+        return new JdtlsLauncher(launcher, Path.of(System.getProperty("java.home")), List.of());
     }
 }

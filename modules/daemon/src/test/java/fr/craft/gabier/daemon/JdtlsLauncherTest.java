@@ -24,7 +24,7 @@ class JdtlsLauncherTest {
         Path data = folder.resolve("data");
         Path javaHome = folder.resolve("java");
 
-        JdtlsConnection connection = new JdtlsLauncher(launcher, javaHome).start(data);
+        JdtlsConnection connection = new JdtlsLauncher(launcher, javaHome, List.of()).start(data);
 
         List<String> output = new String(connection.fromJdtls().readAllBytes(), StandardCharsets.UTF_8)
                 .lines()
@@ -34,12 +34,29 @@ class JdtlsLauncherTest {
     }
 
     @Test
+    void passesEachJvmArgumentToTheLauncherAsAJvmArgOption() throws Exception {
+        Path launcher = folder.resolve("jdtls");
+        Files.writeString(launcher, "#!/bin/sh\nfor argument in \"$@\"; do echo \"$argument\"; done\n");
+        Files.setPosixFilePermissions(launcher, PosixFilePermissions.fromString("rwx------"));
+        Path data = folder.resolve("data");
+
+        JdtlsConnection connection =
+                new JdtlsLauncher(launcher, folder, List.of("-Dfirst=1", "-Dsecond=a b")).start(data);
+
+        List<String> output = new String(connection.fromJdtls().readAllBytes(), StandardCharsets.UTF_8)
+                .lines()
+                .toList();
+        assertThat(output).containsExactly("-data", data.toString(), "--jvm-arg=-Dfirst=1", "--jvm-arg=-Dsecond=a b");
+        assertThat(connection.process().waitFor()).isZero();
+    }
+
+    @Test
     void givesTheStreamsOfTheProcessToTalkToJdtls() throws Exception {
         Path launcher = folder.resolve("jdtls");
         Files.writeString(launcher, "#!/bin/sh\nread line\necho \"heard $line\"\n");
         Files.setPosixFilePermissions(launcher, PosixFilePermissions.fromString("rwx------"));
 
-        JdtlsConnection connection = new JdtlsLauncher(launcher, folder).start(folder.resolve("data"));
+        JdtlsConnection connection = new JdtlsLauncher(launcher, folder, List.of()).start(folder.resolve("data"));
         connection.toJdtls().write("hello\n".getBytes(StandardCharsets.UTF_8));
         connection.toJdtls().flush();
 

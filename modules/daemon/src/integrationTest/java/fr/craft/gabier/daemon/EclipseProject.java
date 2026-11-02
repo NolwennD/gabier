@@ -3,6 +3,8 @@ package fr.craft.gabier.daemon;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * The two files of an Eclipse project ({@code .project}, {@code .classpath}) that jdtls imports without network, which
@@ -27,7 +29,7 @@ final class EclipseProject {
         <?xml version="1.0" encoding="UTF-8"?>
         <classpath>
           <classpathentry kind="src" path="src/main/java"/>
-        %s  <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+        %s%s  <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
           <classpathentry kind="output" path="bin"/>
         </classpath>
         """;
@@ -39,6 +41,8 @@ final class EclipseProject {
           </classpathentry>
         """;
 
+    private static final String LIBRARY = "  <classpathentry kind=\"lib\" path=\"%s\"/>\n";
+
     private EclipseProject() {}
 
     /**
@@ -46,9 +50,16 @@ final class EclipseProject {
      * project jdtls imports.
      */
     static void describe(Path root) throws IOException {
+        describe(root, List.of());
+    }
+
+    /** The same, with the jars on the class path (external libraries, which jdtls indexes). */
+    static void describe(Path root, List<Path> libraries) throws IOException {
         Files.writeString(root.resolve(".project"), PROJECT);
         Files.writeString(
                 root.resolve(".classpath"),
-                CLASSPATH.formatted(Files.isDirectory(root.resolve("src/test/java")) ? TESTS : ""));
+                CLASSPATH.formatted(
+                        Files.isDirectory(root.resolve("src/test/java")) ? TESTS : "",
+                        libraries.stream().map(LIBRARY::formatted).collect(Collectors.joining())));
     }
 }

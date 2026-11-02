@@ -578,8 +578,10 @@ class ProjectServerTest {
         @TempDir
         Path directory;
 
+        private final List<String> logged = new CopyOnWriteArrayList<>();
+
         private ProjectServer served(Map<String, String> environment) {
-            return ProjectServer.jdtls(directory, environment, ignored -> {});
+            return ProjectServer.jdtls(directory, environment, logged::add);
         }
 
         @Test
@@ -625,6 +627,55 @@ class ProjectServerTest {
                     .isInstanceOf(JdtlsStartException.class)
                     .hasMessageContaining("jdtls did not start")
                     .hasMessageContaining("jdtls exited with code 3");
+        }
+
+        /** A launcher in a distribution of jdtls (it has a version) that writes its arguments to a file and exits. */
+        private Path recordingLauncher(Path arguments) throws IOException {
+            Files.createDirectories(directory.resolve("distribution/bin"));
+            Files.createDirectories(directory.resolve("distribution/plugins"));
+            Files.createFile(directory.resolve("distribution/plugins/org.eclipse.jdt.ls.core_1.63.0.202610191322.jar"));
+            var launcher = Files.writeString(directory.resolve("distribution/bin/jdtls"), """
+                #!/bin/sh
+                echo "$@" > %s
+                exit 3
+                """.formatted(arguments));
+            Files.setPosixFilePermissions(launcher, PosixFilePermissions.fromString("rwx------"));
+            return launcher;
+        }
+
+        @Test
+        void startsJdtlsWithoutSharedIndexesWhenItsDistributionTellsNoVersion() throws IOException {
+            var arguments = directory.resolve("arguments");
+            var launcher = Files.writeString(directory.resolve("jdtls"), """
+                #!/bin/sh
+                echo "$@" > %s
+                exit 3
+                """.formatted(arguments));
+            Files.setPosixFilePermissions(launcher, PosixFilePermissions.fromString("rwx------"));
+            var served = served(Map.of("GABIER_JDTLS", launcher.toString()));
+
+            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+                    .isInstanceOf(JdtlsStartException.class);
+
+            assertThat(Files.readString(arguments)).doesNotContain("sharedIndexLocation");
+            assertThat(logged)
+                    .contains("the indexes of the libraries are not shared: " + launcher
+                            + " is not in a distribution of jdtls that tells its version");
+        }
+
+        @Test
+        void startsJdtlsSharingTheIndexesOfItsLibrariesInTheCacheFolder() throws IOException {
+            var arguments = directory.resolve("arguments");
+            var cache = directory.resolve("cache");
+            var served = served(
+                    Map.of("GABIER_JDTLS", recordingLauncher(arguments).toString(), "GABIER_CACHE", cache.toString()));
+
+            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+                    .isInstanceOf(JdtlsStartException.class);
+
+            assertThat(Files.readString(arguments))
+                    .contains(" --jvm-arg=-Djdt.core.sharedIndexLocation=" + cache
+                            + "/jdtls-1.63.0.202610191322/indexes");
         }
     }
 }
