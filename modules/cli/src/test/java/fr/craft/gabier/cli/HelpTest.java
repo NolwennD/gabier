@@ -31,6 +31,7 @@ class HelpTest extends CliTest {
             "references",
             "status",
             "stop",
+            "remove-workspace",
             "help");
 
     private static Map<String, Object> object(Object json) {
@@ -161,7 +162,7 @@ class HelpTest extends CliTest {
         assertThat(err()).startsWith("""
             Usage error: Unknown command; the commands are diagnostics, rename, organize-imports,\
              cleanup, extract-variable, extract-method, extract-constant, extract-field,\
-             move-type-to-file, move, inline, create, references, status, stop, help\
+             move-type-to-file, move, inline, create, references, status, stop, remove-workspace, help\
              (usage-error; command=frobnicate)\
             """);
     }

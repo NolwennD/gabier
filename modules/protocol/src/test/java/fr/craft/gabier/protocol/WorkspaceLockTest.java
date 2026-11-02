@@ -1,4 +1,4 @@
-package fr.craft.gabier.daemon;
+package fr.craft.gabier.protocol;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

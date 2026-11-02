@@ -102,7 +102,7 @@ final class JdtlsSession implements AutoCloseable {
             throws IOException, InterruptedException {
         // The state of the disk that jdtls starts from, before it reads anything.
         WatchedFiles watched = WatchedFiles.of(settings.projectRoot());
-        JdtlsWorkspace.Opened opened = settings.workspace().open(settings.timeout(), log);
+        JdtlsWorkspace.Opened opened = settings.workspace().open(settings.projectRoot(), settings.timeout(), log);
         JdtlsConnection connection;
         try {
             connection = starter.start(opened.data());

@@ -16,6 +16,7 @@ import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.protocol.JdtlsState;
+import fr.craft.gabier.protocol.KeptWorkspaces;
 import fr.craft.gabier.shared.error.domain.ErrorStatus;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -641,6 +642,36 @@ class ProjectServerTest {
                 """.formatted(arguments));
             Files.setPosixFilePermissions(launcher, PosixFilePermissions.fromString("rwx------"));
             return launcher;
+        }
+
+        @Test
+        void startsJdtlsOnATemporaryDataFolderByDefault() throws IOException {
+            var arguments = directory.resolve("arguments");
+            var served =
+                    served(Map.of("GABIER_JDTLS", recordingLauncher(arguments).toString()));
+
+            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+                    .isInstanceOf(JdtlsStartException.class);
+
+            assertThat(Files.readString(arguments))
+                    .contains("-data " + Path.of(System.getProperty("java.io.tmpdir")) + "/gabier-jdtls-data-");
+        }
+
+        @Test
+        void startsJdtlsOnTheKeptWorkspaceOfTheRootWhenAFolderIsGivenAndLeavesItBehind() throws IOException {
+            var arguments = directory.resolve("arguments");
+            var kept = directory.resolve("kept");
+            var served = served(Map.of(
+                    "GABIER_JDTLS",
+                    recordingLauncher(arguments).toString(),
+                    "GABIER_JDTLS_WORKSPACES",
+                    kept.toString()));
+
+            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+                    .isInstanceOf(JdtlsStartException.class);
+
+            assertThat(Files.readString(arguments)).contains("-data " + KeptWorkspaces.of(kept, directory) + " ");
+            assertThat(KeptWorkspaces.of(kept, directory)).isDirectory();
         }
 
         @Test

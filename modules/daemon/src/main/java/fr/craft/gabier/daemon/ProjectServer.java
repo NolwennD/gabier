@@ -10,6 +10,7 @@ import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.protocol.JdtlsState;
+import fr.craft.gabier.protocol.KeptWorkspaces;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -59,13 +60,17 @@ final class ProjectServer implements ServedProject {
 
     /**
      * The project served by a real jdtls: the launcher is the one {@code GABIER_JDTLS} names, and a project that
-     * cannot start it is told so by the first request, not by the daemon at its start.
+     * cannot start it is told so by the first request, not by the daemon at its start. Its workspace is temporary, or
+     * kept in the folder that {@value KeptWorkspaces#VARIABLE} names.
      *
      * @param root the folder jdtls is initialized on, which must be the project jdtls imports
      * @param log receives a line for what happens to jdtls
      */
     static ProjectServer jdtls(Path root, Map<String, String> environment, Consumer<String> log) {
-        var settings = JdtlsSettings.of(root, List.of(), TIMEOUT);
+        var settings = JdtlsSettings.of(root, List.of(), TIMEOUT)
+                .withWorkspace(KeptWorkspaces.folder(environment)
+                        .map(JdtlsWorkspace.temporary()::keptIn)
+                        .orElseGet(JdtlsWorkspace::temporary));
         var launcher = environment.getOrDefault(LAUNCHER_VARIABLE, "");
         JdtlsStarter jdtls = launcher.isBlank()
                 ? data -> {

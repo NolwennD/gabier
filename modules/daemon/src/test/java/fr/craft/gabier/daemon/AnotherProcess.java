@@ -25,46 +25,7 @@ final class AnotherProcess {
         }
         """;
 
-    private static final String HOLD = """
-        import java.nio.channels.FileChannel;
-        import java.nio.file.Path;
-        import java.nio.file.StandardOpenOption;
-
-        public class Hold {
-            public static void main(String[] arguments) throws Exception {
-                try (FileChannel channel = FileChannel.open(Path.of(arguments[0]), StandardOpenOption.WRITE)) {
-                    System.out.println(channel.tryLock() == null ? "refused" : "locked");
-                    System.in.read();
-                }
-            }
-        }
-        """;
-
     private AnotherProcess() {}
-
-    /**
-     * A process that holds the lock of the file until its standard input ends (close {@link Process#getOutputStream}),
-     * once it says it does.
-     */
-    static Process holding(Path lockFile, Path scratch) throws IOException {
-        Path source =
-                Files.writeString(Files.createTempDirectory(scratch, "hold").resolve("Hold.java"), HOLD);
-        Process holder = new ProcessBuilder(
-                        Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-                        source.toString(),
-                        lockFile.toString())
-                .redirectError(ProcessBuilder.Redirect.INHERIT)
-                .start();
-        String answer = new java.io.BufferedReader(
-                        new java.io.InputStreamReader(holder.getInputStream(), StandardCharsets.UTF_8))
-                .readLine();
-        if (!"locked".equals(answer)) {
-            holder.destroyForcibly();
-            throw new IllegalStateException("the holder answered: " + answer);
-        }
-
-        return holder;
-    }
 
     /**
      * Whether a process other than this one finds the file locked: a {@code java} of the same JDK runs a probe that

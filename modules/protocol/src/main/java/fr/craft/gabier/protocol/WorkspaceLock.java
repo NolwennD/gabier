@@ -1,4 +1,4 @@
-package fr.craft.gabier.daemon;
+package fr.craft.gabier.protocol;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -25,10 +25,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * lock (to check it, or to try to take it twice): it answers from the registry of the locks it holds, and only a file
  * it does not hold is opened, which cannot cost it a lock.
  */
-final class WorkspaceLock implements AutoCloseable {
+public final class WorkspaceLock implements AutoCloseable {
 
     /** The file of the workspace that is locked. */
-    static final String FILE = ".gabier-lock";
+    public static final String FILE = ".gabier-lock";
 
     /** The lock files this process holds, by real path: what is asked of them is answered without opening them. */
     private static final Set<Path> HELD = ConcurrentHashMap.newKeySet();
@@ -46,7 +46,7 @@ final class WorkspaceLock implements AutoCloseable {
      *
      * @return the lock, or nothing when a process holds it already (this one included)
      */
-    static Optional<WorkspaceLock> acquire(Path workspace) throws IOException {
+    public static Optional<WorkspaceLock> acquire(Path workspace) throws IOException {
         Path file = workspace.toRealPath().resolve(FILE);
         if (!HELD.add(file)) {
             return Optional.empty();
@@ -72,7 +72,7 @@ final class WorkspaceLock implements AutoCloseable {
      * cannot be tried is held: nothing shows that the workspace is not in use. It never costs this process a lock it
      * holds.
      */
-    static boolean isHeld(Path workspace) {
+    public static boolean isHeld(Path workspace) {
         if (!Files.isRegularFile(workspace.resolve(FILE), LinkOption.NOFOLLOW_LINKS)) {
             return false;
         }

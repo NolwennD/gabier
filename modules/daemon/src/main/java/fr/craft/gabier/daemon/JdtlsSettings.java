@@ -40,6 +40,11 @@ record JdtlsSettings(
                 projectRoot, expectedProjects, timeout, TREE_INTERVAL, SHUTDOWN_TIMEOUT, JdtlsWorkspace.temporary());
     }
 
+    /** The same settings with this workspace. */
+    JdtlsSettings withWorkspace(JdtlsWorkspace workspace) {
+        return new JdtlsSettings(projectRoot, expectedProjects, timeout, treeInterval, shutdownTimeout, workspace);
+    }
+
     /**
      * The {@code java.*} preferences jdtls is initialized with ({@code initializationOptions.settings}, in the nested
      * form of the JSON settings). They are the ones that decide what the organization of the imports writes (Eclipse JDT

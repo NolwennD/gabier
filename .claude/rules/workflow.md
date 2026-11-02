@@ -169,7 +169,8 @@ on `main` at any time, without `bin/ci`, and the branches in flight are rebased 
 with no new `bin/ci` (`.claude/skills/ship/SKILL.md`, step 0).
 
 **Whoever works in a worktree delivers, and the supervisor merges.** The subagent hands back one commit and does not
-merge; the supervisor merges it fast-forward, then removes the worktree and the branch before it reports to the user.
+merge; the supervisor merges it fast-forward, then removes the worktree (after `gabier remove-workspace <worktree>`, which removes the jdtls
+workspace kept for it: skill `ship`, step 5) and the branch before it reports to the user.
 A new worktree needs `mise trust` once; the pre-commit hook lives in the shared `.git/hooks`, so it covers every
 worktree. A merge that does not fast-forward, or a gate that stays red for a reason the branch does not explain, stops
 the delivery: say so in the answer, with the branch name, never leave it silent.

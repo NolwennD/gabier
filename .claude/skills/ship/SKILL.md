@@ -134,9 +134,20 @@ statistic can tell the tickets with exchanges from those without. Commit **only 
 
 ### 5. Clean up
 
+Remove the jdtls workspace that the daemon kept for the worktree, while the worktree still exists, then the worktree
+(the option `GABIER_JDTLS_WORKSPACES` is off by default and not set by `mise.toml`: there is then nothing kept and the
+command says so, but a person who turned it on has a workspace of hundreds of megabytes per worktree):
+
 ```bash
+mise exec -- gabier remove-workspace <worktree>
 git worktree remove <worktree> && git branch -d <branch>
 ```
+
+`gabier remove-workspace` talks to no daemon and has nothing to remove when the workspace is already gone. It is refused
+(`workspace-in-use`, exit code 2) while a daemon runs jdtls on that workspace, the worker's daemon that was not stopped:
+stop it (`gabier stop` on the socket of that worktree, `.claude/rules/dogfooding.md`), then run the command again. The
+daemon that starts jdtls next also removes the kept workspaces of projects that no longer exist, so a worktree removed
+without this step leaves nothing for long.
 
 - `git branch -d` refuses ("not fully merged") after a fast-forward: that is not expected, check before forcing.
 - A leftover directory under `.claude/worktrees/` that `git worktree list` no longer shows: look at it, and delete it
@@ -197,5 +208,5 @@ independent tickets may run in parallel.
 | Findings | unmet `Done when`: back to the subagent once; the rest: `ticket --issue-only` |
 | Merge    | `git merge --ff-only <branch>` from the main checkout                |
 | Close    | `git mv` to `closed/`, `## Resolution`, commit that file only        |
-| Clean up | `git worktree remove <worktree> && git branch -d <branch>`           |
+| Clean up | `mise exec -- gabier remove-workspace <worktree>`, then `git worktree remove <worktree> && git branch -d <branch>` |
 | Next     | earliest open issue, dependencies closed, not on hold: skill `ticket` |

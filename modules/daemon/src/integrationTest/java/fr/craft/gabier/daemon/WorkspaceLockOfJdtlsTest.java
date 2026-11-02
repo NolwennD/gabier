@@ -2,6 +2,7 @@ package fr.craft.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import fr.craft.gabier.protocol.WorkspaceLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;

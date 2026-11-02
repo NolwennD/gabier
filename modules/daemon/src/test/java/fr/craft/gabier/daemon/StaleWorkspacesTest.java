@@ -2,6 +2,7 @@ package fr.craft.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import fr.craft.gabier.protocol.WorkspaceLock;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,7 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * The workspaces that nobody uses any more: the data folder of a daemon that was killed (in the temporary folder). Only real folders and files are used, and no jdtls: the lock of a live
+ * The workspaces that nobody uses any more: the data folder of a daemon that was killed (in the temporary folder), and
+ * the kept workspace of a project that is gone. Only real folders and files are used, and no jdtls: the lock of a live
  * jdtls is a lock this process holds.
  */
 class StaleWorkspacesTest {
@@ -157,6 +159,92 @@ class StaleWorkspacesTest {
 
             assertThat(other).doesNotExist();
             assertThat(log).anySatisfy(line -> assertThat(line).startsWith("could not clean up " + stuck));
+        }
+    }
+
+    @Nested
+    class OfProjectsThatAreGone {
+
+        private void sweep(UserPrincipal user) {
+            StaleWorkspaces.removeOfMissingRoots(folder, user, log::add);
+        }
+
+        private Path keptFor(String name, Path projectRoot) throws IOException {
+            Path kept = workspace(name);
+            Files.writeString(kept.resolve(".gabier-root"), projectRoot.toString());
+            return kept;
+        }
+
+        @Test
+        void removesTheWorkspaceOfAProjectThatNoLongerExists() throws IOException {
+            Path kept = keptFor("1111", folder.resolve("deleted-worktree"));
+
+            sweep(me());
+
+            assertThat(kept).doesNotExist();
+            assertThat(log)
+                    .containsExactly("removed " + kept + ", whose project " + folder.resolve("deleted-worktree")
+                            + " no longer exists");
+        }
+
+        @Test
+        void keepsTheWorkspaceOfAProjectThatStillExists() throws IOException {
+            var root = Files.createDirectories(folder.resolve("project"));
+            Path kept = keptFor("1111", root);
+
+            sweep(me());
+
+            assertThat(kept.resolve(".metadata/.plugins/index")).hasContent("indexes");
+            assertThat(log).isEmpty();
+        }
+
+        @Test
+        void keepsTheWorkspaceThatTellsNoProject() throws IOException {
+            Path unknown = workspace("1111");
+
+            sweep(me());
+
+            assertThat(unknown).isDirectory();
+        }
+
+        @Test
+        void keepsTheWorkspaceWhoseProjectIsNotAPath() throws IOException {
+            Path odd = workspace("1111");
+            Files.writeString(odd.resolve(".gabier-root"), "bad\0path");
+
+            sweep(me());
+
+            assertThat(odd).isDirectory();
+            assertThat(log).anySatisfy(line -> assertThat(line).startsWith("could not clean up " + odd));
+        }
+
+        @Test
+        void keepsTheWorkspaceOfAJdtlsThatStillRunsOnAProjectThatIsGone() throws IOException {
+            Path running = keptFor("1111", folder.resolve("deleted-worktree"));
+
+            try (var held = WorkspaceLock.acquire(running).orElseThrow()) {
+                sweep(me());
+
+                assertThat(held).isNotNull();
+            }
+
+            assertThat(running).isDirectory();
+        }
+
+        @Test
+        void keepsTheWorkspaceThatIsNotTheUsers() throws IOException {
+            Path another = keptFor("1111", folder.resolve("deleted-worktree"));
+
+            sweep(somebodyElse());
+
+            assertThat(another).isDirectory();
+        }
+
+        @Test
+        void doesNothingWhereThereIsNoFolder() {
+            StaleWorkspaces.removeOfMissingRoots(folder.resolve("missing"), somebodyElse(), log::add);
+
+            assertThat(log).isEmpty();
         }
     }
 }

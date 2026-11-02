@@ -44,6 +44,14 @@ socket, `/tmp/gabier-<uid>` when `XDG_RUNTIME_DIR` is not set; a socket path hol
 before its report. The skills `ticket` and `ship` run `scripts/stop-stray-daemons.sh`, which stops the daemon of a worktree
 that no longer exists, for a worker that was stopped before it could.
 
+The jdtls workspace is temporary by default (a folder of `/tmp` removed at each stop). `GABIER_JDTLS_WORKSPACES=<folder>`
+keeps it between daemons, but it is **off** for this project (decision of 02-11-2026: a restart is slower with it, 45 to
+51 s against about 30 s). If someone turns it on, the supervisor removes the workspace of a worktree with
+`gabier remove-workspace <worktree>` before `git worktree remove` (skill `ship`, step 5: it talks to no daemon, says
+"nothing to remove" with no variable, and is refused while a daemon still runs jdtls on that workspace, which a worker
+stops with its final `gabier stop`), and a daemon that starts jdtls removes the kept workspaces of projects that no longer
+exist. The jars that every jdtls indexes are shared in `~/.cache/gabier` (`GABIER_CACHE` moves it).
+
 **A friction met while using gabier is a ticket**: a wrong answer, a refusal that is not explained, a command that is
 missing, a slow answer. The worker reports it to its supervisor with the command, the file and the answer, as for any
 unrelated bug (`.claude/rules/logbook.md`). These tickets come before the findings of a review.
