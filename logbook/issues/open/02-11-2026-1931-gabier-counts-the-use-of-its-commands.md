@@ -19,7 +19,8 @@ Done when:
 - each request the daemon answers appends one event with the data above, refusals and errors included;
 - `gabier stats` prints, per command, the number of calls, of refusals by key and of errors, read from every log, with
   no daemon running;
-- the UUIDv7 class gives the version and variant bits of RFC 9562 and ids that sort with their milliseconds;
+- the UUIDv7 class gives the version and variant bits of RFC 9562 and ids that sort with their milliseconds, proven by
+  tests with a fixed clock and random source, and it is not excluded from coverage (decision of the user, 02-11-2026);
 - the help and `docs/` describe `gabier stats` and the log; `bin/ci` passes.
 
 Depends on: rename-the-base-package.
