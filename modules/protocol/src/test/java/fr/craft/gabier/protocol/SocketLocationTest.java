@@ -172,6 +172,14 @@ class SocketLocationTest {
         }
 
         @Test
+        void takesTheAbsoluteNormalizedPathOfAProjectFolderThatDoesNotExist() {
+            var gone = Map.of(
+                    "GABIER_PROJECT", folder.resolve("gone/../deleted-worktree").toString());
+
+            assertThat(SocketLocation.projectRoot(gone, folder)).isEqualTo(folder.resolve("deleted-worktree"));
+        }
+
+        @Test
         void isNamedWithPlainCharactersWhateverTheNameOfTheFolder() throws IOException {
             var path = SocketLocation.resolve(Map.of(), "1000", project("my demo\u00e9\u001b[31m"));
 

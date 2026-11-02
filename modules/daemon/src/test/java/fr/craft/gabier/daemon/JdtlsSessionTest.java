@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.google.gson.Gson;
-import fr.craft.gabier.protocol.KeptWorkspaces;
-import fr.craft.gabier.protocol.WorkspaceInUseException;
 import fr.craft.gabier.protocol.WorkspaceLock;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -683,7 +681,7 @@ class JdtlsSessionTest {
                     LONG,
                     Duration.ofMillis(20),
                     Duration.ofSeconds(5),
-                    JdtlsWorkspace.temporary(temporary));
+                    new JdtlsWorkspace(temporary));
         }
 
         private Path workspaceOf(String name) throws IOException {
@@ -716,84 +714,6 @@ class JdtlsSessionTest {
             }
 
             assertThat(running).isDirectory();
-        }
-    }
-
-    @Nested
-    class KeptDataFolder {
-
-        @TempDir
-        Path kept;
-
-        private JdtlsSettings keptInTheFolder() {
-            return new JdtlsSettings(
-                    PROJECT_ROOT,
-                    List.of(),
-                    LONG,
-                    Duration.ofMillis(20),
-                    Duration.ofSeconds(5),
-                    JdtlsWorkspace.temporary().keptIn(kept));
-        }
-
-        @Test
-        void staysAtTheCloseWithWhatJdtlsLeftInIt() throws Exception {
-            fake.listsProjects(URI_A);
-            Path data;
-
-            try (JdtlsSession session = JdtlsSession.start(fake, keptInTheFolder(), log::add, published::add)) {
-                data = session.dataDirectory();
-                Files.writeString(data.resolve("state"), "imported");
-
-                assertThat(data).isEqualTo(KeptWorkspaces.of(kept, PROJECT_ROOT));
-            }
-
-            assertThat(data.resolve("state")).hasContent("imported");
-            assertThat(WorkspaceLock.isHeld(data)).isFalse();
-        }
-
-        @Test
-        void isRefusedToASecondDaemonOnTheSameRootWhileTheFirstRunsWithTheReasonAndNoJdtlsIsStarted() throws Exception {
-            fake.listsProjects(URI_A);
-
-            try (JdtlsSession first = JdtlsSession.start(fake, keptInTheFolder(), log::add, published::add)) {
-                var startedBefore = fake.initializedNotifications();
-
-                assertThatThrownBy(() -> JdtlsSession.start(fake, keptInTheFolder(), log::add, published::add))
-                        .isInstanceOfSatisfying(WorkspaceInUseException.class, refusal -> {
-                            assertThat(refusal.key().get()).isEqualTo("workspace-in-use");
-                            assertThat(refusal.getMessage())
-                                    .contains(first.dataDirectory().toString());
-                        });
-
-                assertThat(fake.initializedNotifications()).isEqualTo(startedBefore);
-            }
-        }
-
-        @Test
-        void isStartedAgainOnTheSameFolderOnceTheFirstSessionIsClosed() throws Exception {
-            fake.listsProjects(URI_A);
-            Path data;
-            try (JdtlsSession first = JdtlsSession.start(fake, keptInTheFolder(), log::add, published::add)) {
-                data = first.dataDirectory();
-            }
-
-            try (JdtlsSession second = JdtlsSession.start(fake, keptInTheFolder(), log::add, published::add)) {
-                assertThat(second.dataDirectory()).isEqualTo(data);
-            }
-        }
-
-        @Test
-        void staysWhenTheStartFailsToo() throws Exception {
-            JdtlsStarter failing = directory -> {
-                throw new IOException("no jdtls");
-            };
-
-            assertThatThrownBy(() -> JdtlsSession.start(failing, keptInTheFolder(), log::add, published::add))
-                    .isInstanceOf(IOException.class);
-
-            assertThat(KeptWorkspaces.of(kept, PROJECT_ROOT)).isDirectory();
-            assertThat(WorkspaceLock.isHeld(KeptWorkspaces.of(kept, PROJECT_ROOT)))
-                    .isFalse();
         }
     }
 }

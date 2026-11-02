@@ -26,7 +26,6 @@ final class Capabilities {
             new ApplyAction(),
             new Status(),
             new Stop(),
-            new RemoveWorkspace(),
             new Help());
 
     private Capabilities() {}

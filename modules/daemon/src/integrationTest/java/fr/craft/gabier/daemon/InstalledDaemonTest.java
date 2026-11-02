@@ -8,9 +8,7 @@ import fr.craft.gabier.protocol.ChangedFiles;
 import fr.craft.gabier.protocol.DaemonStatus;
 import fr.craft.gabier.protocol.FileDiagnostics;
 import fr.craft.gabier.protocol.JdtlsState;
-import fr.craft.gabier.protocol.KeptWorkspaces;
 import fr.craft.gabier.protocol.RpcResponse;
-import fr.craft.gabier.protocol.WorkspaceLock;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -61,8 +59,6 @@ class InstalledDaemonTest {
             command.environment().put("GABIER_SOCKET", socket.toString());
             command.environment().put("GABIER_JDTLS", launcher.launcher().toString());
             command.environment().put("JAVA_HOME", System.getProperty("java.home"));
-            // The workspace is kept (the option is off by default), in the folder of the test.
-            command.environment().put(KeptWorkspaces.VARIABLE, workspaces().toString());
             process = command.start();
             for (var attempt = 0; attempt < 600 && !log().contains(" listening on "); attempt++) {
                 assertThat(process.isAlive())
@@ -169,10 +165,6 @@ class InstalledDaemonTest {
         }
     }
 
-    private Path workspaces() {
-        return directory.resolve("workspaces");
-    }
-
     private Path project() throws IOException {
         var project = Files.createDirectory(directory.resolve("project")).toRealPath();
         Scenarios.FILE_WITH_AN_ERROR.writeProject(project);
@@ -215,16 +207,6 @@ class InstalledDaemonTest {
 
             daemon.stop();
             daemon.assertNothingIsLeft();
-
-            var kept = KeptWorkspaces.of(workspaces(), project);
-            assertThat(kept.resolve(".metadata"))
-                    .as("the workspace stays after the stop")
-                    .isDirectory();
-            assertThat(WorkspaceLock.isHeld(kept)).as("and nobody holds it").isFalse();
-            assertThat(KeptWorkspaces.remove(workspaces(), project))
-                    .as("remove-workspace removes it")
-                    .isTrue();
-            assertThat(kept).doesNotExist();
         }
     }
 

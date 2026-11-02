@@ -77,31 +77,6 @@ that is not the user's, a link, nor a folder that has no lock file yet and is yo
 may take to start: it is the folder of a jdtls that is starting). What it cannot remove is told in its log, and does not
 stop jdtls from starting.
 
-**Keeping the workspace between daemons.** By default nothing is left behind: the workspace is temporary, so a restarted
-daemon imports the project again. `GABIER_JDTLS_WORKSPACES=<folder>` keeps it instead: the data folder is
-`<folder>/<hash of the root of the project>` (the root is the real path of the project folder; a relative folder is
-relative to the daemon's working directory), the same for every daemon of that project, and it is left as jdtls wrote it
-when the daemon ends jdtls. The folder also holds `.gabier-root`, the root it is for. **The option is off**, for
-this project too (decision of 02-11-2026): it was measured slower, not faster (45 to 51 s against about 30 s for the
-first `diagnostics` after a restart, see "What it costs" below), so `mise.toml` does not set it. It stays delivered for
-whoever wants its state kept (`GABIER_JDTLS_WORKSPACES=~/.cache/gabier/jdtls-workspaces`, for instance).
-
-- **One daemon per workspace.** Two jdtls on one workspace corrupt it, and jdtls takes no lock of its own, so the daemon
-  does: a second daemon on the same root (another socket, `GABIER_SOCKET`) while the first runs jdtls is refused at its
-  first request with the problem object `workspace-in-use` (exit code 2) that says why and which variable to unset.
-- **What it costs and what it saves** (this checkout, measured 02-11-2026 on a loaded machine, shared indexes warm,
-  the first `diagnostics` after a restart): about 30 s with a temporary workspace (30.0, 29.8, 29.7 s) and **45 to 51 s
-  with the kept one** (51.0, 44.8 s). jdtls reuses the projects of the kept workspace that are valid, but deletes and
-  imports again the ones outside its root (`StandardProjectsManager.deleteInvalidProjects`), which is all of them here,
-  so the restart is not faster, it is slower. What is kept is state, not time. A kept workspace weighs about 3 Mo once
-  the daemon is stopped and 60 Mo while jdtls runs, with the indexes shared ("The shared indexes" above); without
-  them (`GABIER_CACHE` empty) it is the 210 Mo of the data folder.
-- **Cleaning.** `gabier remove-workspace [<project folder>]` removes the workspace of a project, with no daemon (see its
-  [page](commands/remove-workspace.md)); the skill `ship` runs it before `git worktree remove`. When it starts jdtls the
-  daemon also removes the kept workspaces whose project folder no longer exists (a worktree deleted without it), and
-  never one that a daemon holds. To empty everything by hand, remove the folder: `rm -r ~/.cache/gabier/jdtls-workspaces`
-  (with no daemon running).
-
 Two things to know before pointing the daemon at a folder. The project is **the root of the directory the daemon is started in**
 (the nearest folder above it that holds a `.git`, else that directory) when no folder and no `GABIER_PROJECT` is given, so
 a daemon started in the wrong place serves the wrong project. And

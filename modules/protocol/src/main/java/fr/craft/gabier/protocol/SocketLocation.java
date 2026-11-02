@@ -1,5 +1,6 @@
 package fr.craft.gabier.protocol;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -68,7 +69,11 @@ public final class SocketLocation {
         var named = Optional.ofNullable(environment.get(PROJECT)).filter(value -> !value.isBlank());
         var folder = named.map(workingDirectory::resolve).orElseGet(() -> nearestGitFolder(workingDirectory));
 
-        return KeptWorkspaces.rootOf(folder);
+        try {
+            return folder.toRealPath();
+        } catch (IOException gone) {
+            return folder.toAbsolutePath().normalize();
+        }
     }
 
     private static Path nearestGitFolder(Path workingDirectory) {

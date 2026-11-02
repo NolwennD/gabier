@@ -23,7 +23,6 @@ sealed interface Capability
                 ApplyAction,
                 Status,
                 Stop,
-                RemoveWorkspace,
                 Help {
 
     /** The command this capability runs: its name and its help text, which the class holds in {@code COMMAND}. */

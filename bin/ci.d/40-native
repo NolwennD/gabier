@@ -119,7 +119,7 @@ public final class Native {
         try {
             Files.copy(binary, copy);
             int failures = version(copy, empty) + usageError(copy, empty, false) + usageError(copy, empty, true)
-                    + help(copy, empty) + removeWorkspace(copy, empty) + socketOfTheProject(copy, empty);
+                    + help(copy, empty) + socketOfTheProject(copy, empty);
             failures += new Daemon(copy, daemon, fakeDaemon, empty).check();
             return failures == 0 ? 0 : 1;
         } finally {
@@ -206,38 +206,6 @@ public final class Native {
         System.out.println("gabier help rename -> " + one.out().lines().count() + " lines (exit " + one.exit() + ")");
 
         return failures + (one.exit() == 0 && one.err().isEmpty() && one.out().contains("Refusals") ? 0 : 1);
-    }
-
-    /**
-     * 0 when {@code gabier remove-workspace}, run alone with no daemon, removes the kept workspace of a project (named
-     * as the daemon names it: a hash of the real path of its folder, so the locking code runs in the native image), says
-     * so when there is nothing left to remove, and says that nothing is kept when no folder is given.
-     */
-    private static int removeWorkspace(Path binary, Path directory) throws IOException, InterruptedException {
-        Path project = Files.createDirectory(directory.resolve("workspace-project")).toRealPath();
-        Path kept = directory.resolve("kept-workspaces");
-        String hash = java.util.UUID.nameUUIDFromBytes(project.toString().getBytes(StandardCharsets.UTF_8))
-                .toString()
-                .replace("-", "");
-        Path workspace = Files.createDirectories(kept.resolve(hash).resolve(".metadata"));
-        Files.writeString(workspace.resolve("state"), "imported");
-        List<String> environment = List.of("GABIER_JDTLS_WORKSPACES", kept.toString());
-
-        Run first = runBinary(binary, directory, environment, "remove-workspace", project.toString());
-        System.out.println("gabier remove-workspace -> \"" + first.out() + "\" (exit " + first.exit() + ")");
-        Run second = runBinary(binary, directory, environment, "remove-workspace", project.toString());
-        System.out.println("gabier remove-workspace, again -> \"" + second.out() + "\" (exit " + second.exit() + ")");
-        Run none = runBinary(binary, directory, "remove-workspace", project.toString());
-        System.out.println("gabier remove-workspace, no folder -> \"" + none.out() + "\" (exit " + none.exit() + ")");
-
-        boolean removed = first.exit() == 0
-                && first.err().isEmpty()
-                && first.out().startsWith("Removed the jdtls workspace " + kept.resolve(hash))
-                && !Files.exists(kept.resolve(hash));
-        boolean idempotent = second.exit() == 0 && second.out().contains("nothing to remove");
-        boolean unset = none.exit() == 0 && none.out().contains("GABIER_JDTLS_WORKSPACES is not set");
-
-        return removed && idempotent && unset ? 0 : 1;
     }
 
     /**

@@ -100,14 +100,12 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
     (the scenario `FILE_WITH_AN_ERROR` and an Eclipse `.project`, `EclipseProject`), as a client on its socket: `status`
     is `not-started` and starts nothing, the first `diagnostics` starts jdtls and answers the error, `status` is `ready`,
     `stop` ends the daemon and every process jdtls started (watched by handle); a second test stops the daemon while
-    jdtls still starts; the daemon of that test keeps its workspace (`GABIER_JDTLS_WORKSPACES`, in the temporary folder of
-    the test), which stays after the stop and which `KeptWorkspaces.remove` (what `gabier remove-workspace` runs) removes.
+    jdtls still starts.
   - `SharedIndexesReuseTest` starts two jdtls on projects that use one jar and one shared folder of indexes
     (`-Djdt.core.sharedIndexLocation`, `SharedIndexes`): the second builds none of the indexes of the first.
     `WorkspaceLockOfJdtlsTest` shows that a real jdtls takes no lock on its data folder, and that the daemon's own
     (`WorkspaceLock`, `.gabier-lock`) is held while it runs.
-  `JdtlsSession` stops jdtls (the whole process tree) and releases the data directory in every case (a temporary one is
-  deleted, a kept one stays: `JdtlsWorkspace`). jdtls leaves its
+  `JdtlsSession` stops jdtls (the whole process tree) and deletes the data directory in every case (`JdtlsWorkspace`). jdtls leaves its
   Eclipse files (`.project`, `.classpath`, `.settings/`, `bin/`) in a folder it is started on: when that is the checkout,
   they are git-ignored.
 
