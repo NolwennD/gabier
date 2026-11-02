@@ -1,0 +1,81 @@
+# The full bin/ci on every pull request: the same stages as on the machine of a developer (format, build, test, native,
+# jdtls), none skipped (`--all`). The required check of the protection of `main` is the job `bin-ci`.
+#
+# No version is written here: the JDK is the one of `.sdkmanrc`, the GraalVM has the major version of the Java toolchain
+# of the build (build-logic), and mise installs the tools and jdtls (with its checksum) of `mise.toml`.
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bin-ci:
+    name: bin-ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The GraalVM of the release the build uses: the Java toolchain of the modules, and the native-image of the cli.
+      - name: Read the Java release of the build
+        id: java
+        run: |
+          release=$(grep -ohE 'JavaLanguageVersion\.of\([0-9]+\)' build-logic/src/main/kotlin/gabier.java-module-conventions.gradle.kts | grep -oE '[0-9]+' | head -n 1)
+          test -n "$release"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
+      - name: Install GraalVM
+        uses: graalvm/setup-graalvm@f70bc8032f90a104502824a54bcb94b6f01715bc # v1.6.8
+        with:
+          java-version: ${{ steps.java.outputs.release }}
+          distribution: graalvm
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          set-java-home: "false"
+
+      # Gradle finds the toolchain (the Java 25 of the build, the native-image) among the paths it is given.
+      - name: Give the GraalVM to the Gradle toolchains
+        run: |
+          mkdir -p "$HOME/.gradle"
+          echo "org.gradle.java.installations.paths=$GRAALVM_HOME" >> "$HOME/.gradle/gradle.properties"
+
+      # The JDK of the project, `.sdkmanrc`, that runs Gradle, bin/ci and the launcher of jdtls.
+      - name: Install the JDK of .sdkmanrc
+        run: |
+          export SDKMAN_DIR="$HOME/.sdkman"
+          curl -fsSL "https://get.sdkman.io?rcupdate=false" | bash
+          echo "sdkman_auto_answer=true" >> "$SDKMAN_DIR/etc/config"
+          # SDKMAN! is not written for `set -e` and `set -u`: the check that follows is what fails the step.
+          set +eu
+          . "$SDKMAN_DIR/bin/sdkman-init.sh"
+          sdk env install
+          set -e
+          jdk="$SDKMAN_DIR/candidates/java/$(sed -n 's/^java=//p' .sdkmanrc)"
+          test -x "$jdk/bin/java"
+          echo "JAVA_HOME=$jdk" >> "$GITHUB_ENV"
+          echo "$jdk/bin" >> "$GITHUB_PATH"
+
+      - name: Install mise
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+        with:
+          install: false
+          cache: false
+
+      - name: Install the tools and jdtls
+        run: |
+          mise trust
+          mise install
+          mise run jdtls:install
+
+      - name: Run bin/ci
+        run: mise exec -- bin/ci --all
