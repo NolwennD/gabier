@@ -21,6 +21,7 @@ import org.eclipse.lsp4j.PublishDiagnosticsParams;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The start and the end of a jdtls session, against {@link FakeJdtls}: a language server in this process, over pipes,
@@ -61,7 +62,13 @@ class JdtlsSessionTest {
     }
 
     private JdtlsSettings settings(Duration timeout, List<Path> expectedProjects) {
-        return new JdtlsSettings(PROJECT_ROOT, expectedProjects, timeout, Duration.ofMillis(20), Duration.ofSeconds(5));
+        return new JdtlsSettings(
+                PROJECT_ROOT,
+                expectedProjects,
+                timeout,
+                Duration.ofMillis(20),
+                Duration.ofSeconds(5),
+                JdtlsWorkspace.temporary());
     }
 
     private JdtlsSession start(JdtlsStarter starter, Duration timeout, Path... expectedProjects) throws Exception {
@@ -589,7 +596,13 @@ class JdtlsSessionTest {
         }
 
         private JdtlsSettings shortShutdown() {
-            return new JdtlsSettings(PROJECT_ROOT, List.of(), LONG, Duration.ofMillis(20), Duration.ofMillis(300));
+            return new JdtlsSettings(
+                    PROJECT_ROOT,
+                    List.of(),
+                    LONG,
+                    Duration.ofMillis(20),
+                    Duration.ofMillis(300),
+                    JdtlsWorkspace.temporary());
         }
 
         @Test
@@ -597,7 +610,13 @@ class JdtlsSessionTest {
             fake.listsProjects(URI_A).shutdown(FakeJdtls.Shutdown.NEVER_ANSWERS);
             JdtlsSession session = JdtlsSession.start(
                     fake,
-                    new JdtlsSettings(PROJECT_ROOT, List.of(), LONG, Duration.ofMillis(20), Duration.ofMillis(300)),
+                    new JdtlsSettings(
+                            PROJECT_ROOT,
+                            List.of(),
+                            LONG,
+                            Duration.ofMillis(20),
+                            Duration.ofMillis(300),
+                            JdtlsWorkspace.temporary()),
                     log::add,
                     published::add);
 
@@ -645,6 +664,55 @@ class JdtlsSessionTest {
             // The kill was sent before the interruption was noticed; the process is reaped a moment later.
             assertThat(fake.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
             assertThat(session.dataDirectory()).doesNotExist();
+        }
+    }
+
+    @Nested
+    class StaleDataFolders {
+
+        @TempDir
+        Path temporary;
+
+        private JdtlsSettings inTheTemporaryFolder() {
+            return new JdtlsSettings(
+                    PROJECT_ROOT,
+                    List.of(),
+                    LONG,
+                    Duration.ofMillis(20),
+                    Duration.ofSeconds(5),
+                    new JdtlsWorkspace(temporary));
+        }
+
+        private Path workspaceOf(String name) throws IOException {
+            Path workspace = Files.createDirectories(temporary.resolve(name));
+            Files.createFile(workspace.resolve(".gabier-lock"));
+            return workspace;
+        }
+
+        @Test
+        void removesTheDataFolderOfAKilledDaemonWhenItStartsJdtlsAndKeepsItsOwn() throws Exception {
+            fake.listsProjects(URI_A);
+            Path killed = workspaceOf("gabier-jdtls-data-killed");
+
+            try (JdtlsSession session = JdtlsSession.start(fake, inTheTemporaryFolder(), log::add, published::add)) {
+                assertThat(killed).doesNotExist();
+                assertThat(session.dataDirectory()).isDirectory().hasParent(temporary);
+                assertThat(log).contains("removed " + killed + ", which no jdtls uses any more");
+            }
+        }
+
+        @Test
+        void keepsTheDataFolderOfAJdtlsThatRunsOnAnotherProject() throws Exception {
+            fake.listsProjects(URI_A);
+            Path running = workspaceOf("gabier-jdtls-data-running");
+
+            try (var held = WorkspaceLock.acquire(running).orElseThrow();
+                    JdtlsSession session = JdtlsSession.start(fake, inTheTemporaryFolder(), log::add, published::add)) {
+                assertThat(held).isNotNull();
+                assertThat(session.dataDirectory()).isDirectory();
+            }
+
+            assertThat(running).isDirectory();
         }
     }
 }

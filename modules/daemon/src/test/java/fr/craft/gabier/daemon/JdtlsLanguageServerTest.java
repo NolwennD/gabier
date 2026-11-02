@@ -123,7 +123,8 @@ class JdtlsLanguageServerTest {
     }
 
     private JdtlsLanguageServer start(Duration timeout) {
-        var settings = new JdtlsSettings(root, List.of(root), timeout, Duration.ofMillis(20), Duration.ofSeconds(5));
+        var settings = new JdtlsSettings(
+                root, List.of(root), timeout, Duration.ofMillis(20), Duration.ofSeconds(5), JdtlsWorkspace.temporary());
         var server = JdtlsLanguageServer.start(fake, settings, QUIET, log::add);
         fake.initializeParams();
         return server;

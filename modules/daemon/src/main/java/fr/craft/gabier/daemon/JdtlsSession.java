@@ -2,9 +2,7 @@ package fr.craft.gabier.daemon;
 
 import java.io.IOException;
 import java.net.URI;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -14,7 +12,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
-import java.util.stream.Stream;
 import org.eclipse.lsp4j.DidChangeConfigurationParams;
 import org.eclipse.lsp4j.DidChangeWatchedFilesParams;
 import org.eclipse.lsp4j.ExecuteCommandParams;
@@ -33,19 +30,17 @@ import org.eclipse.lsp4j.launch.LSPLauncher;
  * error, when a project that was expected is not listed, or when nothing at all was imported; every timeout names what
  * was awaited.
  *
- * <p>Closing the session asks jdtls to shut down, ends the whole process tree and deletes the data folder; it does so
- * too when the start fails. The launcher starts a java process in turn, and the tree of a process that died cannot be
+ * <p>Closing the session asks jdtls to shut down, ends the whole process tree and releases the data folder
+ * ({@link JdtlsWorkspace}: a temporary one is deleted); it does so too when the start fails. The launcher starts a java process in turn, and the tree of a process that died cannot be
  * read any more: the session therefore records the tree from the moment the process started, again every tree interval
  * of the settings (a quarter of a second), and a last time at the close. What the launcher started and stopped between
  * two readings, or started and left behind in less than that before dying, is not seen.
  */
 final class JdtlsSession implements AutoCloseable {
 
-    private static final String DATA_DIRECTORY_PREFIX = "gabier-jdtls-data-";
-
     private final JdtlsSettings settings;
     private final Process process;
-    private final Path data;
+    private final JdtlsWorkspace.Opened workspace;
     private final Consumer<String> log;
     private final JdtlsClient client;
     private final ImportChoices choices = new ImportChoices();
@@ -61,7 +56,7 @@ final class JdtlsSession implements AutoCloseable {
 
     private JdtlsSession(
             JdtlsSettings settings,
-            Path data,
+            JdtlsWorkspace.Opened workspace,
             JdtlsConnection connection,
             Consumer<String> log,
             Consumer<PublishDiagnosticsParams> diagnostics,
@@ -69,7 +64,7 @@ final class JdtlsSession implements AutoCloseable {
         this.settings = settings;
         this.watched = watched;
         this.process = connection.process();
-        this.data = data;
+        this.workspace = workspace;
         this.log = log;
         this.client = new JdtlsClient(log, diagnostics, watched::register, watched::unregister, choices);
         var launcher = new LSPLauncher.Builder<JdtlsServer>()
@@ -107,16 +102,16 @@ final class JdtlsSession implements AutoCloseable {
             throws IOException, InterruptedException {
         // The state of the disk that jdtls starts from, before it reads anything.
         WatchedFiles watched = WatchedFiles.of(settings.projectRoot());
-        Path data = Files.createTempDirectory(DATA_DIRECTORY_PREFIX);
+        JdtlsWorkspace.Opened opened = settings.workspace().open(settings.timeout(), log);
         JdtlsConnection connection;
         try {
-            connection = starter.start(data);
+            connection = starter.start(opened.data());
         } catch (IOException | RuntimeException failure) {
-            delete(data);
+            settings.workspace().release(opened);
             throw failure;
         }
-        var session = new JdtlsSession(settings, data, connection, log, diagnostics, watched);
-        log.accept("jdtls started, pid " + session.pid() + ", data " + data);
+        var session = new JdtlsSession(settings, opened, connection, log, diagnostics, watched);
+        log.accept("jdtls started, pid " + session.pid() + ", data " + opened.data());
         session.recordTheTree();
         try {
             session.awaitReady();
@@ -151,7 +146,7 @@ final class JdtlsSession implements AutoCloseable {
     }
 
     Path dataDirectory() {
-        return data;
+        return workspace.data();
     }
 
     /** The folders of the projects jdtls has imported, as it listed them when the session became ready. */
@@ -299,7 +294,7 @@ final class JdtlsSession implements AutoCloseable {
                 }
             } finally {
                 listening.cancel(true);
-                delete(data);
+                settings.workspace().release(workspace);
             }
         }
     }
@@ -325,14 +320,6 @@ final class JdtlsSession implements AutoCloseable {
             member.onExit().get(settings.shutdownTimeout().toMillis(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException | TimeoutException e) {
             log.accept("process " + member.pid() + " is still running: " + e);
-        }
-    }
-
-    private static void delete(Path directory) throws IOException {
-        try (Stream<Path> files = Files.walk(directory)) {
-            for (Path file : files.sorted(Comparator.reverseOrder()).toList()) {
-                Files.delete(file);
-            }
         }
     }
 }

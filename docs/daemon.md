@@ -66,6 +66,17 @@ path of the jar, under a folder of the version of the index format) and is only 
 follows the import, not the import: the first `diagnostics` of a project is not faster (about 31 s for this checkout
 with and without), the first `references` or `rename` that has to wait for the indexes is (about 29 s instead of 47 s).
 
+**The data folder of jdtls.** jdtls keeps its workspace (its `-data` folder, about 210 Mo for this checkout) in a folder
+of its own in the temporary folder, `gabier-jdtls-data-<random>`, which the daemon removes when it ends jdtls (`stop`,
+SIGTERM, a failed start). A daemon that is killed (SIGKILL, a crash, a power cut) cannot, and `/tmp` is a memory file
+system on many machines, so **when it starts jdtls the daemon removes the `gabier-jdtls-data-*` folders that no live jdtls
+uses**: the daemon holds a lock on the file `.gabier-lock` of the data folder as long as it runs jdtls on it, and the
+system releases it when the daemon dies, killed or not (jdtls takes no lock of its own: the `.metadata/.lock` of Eclipse
+is the one of its IDE, absent from the data folder of a running jdtls 1.63). It never touches the folder of a running jdtls (the daemon of another project holds its lock), a folder
+that is not the user's, a link, nor a folder that has no lock file yet and is younger than 5 minutes (the time a jdtls
+may take to start: it is the folder of a jdtls that is starting). What it cannot remove is told in its log, and does not
+stop jdtls from starting.
+
 Two things to know before pointing the daemon at a folder. The project is **the directory the daemon is started in**
 when no folder and no `GABIER_PROJECT` is given, so a daemon started in the wrong place serves the wrong project. And
 jdtls importing a checkout **runs its build** (the Gradle wrapper or script, Maven, their plugins) at the first request:

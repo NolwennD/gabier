@@ -16,13 +16,15 @@ import java.util.Map;
  * @param treeInterval how long to wait between two readings of the process tree of jdtls
  * @param shutdownTimeout how long jdtls is given to answer the shutdown and to exit, and then each process of its tree
  *     to end once killed
+ * @param workspace where jdtls keeps its workspace, and what becomes of it
  */
 record JdtlsSettings(
         Path projectRoot,
         List<Path> expectedProjects,
         Duration timeout,
         Duration treeInterval,
-        Duration shutdownTimeout) {
+        Duration shutdownTimeout,
+        JdtlsWorkspace workspace) {
 
     private static final Duration TREE_INTERVAL = Duration.ofMillis(250);
     private static final Duration SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
@@ -34,7 +36,8 @@ record JdtlsSettings(
     }
 
     static JdtlsSettings of(Path projectRoot, List<Path> expectedProjects, Duration timeout) {
-        return new JdtlsSettings(projectRoot, expectedProjects, timeout, TREE_INTERVAL, SHUTDOWN_TIMEOUT);
+        return new JdtlsSettings(
+                projectRoot, expectedProjects, timeout, TREE_INTERVAL, SHUTDOWN_TIMEOUT, JdtlsWorkspace.temporary());
     }
 
     /**
