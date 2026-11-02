@@ -9,6 +9,10 @@ place.
   from a pre-commit hook managed with [hk](https://github.com/jdx/hk). Never format by hand and
   never bypass the hook (`--no-verify`).
 
+- **No agent attribution in the history** (decision of the user, 02-11-2026): no commit message names Claude or
+  Anthropic (`Co-Authored-By: Claude …`, `Generated with Claude Code`). The project `.claude/settings.json` turns
+  the attribution of Claude Code off, and the `commit-msg` hook of `hk.pkl` refuses such a line.
+
 - **Checkstyle keeps the conventions the formatter cannot**: names, unused and star imports, modifier and declaration
   order (fields, constructors, methods; overloads together), no `TODO`, Javadoc form (summary sentence, order of the tags),
   and the bug-prone constructs. One configuration, `config/checkstyle/checkstyle.xml` (the Google style of Checkstyle,

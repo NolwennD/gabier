@@ -10,3 +10,15 @@ local openJavaFormat = new Step {
 steps {
   ["open-java-format"] = openJavaFormat
 }
+
+// No commit names Claude or Anthropic as a co-author or as its generator (decision of the user, 02-11-2026): an agent
+// adds such a trailer out of habit, whatever the attribution setting of Claude Code says.
+hooks {
+  ["commit-msg"] {
+    steps {
+      ["no-agent-attribution"] {
+        check = #"! grep -qiE '^(co-authored-by:.*(claude|anthropic)|.*generated with \[?claude)' {{commit_msg_file}} || { echo 'commit-msg: remove the Claude attribution line (Co-Authored-By / Generated with Claude Code)' >&2; exit 1; }"#
+      }
+    }
+  }
+}
