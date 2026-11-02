@@ -19,3 +19,7 @@ Done when:
       `organize-imports`); the scenarios of `CleanUpScenarios` still replay on the real jdtls.
 - [ ] A fake server that offers no clean-ups refuses `cleanup` with the not-supported problem, shown by a test of the core.
 - [ ] `docs/commands/cleanup.md` and `help` say that the clean-ups are those of the Eclipse server. `bin/ci` passes.
+
+## Resolution
+
+Rejected, not done. The user decided on 02-11-2026 that `CleanUp` stays in the core as it is: the coupling to the Eclipse clean-ups is wanted. What is to come is a way to say so in the code, and to count it: issue `02-11-2026-1249-intended-coupling-is-declared-in-the-code.md` (on hold).
