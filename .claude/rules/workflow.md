@@ -117,8 +117,8 @@ create`, merges it fast-forward on the local `main` once its check is green, and
 merge of the pull request, so the hashes the resolutions cite stay true. A commit of `.md` files only (issues, rules,
 skills, documents) is pushed to `main` directly, through the bypass of the protection that the owner holds. The very small
 technical tasks of the supervisor that touch code go through a pull request of their own too. The check of the pull
-requests is the full `bin/ci` on GitHub (issue `github-runs-the-full-bin-ci-on-every-pull-request`); until it exists, the
-subagent's `bin/ci` summary is the only evidence, as before.
+requests is `bin-ci`, the full `bin/ci --all` on GitHub (`.github/workflows/ci.yml`), next to the subagent's `bin/ci`
+summary.
 
 ## Tickets
 

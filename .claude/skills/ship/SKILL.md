@@ -111,7 +111,7 @@ No second review, whatever the findings.
 From the main checkout:
 
 Once the check of the pull request is green (`gh pr checks <branch> --watch`; a red check sends the subagent back, like a
-red `bin/ci`; while the repository has no check yet, the subagent's `bin/ci` summary stands for it):
+red `bin/ci`; the check is `bin-ci`):
 
 ```bash
 git merge --ff-only <branch>
