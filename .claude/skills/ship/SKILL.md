@@ -18,8 +18,9 @@ the supervisor closes it and moves on to the next one. **The supervisor does not
 `bin/ci` summary is the evidence.
 
 A branch is **shipped** when its commit is on `main` and its issue is in `logbook/issues/closed/`. Report "done" only
-then. `main` moves by fast-forward only, one commit per ticket. There is no remote, no merge request and no pipeline yet:
-`bin/ci` and the review are the whole gate.
+then. `main` moves by fast-forward only, one commit per ticket. The repository is on GitHub (`origin`) and `main` is
+protected: the branch goes through a pull request, and `bin/ci`, the check of the pull request and the review are the
+gate (`.claude/rules/workflow.md`, "Ending a task").
 
 ## Procedure
 
@@ -30,7 +31,8 @@ git rev-parse --abbrev-ref HEAD; git worktree list --porcelain; git remote
 ```
 
 - The main checkout is not on `main`. Refuse: "Run `ship` from the main checkout, on `main`."
-- An `origin` remote exists. Refuse: "A remote exists: shipping through it is not defined yet, revisit this skill."
+- No `origin` remote, or the local `main` is not the `origin/main` (`git fetch origin && git rev-list --count main...origin/main`
+  is not 0). Refuse: "`main` and `origin/main` differ: push or pull `main` first."
 - The branch has no worktree in the list, or no commit ahead of `main` (`git rev-list --count main..<branch>`).
   Refuse: "Nothing to ship."
 - The subagent's report has no `bin/ci` summary, shows a stage that failed, or does not say how each `Done when` point
@@ -43,6 +45,15 @@ git rev-parse --abbrev-ref HEAD; git worktree list --porcelain; git remote
   supervisor rebases the branch itself (`git -C <worktree> rebase main`), does not ask for `bin/ci` again and does not
   send the worker back. A rebase that stops on a conflict goes back to the worker.
 - Uncommitted files in the main checkout that the branch also changes. Refuse: "The main checkout would be overwritten."
+
+### 0b. Pull request
+
+```bash
+git push -u origin <branch>
+gh pr create --base main --head <branch> --title "<subject of the ticket's commit>" --body "Issue: <issue file>"
+```
+
+A batch has one pull request, its commits one per issue. The check of the pull request runs while the review is made.
 
 ### 1. Neutral review
 
@@ -99,12 +110,18 @@ No second review, whatever the findings.
 
 From the main checkout:
 
+Once the check of the pull request is green (`gh pr checks <branch> --watch`; a red check sends the subagent back, like a
+red `bin/ci`; while the repository has no check yet, the subagent's `bin/ci` summary stands for it):
+
 ```bash
 git merge --ff-only <branch>
 ```
 
-- Not a fast-forward (`main` moved meanwhile): send the subagent back to rebase and run `bin/ci` again, then merge,
-  without a new review.
+`main` is pushed at the end of step 4, with the closing of the issue: GitHub then marks the pull request merged.
+
+- Not a fast-forward (`main` moved meanwhile): send the subagent back to rebase and run `bin/ci` again, push the branch
+  again (`git push --force-with-lease origin <branch>`, the only rewrite allowed, on the ticket's branch), then merge, without
+  a new review.
 
 ### 4. Close the issue
 
@@ -130,7 +147,7 @@ The supervisor line gives `calls`, `output` and `input + cache_write` (the cache
 and cost little), then `exchanges with the user: <n> messages` (a floor: a message sent while the supervisor was
 working is not counted). The tokens include that talk and the other tickets of the same period; say so, so that a
 statistic can tell the tickets with exchanges from those without. Commit **only the issue file**, on `main` (never
-`git add -A`).
+`git add -A`), then `git push origin main` (never `--force`).
 
 ### 5. Clean up
 
@@ -179,8 +196,9 @@ independent tickets may run in parallel.
 ## Forbidden
 
 - Running the subagent's checks again, or `bin/ci` in its place: it is the subagent's job, and its summary the evidence.
-- `git push` of any kind while no remote is defined for it; any push to `main`.
-- `git rebase -i`, `git commit --amend`, `--no-verify`, `--force` by the supervisor.
+- A rewrite of `main` on `origin`; `--force` without `-with-lease`, or on anything but the ticket's branch; a push of `main`
+  that holds a code commit whose pull request has a check that is not green; any push by a worker.
+- `git rebase -i`, `git commit --amend`, `--no-verify` by the supervisor.
 - A merge that is not a fast-forward.
 - Merging before the subagent's `bin/ci` summary is green and the review has been done.
 - A second review of the same ticket, or any loop between the reviewer and the subagent.
@@ -195,7 +213,8 @@ independent tickets may run in parallel.
 | Evidence | the subagent's report: `bin/ci` summary and one proof per `Done when` |
 | Review   | fresh `general-purpose` agent, brief of step 1                       |
 | Findings | unmet `Done when`: back to the subagent once; the rest: `ticket --issue-only` |
-| Merge    | `git merge --ff-only <branch>` from the main checkout                |
-| Close    | `git mv` to `closed/`, `## Resolution`, commit that file only        |
+| PR       | `git push -u origin <branch>`, `gh pr create --base main`           |
+| Merge    | check green, then `git merge --ff-only <branch>` from the main checkout |
+| Close    | `git mv` to `closed/`, `## Resolution`, commit that file, push `main` |
 | Clean up | `git worktree remove <worktree> && git branch -d <branch>`           |
 | Next     | earliest open issue, dependencies closed, not on hold: skill `ticket` |

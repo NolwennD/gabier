@@ -109,7 +109,16 @@ Not green (a red test, a blocked step)? Do not commit and do not merge, and say 
 Exceptions: the user restricted the scope of what to commit, asked for a review first, or said to keep the branch (then
 say in the answer that the worktree is still standing, and where).
 
-`git push` has one target: the branch of the ticket, and only when an `origin` remote exists. Never `main`.
+The repository is published on GitHub (`origin`, `github.com/NolwennD/gabier`, decision of the user, 02-11-2026), and
+`main` is protected. Only the supervisor pushes; a worker never pushes. `main` is never rewritten; a ticket's branch is pushed
+again only with `--force-with-lease`, after a rebase. Code (anything but `.md`
+files) reaches `main` through a pull request: the supervisor pushes the branch of the ticket and opens it with `gh pr
+create`, merges it fast-forward on the local `main` once its check is green, and pushes `main`, which GitHub marks as the
+merge of the pull request, so the hashes the resolutions cite stay true. A commit of `.md` files only (issues, rules,
+skills, documents) is pushed to `main` directly, through the bypass of the protection that the owner holds. The very small
+technical tasks of the supervisor that touch code go through a pull request of their own too. The check of the pull
+requests is the full `bin/ci` on GitHub (issue `github-runs-the-full-bin-ci-on-every-pull-request`); until it exists, the
+subagent's `bin/ci` summary is the only evidence, as before.
 
 ## Tickets
 
@@ -135,13 +144,13 @@ and every `Done when` point proven separately; each commit builds and passes its
 **Very small technical tasks are the supervisor's own**, without a ticket and without a subagent, to keep things fluid:
 a few lines, one concern, no new behavior (tidying a build file, a typo, a version, a rule or a skill wording). The
 supervisor checks the change with `bin/ci` (a build file: the proofs that its change could break), and commits it
-directly on `main`. The same goes for the small findings of a review and for the friction met along the way, by a
+on `main`; pushed, it goes through a pull request when it touches code (see "Ending a task"). The same goes for the small findings of a review and for the friction met along the way, by a
 subagent or by the supervisor (a script that fails, a rule that no longer matches the practice): when they are that
 small, the supervisor fixes them itself; a bigger one becomes a ticket opened on the fly. Not when a ticket being worked on touches the same files, since that is a coupled change and would
 conflict with it; not for a feature, a bug fix that needs a test of its own, or a new module: those are tickets.
 
 Another exception, when the user says so ("no need for a ticket"): the change is committed directly on `main`, whatever
-its size.
+its size, and goes through a pull request when it touches code.
 
 A ticket that adopts, reverses, defers or rejects a choice that the code, a rule or a document carries says why in the
 `## Resolution` of its issue: the code says what the repository does, the issue says why, and what it replaced.
