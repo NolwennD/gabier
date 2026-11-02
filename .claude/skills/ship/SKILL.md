@@ -55,7 +55,8 @@ gh pr create --base main --head <branch> --title "<subject of the ticket's commi
 
 A batch has one pull request, its commits one per issue. The check of the pull request runs while the review is made.
 While it waits, the `.md` commits of the supervisor (the issues of the findings) stay on the local `main`: pushing
-`main` then would leave the branch behind it, and its rebase would start the check again. They are pushed with the merge.
+`main` then would leave the branch behind it, and its rebase would start the check again. At the merge they are put back on top of
+the branch (`git rebase <branch> main`, local commits only, so the hash of the ticket's commit stays) and pushed with it.
 
 ### 1. Neutral review
 
