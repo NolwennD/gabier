@@ -1,8 +1,8 @@
-module fr.craft.gabier.core {
+module eu.gabier.core {
     requires static org.jspecify;
-    requires transitive fr.craft.gabier.shared;
+    requires transitive eu.gabier.shared;
 
-    exports fr.craft.gabier.editing.application;
-    exports fr.craft.gabier.editing.domain;
-    exports fr.craft.gabier.editing.infrastructure.secondary;
+    exports eu.gabier.editing.application;
+    exports eu.gabier.editing.domain;
+    exports eu.gabier.editing.infrastructure.secondary;
 }

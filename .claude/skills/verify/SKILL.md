@@ -22,13 +22,13 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   (`:daemon:installDist`, `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`) and runs the native `gabier`
   against it.
 - The test fixtures of `core` (`modules/core/src/testFixtures`: the fake language server and the contract scenarios, in
-  the package `fr.craft.gabier.editing.fixtures`) are shared by the tests of every module: another module uses them with
+  the package `eu.gabier.editing.fixtures`) are shared by the tests of every module: another module uses them with
   `testImplementation(testFixtures(project(":core")))` in its `build.gradle.kts`. They are test code (no coverage gate,
   not seen by the architecture tests) and they have no `module-info.java` (jdtls reports an error on a second descriptor
   in the same project): their jar gets a descriptor from a `module(...)` rule in `gabier.java-module-conventions`, which
   the build needs for any jar on the test runtime path, so the fixtures of another module need a rule of their own. The
   tests of the fixtures themselves are in `modules/core/src/test`.
-- The jdtls adapter is in the main code of the daemon (`fr.craft.gabier.daemon`). `JdtlsSession` starts jdtls, waits
+- The jdtls adapter is in the main code of the daemon (`eu.gabier.daemon`). `JdtlsSession` starts jdtls, waits
   until it is ready and ends its process tree on close (`JdtlsWatch`, `JdtlsClient`, `JdtlsLauncher`).
   `JdtlsLanguageServer` implements the port `JavaLanguageServer` on top of it (with `Diagnostics`, the store of what
   jdtls publishes, and `QuietWait`): it starts jdtls in the background and answers "not ready" until the start is over;
@@ -48,7 +48,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   and waits for jdtls to take it in (`FakeJdtls.registersWatchersFor`, `watched()`). Its unit tests (`modules/daemon/src/test`, run by `:daemon:test`)
   use `FakeJdtls`: a language server in the test process over pipes, with a `sleep` or `sh` child process standing in
   for the jdtls process. No jdtls is started. The daemon depends on the domain of the core (`requires
-  fr.craft.gabier.core`): it is the composition root, and the architecture rule on the contexts exempts it only for the
+  eu.gabier.core`): it is the composition root, and the architecture rule on the contexts exempts it only for the
   `editing` domain it implements (`IMPLEMENTED_DOMAINS` in `HexagonalArchTest`), not for the domain of any other context.
 - The daemon listens on a Unix socket (`gabier-daemon`, no argument): `Main` resolves the path
   (`SocketLocation`, in `protocol`: `GABIER_SOCKET`, else `$XDG_RUNTIME_DIR/gabier/<project>-<hash>.sock`, else
@@ -120,9 +120,9 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 
 | Modified files                                                    | Command                                                                                                               |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `modules/<m>/src/**` (main, `*Test.java`, `testFixtures`)         | `./gradlew :<m>:cleanTest :<m>:test --tests 'fr.craft.gabier.<package>.<Class>*'`                                       |
-| `modules/daemon/src/integrationTest/**`, a scenario of the core   | `./gradlew :daemon:jdtlsProbe --tests 'fr.craft.gabier.daemon.<Class>'` (real jdtls, `GABIER_JDTLS`)                  |
-| one method                                                        | `--tests 'fr.craft.gabier.<package>.<Class>.<method>'`; inside a `@Nested` class: `'…<Class>$<Nested>.<method>'`           |
+| `modules/<m>/src/**` (main, `*Test.java`, `testFixtures`)         | `./gradlew :<m>:cleanTest :<m>:test --tests 'eu.gabier.<package>.<Class>*'`                                       |
+| `modules/daemon/src/integrationTest/**`, a scenario of the core   | `./gradlew :daemon:jdtlsProbe --tests 'eu.gabier.daemon.<Class>'` (real jdtls, `GABIER_JDTLS`)                  |
+| one method                                                        | `--tests 'eu.gabier.<package>.<Class>.<method>'`; inside a `@Nested` class: `'…<Class>$<Nested>.<method>'`           |
 | `module-info.java`, `build.gradle.kts`, `build-logic/**`          | `./gradlew build`: the modules are compiled as modules, so a forbidden dependency fails here                          |
 | `settings.gradle.kts`, `gradle/libs.versions.toml`                | `./gradlew projects` to see the modules, then `./gradlew build`                                                       |
 | packages created or moved                                         | the architecture tests: `./gradlew :architecture:cleanTest :architecture:test`                                        |
@@ -139,7 +139,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
 - **A test task that ended `UP-TO-DATE` or `FROM-CACHE` did not run.** Its green is the previous one. Run `cleanTest`
   first, as in the table.
 - Gradle: the `FAILED` line names `Class > Nested > method()`, then the `expected:` / `but was:` block and the first
-  `at fr.craft.gabier…` line. The HTML report is `modules/<m>/build/reports/tests/test/index.html`.
+  `at eu.gabier…` line. The HTML report is `modules/<m>/build/reports/tests/test/index.html`.
 - The numbers, per test class:
   `grep -ho 'tests="[0-9]*" skipped="[0-9]*" failures="[0-9]*"' modules/<m>/build/test-results/test/*.xml`.
   The architecture tests are not under `modules/`: `architecture/build/test-results/test/*.xml`, and the report

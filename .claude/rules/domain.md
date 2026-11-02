@@ -14,7 +14,7 @@ change that needs a check adds it as a `@Nested` class of `HexagonalArchTest`.
 
 ## Placement
 
-- A new business concept is a new context: a sub-package of `fr.craft.gabier` with its `domain`, `application` and
+- A new business concept is a new context: a sub-package of `eu.gabier` with its `domain`, `application` and
   `infrastructure.primary` / `infrastructure.secondary` packages, each with its `package-info.java`
   (`@NullMarked`). Do not spend time on its name: it can be renamed later.
 - Code shared between contexts goes to the `shared` module, minimal and specialised. Nothing else is shared.

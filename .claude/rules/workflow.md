@@ -45,7 +45,7 @@ user, 02-11-2026):
    the exchange, and the core never sees it. What stays compared exactly is counted (point 4).
 3. **The fake keeps the marginal cases**: faults that real jdtls cannot produce on demand (a null answer, `InvalidRequest`,
    an edit with no message, a server that dies, a timeout, not ready). Each is labelled `@FakeOnly(reason = "...")`
-   (`fr.craft.gabier.editing.fixtures`) with the reason why no replay can show it, and checks the handling by the adapter
+   (`eu.gabier.editing.fixtures`) with the reason why no replay can show it, and checks the handling by the adapter
    of a failure, never what jdtls answers when it is right. A test that makes `FakeJdtls` play such a failure (a request that never gets an
    answer, a failure that is not the refusal `InvalidRequest`, an error status, a shutdown that fails, a null list of
    projects, changes never acknowledged) fails (`FakeOnlyGuard`) unless it, or its enclosing class, is labelled; a blank

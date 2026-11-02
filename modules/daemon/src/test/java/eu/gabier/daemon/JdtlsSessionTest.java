@@ -1,0 +1,732 @@
+package eu.gabier.daemon;
+
+import static eu.gabier.daemon.FakeOnlyReasons.JDTLS_DIED;
+import static eu.gabier.daemon.FakeOnlyReasons.JDTLS_FAILS;
+import static eu.gabier.daemon.FakeOnlyReasons.MALFORMED_ANSWER;
+import static eu.gabier.daemon.FakeOnlyReasons.NO_ANSWER_IN_TIME;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.google.gson.Gson;
+import eu.gabier.editing.fixtures.FakeOnly;
+import eu.gabier.protocol.WorkspaceLock;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
+import org.eclipse.lsp4j.ExecuteCommandParams;
+import org.eclipse.lsp4j.PublishDiagnosticsParams;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
+
+/**
+ * The start and the end of a jdtls session, against {@link FakeJdtls}: a language server in this process, over pipes,
+ * and a child process standing in for the jdtls process. No jdtls is started.
+ */
+@ExtendWith(FakeOnlyGuard.class)
+class JdtlsSessionTest {
+
+    private static final Path PROJECT_ROOT = Path.of("/work/project");
+    private static final Path MODULE_A = PROJECT_ROOT.resolve("modules/a");
+    private static final Path MODULE_B = PROJECT_ROOT.resolve("modules/b");
+    private static final String URI_A = "file:///work/project/modules/a";
+    private static final String URI_B = "file:///work/project/modules/b/";
+    private static final Duration LONG = Duration.ofSeconds(30);
+    /**
+     * The deadline of a test that times out on the answer to {@code initialize}, the first step: the fake never answers
+     * it, so no earlier step can use the time up and the message does not depend on the speed of the machine.
+     */
+    private static final Duration SHORT = Duration.ofMillis(500);
+    /**
+     * The deadline of a test that times out on a later step: the steps before it (initialize, the status) are
+     * answered by the fake in milliseconds, so they cannot use it up, even on a slow machine, and the timeout is the
+     * one of the step the test names.
+     */
+    private static final Duration MEDIUM = Duration.ofSeconds(2);
+
+    private final FakeJdtls fake = new FakeJdtls();
+    private final List<String> log = new CopyOnWriteArrayList<>();
+    private final List<PublishDiagnosticsParams> published = new CopyOnWriteArrayList<>();
+
+    @AfterEach
+    void leaveNothingBehind() throws Exception {
+        // A test that interrupts its own thread must not interrupt the next one.
+        Thread.interrupted();
+        fake.close();
+        if (fake.data() != null && Files.exists(fake.data())) {
+            delete(fake.data());
+        }
+    }
+
+    private JdtlsSettings settings(Duration timeout, List<Path> expectedProjects) {
+        return new JdtlsSettings(
+                PROJECT_ROOT,
+                expectedProjects,
+                timeout,
+                Duration.ofMillis(20),
+                Duration.ofSeconds(5),
+                JdtlsWorkspace.temporary());
+    }
+
+    private JdtlsSession start(JdtlsStarter starter, Duration timeout, Path... expectedProjects) throws Exception {
+        return JdtlsSession.start(starter, settings(timeout, List.of(expectedProjects)), log::add, published::add);
+    }
+
+    private JdtlsSession start(Path... expectedProjects) throws Exception {
+        return start(fake, LONG, expectedProjects);
+    }
+
+    private static void delete(Path directory) throws IOException {
+        try (Stream<Path> files = Files.walk(directory)) {
+            for (Path file : files.sorted(Comparator.reverseOrder()).toList()) {
+                Files.delete(file);
+            }
+        }
+    }
+
+    @Nested
+    class Start {
+
+        @Test
+        void givesBackASessionOnceJdtlsAnsweredInitializeAndSentServiceReady() throws Exception {
+            fake.listsProjects(URI_A);
+
+            try (JdtlsSession session = start()) {
+                assertThat(fake.initializedNotifications()).isEqualTo(1);
+                assertThat(session.pid()).isEqualTo(fake.process().pid());
+            }
+        }
+
+        @Test
+        void initializesJdtlsOnTheRootOfTheProjectWithTheCapabilitiesOfARefactoringClient() throws Exception {
+            fake.listsProjects(URI_A);
+
+            try (JdtlsSession session = start()) {
+                assertThat(fake.initializeParams().getRootUri()).isEqualTo("file:///work/project");
+                assertThat(fake.initializeParams().getCapabilities()).isEqualTo(JdtlsCapabilities.forRefactoring());
+            }
+        }
+
+        @Test
+        void givesJdtlsItsJavaPreferencesAndItsExtendedCapabilitiesAtInitialization() throws Exception {
+            fake.listsProjects(URI_A);
+
+            try (JdtlsSession session = start()) {
+                assertThat(fake.initializeParams().getInitializationOptions())
+                        .isEqualTo(new Gson()
+                                .toJsonTree(Map.of(
+                                        "settings",
+                                        JdtlsSettings.javaPreferences(),
+                                        "extendedClientCapabilities",
+                                        JdtlsCapabilities.extended())));
+            }
+        }
+
+        @Test
+        void startsJdtlsWithADataDirectoryOfItsOwn() throws Exception {
+            fake.listsProjects(URI_A);
+
+            try (JdtlsSession session = start()) {
+                assertThat(session.dataDirectory()).isEqualTo(fake.data()).isDirectory();
+                assertThat(session.dataDirectory().getFileName().toString()).startsWith("gabier-jdtls-data-");
+            }
+        }
+
+        @Test
+        void knowsTheProjectsJdtlsListed() throws Exception {
+            fake.listsProjects(URI_A, URI_B, "file:///work/project/build-logic");
+
+            try (JdtlsSession session = start(MODULE_A, MODULE_B)) {
+                assertThat(session.projects()).containsExactly(MODULE_A, MODULE_B, PROJECT_ROOT.resolve("build-logic"));
+                assertThat(fake.commands()).containsExactly("java.project.getAll");
+            }
+        }
+
+        @Test
+        void isReadyAtTheServiceReadyStatusOfJdtlsAndAsksTheListOfProjectsOnce() throws Exception {
+            // jdtls says ServiceReady once its import jobs are over: what it lists then is the project, not a draft.
+            fake.listsProjects(URI_A).listsProjects(URI_A, URI_B);
+
+            try (JdtlsSession session = start()) {
+                assertThat(session.projects()).containsExactly(MODULE_A);
+                assertThat(fake.projectRequests()).isEqualTo(1);
+            }
+        }
+
+        @Test
+        void handsTheDiagnosticsPublishedFromTheFirstMessageToTheListener() throws Exception {
+            fake.listsProjects(URI_A).publishesDiagnosticsFor("file:///work/project/modules/a/A.java");
+
+            try (JdtlsSession session = start()) {
+                assertThat(session.projects()).containsExactly(MODULE_A);
+            }
+            assertThat(published)
+                    .extracting(PublishDiagnosticsParams::getUri)
+                    .containsExactly("file:///work/project/modules/a/A.java");
+        }
+
+        @Test
+        void tellsWhatItStartedAndWhatJdtlsSays() throws Exception {
+            fake.listsProjects(URI_A);
+
+            try (JdtlsSession session = start()) {
+                assertThat(log)
+                        .contains(
+                                "jdtls started, pid " + session.pid() + ", data " + session.dataDirectory(),
+                                "jdtls status ServiceReady: ServiceReady");
+            }
+        }
+
+        @Test
+        void givesTheServerAndAWatchToWhoKeepsTalkingToJdtls() throws Exception {
+            fake.listsProjects(URI_A);
+
+            try (JdtlsSession session = start()) {
+                var answer =
+                        session.server().getWorkspaceService().executeCommand(new ExecuteCommandParams("x", List.of()));
+
+                assertThat(session.newWatch().await("the project list", () -> answer))
+                        .isEqualTo(List.of(URI_A));
+            }
+        }
+
+        @Test
+        void theWatchOfTheSessionPausesForTheIntervalAndSeesJdtlsDie() throws Exception {
+            fake.listsProjects(URI_A);
+
+            try (JdtlsSession session = start()) {
+                long begin = System.nanoTime();
+                session.newWatch().pause("a short pause", Duration.ofMillis(50));
+                assertThat(Duration.ofNanos(System.nanoTime() - begin)).isGreaterThanOrEqualTo(Duration.ofMillis(50));
+
+                fake.process().destroyForcibly().onExit().get();
+
+                assertThatThrownBy(() -> session.newWatch().pause("a long pause", LONG))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("jdtls exited with code")
+                        .hasMessageContaining("a long pause");
+            }
+        }
+
+        @Test
+        void everyWatchHasADeadlineOfItsOwnStartedWhenItIsCreated() throws Exception {
+            fake.listsProjects(URI_A);
+
+            try (JdtlsSession session = start(fake, MEDIUM)) {
+                Thread.sleep(MEDIUM.plusMillis(200));
+                var answer =
+                        session.server().getWorkspaceService().executeCommand(new ExecuteCommandParams("x", List.of()));
+
+                assertThat(session.newWatch().await("the project list", () -> answer))
+                        .isEqualTo(List.of(URI_A));
+            }
+        }
+    }
+
+    @Nested
+    class StartFailing {
+
+        @FakeOnly(reason = JDTLS_DIED)
+        @Test
+        void failsAtOnceWhenJdtlsSendsAnErrorStatus() throws Exception {
+            fake.sendsStatus("Error");
+            long begin = System.nanoTime();
+
+            assertThatThrownBy(() -> start())
+                    .isInstanceOf(JdtlsException.class)
+                    .hasMessageContaining("jdtls sent the status Error: Error")
+                    .hasMessageContaining("the language/status notification of type ServiceReady");
+
+            assertThat(Duration.ofNanos(System.nanoTime() - begin)).isLessThan(Duration.ofSeconds(10));
+            assertNothingLeftBehind();
+        }
+
+        @Test
+        void failsAtOnceWithTheExitCodeWhenJdtlsExits() throws Exception {
+            fake.child("sh", "-c", "exit 3").neverAnswersInitialize();
+            long begin = System.nanoTime();
+
+            assertThatThrownBy(() -> start())
+                    .isInstanceOf(JdtlsException.class)
+                    .hasMessageContaining("jdtls exited with code 3")
+                    .hasMessageContaining("the answer to initialize");
+
+            assertThat(Duration.ofNanos(System.nanoTime() - begin)).isLessThan(Duration.ofSeconds(10));
+            assertNothingLeftBehind();
+        }
+
+        @Test
+        void failsAtOnceWhenTheStreamToJdtlsIsClosedAndJdtlsIsGone() throws Exception {
+            fake.child("sh", "-c", "exit 4");
+            JdtlsStarter closedStream = data -> {
+                JdtlsConnection connection = fake.start(data);
+                try {
+                    fake.closePipes();
+                } catch (Exception e) {
+                    throw new IOException(e);
+                }
+                return connection;
+            };
+
+            assertThatThrownBy(() -> start(closedStream, LONG))
+                    .isInstanceOf(JdtlsException.class)
+                    .hasMessageContaining("jdtls exited with code 4")
+                    .hasMessageContaining("the answer to initialize");
+
+            assertNothingLeftBehind();
+        }
+
+        @Test
+        void aTimeoutNamesTheAnswerToInitialize() throws Exception {
+            fake.neverAnswersInitialize();
+
+            assertThatThrownBy(() -> start(fake, SHORT))
+                    .isInstanceOf(JdtlsException.class)
+                    .hasMessageContaining("Timed out")
+                    .hasMessageContaining("waiting for the answer to initialize");
+
+            assertNothingLeftBehind();
+        }
+
+        @Test
+        void aTimeoutNamesTheServiceReadyStatus() throws Exception {
+            fake.sendsStatus("");
+
+            assertThatThrownBy(() -> start(fake, MEDIUM))
+                    .isInstanceOf(JdtlsException.class)
+                    .hasMessageContaining("Timed out")
+                    .hasMessageContaining("the language/status notification of type ServiceReady");
+
+            assertNothingLeftBehind();
+        }
+
+        @Test
+        void aFolderWithNothingToImportIsRefusedAtOnceAsHavingNoBuild() throws Exception {
+            fake.listsProjects();
+            long begin = System.nanoTime();
+
+            assertThatThrownBy(() -> start()).isInstanceOfSatisfying(NoBuildToImportException.class, refusal -> {
+                assertThat(refusal.key().get()).isEqualTo("no-build-to-import");
+                assertThat(refusal.getMessage()).contains("no build to import in " + PROJECT_ROOT);
+                assertThat(refusal.parameters()).containsEntry("project", PROJECT_ROOT.toString());
+            });
+
+            assertThat(Duration.ofNanos(System.nanoTime() - begin)).isLessThan(Duration.ofSeconds(10));
+            assertThat(fake.projectRequests()).isEqualTo(1);
+            assertNothingLeftBehind();
+        }
+
+        @Test
+        void aModuleThatJdtlsDidNotImportIsAFailureAtOnceThatNamesIt() throws Exception {
+            fake.listsProjects(URI_A);
+
+            assertThatThrownBy(() -> start(MODULE_A, MODULE_B))
+                    .isInstanceOf(JdtlsException.class)
+                    .hasMessageContaining("did not import [" + MODULE_B + "]")
+                    .hasMessageContaining("it listed [" + MODULE_A + "]");
+
+            assertThat(fake.projectRequests()).isEqualTo(1);
+            assertNothingLeftBehind();
+        }
+
+        @FakeOnly(reason = MALFORMED_ANSWER)
+        @Test
+        void aListOfProjectsThatIsNotAListIsAFailure() throws Exception {
+            fake.answersNothingToProjects();
+
+            assertThatThrownBy(() -> start())
+                    .isInstanceOf(JdtlsException.class)
+                    .hasMessageContaining("java.project.getAll answered null, which is not a list of projects");
+
+            assertNothingLeftBehind();
+        }
+
+        @Test
+        void removesTheDataDirectoryWhenJdtlsCannotBeStarted() {
+            AtomicReference<Path> data = new AtomicReference<>();
+            JdtlsStarter failing = directory -> {
+                data.set(directory);
+                throw new IOException("no such launcher");
+            };
+
+            assertThatThrownBy(() -> start(failing, LONG))
+                    .isInstanceOf(IOException.class)
+                    .hasMessageContaining("no such launcher");
+
+            assertThat(data.get()).doesNotExist();
+        }
+
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
+        @Test
+        void aFailureToCloseAfterAFailureToStartIsAddedToItNotInstead() throws Exception {
+            Thread test = Thread.currentThread();
+            // The test thread is interrupted while it awaits initialize, and again while the failed start closes.
+            fake.neverAnswersInitialize()
+                    .shutdown(FakeJdtls.Shutdown.NEVER_ANSWERS)
+                    .onInitialize(test::interrupt)
+                    .onShutdown(test::interrupt);
+
+            assertThatThrownBy(() -> start())
+                    .isInstanceOf(InterruptedException.class)
+                    .satisfies(failure -> assertThat(failure.getSuppressed())
+                            .singleElement()
+                            .isInstanceOf(InterruptedException.class));
+
+            assertNothingLeftBehind();
+        }
+
+        private void assertNothingLeftBehind() {
+            assertThat(fake.process().isAlive()).as("the jdtls process").isFalse();
+            assertThat(fake.data()).as("the data directory").doesNotExist();
+        }
+    }
+
+    @Nested
+    class Close {
+
+        @Test
+        void asksJdtlsToShutDownAndToExit() throws Exception {
+            fake.listsProjects(URI_A);
+            JdtlsSession session = start();
+
+            session.close();
+
+            assertThat(fake.shutdownRequests()).isEqualTo(1);
+            assertThat(fake.awaitExitNotification()).isTrue();
+            assertThat(log).doesNotContain("jdtls did not shut down cleanly");
+        }
+
+        @Test
+        void endsTheWholeProcessTree() throws Exception {
+            fake.listsProjects(URI_A).child("sh", "-c", "sleep 300 & wait").whoseLauncherStarts(1);
+            JdtlsSession session = start();
+            List<ProcessHandle> tree = fake.process().descendants().toList();
+            assertThat(tree).as("the process the launcher started in turn").isNotEmpty();
+
+            session.close();
+
+            assertThat(fake.process().isAlive()).isFalse();
+            assertThat(tree).noneMatch(ProcessHandle::isAlive);
+        }
+
+        @Test
+        void endsTheChildrenOfALauncherThatDiedBeforeTheClose() throws Exception {
+            fake.listsProjects(URI_A).child("sh", "-c", "sleep 300 & wait").whoseLauncherStarts(1);
+            JdtlsSession session = start();
+            List<ProcessHandle> orphans = fake.process().descendants().toList();
+            try {
+                assertThat(orphans)
+                        .as("the process the launcher started in turn")
+                        .isNotEmpty();
+                fake.process().destroyForcibly().onExit().get();
+                assertThat(orphans).as("orphaned, not dead").allMatch(ProcessHandle::isAlive);
+                assertThat(fake.process().descendants())
+                        .as("the tree is now unreadable")
+                        .isEmpty();
+
+                session.close();
+
+                assertEnded(orphans);
+                assertThat(session.dataDirectory()).doesNotExist();
+            } finally {
+                orphans.forEach(ProcessHandle::destroyForcibly);
+            }
+        }
+
+        @Test
+        void endsWhatALauncherStartedBeforeItDiedDuringTheStart() throws Exception {
+            // The launcher leaves while jdtls has not answered initialize, one second after it started a process.
+            fake.child("sh", "-c", "sleep 300 & sleep 1; exit 3")
+                    .whoseLauncherStarts(1)
+                    .neverAnswersInitialize();
+
+            assertThatThrownBy(() -> start())
+                    .isInstanceOf(JdtlsException.class)
+                    .hasMessageContaining("jdtls exited with code 3");
+
+            List<ProcessHandle> orphans = fake.launched();
+            try {
+                assertThat(orphans).as("the process the launcher started").isNotEmpty();
+                assertEnded(orphans);
+            } finally {
+                orphans.forEach(ProcessHandle::destroyForcibly);
+            }
+        }
+
+        @Test
+        void endsWhatALauncherStartedAfterTheSessionWasReady() throws Exception {
+            fake.listsProjects(URI_A)
+                    .child("sh", "-c", "sleep 300 & sleep 1; sleep 301 & wait")
+                    .whoseLauncherStarts(1);
+            JdtlsSession session = start();
+            List<ProcessHandle> late = List.of();
+            try {
+                late = awaitProcess("301");
+                awaitRecorded(session, late.getFirst());
+                fake.process().destroyForcibly().onExit().get();
+
+                session.close();
+
+                assertEnded(late);
+                assertEnded(fake.launched());
+            } finally {
+                late.forEach(ProcessHandle::destroyForcibly);
+            }
+        }
+
+        private List<ProcessHandle> awaitProcess(String seconds) throws InterruptedException {
+            long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            List<ProcessHandle> found = running(fake.process().descendants().toList(), seconds);
+            while (found.isEmpty() && System.nanoTime() < deadline) {
+                Thread.sleep(10);
+                found = running(fake.process().descendants().toList(), seconds);
+            }
+            assertThat(found).as("the process started later by the launcher").isNotEmpty();
+            return found;
+        }
+
+        private void awaitRecorded(JdtlsSession session, ProcessHandle process) throws InterruptedException {
+            long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            while (!session.recordedProcesses().contains(process) && System.nanoTime() < deadline) {
+                Thread.sleep(10);
+            }
+            assertThat(session.recordedProcesses())
+                    .as("the processes recorded by the session")
+                    .contains(process);
+        }
+
+        /** The processes among these that run {@code sleep <seconds>}. */
+        private static List<ProcessHandle> running(List<ProcessHandle> processes, String seconds) {
+            return processes.stream()
+                    .filter(process -> process.info().arguments().stream()
+                            .flatMap(Stream::of)
+                            .anyMatch(seconds::equals))
+                    .toList();
+        }
+
+        private static void assertEnded(List<ProcessHandle> processes) throws Exception {
+            for (ProcessHandle process : processes) {
+                process.onExit().get(10, TimeUnit.SECONDS);
+            }
+            assertThat(processes).noneMatch(ProcessHandle::isAlive);
+        }
+
+        @Test
+        void logsTheExitCodeOfAJdtlsThatDiedWithoutBeingAskedTo() throws Exception {
+            fake.listsProjects(URI_A);
+            JdtlsSession session = start();
+            long begin = System.nanoTime();
+
+            fake.process().destroyForcibly().onExit().get();
+            while (log.stream().noneMatch(line -> line.startsWith("jdtls exited with code "))
+                    && System.nanoTime() - begin < Duration.ofSeconds(10).toNanos()) {
+                Thread.sleep(10);
+            }
+
+            assertThat(log).contains("jdtls exited with code " + fake.process().exitValue());
+            assertThat(session.isAlive()).isFalse();
+            assertThat(session.exitValue()).isEqualTo(fake.process().exitValue());
+            session.close();
+        }
+
+        @Test
+        void deletesTheDataDirectoryWithWhatJdtlsWroteInIt() throws Exception {
+            fake.listsProjects(URI_A);
+            JdtlsSession session = start();
+            Files.createDirectories(session.dataDirectory().resolve("workspace/.metadata"));
+            Files.writeString(session.dataDirectory().resolve("workspace/.metadata/.log"), "jdtls was here");
+
+            session.close();
+
+            assertThat(session.dataDirectory()).doesNotExist();
+        }
+
+        @Test
+        void sendsNoShutdownRequestToAJdtlsThatIsAlreadyDead() throws Exception {
+            fake.listsProjects(URI_A);
+            JdtlsSession session = start();
+            fake.process().destroyForcibly().onExit().get();
+
+            session.close();
+
+            assertThat(fake.shutdownRequests()).isZero();
+            assertThat(session.dataDirectory()).doesNotExist();
+        }
+
+        @FakeOnly(reason = JDTLS_FAILS)
+        @Test
+        void stillEndsJdtlsWhenItRefusesToShutDown() throws Exception {
+            fake.listsProjects(URI_A).shutdown(FakeJdtls.Shutdown.FAILS);
+            JdtlsSession session = start();
+
+            session.close();
+
+            assertThat(log)
+                    .anyMatch(line -> line.startsWith("jdtls did not shut down cleanly: ")
+                            && line.contains("ExecutionException"));
+            assertThat(fake.process().isAlive()).isFalse();
+            assertThat(session.dataDirectory()).doesNotExist();
+        }
+
+        @Test
+        void tellsWhenAProcessOfTheTreeIsStillRunningAfterTheKill() throws Exception {
+            fake.listsProjects(URI_A).whoseHandleExitsAs(new CompletableFuture<>());
+            JdtlsSession session = JdtlsSession.start(fake, shortShutdown(), log::add, published::add);
+
+            session.close();
+
+            assertThat(log)
+                    .anyMatch(line -> line.equals("process " + session.pid() + " is still running: "
+                            + "java.util.concurrent.TimeoutException"));
+            assertThat(session.dataDirectory()).doesNotExist();
+        }
+
+        @Test
+        void tellsWhenTheEndOfAProcessOfTheTreeCannotBeAwaited() throws Exception {
+            fake.listsProjects(URI_A)
+                    .whoseHandleExitsAs(CompletableFuture.failedFuture(new IllegalStateException("lost")));
+            JdtlsSession session = JdtlsSession.start(fake, shortShutdown(), log::add, published::add);
+
+            session.close();
+
+            assertThat(log)
+                    .anyMatch(line -> line.startsWith("process " + session.pid() + " is still running: ")
+                            && line.contains("ExecutionException")
+                            && line.contains("lost"));
+            assertThat(session.dataDirectory()).doesNotExist();
+        }
+
+        private JdtlsSettings shortShutdown() {
+            return new JdtlsSettings(
+                    PROJECT_ROOT,
+                    List.of(),
+                    LONG,
+                    Duration.ofMillis(20),
+                    Duration.ofMillis(300),
+                    JdtlsWorkspace.temporary());
+        }
+
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
+        @Test
+        void stillEndsJdtlsWhenItNeverAnswersTheShutdown() throws Exception {
+            fake.listsProjects(URI_A).shutdown(FakeJdtls.Shutdown.NEVER_ANSWERS);
+            JdtlsSession session = JdtlsSession.start(
+                    fake,
+                    new JdtlsSettings(
+                            PROJECT_ROOT,
+                            List.of(),
+                            LONG,
+                            Duration.ofMillis(20),
+                            Duration.ofMillis(300),
+                            JdtlsWorkspace.temporary()),
+                    log::add,
+                    published::add);
+
+            session.close();
+
+            assertThat(log)
+                    .anyMatch(line ->
+                            line.startsWith("jdtls did not shut down cleanly: ") && line.contains("TimeoutException"));
+            assertThat(fake.process().isAlive()).isFalse();
+            assertThat(session.dataDirectory()).doesNotExist();
+        }
+
+        @Test
+        void stillEndsJdtlsWhenTheStreamToItIsBroken() throws Exception {
+            fake.listsProjects(URI_A);
+            JdtlsSession session = start();
+            fake.closePipes();
+
+            session.close();
+
+            assertThat(log).anyMatch(line -> line.startsWith("jdtls did not shut down cleanly: "));
+            assertThat(fake.process().isAlive()).isFalse();
+            assertThat(session.dataDirectory()).doesNotExist();
+        }
+
+        @Test
+        void closingTwiceDoesNothingTheSecondTime() throws Exception {
+            fake.listsProjects(URI_A);
+            JdtlsSession session = start();
+            session.close();
+
+            session.close();
+
+            assertThat(fake.shutdownRequests()).isEqualTo(1);
+        }
+
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
+        @Test
+        void anInterruptionDoesNotStopTheCleaningUp() throws Exception {
+            fake.listsProjects(URI_A).shutdown(FakeJdtls.Shutdown.NEVER_ANSWERS);
+            JdtlsSession session = start();
+            Thread.currentThread().interrupt();
+
+            assertThatThrownBy(session::close).isInstanceOf(InterruptedException.class);
+
+            // The kill was sent before the interruption was noticed; the process is reaped a moment later.
+            assertThat(fake.process().waitFor(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(session.dataDirectory()).doesNotExist();
+        }
+    }
+
+    @Nested
+    class StaleDataFolders {
+
+        @TempDir
+        Path temporary;
+
+        private JdtlsSettings inTheTemporaryFolder() {
+            return new JdtlsSettings(
+                    PROJECT_ROOT,
+                    List.of(),
+                    LONG,
+                    Duration.ofMillis(20),
+                    Duration.ofSeconds(5),
+                    new JdtlsWorkspace(temporary));
+        }
+
+        private Path workspaceOf(String name) throws IOException {
+            Path workspace = Files.createDirectories(temporary.resolve(name));
+            Files.createFile(workspace.resolve(".gabier-lock"));
+            return workspace;
+        }
+
+        @Test
+        void removesTheDataFolderOfAKilledDaemonWhenItStartsJdtlsAndKeepsItsOwn() throws Exception {
+            fake.listsProjects(URI_A);
+            Path killed = workspaceOf("gabier-jdtls-data-killed");
+
+            try (JdtlsSession session = JdtlsSession.start(fake, inTheTemporaryFolder(), log::add, published::add)) {
+                assertThat(killed).doesNotExist();
+                assertThat(session.dataDirectory()).isDirectory().hasParent(temporary);
+                assertThat(log).contains("removed " + killed + ", which no jdtls uses any more");
+            }
+        }
+
+        @Test
+        void keepsTheDataFolderOfAJdtlsThatRunsOnAnotherProject() throws Exception {
+            fake.listsProjects(URI_A);
+            Path running = workspaceOf("gabier-jdtls-data-running");
+
+            try (var held = WorkspaceLock.acquire(running).orElseThrow();
+                    JdtlsSession session = JdtlsSession.start(fake, inTheTemporaryFolder(), log::add, published::add)) {
+                assertThat(held).isNotNull();
+                assertThat(session.dataDirectory()).isDirectory();
+            }
+
+            assertThat(running).isDirectory();
+        }
+    }
+}

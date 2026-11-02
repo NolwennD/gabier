@@ -15,8 +15,8 @@ application {
   // The name of the start script and of the distribution: what a user types (bin/gabier-daemon), not the project name.
   applicationName = "gabier-daemon"
   // The start script of `installDist` puts the jars on the module path and runs this module: what the self-check proves.
-  mainModule = "fr.craft.gabier.daemon"
-  mainClass = "fr.craft.gabier.daemon.Main"
+  mainModule = "eu.gabier.daemon"
+  mainClass = "eu.gabier.daemon.Main"
 }
 
 // Starts the installed daemon (not the classes of the build): what a user runs, on the module path. A self-check run
@@ -61,7 +61,7 @@ val fakeServedLibraries = files(tasks.jar, fakeServedJar, configurations["fakeSe
 
 val fakeServedScripts = tasks.register<CreateStartScripts>("fakeServedScripts") {
   applicationName = "gabier-daemon-fake"
-  mainClass = "fr.craft.gabier.daemon.FakeServedMain"
+  mainClass = "eu.gabier.daemon.FakeServedMain"
   outputDir = layout.buildDirectory.dir("fake-served-scripts").get().asFile
   classpath = fakeServedLibraries
 }

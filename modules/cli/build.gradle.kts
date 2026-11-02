@@ -29,7 +29,7 @@ graalvmNative {
       imageName = "gabier"
       // The plugin builds a shared library (--shared) for a module with the java-library plugin: this one is a program.
       sharedLibrary = false
-      mainClass = "fr.craft.gabier.cli.Gabier"
+      mainClass = "eu.gabier.cli.Gabier"
       // No fallback: an image that cannot be built natively fails the build instead of quietly needing a JVM. This is
       // already the plugin's default; it is written down to keep the intent.
       buildArgs.add("--no-fallback")

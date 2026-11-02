@@ -1,6 +1,6 @@
-module fr.craft.gabier.protocol {
+module eu.gabier.protocol {
     requires static org.jspecify;
-    requires transitive fr.craft.gabier.shared;
+    requires transitive eu.gabier.shared;
 
-    exports fr.craft.gabier.protocol;
+    exports eu.gabier.protocol;
 }

@@ -36,9 +36,9 @@ adds its replay for free.
 3. **Add its name to the catalogue**: in `Scenarios.all()` and in the list of `ScenariosTest`
    (`holdsTheClean...`), plus a test in `ScenariosTest` if it shows something the others do not (a position that holds
    the identifier it claims, for instance). Run the catalogue:
-   `./gradlew :core:cleanTest :core:test --tests 'fr.craft.gabier.editing.fixtures.*'`.
+   `./gradlew :core:cleanTest :core:test --tests 'eu.gabier.editing.fixtures.*'`.
 4. **Replay it on the real jdtls** (`GABIER_JDTLS` is the launcher; `mise exec --` outside an activated mise):
-   `./gradlew :daemon:jdtlsProbe --tests 'fr.craft.gabier.daemon.ScenarioReplayTest'`. The test prints what jdtls
+   `./gradlew :daemon:jdtlsProbe --tests 'eu.gabier.daemon.ScenarioReplayTest'`. The test prints what jdtls
    answered for each scenario, and lists the scenarios it does not replay (their request is not implemented by the
    adapter yet).
 5. **A difference is a finding.** Read what jdtls answered and decide who is wrong:
@@ -79,7 +79,7 @@ adds its replay for free.
 10. **A case that no replay can show is `@FakeOnly(reason = "...")`**: a null answer, a response error `InvalidRequest`
    that jdtls does not give, a server that dies, a timeout. It is a test of the adapter in `modules/daemon/src/test` (it
    checks how a failure is handled, never what jdtls answers when it is right), not a scenario; the annotation
-   (`fr.craft.gabier.editing.fixtures.FakeOnly`) carries the reason (the usual ones are in `FakeOnlyReasons`). A test that
+   (`eu.gabier.editing.fixtures.FakeOnly`) carries the reason (the usual ones are in `FakeOnlyReasons`). A test that
    makes `FakeJdtls` play a failure (never answered, a failure other than `InvalidRequest`, an error status, a failed
    shutdown, null projects, changes never acknowledged) fails without it (`FakeOnlyGuard`, put on the test class with
    `@ExtendWith`), and a blank reason fails `FakeOnlyReasonTest`; a wrong-shaped answer or a dead process is not seen, label it by hand.

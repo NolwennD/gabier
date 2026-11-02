@@ -20,7 +20,7 @@ include("architecture")
 
 javaModules {
   directory("modules") {
-    group = "fr.craft.gabier"
+    group = "eu.gabier"
     plugin("gabier.java-module-conventions")
   }
 }

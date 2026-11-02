@@ -32,9 +32,9 @@ extraJavaModuleInfo {
   // the consumer. It cannot carry its own module-info.java: jdtls reports "The package ... does not exist or is empty"
   // on a second descriptor in the same project. So the descriptor is given here, like a third-party jar's. A module
   // whose fixtures are used by another one adds its own rule: <project>-test-fixtures.jar.
-  module("core-test-fixtures.jar", "fr.craft.gabier.core.test.fixtures") {
+  module("core-test-fixtures.jar", "eu.gabier.core.test.fixtures") {
     exportAllPackages()
-    requiresTransitive("fr.craft.gabier.core")
+    requiresTransitive("eu.gabier.core")
   }
 
   // The LSP4J 1.0.0 jars have no module-info and no Automatic-Module-Name: their automatic names come from the file

@@ -28,14 +28,14 @@ place.
   Code that is merely tedious to test is tested. The annotation's name must keep the word `Generated`: JaCoCo ignores
   what is annotated with such an annotation. Every use is challenged in the review.
 - **The core stays almost pure Java**: the domain depends on `java..`, on our own
-  `shared` code (`fr.craft.gabier.shared..`) and on the null-safety annotations (`org.jspecify..`,
+  `shared` code (`eu.gabier.shared..`) and on the null-safety annotations (`org.jspecify..`,
   `com.uber.nullaway.annotations..`, the user's decision of 30-10-2026), never on another third-party library or
   framework. Adding a third-party dependency to the domain is the user's decision, not an agent's: the allow-list is the
   constant `DOMAIN_ALLOWED_PACKAGES` in
-  `architecture/src/test/java/fr/craft/gabier/architecture/HexagonalArchTest.java`. These architecture tests (ArchUnit,
+  `architecture/src/test/java/eu/gabier/architecture/HexagonalArchTest.java`. These architecture tests (ArchUnit,
   adapted from the `HexagonalArchTest` that [seed4j](https://github.com/seed4j/seed4j) generates, without its Spring
   parts; the project `:architecture` sees the classes of every module) also keep the packages free of cycles, the
-  contexts (the sub-packages of `fr.craft.gabier` other than `shared`) off each other's domain (the `daemon`, composition
+  contexts (the sub-packages of `eu.gabier` other than `shared`) off each other's domain (the `daemon`, composition
   root and home of the adapters of the real servers, is held to it too, except for the domains whose ports it
   implements: `editing` today, the constant `IMPLEMENTED_DOMAINS` of the same test), each
   context a hexagon (domain, application, primary and secondary adapters, pointing towards the domain), the application
@@ -56,7 +56,7 @@ place.
   `@SuppressWarnings` of one of these checks, under any of its names (`UnusedMethod`, `UnusedVariable`, and the aliases
   `UnusedParameters` and `unused`), with a comment that says why, challenged in the review. Naming a variable `unused...`
   (which Error Prone exempts) to get past the check is a suppression without a reason, so it is not done.
-- **LSP4J stays in the daemon**: Eclipse LSP4J (`org.eclipse.lsp4j..`) is used by `fr.craft.gabier.daemon..` only; an
+- **LSP4J stays in the daemon**: Eclipse LSP4J (`org.eclipse.lsp4j..`) is used by `eu.gabier.daemon..` only; an
   architecture test fails on any class outside it that depends on an LSP4J type. Its jars are automatic modules, given
   real descriptors by `extraJavaModuleInfo` in `gabier.java-module-conventions` (which fails the build on any other
   automatic module): a new third-party jar that is not a module is declared there, with its Maven coordinates in

@@ -1,5 +1,5 @@
-module fr.craft.gabier.cli {
+module eu.gabier.cli {
     requires static org.jspecify;
-    requires fr.craft.gabier.protocol;
-    requires fr.craft.gabier.shared;
+    requires eu.gabier.protocol;
+    requires eu.gabier.shared;
 }

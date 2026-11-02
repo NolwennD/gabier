@@ -1,0 +1,50 @@
+package eu.gabier.daemon;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import eu.gabier.protocol.DaemonStatus;
+import eu.gabier.protocol.JdtlsState;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.Test;
+
+class DaemonMethodsTest {
+
+    private static final DaemonStatus STATUS =
+            new DaemonStatus("0.1", 4242, Duration.ofSeconds(5), Path.of("/work/demo"), JdtlsState.READY);
+
+    @Test
+    void statusIsNamedStatusAndGivesTheStatusAsJson() {
+        var method = new StatusMethod(() -> STATUS);
+
+        assertThat(method.name()).isEqualTo("status");
+        assertThat(method.call(Map.of()).resultJson()).isEqualTo(STATUS.toJson());
+    }
+
+    @Test
+    void statusDoesNothingAfterTheReply() {
+        new StatusMethod(() -> STATUS).call(Map.of()).afterReply().run();
+    }
+
+    @Test
+    void stopIsNamedStopAndSaysItIsStopping() {
+        var method = new StopMethod(() -> {});
+
+        assertThat(method.name()).isEqualTo("stop");
+        assertThat(method.call(Map.of()).resultJson()).isEqualTo("{\"stopping\":true}");
+    }
+
+    @Test
+    void stopStopsTheDaemonAfterTheReplyAndNotBefore() {
+        var stops = new AtomicInteger();
+        var outcome = new StopMethod(stops::incrementAndGet).call(Map.of());
+
+        assertThat(stops).hasValue(0);
+
+        outcome.afterReply().run();
+
+        assertThat(stops).hasValue(1);
+    }
+}
