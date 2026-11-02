@@ -613,7 +613,7 @@ class ProjectServerTest {
         private final List<String> logged = new CopyOnWriteArrayList<>();
 
         private ProjectServer served(Map<String, String> environment) {
-            return ProjectServer.jdtls(directory, environment, logged::add);
+            return ProjectServer.jdtls(directory, environment, directory.resolve("home"), logged::add);
         }
 
         @Test
@@ -624,7 +624,7 @@ class ProjectServerTest {
             assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
                     .isInstanceOf(JdtlsStartException.class)
                     .hasMessageContaining("jdtls did not start")
-                    .hasMessageContaining("GABIER_JDTLS is not set");
+                    .hasMessageContaining("no jdtls found");
             assertThat(served.state()).isEqualTo(JdtlsState.FAILED);
         }
 
@@ -633,7 +633,7 @@ class ProjectServerTest {
             var served = served(Map.of("GABIER_JDTLS", " "));
 
             assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
-                    .hasMessageContaining("GABIER_JDTLS is not set");
+                    .hasMessageContaining("no jdtls found");
         }
 
         @Test
@@ -721,6 +721,61 @@ class ProjectServerTest {
             assertThat(Files.readString(arguments))
                     .contains(" --jvm-arg=-Djdt.core.sharedIndexLocation=" + cache
                             + "/jdtls-1.63.0.202610191322/indexes");
+        }
+
+        /** The pinned jdtls as {@code mise run jdtls:install} leaves it under the home folder, writing its arguments. */
+        private Path installedLauncher(Path arguments) throws IOException {
+            var distribution = directory.resolve("home/.local/share/jdtls").resolve(JdtlsLocation.PINNED_VERSION);
+            Files.createDirectories(distribution.resolve("bin"));
+            var launcher = Files.writeString(distribution.resolve("bin/jdtls"), """
+                #!/bin/sh
+                echo "$@" > %s
+                exit 3
+                """.formatted(arguments));
+            Files.setPosixFilePermissions(launcher, PosixFilePermissions.fromString("rwx------"));
+            return launcher;
+        }
+
+        @Test
+        void startsThePinnedJdtlsInstalledUnderTheHomeFolderWhenTheVariableIsNotSet() throws IOException {
+            var arguments = directory.resolve("arguments");
+            installedLauncher(arguments);
+            var served = served(Map.of());
+
+            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+                    .isInstanceOf(JdtlsStartException.class)
+                    .hasMessageContaining("jdtls exited with code 3");
+
+            assertThat(Files.readString(arguments)).contains("-data ");
+        }
+
+        @Test
+        void startsTheLauncherOfTheVariableWhateverIsInstalled() throws IOException {
+            var installedArguments = directory.resolve("installed-arguments");
+            installedLauncher(installedArguments);
+            var chosenArguments = directory.resolve("chosen-arguments");
+            var served = served(
+                    Map.of("GABIER_JDTLS", recordingLauncher(chosenArguments).toString()));
+
+            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+                    .isInstanceOf(JdtlsStartException.class);
+
+            assertThat(chosenArguments).exists();
+            assertThat(installedArguments).doesNotExist();
+        }
+
+        @Test
+        void findsAJdtlsInstalledAfterTheServerWasMadeAtTheNextRequest() throws IOException {
+            var arguments = directory.resolve("arguments");
+            var served = served(Map.of());
+            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+                    .hasMessageContaining("no jdtls found");
+
+            installedLauncher(arguments);
+            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+                    .hasMessageContaining("jdtls exited with code 3");
+
+            assertThat(arguments).exists();
         }
     }
 }

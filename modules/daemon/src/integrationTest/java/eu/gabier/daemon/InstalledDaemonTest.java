@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -51,13 +52,18 @@ class InstalledDaemonTest {
         private final Set<ProcessHandle> java = new LinkedHashSet<>();
 
         Daemon(Path project) throws IOException, InterruptedException {
-            var launcher = RealJdtls.launcher();
+            this(project, Map.of("GABIER_JDTLS", RealJdtls.launcher().launcher().toString()));
+        }
+
+        /** A daemon started with the given environment on top of the current one, without GABIER_JDTLS. */
+        Daemon(Path project, Map<String, String> environment) throws IOException, InterruptedException {
             var command = new ProcessBuilder(System.getProperty("gabier.daemon"), project.toString())
                     .directory(directory.toFile())
                     .redirectErrorStream(true)
                     .redirectOutput(directory.resolve("daemon.log").toFile());
             command.environment().put("GABIER_SOCKET", socket.toString());
-            command.environment().put("GABIER_JDTLS", launcher.launcher().toString());
+            command.environment().remove("GABIER_JDTLS");
+            command.environment().putAll(environment);
             command.environment().put("JAVA_HOME", System.getProperty("java.home"));
             process = command.start();
             for (var attempt = 0; attempt < 600 && !log().contains(" listening on "); attempt++) {
@@ -227,6 +233,34 @@ class InstalledDaemonTest {
         assertThat(parsed).as("the answer: %s", answer).isInstanceOf(RpcResponse.Success.class);
 
         return ChangedFiles.of(((RpcResponse.Success) parsed).result());
+    }
+
+    @Test
+    void startsThePinnedJdtlsInstalledUnderTheHomeFolderWhenGabierJdtlsIsNotSet() throws Exception {
+        // A home folder of its own, where the pinned jdtls is installed the way `mise run jdtls:install` does it (a
+        // link to
+        // the distribution of GABIER_JDTLS), and a PATH with no jdtls: only the pinned location can be the one found.
+        var home = Files.createDirectory(directory.resolve("home"));
+        var installed = home.resolve(".local/share/jdtls").resolve(System.getProperty("gabier.jdtlsVersion"));
+        Files.createDirectories(installed.getParent());
+        Files.createSymbolicLink(
+                installed, RealJdtls.launcher().launcher().getParent().getParent());
+        // A project with no mise.toml (nothing in the folder exports the variable either).
+        var project = project();
+        var environment = Map.of("JAVA_OPTS", "-Duser.home=" + home, "PATH", "/usr/bin:/bin");
+        try (var daemon = new Daemon(project, environment)) {
+            var answer = RpcResponse.parse(daemon.ask("diagnostics", diagnosticsOf(project)));
+            daemon.remember();
+
+            assertThat(answer).as("the answer: %s", answer).isInstanceOf(RpcResponse.Success.class);
+            assertThat(FileDiagnostics.of(((RpcResponse.Success) answer).result())
+                            .diagnostics())
+                    .hasSize(1);
+            System.out.println("the daemon found the pinned jdtls by itself: " + installed);
+
+            daemon.stop();
+            daemon.assertNothingIsLeft();
+        }
     }
 
     @Test

@@ -19,6 +19,28 @@ application {
   mainClass = "eu.gabier.daemon.Main"
 }
 
+// The jdtls the daemon looks for when GABIER_JDTLS is not set: the version that `mise.toml` pins (`jdtls_version`), written
+// in the resource `jdtls.properties` that `JdtlsLocation` reads. The number lives in `mise.toml` alone.
+val jdtlsVersion = providers
+  .fileContents(rootProject.layout.projectDirectory.file("mise.toml"))
+  .asText
+  .map { text ->
+    Regex("""(?m)^jdtls_version\s*=\s*"([^"]+)"""").find(text)?.groupValues?.get(1)
+      ?: throw GradleException("mise.toml has no jdtls_version")
+  }
+
+tasks.processResources {
+  inputs.property("jdtlsVersion", jdtlsVersion)
+  filesMatching("**/jdtls.properties") {
+    filter<org.apache.tools.ant.filters.ReplaceTokens>("tokens" to mapOf("version" to jdtlsVersion.get()))
+  }
+}
+
+// The version the build was given, for the test that proves it reaches JdtlsLocation.
+tasks.test {
+  systemProperty("gabier.jdtlsVersion", jdtlsVersion.get())
+}
+
 // Starts the installed daemon (not the classes of the build): what a user runs, on the module path. A self-check run
 // on the class path would pass where Gson fails on the module path, so this is the one that counts.
 val selfCheck = tasks.register<Exec>("selfCheck") {
@@ -110,6 +132,8 @@ tasks.register<Test>("jdtlsProbe") {
     layout.buildDirectory.file("install/${application.applicationName}/bin/${application.applicationName}").get().asFile.path,
   )
   providers.environmentVariable("GABIER_JDTLS").orNull?.let { environment("GABIER_JDTLS", it) }
+  // The pinned version, which the installed daemon looks for under the home folder when GABIER_JDTLS is not set.
+  systemProperty("gabier.jdtlsVersion", jdtlsVersion.get())
   // It talks to a real server: never up to date, and the output (pid, status, projects) is the evidence.
   outputs.upToDateWhen { false }
   testLogging {

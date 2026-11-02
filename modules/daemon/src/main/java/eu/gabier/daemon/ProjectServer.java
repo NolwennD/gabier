@@ -37,8 +37,6 @@ final class ProjectServer implements ServedProject {
     /** How long jdtls may take to start (all its waits together), then to answer each request. */
     static final Duration TIMEOUT = Duration.ofMinutes(5);
 
-    private static final String LAUNCHER_VARIABLE = "GABIER_JDTLS";
-
     /** Starts a language server in the background: the one seam between the project and jdtls. */
     @FunctionalInterface
     interface Starter {
@@ -60,28 +58,28 @@ final class ProjectServer implements ServedProject {
     }
 
     /**
-     * The project served by a real jdtls: the launcher is the one {@code GABIER_JDTLS} names, and a project that
-     * cannot start it is told so by the first request, not by the daemon at its start.
+     * The project served by a real jdtls: the launcher is the one {@link JdtlsLocation} finds ({@code GABIER_JDTLS},
+     * else the pinned jdtls installed under the home folder, else a {@code jdtls} on the {@code PATH}), and a project
+     * that cannot start it is told so by the first request, not by the daemon at its start.
      *
      * @param root the folder jdtls is initialized on, which must be the project jdtls imports
+     * @param home the home folder of the user
      * @param log receives a line for what happens to jdtls
      */
-    static ProjectServer jdtls(Path root, Map<String, String> environment, Consumer<String> log) {
+    static ProjectServer jdtls(Path root, Map<String, String> environment, Path home, Consumer<String> log) {
         var settings = JdtlsSettings.of(root, List.of(), TIMEOUT);
-        var launcher = environment.getOrDefault(LAUNCHER_VARIABLE, "");
-        JdtlsStarter jdtls = launcher.isBlank()
-                ? data -> {
-                    throw new IOException(LAUNCHER_VARIABLE + " is not set: it must be the path of the jdtls launcher");
-                }
-                : launcher(Path.of(launcher), environment, log);
+        // Looked for at each start, not once: a jdtls installed after the daemon began is found by the next request.
+        JdtlsStarter jdtls = data -> launcher(JdtlsLocation.launcher(environment, home), environment, home, log)
+                .start(data);
 
         return new ProjectServer(
                 root, () -> JdtlsLanguageServer.start(jdtls, settings, JdtlsLanguageServer.QUIET, log), log);
     }
 
     /** The launcher, with the option that makes jdtls share the indexes of its libraries when its version is known. */
-    private static JdtlsLauncher launcher(Path launcher, Map<String, String> environment, Consumer<String> log) {
-        var indexes = SharedIndexes.of(launcher, environment, Path.of(System.getProperty("user.home")));
+    private static JdtlsLauncher launcher(
+            Path launcher, Map<String, String> environment, Path home, Consumer<String> log) {
+        var indexes = SharedIndexes.of(launcher, environment, home);
         if (indexes.isEmpty()) {
             log.accept("the indexes of the libraries are not shared: " + launcher
                     + " is not in a distribution of jdtls that tells its version");

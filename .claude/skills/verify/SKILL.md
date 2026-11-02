@@ -59,7 +59,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   `RenameTokenMethod`, `OrganizeImportsMethod`, `CleanUpMethod`, `ExtractVariableMethod`, `ExtractMethodMethod`, `ExtractConstantMethod`, `ExtractFieldMethod`, `MoveTypeToFileMethod`, `InlineMethod`, `CreateTypeMethod`, `ReferencesMethod`, `CodeActionsMethod`, `ApplyCodeActionMethod`; adding one is
   `.claude/skills/add-daemon-method`). The daemon serves one project (`ServedProject`: its root, its language server and
   where that is): `Main` takes the folder from its argument, `GABIER_PROJECT` or the working directory, and builds
-  `ProjectServer.jdtls`, which starts the real jdtls (`JdtlsLanguageServer`, launcher `GABIER_JDTLS`) at the first request
+  `ProjectServer.jdtls`, which starts the real jdtls (`JdtlsLanguageServer`; launcher found by `JdtlsLocation`: `GABIER_JDTLS`, else `~/.local/share/jdtls/<version>/bin/jdtls` with the version of `mise.toml` written by the build in `jdtls.properties`, else `jdtls` on the `PATH`) at the first request
   that needs it, once whatever the number of requests, waits for it (5 minutes at most, `jdtls-start-failed` otherwise,
   and the next request tries again, as it does for a jdtls that died while ready; a folder with no build is refused at
   once as `no-build-to-import`) and ends it when the daemon stops (`DaemonServer.close`: `stop`, SIGTERM). `status`

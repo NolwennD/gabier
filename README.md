@@ -28,6 +28,10 @@ for the project; both are written in Java.
 4. exports, in a shell where mise is active, `GABIER_JDTLS` (the path of the jdtls launcher) and adds that launcher to
    the `PATH`.
 
+The daemon does not need that variable: when `GABIER_JDTLS` is not set it looks for the pinned jdtls in
+`~/.local/share/jdtls/<version>/bin/jdtls`, then for a `jdtls` on the `PATH` (see [The daemon](docs/daemon.md)), so
+`gabier` works in any Java project once step 3 has run.
+
 Then `mise run install` builds the native `gabier` and the daemon `gabier-daemon`, **copies** them into
 `~/.local/share/gabier/<version>` (`GABIER_INSTALL_DIR` to change it; `<version>` is what `gabier --version` prints) and
 links `gabier` and `gabier-daemon` from `~/.local/bin` to that copy (`GABIER_BIN_DIR` to change it; the arguments of

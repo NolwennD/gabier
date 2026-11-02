@@ -49,7 +49,14 @@ class MainTest {
     }
 
     private int run(Map<String, String> environment, Path workingDirectory, SelfCheck selfCheck, String... args) {
-        return Main.run(args, environment, workingDirectory, selfCheck, printStream(out), printStream(err));
+        return Main.run(
+                args,
+                environment,
+                workingDirectory,
+                directory.resolve("home"),
+                selfCheck,
+                printStream(out),
+                printStream(err));
     }
 
     private static PrintStream printStream(ByteArrayOutputStream stream) {
@@ -284,7 +291,7 @@ class MainTest {
 
             assertThat(refusal)
                     .contains("\"key\":\"jdtls-start-failed\"")
-                    .contains("GABIER_JDTLS is not set")
+                    .contains("no jdtls found")
                     .contains("\"project\":\"" + directory.toRealPath() + "\"");
             assertThat(status().jdtls()).isEqualTo(JdtlsState.FAILED);
             ask(STOP);

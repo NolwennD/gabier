@@ -31,6 +31,7 @@ public final class Main {
                 args,
                 System.getenv(),
                 Path.of("").toAbsolutePath(),
+                Path.of(System.getProperty("user.home")),
                 SelfCheck.ofThisRuntime(),
                 System.out,
                 System.err));
@@ -46,16 +47,18 @@ public final class Main {
      *
      * @param workingDirectory where the daemon was started: the project by default, and what a relative argument is
      *     relative to
+     * @param home the home folder of the user, where the pinned jdtls and the shared indexes are looked for
      */
     static int run(
             String[] args,
             Map<String, String> environment,
             Path workingDirectory,
+            Path home,
             SelfCheck selfCheck,
             PrintStream out,
             PrintStream err) {
         try {
-            return execute(List.of(args), environment, workingDirectory, selfCheck, out, err);
+            return execute(List.of(args), environment, workingDirectory, home, selfCheck, out, err);
         } catch (IOException | RuntimeException failure) {
             var problem = ProblemMapper.toProblem(failure);
             err.println(problem.toText());
@@ -68,6 +71,7 @@ public final class Main {
             List<String> arguments,
             Map<String, String> environment,
             Path workingDirectory,
+            Path home,
             SelfCheck selfCheck,
             PrintStream out,
             PrintStream err)
@@ -82,7 +86,7 @@ public final class Main {
                     workingDirectory,
                     out,
                     ProjectServer.jdtls(
-                            root, environment, line -> err.println("jdtls: " + TerminalText.neutralise(line))));
+                            root, environment, home, line -> err.println("jdtls: " + TerminalText.neutralise(line))));
         }
         if (arguments.equals(List.of(VERSION_OPTION))) {
             out.println("gabier-daemon " + ProtocolVersion.CURRENT);

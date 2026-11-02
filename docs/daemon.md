@@ -39,7 +39,7 @@ project it was started for (`gabier status` says which), and the command finds t
 It serves **one project**: `gabier-daemon [<project folder>]`, else the folder named by `GABIER_PROJECT`, else the
 root of the directory it is started in, the nearest folder from it up that holds a `.git` (a relative folder is relative
 to that directory; one that is not a folder is a usage error).
-Starting the daemon starts nothing else. jdtls (the launcher `GABIER_JDTLS` names, as for the integration tests) is started by the
+Starting the daemon starts nothing else. jdtls is started by the
 first request that needs it, on that folder, and the request waits until it has imported the project: the first
 `diagnostics` takes seconds for a small project and about a minute and a half for this checkout. Requests that arrive
 meanwhile wait for the same start, never for another. jdtls then stays up for the next requests, and is ended, with every
@@ -51,6 +51,15 @@ request that waits while the daemon stops is told that the daemon is stopping: i
 connection ends (the daemon gives the clients 5 seconds to end, then cuts them). What jdtls says of itself goes to the
 standard error of the daemon, prefixed with `jdtls:`, with control characters written as escapes like in the text of
 `gabier diagnostics`.
+
+**Where the daemon finds jdtls.** At each start of jdtls, in this order: the launcher that `GABIER_JDTLS` names (used as it
+is, even when nothing is there, so that the failure names it), else the pinned jdtls that `mise run jdtls:install`
+installs, `~/.local/share/jdtls/<version>/bin/jdtls` (the home folder is the one of the user; the version is the
+`jdtls_version` of `mise.toml`, written by the build in the resource `jdtls.properties` of the daemon, so the number
+exists once), else a `jdtls` on the `PATH`. So the daemon serves any Java project once `mise run jdtls:install` has run,
+with no `mise.toml` and no variable in that project. With none of the three, the request gets `jdtls-start-failed` whose
+message names the three places and `mise run jdtls:install`; the next request looks again, so a jdtls installed meanwhile
+is found without restarting the daemon.
 
 jdtls is ready when it says so itself: its `ServiceReady` status comes once its import is over, and the daemon then asks
 the list of projects it imported, once. A folder with nothing jdtls can import (no Gradle, Maven or Eclipse build) is
