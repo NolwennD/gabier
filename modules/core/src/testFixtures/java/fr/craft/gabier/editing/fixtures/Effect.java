@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -24,10 +25,10 @@ public final class Effect {
     private Effect() {}
 
     /**
-     * The sources of the project (the files under {@code src}) once the change set is applied to a copy of it. The
+     * The sources of the project (the files under its {@link #sourceFolders(Path) source folders}) once the change set is applied to a copy of it. The
      * project is not touched.
      *
-     * @param root the folder of the project, which holds {@code src}
+     * @param root the folder of the project, which holds {@code src}, or of the projects, each of which holds one
      * @param changes the changes, with the paths under the root
      * @return the text of each source, by its path relative to the root; a moved file is at its new path only
      * @throws fr.craft.gabier.editing.domain.EditingException if the set cannot be applied
@@ -47,14 +48,37 @@ public final class Effect {
         }
     }
 
+    /**
+     * The folders of the sources of a project: its {@code src}, or, for a root that holds several projects and no
+     * {@code src} of its own, the {@code src} of each folder that has one.
+     *
+     * @param root the folder of the project, or of the projects
+     * @return the folders, in the order of their paths
+     */
+    public static List<Path> sourceFolders(Path root) throws IOException {
+        Assert.notNull("root", root);
+
+        if (Files.isDirectory(root.resolve(SOURCES))) {
+            return List.of(root.resolve(SOURCES));
+        }
+        try (var projects = Files.list(root)) {
+            return projects.map(project -> project.resolve(SOURCES))
+                    .filter(Files::isDirectory)
+                    .sorted()
+                    .toList();
+        }
+    }
+
     private static void copySources(Path from, Path to) throws IOException {
-        try (var files = Files.walk(from.resolve(SOURCES))) {
-            for (Path file : files.toList()) {
-                Path target = to.resolve(from.relativize(file));
-                if (Files.isDirectory(file)) {
-                    Files.createDirectories(target);
-                } else {
-                    Files.copy(file, target);
+        for (Path folder : sourceFolders(from)) {
+            try (var files = Files.walk(folder)) {
+                for (Path file : files.toList()) {
+                    Path target = to.resolve(from.relativize(file));
+                    if (Files.isDirectory(file)) {
+                        Files.createDirectories(target);
+                    } else {
+                        Files.copy(file, target);
+                    }
                 }
             }
         }
@@ -62,9 +86,11 @@ public final class Effect {
 
     private static Map<Path, String> sources(Path root) throws IOException {
         Map<Path, String> found = new TreeMap<>();
-        try (var files = Files.walk(root.resolve(SOURCES))) {
-            for (Path file : files.filter(Files::isRegularFile).toList()) {
-                found.put(root.relativize(file), Files.readString(file));
+        for (Path folder : sourceFolders(root)) {
+            try (var files = Files.walk(folder)) {
+                for (Path file : files.filter(Files::isRegularFile).toList()) {
+                    found.put(root.relativize(file), Files.readString(file));
+                }
             }
         }
 

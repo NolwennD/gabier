@@ -44,6 +44,13 @@ import java.util.Map;
  *       #MOVE_A_FILE_THAT_IS_NOT_A_JAVA_SOURCE}, {@link #MOVE_A_FILE_OF_NO_SOURCE_FOLDER}, {@link
  *       #MOVE_A_CLASS_TO_THE_PACKAGE_IT_IS_IN}, {@link #MOVE_A_CLASS_TO_A_PACKAGE_THAT_HAS_A_FILE_OF_ITS_NAME}, {@link
  *       #MOVE_FILES_OF_TWO_SOURCE_FOLDERS}). The reason is the detail of the refusal ({@link NotMovableReason}).
+ *   <li>The files of the other projects that use the moved class are rewritten too, when jdtls knows the projects are
+ *       linked: a module that requires the module of the class, the import and the qualified names of its files ({@link
+ *       #MOVE_A_CLASS_THAT_ANOTHER_MODULE_USES}, two projects, each with its {@code module-info.java}, the one that
+ *       requires the other linked to it). jdtls sees the links of a build of several modules only if the build gives
+ *       them: a Gradle build whose plugin {@code org.gradlex.extra-java-module-info} transforms the jars of its own
+ *       projects (its default, {@code skipLocalJars} false) gives none, and jdtls then rewrites the module of the class
+ *       only.
  *   <li>jdtls does not check what the move breaks: a member with the default access that a class left behind uses is
  *       not reported, and the move is answered all the same. That case has no scenario, as a replay compiles the
  *       project once the answer is applied; {@code gabier diagnostics} shows it afterwards.
@@ -146,6 +153,69 @@ public final class PackageMoveScenarios {
                 """),
             Map.entry(UNSOURCED, """
                 public class Unsourced {
+                }
+                """));
+
+    private static final Path MONEY = Path.of("shared/src/main/java/demo/shared/Money.java");
+    private static final Path MOVED_MONEY = Path.of("shared/src/main/java/demo/shared/money/Money.java");
+    private static final Path TILL = Path.of("app/src/main/java/demo/app/Till.java");
+    private static final Path PURSE = Path.of("app/src/main/java/demo/app/Purse.java");
+
+    private static final PackageName MONEY_PACKAGE = PackageName.of("demo.shared.money");
+
+    /**
+     * Two projects, each a module, as the modules of a build: {@code shared} ({@code demo.shared}, which exports its two
+     * packages) and {@code app} ({@code demo.app}, which requires it and uses its {@code Money} through an import and
+     * through qualified names). The package that is left keeps a class, and the one {@code Money} goes to has one
+     * already, so that both exports still name a package once it is moved.
+     */
+    private static final Map<Path, String> MODULES = Map.ofEntries(
+            Map.entry(Path.of("shared/src/main/java/module-info.java"), """
+                module demo.shared {
+                    exports demo.shared;
+                    exports demo.shared.money;
+                }
+                """),
+            Map.entry(MONEY, """
+                package demo.shared;
+
+                public record Money(long cents) {
+                }
+                """),
+            Map.entry(Path.of("shared/src/main/java/demo/shared/Currency.java"), """
+                package demo.shared;
+
+                public enum Currency {
+                    EURO
+                }
+                """),
+            Map.entry(Path.of("shared/src/main/java/demo/shared/money/Coin.java"), """
+                package demo.shared.money;
+
+                public record Coin(int value) {
+                }
+                """),
+            Map.entry(Path.of("app/src/main/java/module-info.java"), """
+                module demo.app {
+                    requires demo.shared;
+                }
+                """),
+            Map.entry(TILL, """
+                package demo.app;
+
+                import demo.shared.Money;
+
+                public class Till {
+                    public Money total() {
+                        return new Money(0);
+                    }
+                }
+                """),
+            Map.entry(PURSE, """
+                package demo.app;
+
+                public class Purse {
+                    private final demo.shared.Money money = new demo.shared.Money(1);
                 }
                 """));
 
@@ -260,6 +330,21 @@ public final class PackageMoveScenarios {
             new Request.MoveToPackage(List.of(ELSEWHERE), BILLING),
             new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
 
+    /**
+     * {@code Money} of the module {@code demo.shared} to {@code demo.shared.money}: the module {@code demo.app}, a project
+     * of its own that requires it, has its import and its qualified names rewritten.
+     */
+    public static final Scenario MOVE_A_CLASS_THAT_ANOTHER_MODULE_USES = new Scenario(
+            "move-a-class-that-another-module-uses",
+            MODULES,
+            new Request.MoveToPackage(List.of(MONEY), MONEY_PACKAGE),
+            new Answer.MovedToPackage(new ChangeSet(List.of(
+                    edits(PURSE, replace(3, 48, 3, 65, "demo.shared.money.Money")),
+                    edits(PURSE, replace(3, 18, 3, 35, "demo.shared.money.Money")),
+                    edits(TILL, replace(2, 0, 2, 25, "import demo.shared.money.Money;")),
+                    edits(MONEY, replace(0, 8, 0, 19, "demo.shared.money")),
+                    new RenameFile(MONEY, MOVED_MONEY)))));
+
     /** The project is still being imported: the server cannot say what a move changes. */
     public static final Scenario MOVE_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "move-while-the-server-imports",
@@ -276,6 +361,7 @@ public final class PackageMoveScenarios {
                 MOVE_SEVERAL_CLASSES_TO_AN_EXISTING_PACKAGE,
                 MOVE_A_CLASS_TO_A_NEW_PACKAGE,
                 MOVE_A_TEST_CLASS_TO_A_NEW_PACKAGE,
+                MOVE_A_CLASS_THAT_ANOTHER_MODULE_USES,
                 MOVE_A_CLASS_TO_THE_PACKAGE_IT_IS_IN,
                 MOVE_A_CLASS_TO_A_PACKAGE_THAT_HAS_A_FILE_OF_ITS_NAME,
                 MOVE_A_FILE_THAT_IS_NOT_A_JAVA_SOURCE,

@@ -3,8 +3,15 @@ package fr.craft.gabier.daemon;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The two files of an Eclipse project ({@code .project}, {@code .classpath}) that jdtls imports without network, which
@@ -15,7 +22,7 @@ final class EclipseProject {
     private static final String PROJECT = """
         <?xml version="1.0" encoding="UTF-8"?>
         <projectDescription>
-          <name>scenario</name>
+          <name>%s</name>
           <comment></comment>
           <projects></projects>
           <buildSpec>
@@ -29,7 +36,7 @@ final class EclipseProject {
         <?xml version="1.0" encoding="UTF-8"?>
         <classpath>
           <classpathentry kind="src" path="src/main/java"/>
-        %s%s  <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+        %s%s%s
           <classpathentry kind="output" path="bin"/>
         </classpath>
         """;
@@ -43,6 +50,27 @@ final class EclipseProject {
 
     private static final String LIBRARY = "  <classpathentry kind=\"lib\" path=\"%s\"/>\n";
 
+    private static final String JRE =
+            "  <classpathentry kind=\"con\" path=\"org.eclipse.jdt.launching.JRE_CONTAINER\"/>\n";
+
+    /** The JDK of a modular project, on its module path. */
+    private static final String MODULAR_JRE = """
+          <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER">
+            <attributes><attribute name="module" value="true"/></attributes>
+          </classpathentry>
+        """;
+
+    /** Another project of the workspace whose module this one requires, on its module path. */
+    private static final String REQUIRED_PROJECT = """
+          <classpathentry kind="src" path="/%s" combineaccessrules="false">
+            <attributes><attribute name="module" value="true"/></attributes>
+          </classpathentry>
+        """;
+
+    private static final Path MODULE_INFO = Path.of("src/main/java/module-info.java");
+    private static final Pattern MODULE = Pattern.compile("\\bmodule\\s+([\\w.]+)");
+    private static final Pattern REQUIRES = Pattern.compile("\\brequires\\s+(?:transitive\\s+)?([\\w.]+)\\s*;");
+
     private EclipseProject() {}
 
     /**
@@ -55,11 +83,77 @@ final class EclipseProject {
 
     /** The same, with the jars on the class path (external libraries, which jdtls indexes). */
     static void describe(Path root, List<Path> libraries) throws IOException {
-        Files.writeString(root.resolve(".project"), PROJECT);
+        writeFiles(root, "scenario", libraries, List.of());
+    }
+
+    /**
+     * Makes the folder a project, as {@link #describe(Path)} does, when it holds {@code src}; otherwise each folder of
+     * it that holds {@code src} is a project of its own, named after its folder, and linked to the projects whose module
+     * its {@code module-info.java} requires, as a build of several modules links them.
+     *
+     * @return the folders of the projects, which jdtls must import
+     */
+    static List<Path> describeProjects(Path root) throws IOException {
+        if (Files.isDirectory(root.resolve("src"))) {
+            describe(root);
+
+            return List.of(root);
+        }
+        List<Path> projects;
+        try (Stream<Path> folders = Files.list(root)) {
+            projects = folders.filter(folder -> Files.isDirectory(folder.resolve("src")))
+                    .sorted()
+                    .toList();
+        }
+        Map<String, Path> byModule = new TreeMap<>();
+        for (Path project : projects) {
+            moduleOf(project).ifPresent(module -> byModule.put(module, project));
+        }
+        for (Path project : projects) {
+            List<String> required = new ArrayList<>();
+            for (String module : requiredModules(project)) {
+                Path other = byModule.get(module);
+                if (other != null) {
+                    required.add(other.getFileName().toString());
+                }
+            }
+            writeFiles(project, project.getFileName().toString(), List.of(), required);
+        }
+        return projects;
+    }
+
+    private static void writeFiles(Path root, String name, List<Path> libraries, List<String> requiredProjects)
+            throws IOException {
+        boolean modular = Files.isRegularFile(root.resolve(MODULE_INFO));
+        Files.writeString(root.resolve(".project"), PROJECT.formatted(name));
         Files.writeString(
                 root.resolve(".classpath"),
                 CLASSPATH.formatted(
                         Files.isDirectory(root.resolve("src/test/java")) ? TESTS : "",
-                        libraries.stream().map(LIBRARY::formatted).collect(Collectors.joining())));
+                        Stream.concat(
+                                        libraries.stream().map(LIBRARY::formatted),
+                                        requiredProjects.stream().map(REQUIRED_PROJECT::formatted))
+                                .collect(Collectors.joining()),
+                        modular ? MODULAR_JRE : JRE));
+    }
+
+    private static Optional<String> moduleOf(Path project) throws IOException {
+        Path descriptor = project.resolve(MODULE_INFO);
+        if (!Files.isRegularFile(descriptor)) {
+            return Optional.empty();
+        }
+        Matcher module = MODULE.matcher(Files.readString(descriptor));
+        return module.find() ? Optional.of(module.group(1)) : Optional.empty();
+    }
+
+    private static List<String> requiredModules(Path project) throws IOException {
+        Path descriptor = project.resolve(MODULE_INFO);
+        if (!Files.isRegularFile(descriptor)) {
+            return List.of();
+        }
+        return REQUIRES.matcher(Files.readString(descriptor))
+                .results()
+                .map(requires -> requires.group(1))
+                .toList();
     }
 }

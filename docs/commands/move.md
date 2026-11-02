@@ -31,6 +31,12 @@ renamed /work/demo/src/main/java/demo/Invoice.java -> /work/demo/src/main/java/d
 ...
 ```
 
+**Several modules.** The files of the other projects of the build that use a moved class (the modules that require its
+module) are rewritten too, imports and qualified names, provided jdtls knows that the projects are linked. jdtls takes the
+links from the build: a Gradle build whose plugin `org.gradlex.extra-java-module-info` transforms the jars of its own
+projects (its default) gives jdtls no link between the modules, and the move then rewrites the module of the class only.
+Such a build sets `skipLocalJars = true` in its `extraJavaModuleInfo` block, as gabier's own does.
+
 **After the move.** gabier does not compile the project. A member that was package-private (no `public`) in the old
 package and that the moved class uses, or that uses the moved class, is no longer reachable from the other package: jdtls
 moves the class all the same, and says nothing about it. Run `gabier diagnostics` on the files that use the moved

@@ -47,6 +47,19 @@ class EffectTest {
     }
 
     @Test
+    void holdsTheSourcesOfEveryProjectOfARootThatHoldsSeveral(@TempDir Path root) throws IOException {
+        Scenario move = written(PackageMoveScenarios.MOVE_A_CLASS_THAT_ANOTHER_MODULE_USES, root);
+
+        Map<Path, String> sources = Effect.of(root, changesOf(move));
+
+        assertThat(sources)
+                .containsKey(Path.of("shared/src/main/java/demo/shared/money/Money.java"))
+                .doesNotContainKey(Path.of("shared/src/main/java/demo/shared/Money.java"));
+        assertThat(sources.get(Path.of("app/src/main/java/demo/app/Till.java")))
+                .contains("import demo.shared.money.Money;");
+    }
+
+    @Test
     void holdsAMovedFileAtItsNewPathOnly(@TempDir Path root) throws IOException {
         Scenario rename = written(Scenarios.RENAME_TYPE, root);
 

@@ -21,6 +21,11 @@ java {
 extraJavaModuleInfo {
   failOnMissingModuleInfo = true
   failOnAutomaticModules = true
+  // The jars of the modules of this build are modules already: they are left out of the transform. Transformed, a
+  // module seen by another is a file and no longer a project, so the Eclipse model of the build, which jdtls imports
+  // (Buildship), loses the links between the modules: jdtls then searches and refactors each module alone, and a
+  // `gabier move` or `gabier references` of a class of shared never reaches the modules that use it.
+  skipLocalJars = true
 
   // The test fixtures of core (src/testFixtures: the fake language server and its scenarios), for the tests of the other
   // modules. Their jar has no descriptor, and the transform above refuses a jar without one on the test runtime path of

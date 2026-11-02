@@ -32,7 +32,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.stream.Collectors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaFileObject;
 import javax.tools.ToolProvider;
@@ -46,7 +47,9 @@ import org.junit.jupiter.api.Test;
  *
  * <p>The scenarios are grouped by their project: one jdtls is started on each. Its project is written in a fresh
  * folder, with the two files of an Eclipse project ({@code .project}, {@code .classpath}) that jdtls imports without
- * network, which a build file of Maven or Gradle would not guarantee. A scenario whose answer is "not ready" is replayed
+ * network, which a build file of Maven or Gradle would not guarantee; a scenario whose files are in several folders that
+ * each hold a {@code src} is several projects, linked as their {@code module-info.java} require each other ({@link
+ * EclipseProject#describeProjects}). A scenario whose answer is "not ready" is replayed
  * before jdtls has imported the project, which is how the adapter detects it: the import takes seconds, so asking at
  * once is deterministic. The other scenarios are replayed once it is ready. Not run by {@code check}: {@code
  * ./gradlew jdtlsProbe}, with {@code GABIER_JDTLS} set to the jdtls launcher.
@@ -60,6 +63,7 @@ import org.junit.jupiter.api.Test;
 class ScenarioReplayTest {
 
     private static final Duration TIMEOUT = Duration.ofMinutes(5);
+    private static final Pattern MODULE = Pattern.compile("\\bmodule\\s+([\\w.]+)");
 
     @Test
     void replaysTheScenariosTheAdapterImplements() throws Exception {
@@ -120,8 +124,7 @@ class ScenarioReplayTest {
         Path root = Files.createTempDirectory("gabier-scenarios-").toRealPath();
         try {
             scenarios.getFirst().writeProject(root);
-            EclipseProject.describe(root);
-            var settings = JdtlsSettings.of(root, List.of(root), TIMEOUT);
+            var settings = JdtlsSettings.of(root, EclipseProject.describeProjects(root), TIMEOUT);
             try (var server = JdtlsLanguageServer.start(
                     RealJdtls.launcher(), settings, JdtlsLanguageServer.QUIET, System.out::println)) {
                 for (Scenario scenario : scenarios) {
@@ -187,12 +190,14 @@ class ScenarioReplayTest {
         }
     }
 
-    /** The sources of the project, by path, as they are on disk. */
+    /** The sources of the project, or of the projects, by path, as they are on disk. */
     private static Map<Path, String> sources(Path root) throws IOException {
         Map<Path, String> found = new TreeMap<>();
-        try (var files = Files.walk(root.resolve("src"))) {
-            for (Path file : files.filter(Files::isRegularFile).toList()) {
-                found.put(file, Files.readString(file));
+        for (Path folder : Effect.sourceFolders(root)) {
+            try (var files = Files.walk(folder)) {
+                for (Path file : files.filter(Files::isRegularFile).toList()) {
+                    found.put(file, Files.readString(file));
+                }
             }
         }
         return found;
@@ -401,18 +406,25 @@ class ScenarioReplayTest {
         }
     }
 
-    /** The folders under {@code src}, as they are on disk. */
+    /** The folders under the {@code src} of the project, or of each project, as they are on disk. */
     private static Set<Path> folders(Path root) throws IOException {
-        try (var files = Files.walk(root.resolve("src"))) {
-            return files.filter(Files::isDirectory).collect(Collectors.toCollection(TreeSet::new));
+        Set<Path> found = new TreeSet<>();
+        for (Path sources : Effect.sourceFolders(root)) {
+            try (var files = Files.walk(sources)) {
+                files.filter(Files::isDirectory).forEach(found::add);
+            }
         }
+        return found;
     }
 
-    /** The folders under {@code src} that the files need. */
-    private static Set<Path> foldersOf(Path root, Map<Path, String> files) {
+    /** The folders under the {@code src} of the project, or of each project, that the files need. */
+    private static Set<Path> foldersOf(Path root, Map<Path, String> files) throws IOException {
+        List<Path> sourceFolders = Effect.sourceFolders(root);
         Set<Path> folders = new TreeSet<>();
         for (Path file : files.keySet()) {
-            for (Path folder = file.getParent(); folder.startsWith(root.resolve("src")); folder = folder.getParent()) {
+            for (Path folder = file.getParent();
+                    sourceFolders.stream().anyMatch(folder::startsWith);
+                    folder = folder.getParent()) {
                 folders.add(folder);
             }
         }
@@ -435,16 +447,36 @@ class ScenarioReplayTest {
         }
     }
 
-    /** What javac reports on every source under the project, none when it compiles. */
+    /**
+     * What javac reports on every source under the project, or the projects, none when it compiles. Projects that are
+     * modules are compiled together, each module from its source folder ({@code --module-source-path}).
+     */
     private static List<String> compilationErrors(Path project) throws IOException {
         var javac = ToolProvider.getSystemJavaCompiler();
         var errors = new DiagnosticCollector<JavaFileObject>();
-        try (var files = Files.walk(project.resolve("src"));
-                var manager = javac.getStandardFileManager(errors, null, null)) {
-            var sources = manager.getJavaFileObjectsFromPaths(
-                    files.filter(file -> file.toString().endsWith(".java")).toList());
-            Path classes = Files.createTempDirectory(project, "classes-");
-            javac.getTask(null, manager, errors, List.of("-d", classes.toString()), null, sources)
+        List<Path> javaFiles = new ArrayList<>();
+        for (Path folder : Effect.sourceFolders(project)) {
+            try (var files = Files.walk(folder)) {
+                files.filter(file -> file.toString().endsWith(".java")).forEach(javaFiles::add);
+            }
+        }
+        Path classes = Files.createTempDirectory(project, "classes-");
+        List<String> options = new ArrayList<>(List.of("-d", classes.toString()));
+        List<Path> descriptors = javaFiles.stream()
+                .filter(file -> file.endsWith("module-info.java"))
+                .toList();
+        if (descriptors.size() > 1) {
+            for (Path descriptor : descriptors) {
+                Matcher module = MODULE.matcher(Files.readString(descriptor));
+                assertThat(module.find())
+                        .as("the name of the module of " + descriptor)
+                        .isTrue();
+                options.add("--module-source-path");
+                options.add(module.group(1) + "=" + descriptor.getParent());
+            }
+        }
+        try (var manager = javac.getStandardFileManager(errors, null, null)) {
+            javac.getTask(null, manager, errors, options, null, manager.getJavaFileObjectsFromPaths(javaFiles))
                     .call();
         }
         return errors.getDiagnostics().stream()

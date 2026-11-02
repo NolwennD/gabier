@@ -84,7 +84,9 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   class), and shows their output, which is the evidence:
   - `ScenarioReplayTest` replays the contract scenarios of the core (`Scenarios.all()`) that the adapter implements
     against a real jdtls started on each scenario's project (written in a temporary folder, with an Eclipse `.project`
-    and `.classpath` that jdtls imports without network), and fails on any difference. The answer that is a change
+    and `.classpath` that jdtls imports without network; a scenario whose files are under several folders that each hold
+    a `src` is several projects, linked as their `module-info.java` require each other, `EclipseProject.describeProjects`),
+    and fails on any difference. The answer that is a change
     set is compared by its effect (`Effect`: the sources of the project once it is applied to a copy, equal to the ones
     the scenario's set leaves, and compiled by javac; the edits themselves are not compared), a diagnostic by its
     severity and its position (not its message), the titles of the offered actions exactly, and no request may change the

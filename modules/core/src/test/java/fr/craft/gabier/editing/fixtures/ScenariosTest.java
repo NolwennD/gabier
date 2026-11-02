@@ -105,6 +105,16 @@ class ScenariosTest {
         return files;
     }
 
+    /**
+     * The source folder of a file of a scenario, relative to the root: {@code src/main/java} or {@code src/test/java},
+     * under the folder of its project when the scenario has several.
+     */
+    private static Path sourceFolderOf(Path file) {
+        int sources = file.getName(0).toString().equals("src") ? 0 : 1;
+
+        return file.subpath(0, sources + 3);
+    }
+
     private static List<Scenario> answeredWith(Class<? extends Answer> answer) {
         return ALL.stream()
                 .filter(scenario -> answer.isInstance(scenario.answer()))
@@ -215,6 +225,7 @@ class ScenariosTest {
                         "move-several-classes-to-an-existing-package",
                         "move-a-class-to-a-new-package",
                         "move-a-test-class-to-a-new-package",
+                        "move-a-class-that-another-module-uses",
                         "move-a-class-to-the-package-it-is-in",
                         "move-a-class-to-a-package-that-has-a-file-of-its-name",
                         "move-a-file-that-is-not-a-java-source",
@@ -493,7 +504,7 @@ class ScenariosTest {
     void movesEachFileToTheFolderOfThePackageUnderItsSourceFolderAndRewritesItsPackageLine(@TempDir Path directory)
             throws IOException {
         List<Scenario> moves = answeredWith(Answer.MovedToPackage.class);
-        assertThat(moves).hasSize(4);
+        assertThat(moves).hasSize(5);
         for (Scenario scenario : moves) {
             Path root = Files.createTempDirectory(directory, "project");
             Scenario inside = scenario.inside(root);
@@ -503,7 +514,7 @@ class ScenariosTest {
             new ChangeApplier(new NioFileStore()).apply(((Answer.MovedToPackage) inside.answer()).changes());
 
             for (Path file : request.files()) {
-                Path sourceFolder = root.resolve(root.relativize(file).subpath(0, 3));
+                Path sourceFolder = root.resolve(sourceFolderOf(root.relativize(file)));
                 Path moved = sourceFolder.resolve(request.target().folder()).resolve(file.getFileName());
                 assertThat(file).as(scenario.name()).doesNotExist();
                 assertThat(Files.readString(moved))
@@ -547,12 +558,13 @@ class ScenariosTest {
 
             for (var source : filesUnder(root).entrySet()) {
                 Path relative = root.relativize(source.getKey());
-                if (!relative.toString().matches("src/(main|test)/java/.*")) {
+                if (!relative.toString().matches("(\\w+/)?src/(main|test)/java/.*")
+                        || relative.endsWith("module-info.java")) {
                     continue;
                 }
                 Path folder = relative.getParent();
                 String expected =
-                        folder.subpath(3, folder.getNameCount()).toString().replace('/', '.');
+                        sourceFolderOf(relative).relativize(folder).toString().replace('/', '.');
                 assertThat(source.getValue())
                         .as(scenario.name() + ": " + relative)
                         .startsWith("package " + expected + ";\n");
@@ -606,8 +618,8 @@ class ScenariosTest {
                     .allSatisfy(file -> {
                         assertThat(file.isAbsolute()).isFalse();
                         assertThat(file.toString())
-                                .matches(
-                                        "src/(main|test)/java/.*\\.java|src/main/resources/.*|src/main/other/.*\\.java");
+                                .matches("(\\w+/)?src/(main|test)/java/.*\\.java|src/main/resources/.*"
+                                        + "|src/main/other/.*\\.java");
                     });
             assertThat(scenario.request().file().isAbsolute())
                     .as(scenario.name())
