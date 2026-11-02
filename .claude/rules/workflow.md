@@ -115,7 +115,10 @@ again only with `--force-with-lease`, after a rebase. Code (anything but `.md`
 files) reaches `main` through a pull request: the supervisor pushes the branch of the ticket and opens it with `gh pr
 create`, merges it fast-forward on the local `main` once its check is green, and pushes `main`, which GitHub marks as the
 merge of the pull request, so the hashes the resolutions cite stay true. A commit of `.md` files only (issues, rules,
-skills, documents) is pushed to `main` directly, through the bypass of the protection that the owner holds. The very small
+skills, documents) is pushed to `main` directly, through the bypass of the protection that the owner holds. The rulesets
+of GitHub are `main` (a pull request, the check `bin-ci`, a linear history, no force-push or deletion) and `release tags`
+(no `v*` tag is created, moved or deleted but by the owner, whose push of a tag publishes a release, `release.yml`); both
+let the admin role bypass them. A tag is pushed by the supervisor only, with the user's go. The very small
 technical tasks of the supervisor that touch code go through a pull request of their own too. The check of the pull
 requests is `bin-ci`, the full `bin/ci --all` on GitHub (`.github/workflows/ci.yml`), next to the subagent's `bin/ci`
 summary.
