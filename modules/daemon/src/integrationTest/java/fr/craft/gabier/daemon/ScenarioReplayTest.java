@@ -271,7 +271,7 @@ class ScenarioReplayTest {
                         .isEqualTo(referenced.locations());
             }
             case Answer.Organized organized -> {
-                var answer = (Optional<?>) ask(server, request);
+                var answer = (Optional<?>) askWithoutWaitingForDiagnostics(server, scenario, differences);
                 System.out.println(scenario.name() + ": jdtls answered " + answer);
                 differences
                         .assertThat(answer)
@@ -282,7 +282,7 @@ class ScenarioReplayTest {
                 }
             }
             case Answer.AlreadyOrganized _ -> {
-                var answer = (Optional<?>) ask(server, request);
+                var answer = (Optional<?>) askWithoutWaitingForDiagnostics(server, scenario, differences);
                 System.out.println(scenario.name() + ": jdtls answered " + answer);
                 differences
                         .assertThat(answer)
@@ -331,6 +331,29 @@ class ScenarioReplayTest {
                 }
             }
         }
+    }
+
+    /**
+     * The organization of the imports of a file whose answer loses no code: jdtls answers at once, and the adapter does
+     * not wait for the diagnostics of the file ({@link JdtlsLanguageServer#QUIET} of silence from jdtls), which it asks
+     * only for an import that is removed and still used. The answer of an unused import that is removed must not take
+     * that long.
+     */
+    private static Object askWithoutWaitingForDiagnostics(
+            JdtlsLanguageServer server, Scenario scenario, SoftAssertions differences) {
+        // The first request on a jdtls that has just started is slow for reasons of its own: it is asked twice, and
+        // the second one is timed.
+        ask(server, scenario.request());
+        long start = System.nanoTime();
+        Object answer = ask(server, scenario.request());
+        Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
+        System.out.println(scenario.name() + ": jdtls answered in " + elapsed.toMillis() + " ms");
+        differences
+                .assertThat(elapsed)
+                .as("%s: the time to organize, with no diagnostics to wait for", scenario.name())
+                .isLessThan(JdtlsLanguageServer.QUIET);
+
+        return answer;
     }
 
     /** The diagnostics, the change set, or the change set that may be none, that jdtls answers to the request. */

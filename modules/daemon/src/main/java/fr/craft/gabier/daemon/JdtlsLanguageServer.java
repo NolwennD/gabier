@@ -41,6 +41,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionContext;
 import org.eclipse.lsp4j.CodeActionKind;
@@ -1002,8 +1004,10 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * <p>jdtls does not always judge the imports, and gabier does not write what jdtls could not judge. A type that
      * several packages declare and that the file uses without importing it is left out by jdtls, which asks the client
      * to choose ({@code java.action.organizeImports.chooseImports}, enabled by {@link JdtlsCapabilities#extended()}):
-     * the request is refused with the candidates. An import that jdtls removes and reports an error on (it cannot
-     * resolve it) is refused too, with the import.
+     * the request is refused with the candidates. An import that jdtls removes, that the file still uses and that
+     * jdtls reports an error on (it cannot resolve it) is refused too, with the import. The edit is judged before
+     * anything is written, and the diagnostics are asked only when a used import is removed: an unused import is
+     * removed at once.
      *
      * @throws LanguageServerException if jdtls is not ready, the file is not in its project, a type has several
      *     candidates or an import cannot be resolved
@@ -1119,33 +1123,51 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     /**
      * jdtls deletes the imports it cannot resolve along with the ones nothing uses: for a file whose imports it does not
      * see (a source set it has no classpath for: "The package p is not accessible") that is every import, used or not.
-     * An import that the edit removes and that jdtls reports an error on is one it cannot judge: the request is refused,
-     * names it, and nothing is written. A resolved import that nothing uses has a warning, not an error. The
-     * diagnostics are asked only when the edit removes an import, because they cost a wait for jdtls to be quiet.
+     * An import that the edit removes, that the file still uses and that jdtls reports an error on is one it cannot
+     * judge: the request is refused, names it, and nothing is written. Only then can code that is used be lost, so
+     * the diagnostics, which cost a wait for jdtls to be quiet, are asked only for the removed imports whose simple name
+     * still appears in the file outside the import lines ({@link #stillUsed}); an import nothing uses is removed
+     * as the edit says, even when it cannot be resolved (the class was deleted).
      */
     private void refuseTheImportsJdtlsCannotResolve(Path path, String original, List<FileChange> changes) {
         List<String> before = original.lines().toList();
         String after = SourceText.edited(path, original, editsOnTheFile(path, changes));
         List<String> kept = after.lines().toList();
-        Map<Integer, String> removed = new LinkedHashMap<>();
+        String code =
+                before.stream().filter(line -> !line.startsWith("import ")).collect(Collectors.joining("\n"));
+        Map<Integer, String> atRisk = new LinkedHashMap<>();
         for (int line = 0; line < before.size(); line++) {
             String text = before.get(line);
-            if (text.startsWith("import ") && !kept.contains(text)) {
-                removed.put(line, importedName(text));
+            if (text.startsWith("import ") && !kept.contains(text) && stillUsed(importedName(text), code)) {
+                atRisk.put(line, importedName(text));
             }
         }
-        if (removed.isEmpty()) {
+        if (atRisk.isEmpty()) {
             return;
         }
         List<String> unresolved = diagnostics(path).stream()
                 .filter(found -> found.severity() == Severity.ERROR)
-                .map(found -> removed.get(found.position().line()))
+                .map(found -> atRisk.get(found.position().line()))
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
         if (!unresolved.isEmpty()) {
             throw LanguageServerException.unresolvedImports(path, unresolved);
         }
+    }
+
+    /**
+     * Whether the simple name of an imported name ({@code Set} of {@code java.util.Set}, {@code entry} of {@code
+     * java.util.Map.entry}) is a word of the code. A star import has no name to look for, so it counts as used: what it
+     * brought in cannot be told.
+     */
+    private static boolean stillUsed(String imported, String code) {
+        String name = imported.substring(imported.lastIndexOf('.') + 1);
+
+        return name.equals("*")
+                || Pattern.compile("(?<![\\w$])" + Pattern.quote(name) + "(?![\\w$])")
+                        .matcher(code)
+                        .find();
     }
 
     /** {@code import static a.B.c;} is {@code a.B.c}. */

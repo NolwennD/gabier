@@ -45,11 +45,21 @@ is written:
   answers the command that nothing is chosen, and refuses with `language-server-ambiguous-imports`: the parameter
   `candidates` lists the qualified names, those of one name together and in order. Choose, add the import by hand,
   then organize.
-- An import that jdtls would delete and reports an error on, such as a class of a source set it has no classpath for
-  (`The package p is not accessible` on the import): jdtls answers an edit that deletes the used imports along with
-  the unused ones. The refusal is `language-server-unresolved-imports`, with the parameter `imports` naming them. An
-  import that is only unused has a warning, not an error, and is removed as before. The file is not given to jdtls to
-  be judged unless the edit removes an import: only then does the request wait for the diagnostics of the file.
+- An import that jdtls would delete, that the file still uses and that jdtls reports an error on, such as a package of
+  a module the file cannot read (`The package java.sql is not accessible` on `import java.sql.*;`, or a class of a source
+  set it has no classpath for): jdtls answers an edit that deletes the imports the file uses along with the unused ones.
+  The refusal is `language-server-unresolved-imports`, with the parameter `imports` naming them, and the file is not
+  touched.
+
+**What the command waits for.** jdtls answers the action at once, and gabier decides from the edit, before writing,
+whether doing it loses code. It looks at the imports the edit removes: when none of them is a name the file still uses
+(its simple name, `Set` of `java.util.Set`, `entry` of `java.util.Map.entry`, as a word of the file outside the import
+lines), nothing that is used can be lost, and the edit is written as it is, with no wait. That is the common case, an
+unused import, and it includes an import of a class that does not exist (it was deleted): it is removed. Only when a
+removed import is still used does gabier ask the diagnostics of the file, which cost a wait for jdtls to be quiet (about
+five seconds), and refuse if jdtls reports an error on that import. A removed star import (`java.sql.*`) has no name to
+look for, so it counts as used: the diagnostics are asked, and it is refused when jdtls reports an error on it. An import
+of a class that does not exist and that the file uses is kept by jdtls, so it is not a case of the command.
 
 The daemon method is `organize-imports` (parameters `file`,
 `dryRun`).
@@ -61,7 +71,7 @@ command can answer, and the help of the command (`gabier help organize-imports`)
 
 - `language-server-ambiguous-imports`: several packages declare a type the file uses without importing it; the
   candidates are in the problem.
-- `language-server-unresolved-imports`: jdtls would delete imports it reports an error on.
+- `language-server-unresolved-imports`: jdtls would delete imports that the file uses and it reports an error on.
 - `language-server-file-outside-project`: the file is not in the project the daemon serves.
 - `language-server-file-missing`: the path is under the project and no file is there.
 - `language-server-not-a-file`: the path is a folder.

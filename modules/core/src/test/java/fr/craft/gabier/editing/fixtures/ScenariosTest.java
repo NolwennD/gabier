@@ -134,6 +134,8 @@ class ScenariosTest {
                         "organize-imports-of-a-file-in-order",
                         "organize-imports-keeps-explicit-imports",
                         "organize-imports-of-a-type-two-packages-declare",
+                        "organize-imports-removes-an-unused-import-of-a-class-that-does-not-exist",
+                        "organize-imports-refuses-a-used-import-jdtls-cannot-resolve",
                         "organize-imports-while-the-server-imports",
                         "organize-imports-of-a-file-outside-the-project",
                         "extract-a-variable",
@@ -274,7 +276,8 @@ class ScenariosTest {
                 .containsExactlyInAnyOrder(
                         LanguageServerErrorKey.NOT_READY,
                         LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
-                        LanguageServerErrorKey.AMBIGUOUS_IMPORTS);
+                        LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
+                        LanguageServerErrorKey.UNRESOLVED_IMPORTS);
     }
 
     @Test

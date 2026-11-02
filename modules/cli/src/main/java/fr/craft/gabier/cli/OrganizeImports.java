@@ -18,7 +18,8 @@ final class OrganizeImports implements Capability {
             .asksTheDaemon(
                     "language-server-ambiguous-imports: several packages declare a type the file uses without"
                             + " importing it; the candidates are in the problem",
-                    "language-server-unresolved-imports: jdtls would delete imports it reports an error on",
+                    "language-server-unresolved-imports: jdtls would delete imports that the file uses and it reports"
+                            + " an error on",
                     Refusal.FILE_OUTSIDE_PROJECT,
                     Refusal.FILE_MISSING,
                     Refusal.NOT_A_FILE,

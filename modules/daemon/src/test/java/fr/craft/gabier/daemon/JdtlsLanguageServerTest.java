@@ -1073,9 +1073,11 @@ class JdtlsLanguageServerTest {
 
                 class Greeter {
                     List<String> names;
+                    Set<String> seen;
                 }
                 """);
-            // An import that jdtls removes is judged by the diagnostics of the file: none, unless a test says.
+            // An import that jdtls removes and the file still uses is judged by the diagnostics of the file: none,
+            // unless a test says.
             fake.publishesOnOpen(greeter, List.of());
         }
 
@@ -1225,13 +1227,13 @@ class JdtlsLanguageServerTest {
             fake.codeActionAnswers(offers(resolvedAction(past)));
 
             try (var server = started()) {
-                // The text ends with a newline: its last line, the empty one, is line 8.
+                // The text ends with a newline: its last line, the empty one, is line 9.
                 assertThat(server.organizeImports(greeter))
                         .contains(new ChangeSet(List.of(new FileChange.EditFile(
                                 greeter,
                                 List.of(new fr.craft.gabier.editing.domain.TextEdit(
                                         new fr.craft.gabier.editing.domain.Range(
-                                                new Position(2, 0), new Position(8, 0)),
+                                                new Position(2, 0), new Position(9, 0)),
                                         ""))))));
             }
         }
@@ -1276,6 +1278,110 @@ class JdtlsLanguageServerTest {
         }
 
         @Test
+        void doesNotWaitForTheDiagnosticsWhenTheImportItRemovesIsNotUsed() throws Exception {
+            Path unused = write("src/main/java/demo/Unused.java", """
+                package demo;
+
+                import java.util.Set;
+                import java.util.List;
+
+                class Unused {
+                    List<String> names;
+                    String label = "Setter";
+                }
+                """);
+            var action = lazyAction();
+            action.setEdit(new WorkspaceEdit(Map.of(unused.toUri().toString(), List.of(removeSet()))));
+            // No diagnostics are scripted: a request for them would wait, and fail on the missing answer.
+            fake.codeActionAnswers(offers(action));
+
+            try (var server = started()) {
+                assertThat(server.organizeImports(unused)).isPresent();
+
+                assertThat(fake.opened()).isEmpty();
+            }
+        }
+
+        @Test
+        void organizesAnUnusedImportOfAClassThatDoesNotExist() throws Exception {
+            Path gone = write("src/main/java/demo/Keeper.java", """
+                package demo;
+
+                import demo.Gone;
+                import java.util.List;
+
+                class Keeper {
+                    List<String> names;
+                }
+                """);
+            var action = lazyAction();
+            action.setEdit(new WorkspaceEdit(Map.of(gone.toUri().toString(), List.of(removeSet()))));
+            fake.codeActionAnswers(offers(action)).publishesOnOpen(gone, List.of(problem(DiagnosticSeverity.Error, 2)));
+
+            try (var server = started()) {
+                assertThat(server.organizeImports(gone)).isPresent();
+
+                assertThat(fake.opened()).isEmpty();
+            }
+        }
+
+        @Test
+        void asksTheDiagnosticsWhenTheNameOfARemovedStarImportCannotBeTold() throws Exception {
+            Path star = write("src/main/java/demo/Star.java", """
+                package demo;
+
+                import java.util.*;
+                import java.util.List;
+
+                class Star {
+                    List<String> names;
+                }
+                """);
+            var action = lazyAction();
+            action.setEdit(new WorkspaceEdit(Map.of(star.toUri().toString(), List.of(removeSet()))));
+            fake.codeActionAnswers(offers(action)).publishesOnOpen(star, List.of(problem(DiagnosticSeverity.Error, 2)));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.organizeImports(star))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.parameters()).containsEntry("imports", "java.util.*"));
+            }
+        }
+
+        @Test
+        void ignoresTheErrorOnARemovedImportTheFileDoesNotUseWhenAnotherOneIsUsed() throws Exception {
+            Path mixed = write("src/main/java/demo/Mixed.java", """
+                package demo;
+
+                import java.util.Set;
+                import java.util.Map;
+                import java.util.List;
+
+                class Mixed {
+                    List<String> names;
+                    Set<String> seen;
+                }
+                """);
+            var action = lazyAction();
+            action.setEdit(new WorkspaceEdit(Map.of(
+                    mixed.toUri().toString(),
+                    List.of(new TextEdit(
+                            new Range(new org.eclipse.lsp4j.Position(2, 0), new org.eclipse.lsp4j.Position(4, 0)),
+                            "")))));
+            fake.codeActionAnswers(offers(action))
+                    .publishesOnOpen(
+                            mixed, List.of(problem(DiagnosticSeverity.Error, 2), problem(DiagnosticSeverity.Error, 3)));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.organizeImports(mixed))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.parameters()).containsEntry("imports", "java.util.Set"));
+            }
+        }
+
+        @Test
         void asksTheDiagnosticsOfTheFileWhenTheEditRemovesAnImportAndKeepsTheEditWithoutError() throws Exception {
             fake.codeActionAnswers(offers(resolvedAction(removeSet())))
                     .publishesOnOpen(greeter, List.of(problem(DiagnosticSeverity.Warning, 2)));
@@ -1315,6 +1421,8 @@ class JdtlsLanguageServerTest {
 
                 class Statics {
                     List<String> names;
+                    Object pair = entry("a", "b");
+                    Set<String> seen;
                 }
                 """);
             var action = lazyAction();

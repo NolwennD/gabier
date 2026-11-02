@@ -94,7 +94,9 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
     change, and a copy of a main source and of a test source with an unused import added must get the edit that removes
     it. The `fakeServed` source set, whose fixtures jdtls cannot see, is the file of the refusal: organizing its imports
     is refused as `language-server-unresolved-imports`, naming the three imports jdtls would delete, and the file is not
-    touched.
+    touched. (The scenarios of the imports, replayed by `ScenarioReplayTest`, say the same on a small project, and the
+    replay checks that an organization that loses no code, asked a second time, takes less than the five seconds of
+    the diagnostics.)
   - `ScenarioReplayTest` replays the contract scenarios of the core (`Scenarios.all()`) that the adapter implements
     against a real jdtls started on each scenario's project (written in a temporary folder, with an Eclipse `.project`
     and `.classpath` that jdtls imports without network), and fails on any difference. The answer of a rename is

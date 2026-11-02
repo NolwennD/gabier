@@ -130,9 +130,12 @@ import java.util.stream.Stream;
  *       unless the client declares that it can choose ({@code advancedOrganizeImportsSupport}): jdtls then sends {@code
  *       java.action.organizeImports.chooseImports} with the candidates, which the adapter keeps and refuses with
  *       ({@link #ORGANIZE_IMPORTS_OF_A_TYPE_TWO_PACKAGES_DECLARE}). The imports of a file that jdtls cannot resolve
- *       ("The package p is not accessible") are deleted by its edit; the adapter refuses them, which the catalogue
- *       cannot show (a package that is not accessible needs a class path that a scenario project does not have) and
- *       {@code JdtlsProbeTest} replays on the source set {@code fakeServed} of the checkout.
+ *       ("The package p is not accessible") are deleted by its edit, with the ones nothing uses; one that the file
+ *       still uses is refused by the adapter, which names it ({@link
+ *       #ORGANIZE_IMPORTS_REFUSES_A_USED_IMPORT_JDTLS_CANNOT_RESOLVE}). An import of a class that does not exist is
+ *       kept by jdtls while the file uses it, and removed once nothing does ({@link
+ *       #ORGANIZE_IMPORTS_REMOVES_AN_UNUSED_IMPORT_OF_A_CLASS_THAT_DOES_NOT_EXIST}); the adapter does not wait for
+ *       diagnostics to write that removal.
  *   <li>the clean-ups of a file ({@link CleanUpScenarios}, {@code gabier cleanup}): {@code java/cleanup} runs the
  *       identifiers of the setting {@code java.cleanup.actions}, which the adapter sets before the request; jdtls
  *       answers one edit of the whole text, or none.
@@ -176,6 +179,9 @@ public final class Scenarios {
     private static final Path TIDY = Path.of("src/main/java/demo/Tidy.java");
     private static final Path WIDE = Path.of("src/main/java/demo/Wide.java");
     private static final Path TWICE = Path.of("src/main/java/demo/Twice.java");
+    private static final Path STALE = Path.of("src/main/java/demo/Stale.java");
+    private static final Path LOST = Path.of("src/main/java/demo/Lost.java");
+    private static final Path MODULE_INFO = Path.of("src/main/java/module-info.java");
     private static final Path TOTALS = Path.of("src/main/java/demo/Totals.java");
     private static final Path SHAPES = Path.of("src/main/java/demo/Shapes.java");
     private static final Path DRAWING = Path.of("src/main/java/demo/app/Drawing.java");
@@ -531,8 +537,48 @@ public final class Scenarios {
         }
         """;
 
-    /** The one file whose import is ambiguous: the project does not compile as it is, on purpose. */
+    /** {@code demo.gone.Gone} was deleted: the import is unused, and jdtls cannot resolve it. */
+    private static final String STALE_SOURCE = """
+        package demo;
+
+        import demo.gone.Gone;
+        import java.util.List;
+
+        public class Stale {
+            List<String> names;
+        }
+        """;
+
+    /**
+     * The module {@code demo} reads only {@code java.base}: {@code java.sql} is not accessible to it, and {@code Lost}
+     * imports {@code java.sql.*} and uses {@code Date}.
+     */
+    private static final String LOST_SOURCE = """
+        package demo;
+
+        import java.sql.*;
+        import java.util.List;
+
+        public class Lost {
+            List<String> names;
+            Date when;
+        }
+        """;
+
+    private static final String MODULE_INFO_SOURCE = """
+        module demo {
+        }
+        """;
+
+    /** The project of the scenario of an unused import of a deleted class: it compiles once the import is removed. */
+    private static final Map<Path, String> STALE_IMPORT_PROJECT = Map.of(STALE, STALE_SOURCE);
+
+    /** {@code Twice} uses a type that two packages declare: the project does not compile as it is, on purpose. */
     private static final Map<Path, String> AMBIGUOUS_IMPORTS_PROJECT = Map.of(TWICE, TWICE_SOURCE);
+
+    /** The module that cannot read the package {@code Lost} imports: the project does not compile, on purpose. */
+    private static final Map<Path, String> NOT_ACCESSIBLE_IMPORT_PROJECT =
+            Map.of(MODULE_INFO, MODULE_INFO_SOURCE, LOST, LOST_SOURCE);
 
     /** The project after {@link #RENAME_TYPE}: the type is {@code Welcomer}, in its own file, and {@code Main} uses it. */
     private static final Map<Path, String> RENAMED_PROJECT = Map.of(
@@ -723,6 +769,30 @@ public final class Scenarios {
                             "java.util.Date",
                             "sun.util.calendar.BaseCalendar.Date",
                             "sun.util.calendar.LocalGregorianCalendar.Date")));
+
+    /**
+     * {@code Stale} imports {@code demo.gone.Gone}, a class that does not exist, and nothing uses it: the import is
+     * removed, as jdtls's edit says, and the file is not given to jdtls to be judged (nothing that is used can be lost).
+     */
+    public static final Scenario ORGANIZE_IMPORTS_REMOVES_AN_UNUSED_IMPORT_OF_A_CLASS_THAT_DOES_NOT_EXIST =
+            new Scenario(
+                    "organize-imports-removes-an-unused-import-of-a-class-that-does-not-exist",
+                    STALE_IMPORT_PROJECT,
+                    new Request.OrganizeImports(STALE),
+                    new Answer.Organized(new ChangeSet(List.of(edits(STALE, replace(2, 0, 3, 0, ""))))));
+
+    /**
+     * {@code Lost} imports {@code java.sql.*}, which the module {@code demo} cannot read ("The package java.sql is not
+     * accessible"), and uses {@code Date}: jdtls deletes the import with the ones nothing uses, which would leave code
+     * that does not compile. The adapter refuses and names it. (jdtls keeps the import of a class that does not exist
+     * while the file uses it, and for a single-type import of a module it cannot read it says "The type ... is not
+     * accessible" and keeps it: only the package it reports as not accessible is deleted.)
+     */
+    public static final Scenario ORGANIZE_IMPORTS_REFUSES_A_USED_IMPORT_JDTLS_CANNOT_RESOLVE = new Scenario(
+            "organize-imports-refuses-a-used-import-jdtls-cannot-resolve",
+            NOT_ACCESSIBLE_IMPORT_PROJECT,
+            new Request.OrganizeImports(LOST),
+            new Answer.Refused(LanguageServerErrorKey.UNRESOLVED_IMPORTS, List.of("java.sql.*")));
 
     /** The project is still being imported: the server cannot say what organizing the imports changes. */
     public static final Scenario ORGANIZE_IMPORTS_WHILE_THE_SERVER_IMPORTS = new Scenario(
@@ -1589,6 +1659,8 @@ public final class Scenarios {
                 ORGANIZE_IMPORTS_IN_ORDER,
                 ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS,
                 ORGANIZE_IMPORTS_OF_A_TYPE_TWO_PACKAGES_DECLARE,
+                ORGANIZE_IMPORTS_REMOVES_AN_UNUSED_IMPORT_OF_A_CLASS_THAT_DOES_NOT_EXIST,
+                ORGANIZE_IMPORTS_REFUSES_A_USED_IMPORT_JDTLS_CANNOT_RESOLVE,
                 ORGANIZE_IMPORTS_WHILE_THE_SERVER_IMPORTS,
                 ORGANIZE_IMPORTS_OUTSIDE_THE_PROJECT,
                 EXTRACT_VARIABLE,
