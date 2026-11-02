@@ -514,6 +514,29 @@ class ScenariosTest {
     }
 
     @Test
+    void listsTheChangesOfAMoveToAPackageAsTheEditsOfTheFilesByPathThenTheMovesByTheirOldPath() {
+        for (Scenario scenario : answeredWith(Answer.MovedToPackage.class)) {
+            List<FileChange> changes =
+                    ((Answer.MovedToPackage) scenario.answer()).changes().changes();
+
+            List<Path> edited = changes.stream()
+                    .filter(FileChange.EditFile.class::isInstance)
+                    .map(change -> ((FileChange.EditFile) change).file())
+                    .toList();
+            List<Path> moved = changes.stream()
+                    .filter(FileChange.RenameFile.class::isInstance)
+                    .map(change -> ((FileChange.RenameFile) change).from())
+                    .toList();
+            assertThat(changes.stream().limit(edited.size()))
+                    .as(scenario.name() + ": the edits come first")
+                    .allMatch(FileChange.EditFile.class::isInstance);
+            assertThat(edited).as(scenario.name() + ": the edits by path").isSorted();
+            assertThat(moved).as(scenario.name() + ": the moves by path").isSorted();
+            assertThat(edited.size() + moved.size()).isEqualTo(changes.size());
+        }
+    }
+
+    @Test
     void leavesEveryFileOfAMovePackageLineMatchingItsFolder(@TempDir Path directory) throws IOException {
         for (Scenario scenario : answeredWith(Answer.MovedToPackage.class)) {
             Path root = Files.createTempDirectory(directory, "project");

@@ -8,6 +8,7 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -79,6 +80,37 @@ final class WorkspaceEdits {
             }
         }
         return changes;
+    }
+
+    /**
+     * The changes of a move in a stable order, whatever the order jdtls answered them in (it varies from one run to the
+     * next): first the edits (and the creations) of every file by path, then the moves of files by the path they leave,
+     * then the removals by path. The edits of a file come before its move, which is what the answer of {@code java/move}
+     * does (its edits are under the old path), so applying the set in order works; the edits of one path keep the order
+     * of the answer, since each is applied to the result of the previous ones.
+     */
+    static List<FileChange> inOrderOfAMove(List<FileChange> changes) {
+        return changes.stream()
+                .sorted(Comparator.comparingInt(WorkspaceEdits::rankOfAMove).thenComparing(WorkspaceEdits::pathOfAMove))
+                .toList();
+    }
+
+    private static int rankOfAMove(FileChange change) {
+        return switch (change) {
+            case FileChange.CreateFile _ -> 0;
+            case FileChange.EditFile _ -> 0;
+            case FileChange.RenameFile _ -> 1;
+            case FileChange.DeleteFile _ -> 2;
+        };
+    }
+
+    private static Path pathOfAMove(FileChange change) {
+        return switch (change) {
+            case FileChange.CreateFile create -> create.file();
+            case FileChange.EditFile edit -> edit.file();
+            case FileChange.RenameFile rename -> rename.from();
+            case FileChange.DeleteFile delete -> delete.file();
+        };
     }
 
     private static Optional<FileChange> editsOf(

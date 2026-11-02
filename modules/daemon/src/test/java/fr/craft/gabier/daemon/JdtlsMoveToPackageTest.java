@@ -178,6 +178,55 @@ class JdtlsMoveToPackageTest {
     }
 
     @Test
+    void answersTheEditsOfEveryFileByPathThenTheMovesByPathWhateverTheOrderOfJdtls() throws Exception {
+        Path billing = main.resolve("demo/billing");
+        String firstEdit = "first";
+        String secondEdit = "second";
+        List<Either<TextDocumentEdit, ResourceOperation>> shuffled = List.of(
+                Either.forRight(new RenameFile(
+                        payment.toUri().toString(),
+                        billing.resolve("Payment.java").toUri().toString())),
+                editOf(invoiceTest, firstEdit),
+                editOf(payment, firstEdit),
+                Either.forRight(new RenameFile(
+                        invoice.toUri().toString(),
+                        billing.resolve("Invoice.java").toUri().toString())),
+                editOf(invoice, firstEdit),
+                editOf(invoice, secondEdit));
+        fake.moveAnswers(CompletableFuture.completedFuture(
+                new JdtlsServer.RefactorEdit(new WorkspaceEdit(shuffled), null, null)));
+
+        try (var server = started()) {
+            ChangeSet changes = server.moveToPackage(List.of(invoice, payment), BILLING);
+
+            assertThat(changes.changes())
+                    .containsExactly(
+                            edited(invoice, firstEdit),
+                            edited(invoice, secondEdit),
+                            edited(payment, firstEdit),
+                            edited(invoiceTest, firstEdit),
+                            new FileChange.RenameFile(invoice, billing.resolve("Invoice.java")),
+                            new FileChange.RenameFile(payment, billing.resolve("Payment.java")));
+        }
+    }
+
+    private static Either<TextDocumentEdit, ResourceOperation> editOf(Path file, String text) {
+        return Either.forLeft(new TextDocumentEdit(
+                new VersionedTextDocumentIdentifier(file.toUri().toString(), null),
+                List.of(Either.forLeft(new TextEdit(new Range(at(0, 8), at(0, 12)), text)))));
+    }
+
+    private static FileChange edited(Path file, String text) {
+        return new FileChange.EditFile(
+                file,
+                List.of(new fr.craft.gabier.editing.domain.TextEdit(
+                        new fr.craft.gabier.editing.domain.Range(
+                                new fr.craft.gabier.editing.domain.Position(0, 8),
+                                new fr.craft.gabier.editing.domain.Position(0, 12)),
+                        text)));
+    }
+
+    @Test
     void tellsJdtlsAboutTheChangesOnDiskBeforeAsking() throws Exception {
         fake.moveAnswers(moves(main.resolve("demo/billing"), invoice));
         fake.registersWatchersFor("**/*.java");

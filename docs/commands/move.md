@@ -16,9 +16,9 @@ run; with `--json`, the `ChangedFiles` object of the other commands that change 
 $ gabier move --dry-run src/main/java/demo/Invoice.java demo.billing
 dry run, nothing written
 modified /work/demo/src/main/java/demo/Invoice.java
-modified /work/demo/src/test/java/demo/InvoiceTest.java
 modified /work/demo/src/main/java/demo/Receipt.java
 modified /work/demo/src/main/java/demo/app/Shop.java
+modified /work/demo/src/test/java/demo/InvoiceTest.java
 renamed /work/demo/src/main/java/demo/Invoice.java -> /work/demo/src/main/java/demo/billing/Invoice.java
 
 --- /work/demo/src/main/java/demo/Invoice.java
@@ -42,8 +42,11 @@ files named are moved. Other types of a moved file, and the package-private clas
 The command asks jdtls for `java/move` with the move kind `moveResource` (`MoveHandler.moveCU` in the jdtls source): the
 files, the folder of the package as the destination, and `updateReferences` true. The answer holds the edits and, for
 each file, a `RenameFile` (the client declares the resource operations `create`, `rename` and `delete`, `JdtlsCapabilities`).
-The edits come before the rename of their file, so applying the set in order works. No setting of `JdtlsSettings` is
-involved.
+The edits come before the rename of their file, so applying the set in order works. jdtls does not answer in the same
+order from one run to the next, so the adapter orders the answer: the edits of every file by path (the edits of one file
+in the order of jdtls, each applies to the result of the previous ones), then the moves of the files by the path they
+leave. The files and the diff of the command, in text and with `--json`, follow that order: the same move gives the same
+answer every time. No setting of `JdtlsSettings` is involved.
 
 **What jdtls does not do, gabier does.** jdtls answers **nothing**, with no word, for a package whose folder it does not
 know, skips a file it does not know in the middle of a list, moves a file onto a file of its name, and answers a rename

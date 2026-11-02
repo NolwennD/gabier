@@ -239,12 +239,12 @@ class ScenarioReplayTest {
                 var answer = (ChangeSet) ask(server, request);
                 System.out.println(scenario.name() + ": jdtls answered " + answer);
                 // jdtls does not answer the files of a move in a stable order (seen to change from one run to the next,
-                // the temporary folder differing): the changes must be the same, not their order. The order that
-                // matters, the edits of a file before its rename, is proved by applying the set in compile().
+                // the temporary folder differing): the order of the answer is the adapter's, the edits of the files by
+                // path, then the moves by path, and it is compared as it is.
                 differences
-                        .assertThat(answer.changes())
-                        .as("%s: the changes jdtls answers", scenario.name())
-                        .containsExactlyInAnyOrderElementsOf(moved.changes().changes());
+                        .assertThat(answer)
+                        .as("%s: the change set jdtls answers", scenario.name())
+                        .isEqualTo(moved.changes());
                 compile(scenario, root, answer, differences);
             }
             case Answer.Inlined inlined -> {

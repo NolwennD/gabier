@@ -61,7 +61,9 @@ final class Move implements Capability {
         var operands = arguments.atLeast(2);
         int last = operands.operands().size() - 1;
         List<Path> files = IntStream.range(0, last).mapToObj(operands::file).toList();
-        if (files.stream().anyMatch(file -> file.toString().lines().count() > 1)) {
+        if (files.stream()
+                .anyMatch(file ->
+                        file.toString().contains("\n") || file.toString().contains("\r"))) {
             throw UsageException.unsupportedArguments(arguments.all());
         }
         ChangedFilesReply.ask(

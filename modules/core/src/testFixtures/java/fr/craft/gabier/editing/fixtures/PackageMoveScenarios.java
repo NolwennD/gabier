@@ -156,10 +156,10 @@ public final class PackageMoveScenarios {
             new Request.MoveToPackage(List.of(INVOICE), BILLING),
             new Answer.MovedToPackage(new ChangeSet(List.of(
                     edits(INVOICE, replace(0, 13, 2, 0, "\n\nimport demo.Customer;\n\n")),
-                    edits(INVOICE_TEST, replace(0, 13, 2, 0, "\n\nimport demo.billing.Invoice;\n\n")),
+                    edits(INVOICE, replace(0, 8, 0, 12, "demo.billing")),
                     edits(RECEIPT, replace(0, 13, 2, 0, "\n\nimport demo.billing.Invoice;\n\n")),
                     edits(SHOP, replace(2, 0, 2, 20, "import demo.billing.Invoice;")),
-                    edits(INVOICE, replace(0, 8, 0, 12, "demo.billing")),
+                    edits(INVOICE_TEST, replace(0, 13, 2, 0, "\n\nimport demo.billing.Invoice;\n\n")),
                     new RenameFile(INVOICE, BILLING_INVOICE)))));
 
     /** {@code Invoice} and {@code Payment} to {@code demo.billing}: two files, one change set. */
@@ -169,13 +169,13 @@ public final class PackageMoveScenarios {
             new Request.MoveToPackage(List.of(INVOICE, PAYMENT), BILLING),
             new Answer.MovedToPackage(new ChangeSet(List.of(
                     edits(INVOICE, replace(0, 13, 2, 0, "\n\nimport demo.Customer;\n\n")),
-                    edits(INVOICE_TEST, replace(0, 13, 2, 0, "\n\nimport demo.billing.Invoice;\n\n")),
+                    edits(INVOICE, replace(0, 8, 0, 12, "demo.billing")),
                     edits(PAYMENT, replace(0, 13, 2, 0, "\n\nimport demo.Receipt;\n\n")),
+                    edits(PAYMENT, replace(0, 8, 0, 12, "demo.billing")),
                     edits(RECEIPT, replace(0, 13, 2, 0, "\n\nimport demo.billing.Invoice;\n\n")),
                     edits(SHOP, replace(2, 0, 2, 20, "import demo.billing.Invoice;")),
-                    edits(INVOICE, replace(0, 8, 0, 12, "demo.billing")),
+                    edits(INVOICE_TEST, replace(0, 13, 2, 0, "\n\nimport demo.billing.Invoice;\n\n")),
                     new RenameFile(INVOICE, BILLING_INVOICE),
-                    edits(PAYMENT, replace(0, 8, 0, 12, "demo.billing")),
                     new RenameFile(PAYMENT, BILLING_PAYMENT)))));
 
     /** {@code Invoice} to {@code demo.archive}, which has no folder: the change set moves it into one. */
@@ -185,10 +185,10 @@ public final class PackageMoveScenarios {
             new Request.MoveToPackage(List.of(INVOICE), ARCHIVE),
             new Answer.MovedToPackage(new ChangeSet(List.of(
                     edits(INVOICE, replace(0, 13, 2, 0, "\n\nimport demo.Customer;\n\n")),
-                    edits(INVOICE_TEST, replace(0, 13, 2, 0, "\n\nimport demo.archive.Invoice;\n\n")),
+                    edits(INVOICE, replace(0, 8, 0, 12, "demo.archive")),
                     edits(RECEIPT, replace(0, 13, 2, 0, "\n\nimport demo.archive.Invoice;\n\n")),
                     edits(SHOP, replace(2, 0, 2, 20, "import demo.archive.Invoice;")),
-                    edits(INVOICE, replace(0, 8, 0, 12, "demo.archive")),
+                    edits(INVOICE_TEST, replace(0, 13, 2, 0, "\n\nimport demo.archive.Invoice;\n\n")),
                     new RenameFile(INVOICE, ARCHIVE_INVOICE)))));
 
     /**

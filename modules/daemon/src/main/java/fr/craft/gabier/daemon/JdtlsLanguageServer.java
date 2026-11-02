@@ -729,7 +729,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         if (edit == null) {
             throw nothingToMove(paths, target);
         }
-        List<FileChange> changes = WorkspaceEdits.of(edit, JdtlsLanguageServer::textOnDisk);
+        List<FileChange> changes =
+                WorkspaceEdits.inOrderOfAMove(WorkspaceEdits.of(edit, JdtlsLanguageServer::textOnDisk));
         if (changes.isEmpty()) {
             throw nothingToMove(paths, target);
         }

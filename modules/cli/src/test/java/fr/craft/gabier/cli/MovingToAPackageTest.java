@@ -48,7 +48,7 @@ class MovingToAPackageTest extends CliTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"A\nB.java", "A\rB.java"})
+    @ValueSource(strings = {"A\nB.java", "A\rB.java", "A.java\n", "\nA.java", "A.java\r"})
     void refusesAFileNameWithALineBreakAsAUsageErrorThatShowsItAsAnEscapeAndAsksNothing(String file)
             throws IOException {
         try (var daemon = daemonAnswering(MODIFIED.toJson())) {
@@ -57,7 +57,7 @@ class MovingToAPackageTest extends CliTest {
             assertThat(out()).isEmpty();
             assertThat(err())
                     .startsWith("Usage error: Unsupported arguments;")
-                    .contains("arguments=move A\\u000" + (file.contains("\n") ? "a" : "d") + "B.java demo)");
+                    .contains("arguments=move " + file.replace("\n", "\\u000a").replace("\r", "\\u000d") + " demo)");
             assertThat(daemon.requests()).isEmpty();
         }
     }

@@ -91,6 +91,34 @@ class WorkspaceEditsTest {
     }
 
     @Test
+    void ordersTheChangesOfAMoveWithTheCreationsAndTheEditsFirstThenTheMovesThenTheRemovalsEachByPath() {
+        Path creator = Path.of("/project/Creator.java");
+        Path zebra = Path.of("/project/Zebra.java");
+        List<FileChange> shuffled = List.of(
+                new DeleteFile(zebra),
+                new DeleteFile(GREETER),
+                new RenameFile(zebra, WELCOMER),
+                new EditFile(zebra, List.of(domain(0, 0, 0, 1))),
+                new RenameFile(GREETER, creator),
+                new CreateFile(creator),
+                new EditFile(creator, List.of(domain(0, 0, 0, 1))),
+                new EditFile(GREETER, List.of(domain(0, 6, 0, 13))),
+                new EditFile(GREETER, List.of(domain(0, 0, 0, 1))));
+
+        assertThat(WorkspaceEdits.inOrderOfAMove(shuffled))
+                .containsExactly(
+                        new CreateFile(creator),
+                        new EditFile(creator, List.of(domain(0, 0, 0, 1))),
+                        new EditFile(GREETER, List.of(domain(0, 6, 0, 13))),
+                        new EditFile(GREETER, List.of(domain(0, 0, 0, 1))),
+                        new EditFile(zebra, List.of(domain(0, 0, 0, 1))),
+                        new RenameFile(GREETER, creator),
+                        new RenameFile(zebra, WELCOMER),
+                        new DeleteFile(GREETER),
+                        new DeleteFile(zebra));
+    }
+
+    @Test
     void putsThePathsOfFileUrisInTheirNormalForm() {
         var spelled = Path.of("/project/src/../Greeter.java").toUri().toString();
         var delete = new org.eclipse.lsp4j.DeleteFile(spelled);
