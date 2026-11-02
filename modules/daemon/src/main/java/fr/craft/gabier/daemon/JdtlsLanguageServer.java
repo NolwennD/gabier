@@ -52,6 +52,7 @@ import org.eclipse.lsp4j.CodeActionParams;
 import org.eclipse.lsp4j.CompletionItem;
 import org.eclipse.lsp4j.CompletionItemKind;
 import org.eclipse.lsp4j.CompletionParams;
+import org.eclipse.lsp4j.DefinitionParams;
 import org.eclipse.lsp4j.DiagnosticSeverity;
 import org.eclipse.lsp4j.DidCloseTextDocumentParams;
 import org.eclipse.lsp4j.DidOpenTextDocumentParams;
@@ -110,6 +111,12 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * see {@link #takeInChangesOnDisk}.
      */
     private static final String BARRIER = ".gabier-changes-taken-";
+
+    /** The kinds of the symbols that jdtls lists for a class, an interface or an enum (a record is a class). */
+    private static final Set<SymbolKind> TYPES = Set.of(SymbolKind.Class, SymbolKind.Interface, SymbolKind.Enum);
+
+    /** What a name starts with: the label of an anonymous class does not ({@code {...}}). */
+    private static final Pattern STARTS_AS_A_NAME = Pattern.compile("^\\p{javaJavaIdentifierStart}");
 
     private final Diagnostics diagnostics;
     private final Duration quiet;
@@ -389,7 +396,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                 throw LanguageServerException.notExtractable(path, selection);
             }
             String extracted = SourceText.edited(path, original, editsOf(path, proposed, original));
-            var introduced = introducedName(refactor, extracted);
+            var introduced = introducedName(extraction, refactor, extracted);
             String named = extracted;
             if (!introduced.text().equals(name)) {
                 named = SourceText.edited(
@@ -410,10 +417,12 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     /** The name jdtls introduced, and where it is in the text after the edit. */
     private record Introduced(int offset, String text) {}
 
-    private static Introduced introducedName(JdtlsServer.RefactorEdit refactor, String extracted) {
+    private static Introduced introducedName(
+            Extraction extraction, JdtlsServer.RefactorEdit refactor, String extracted) {
         var follow = refactor.command();
         if (follow == null || follow.arguments().isEmpty()) {
-            throw new JdtlsException("jdtls extracted the variable but did not say where its name is: " + refactor);
+            throw new JdtlsException(
+                    "jdtls made " + extraction.extracted + " but did not say where its name is: " + refactor);
         }
         var where = follow.arguments().getFirst();
 
@@ -440,7 +449,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                 .toList();
     }
 
-    /** Renames the variable on the text jdtls has been given, opened for the time of the request. */
+    /** Renames what the extraction introduced on the text jdtls has been given, opened for the time of the request. */
     private List<TextEdit> renamed(
             JdtlsSession session,
             JdtlsWatch watch,
@@ -457,7 +466,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             var publication = open(session, Map.of(path, text)).get(path);
             watch.await("jdtls to take in " + extraction.extracted + " in " + path, () -> publication);
             if (extraction == Extraction.METHOD) {
-                refuseASignatureInUse(session, watch, path, introduced, name, selection);
+                refuseASignatureInUse(session, watch, path, introduced, lsp(where), name, selection);
             }
             var edit = watch.await(
                     "the rename of " + extraction.extracted + " at " + where + " of " + path + " to " + name,
@@ -483,42 +492,88 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     /**
      * Refuses the name of a method that the class already declares with the parameters of the extracted one. jdtls
      * does not decline it: its rename answers an edit that leaves two methods of one signature, which does not
-     * compile. The methods are those jdtls lists for the text it was given (a flat list: the client declares no
-     * hierarchical symbols), labelled {@code name(parameters) : return type}, under the name of their class.
+     * compile. The methods are those jdtls lists for the text it was given: a flat list in the order of its outline
+     * (the members of a type, then the type), each labelled {@code name(parameters)}, or {@code name(parameters)
+     * <type parameters>} for a generic method, with no return type, with the range of its name and the simple name of
+     * its parent (empty for an anonymous class). The extracted method is the one whose name holds the place that
+     * {@code textDocument/definition} gives for the name jdtls introduced, and the class it is in is the first type
+     * after it in the list that has the name of its container: two classes of one simple name are two types.
      */
     private void refuseASignatureInUse(
-            JdtlsSession session, JdtlsWatch watch, Path path, Introduced introduced, String name, Range selection)
+            JdtlsSession session,
+            JdtlsWatch watch,
+            Path path,
+            Introduced introduced,
+            org.eclipse.lsp4j.Position where,
+            String name,
+            Range selection)
             throws InterruptedException {
-        var listed = watch.await(
-                "the methods of the extracted text of " + path,
-                () -> session.server()
-                        .getTextDocumentService()
-                        .documentSymbol(new DocumentSymbolParams(
-                                new TextDocumentIdentifier(path.toUri().toString()))));
-        List<SymbolInformation> methods = Optional.ofNullable(listed).orElse(List.of()).stream()
+        var service = session.server().getTextDocumentService();
+        var document = new TextDocumentIdentifier(path.toUri().toString());
+        var definition = watch.await(
+                "the declaration of the method " + introduced.text() + " in " + path,
+                () -> service.definition(new DefinitionParams(document, where)));
+        var declaredAt = Optional.ofNullable(definition)
                 .filter(Either::isLeft)
                 .map(Either::getLeft)
-                .filter(symbol -> symbol.getKind() == SymbolKind.Method)
+                .flatMap(places -> places.stream().findFirst())
+                .map(place -> place.getRange().getStart())
+                .orElseThrow(() -> new JdtlsException(
+                        "jdtls did not say where the method " + introduced.text() + " is declared in " + path));
+        var listed = watch.await(
+                "the methods of the extracted text of " + path,
+                () -> service.documentSymbol(new DocumentSymbolParams(document)));
+        List<SymbolInformation> symbols = Optional.ofNullable(listed).orElse(List.of()).stream()
+                .filter(Either::isLeft)
+                .map(Either::getLeft)
                 .toList();
-        var extracted = methods.stream()
-                .filter(method -> method.getName().startsWith(introduced.text() + "("))
+        var extracted = symbols.stream()
+                .filter(symbol -> symbol.getKind() == SymbolKind.Method && nameIsAt(symbol, declaredAt))
                 .findFirst()
                 .orElseThrow(() -> new JdtlsException("jdtls did not list the method " + introduced.text()
-                        + " it extracted in " + path + ": " + methods));
+                        + " it extracted in " + path + ": " + symbols));
         String wanted = name + parametersOf(extracted);
-        if (methods.stream()
-                .anyMatch(method -> Objects.equals(method.getContainerName(), extracted.getContainerName())
-                        && signatureOf(method).equals(wanted))) {
+        var owner = ownerOf(symbols, extracted);
+        if (symbols.stream()
+                .filter(symbol -> symbol.getKind() == SymbolKind.Method)
+                .anyMatch(method -> signatureOf(method).equals(wanted)
+                        && ownerOf(symbols, method).equals(owner))) {
             throw LanguageServerException.invalidName(path, selection.start(), name);
         }
     }
 
-    /** {@code name(parameters)} of a label {@code name(parameters) : return type}. */
+    private static boolean nameIsAt(SymbolInformation symbol, org.eclipse.lsp4j.Position place) {
+        var range = symbol.getLocation().getRange();
+
+        return compare(range.getStart(), place) <= 0 && compare(place, range.getEnd()) <= 0;
+    }
+
+    /**
+     * The type a member is declared in: the first type listed after it whose name is that of the container jdtls gave
+     * (jdtls lists a type after its members). The listing has no other link between a member and its type.
+     */
+    private static Optional<SymbolInformation> ownerOf(List<SymbolInformation> symbols, SymbolInformation member) {
+        String container = Objects.requireNonNullElse(member.getContainerName(), "");
+
+        return symbols.subList(symbols.indexOf(member) + 1, symbols.size()).stream()
+                .filter(symbol -> TYPES.contains(symbol.getKind()) && isNamed(symbol, container))
+                .findFirst();
+    }
+
+    /** Whether the type is the one a container name is of: its label without the type parameters, none for an anonymous one. */
+    private static boolean isNamed(SymbolInformation type, String container) {
+        String label = type.getName();
+
+        return container.isEmpty()
+                ? !STARTS_AS_A_NAME.matcher(label).find()
+                : label.replaceFirst("<.*", "").equals(container);
+    }
+
+    /** {@code name(parameters)} of a label {@code name(parameters)} or {@code name(parameters) <type parameters>}. */
     private static String signatureOf(SymbolInformation method) {
         String label = method.getName();
-        int returnType = label.indexOf(" : ");
 
-        return returnType < 0 ? label : label.substring(0, returnType);
+        return label.substring(0, label.indexOf(')') + 1);
     }
 
     private static String parametersOf(SymbolInformation method) {
@@ -546,6 +601,10 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
 
     private static String restOfTheLine(String text, int from) {
         return text.substring(from).lines().findFirst().orElse("");
+    }
+
+    private static org.eclipse.lsp4j.Position lsp(Position position) {
+        return new org.eclipse.lsp4j.Position(position.line(), position.column());
     }
 
     private static org.eclipse.lsp4j.Range lsp(Range range) {

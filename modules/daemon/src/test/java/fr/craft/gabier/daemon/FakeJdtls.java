@@ -29,6 +29,7 @@ import org.eclipse.lsp4j.Command;
 import org.eclipse.lsp4j.CompletionItem;
 import org.eclipse.lsp4j.CompletionList;
 import org.eclipse.lsp4j.CompletionParams;
+import org.eclipse.lsp4j.DefinitionParams;
 import org.eclipse.lsp4j.Diagnostic;
 import org.eclipse.lsp4j.DidChangeConfigurationParams;
 import org.eclipse.lsp4j.DidChangeTextDocumentParams;
@@ -44,6 +45,7 @@ import org.eclipse.lsp4j.InitializeParams;
 import org.eclipse.lsp4j.InitializeResult;
 import org.eclipse.lsp4j.InitializedParams;
 import org.eclipse.lsp4j.Location;
+import org.eclipse.lsp4j.LocationLink;
 import org.eclipse.lsp4j.PrepareRenameDefaultBehavior;
 import org.eclipse.lsp4j.PrepareRenameParams;
 import org.eclipse.lsp4j.PrepareRenameResult;
@@ -132,6 +134,9 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private final List<RenameParams> renamed = new CopyOnWriteArrayList<>();
     private CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> documentSymbolAnswer =
             new CompletableFuture<>();
+    private CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> definitionAnswer =
+            new CompletableFuture<>();
+    private final List<DefinitionParams> definitionRequests = new CopyOnWriteArrayList<>();
     private CompletableFuture<List<Either<Command, CodeAction>>> codeActionAnswer = new CompletableFuture<>();
     private CompletableFuture<CodeAction> resolveAnswer = new CompletableFuture<>();
     private final List<CodeActionParams> codeActionRequests = new CopyOnWriteArrayList<>();
@@ -274,6 +279,21 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     FakeJdtls documentSymbolAnswers(CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> answer) {
         this.documentSymbolAnswer = answer;
         return this;
+    }
+
+    /**
+     * The answer to {@code textDocument/definition}, whatever the request: the locations or links, null or a failed
+     * future. Unscripted, the request never gets an answer.
+     */
+    FakeJdtls definitionAnswers(
+            CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> answer) {
+        this.definitionAnswer = answer;
+        return this;
+    }
+
+    /** The {@code textDocument/definition} requests received, in order. */
+    List<DefinitionParams> definitionRequests() {
+        return List.copyOf(definitionRequests);
     }
 
     /**
@@ -752,6 +772,14 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                     referenced.add(params);
                     return referencesAnswers.getOrDefault(
                             params.getContext().isIncludeDeclaration(), new CompletableFuture<>());
+                }
+
+                @Override
+                public CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> definition(
+                        DefinitionParams params) {
+                    received.add("definition " + named(params.getTextDocument().getUri()));
+                    definitionRequests.add(params);
+                    return definitionAnswer;
                 }
 
                 @Override

@@ -109,6 +109,18 @@ class ExtractMethodTest {
     }
 
     @Test
+    void givesTheMethodTheNameOfAnotherMethodOfTheClassWhenTheParameterTypesAreNotTheSame() throws IOException {
+        project(Scenarios.EXTRACT_METHOD_TO_THE_NAME_OF_AN_OVERLOAD);
+
+        extract.apply(path(TOTALS), new Range(new Position(4, 20), new Position(4, 33)), "doubled");
+
+        assertThat(text(TOTALS))
+                .contains("        int count = doubled(values);\n")
+                .contains("public int doubled(int value) {")
+                .contains("private int doubled(int[] values) {");
+    }
+
+    @Test
     void asksTheServerOnceForTheFileTheSelectionAndTheNameAsGiven() throws IOException {
         project(Scenarios.EXTRACT_METHOD_THAT_USES_A_LOCAL_VARIABLE);
 

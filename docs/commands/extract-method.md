@@ -21,7 +21,7 @@ A refusal is the problem object, exit code 2, and nothing is written:
   for `doubled(int)`), which would not compile. The same name with other parameter types is an overload and is accepted;
 - a file outside the project, a server that is not ready, a change set that cannot be applied to the file as it is.
 
-The refusals above, except the change set that cannot be applied, are contract scenarios replayed on the real jdtls (`ScenarioReplayTest`). That a name with other parameter types is accepted as an overload is tested on the fake language server only.
+The refusals above, except the change set that cannot be applied, are contract scenarios replayed on the real jdtls (`ScenarioReplayTest`). That a name with other parameter types is accepted as an overload is a scenario too (`extract-a-method-to-the-name-of-an-overload`), replayed on the real jdtls: `values.length` becomes `doubled(values)` and a `doubled(int[])` next to the existing `doubled(int)`. What the check reads is asserted on the real jdtls too, by `ExtractedMethodSymbolsTest` (`jdtlsProbe`), which asks for the same scenario what the adapter asks: the name that jdtls introduces is at the call (`extracted(values);`), the definition of that name is the declaration of the new method (`private int extracted(int[] values)`), which is where the name range of its symbol starts, and the labels of the list are exactly `name(parameters)` (`print(int[])`, `total(int[], int)`, `extracted(int[])`), with no return type, under the simple name of the class.
 
 ```text
 $ gabier extract-method --dry-run src/main/java/demo/Totals.java 6:9 6:47 printCount
@@ -46,9 +46,13 @@ client does, as `extract-variable` does. It asks `java/getRefactorEdit` with the
 behind the code action `refactor.extract.method`; it needs no client capability and no setting of `JdtlsSettings` or
 `JdtlsCapabilities`), which answers the edit and the command `java.action.rename` with the place of the new name in the
 edited text. It applies that edit in memory, opens the edited text in jdtls (it is never written to disk), and
-asks `textDocument/documentSymbol` for the methods of that text, to see whether the class already has the name with the
-parameters of the new method: jdtls does not decline such a name, its rename answers an edit that leaves two methods of one
-signature, so this refusal is **gabier's own check** and not jdtls's. It then asks `textDocument/rename` for the method with
+asks where the new method is declared (`textDocument/definition` of the name jdtls introduced) and
+`textDocument/documentSymbol` for the methods of that text, to see whether the class already has the name with the
+parameters of the new method. The new method is the symbol whose name holds the place the definition gave; its class is
+told from another class of the same simple name by the order of the list (jdtls lists the members of a type, then the
+type). The labels of the list are `name(parameters)` (`name(T) <T>` for a generic method), with no return type, so
+two methods that differ only by their return type are one signature. jdtls does not decline such a name, its rename
+answers an edit that leaves two methods of one signature, so this refusal is **gabier's own check** and not jdtls's. It then asks `textDocument/rename` for the method with
 your name, which jdtls checks as for any rename (a name that is not an identifier is declined), closes the text, and
 folds the two edits into one on the file as it is on disk. The unwanted name never reaches the file or the diff. When the
 name asked for is the one jdtls proposed, the rename and the overlay are skipped.

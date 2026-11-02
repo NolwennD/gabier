@@ -156,6 +156,7 @@ class ScenariosTest {
                         "extract-a-method-from-a-branch-that-returns",
                         "extract-a-method-to-an-invalid-name",
                         "extract-a-method-to-a-name-in-use",
+                        "extract-a-method-to-the-name-of-an-overload",
                         "extract-a-method-while-the-server-imports",
                         "extract-a-method-of-a-file-outside-the-project",
                         "extract-a-constant",
@@ -833,7 +834,7 @@ class ScenariosTest {
         List<Scenario> extractions = answeredWith(Answer.Extracted.class).stream()
                 .filter(scenario -> scenario.request() instanceof Request.ExtractMethod)
                 .toList();
-        assertThat(extractions).hasSize(3);
+        assertThat(extractions).hasSize(4);
         for (Scenario scenario : extractions) {
             Path root = Files.createTempDirectory(directory, "project");
             Scenario inside = scenario.inside(root);

@@ -66,8 +66,10 @@ import java.util.stream.Stream;
  *       file to the last. The rename of jdtls declines a name that is not an identifier ({@link
  *       #EXTRACT_METHOD_TO_AN_INVALID_NAME}) but not the name of a method the class already has with the same
  *       parameters: it answers an edit that leaves two methods of one signature. The adapter refuses it, from the
- *       methods that jdtls lists for the text ({@code textDocument/documentSymbol}), as {@code invalid-name} ({@link
- *       #EXTRACT_METHOD_TO_A_NAME_IN_USE});
+ *       methods that jdtls lists for the text ({@code textDocument/documentSymbol}, labelled {@code name(parameters)}),
+ *       the new one being the one declared where {@code textDocument/definition} of the introduced name says, as
+ *       {@code invalid-name} ({@link #EXTRACT_METHOD_TO_A_NAME_IN_USE}); the same name with other parameter types is an
+ *       overload, which is accepted ({@link #EXTRACT_METHOD_TO_THE_NAME_OF_AN_OVERLOAD});
  *   <li>the extraction of a constant: the command {@code extractConstant} (no client capability, no setting) answers the
  *       declaration at the top of the class and the replacement of the expression; the name it proposes is renamed as
  *       for a variable, and the answer holds the one edit that results from both ({@link #EXTRACT_CONSTANT}). A name
@@ -1000,6 +1002,25 @@ public final class Scenarios {
             new Request.ExtractMethod(TOTALS, new Range(new Position(29, 15), new Position(29, 28)), "doubled"),
             new Answer.Refused(LanguageServerErrorKey.INVALID_NAME));
 
+    /**
+     * {@code values.length}: the extracted method takes an {@code int[]}, and the class has {@code doubled(int)}. The
+     * name is the same and the parameter types are not, which Java allows as an overload: jdtls renames, and so does the
+     * adapter. The edit is the one jdtls answers, folded with the rename.
+     */
+    public static final Scenario EXTRACT_METHOD_TO_THE_NAME_OF_AN_OVERLOAD = new Scenario(
+            "extract-a-method-to-the-name-of-an-overload",
+            PROJECT,
+            new Request.ExtractMethod(TOTALS, new Range(new Position(4, 20), new Position(4, 33)), "doubled"),
+            new Answer.Extracted(new ChangeSet(List.of(edits(TOTALS, replace(4, 20, 6, 34, """
+                doubled(values);
+                        System.out.println("count: " + count);
+                        System.out.println("done");
+                    }
+
+                    private int doubled(int[] values) {
+                        return values.length\
+                """))))));
+
     /** The project is still being imported: the server cannot say what an extraction changes. */
     public static final Scenario EXTRACT_METHOD_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "extract-a-method-while-the-server-imports",
@@ -1714,6 +1735,7 @@ public final class Scenarios {
                 EXTRACT_METHOD_FROM_A_BRANCH_THAT_RETURNS,
                 EXTRACT_METHOD_TO_AN_INVALID_NAME,
                 EXTRACT_METHOD_TO_A_NAME_IN_USE,
+                EXTRACT_METHOD_TO_THE_NAME_OF_AN_OVERLOAD,
                 EXTRACT_METHOD_WHILE_THE_SERVER_IMPORTS,
                 EXTRACT_METHOD_OUTSIDE_THE_PROJECT,
                 EXTRACT_CONSTANT,

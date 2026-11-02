@@ -42,6 +42,7 @@ import org.eclipse.lsp4j.CreateFileOptions;
 import org.eclipse.lsp4j.DiagnosticSeverity;
 import org.eclipse.lsp4j.DocumentSymbol;
 import org.eclipse.lsp4j.Location;
+import org.eclipse.lsp4j.LocationLink;
 import org.eclipse.lsp4j.MarkupContent;
 import org.eclipse.lsp4j.PrepareRenameDefaultBehavior;
 import org.eclipse.lsp4j.PrepareRenameResult;
@@ -2203,27 +2204,63 @@ class JdtlsLanguageServerTest {
             return CompletableFuture.completedFuture(new JdtlsServer.RefactorEdit(extractsTheMethod(), follow, null));
         }
 
-        private Either<SymbolInformation, DocumentSymbol> symbol(String label, SymbolKind kind) {
+        /**
+         * A symbol as jdtls lists it for the text it was given: the label is {@code name(parameters)}, or {@code
+         * name(parameters) <type parameters>}, with no return type, and the range is that of the name, on one line.
+         */
+        private Either<SymbolInformation, DocumentSymbol> symbol(
+                String label, SymbolKind kind, String container, int line) {
             return Either.forLeft(new SymbolInformation(
-                    label, kind, new Location(totals.toUri().toString(), new Range(at(0, 0), at(0, 0))), "Totals"));
+                    label, kind, new Location(totals.toUri().toString(), nameRange(label, line)), container));
         }
 
-        /** The members of the text jdtls was given, as it lists them: its label is {@code name(parameters) : type}. */
+        private static Range nameRange(String label, int line) {
+            int length = label.indexOf('(') < 0 ? label.length() : label.indexOf('(');
+
+            return new Range(at(line, 8), at(line, 8 + length));
+        }
+
+        private Either<SymbolInformation, DocumentSymbol> method(String label, String container, int line) {
+            return symbol(label, SymbolKind.Method, container, line);
+        }
+
+        private Either<SymbolInformation, DocumentSymbol> type(String name, String container, int line) {
+            return symbol(name, SymbolKind.Class, container, line);
+        }
+
+        /** What jdtls lists, in the order of its outline: the members of a type, then the type. */
+        @SafeVarargs
+        private static CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> listing(
+                Either<SymbolInformation, DocumentSymbol>... symbols) {
+            return CompletableFuture.completedFuture(List.of(symbols));
+        }
+
+        /** The methods of {@code Totals}, the new one declared on the line 5, and then the class. */
         private CompletableFuture<List<Either<SymbolInformation, DocumentSymbol>>> members(String... methods) {
             var listed = new ArrayList<Either<SymbolInformation, DocumentSymbol>>();
-            listed.add(symbol("Totals", SymbolKind.Class));
+            int line = 1;
             for (String method : methods) {
-                listed.add(symbol(method, SymbolKind.Method));
+                listed.add(method(method, "Totals", line));
+                line += 4;
             }
+            listed.add(type("Totals", "", 0));
 
             return CompletableFuture.completedFuture(listed);
+        }
+
+        /** The answer to the definition of the new name: the declaration of the method, on that line. */
+        private CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> declaredOnLine(
+                int line) {
+            var declaration = new Location(totals.toUri().toString(), nameRange("extracted(int)", line));
+
+            return CompletableFuture.completedFuture(Either.forLeft(List.of(declaration)));
         }
 
         private void scriptTheExtraction(String name) {
             fake.refactorEditAnswers(proposal())
                     .publishesOnOpen(totals, List.of())
-                    .documentSymbolAnswers(
-                            members("quadrupled(int) : int", "extracted(int) : int", "doubled(int) : int"))
+                    .documentSymbolAnswers(members("quadrupled(int)", "extracted(int)", "doubled(int)"))
+                    .definitionAnswers(declaredOnLine(5))
                     .renameAnswers(CompletableFuture.completedFuture(renamesTo(name)));
         }
 
@@ -2261,10 +2298,13 @@ class JdtlsLanguageServerTest {
                 assertThat(fake.renamed()).hasSize(1);
                 assertThat(fake.renamed().getFirst().getPosition()).isEqualTo(at(2, 15));
                 assertThat(fake.renamed().getFirst().getNewName()).isEqualTo("scaled");
+                assertThat(fake.definitionRequests()).hasSize(1);
+                assertThat(fake.definitionRequests().getFirst().getPosition()).isEqualTo(at(2, 15));
                 assertThat(fake.received())
                         .containsExactly(
                                 "getRefactorEdit Totals.java",
                                 "didOpen Totals.java",
+                                "definition Totals.java",
                                 "documentSymbol Totals.java",
                                 "rename Totals.java");
                 assertThat(fake.closed(1)).containsExactly(totals.toUri().toString());
@@ -2294,6 +2334,7 @@ class JdtlsLanguageServerTest {
                 assertThat(applied(ORIGINAL, changes)).isEqualTo(PROPOSED);
                 assertThat(fake.opened()).isEmpty();
                 assertThat(fake.renamed()).isEmpty();
+                assertThat(fake.definitionRequests()).isEmpty();
             }
         }
 
@@ -2316,13 +2357,16 @@ class JdtlsLanguageServerTest {
             }
         }
 
-        @ParameterizedTest
-        @ValueSource(strings = {"doubled(int) : String", "doubled(int)"})
-        void refusesTheNameOfAMethodThatDiffersOnlyByItsReturnTypeOrHasNone(String existing) throws Exception {
+        /** Scripts the extraction in a text that has the symbols listed, the new method being declared on that line. */
+        private void scriptTheExtractionIn(List<Either<SymbolInformation, DocumentSymbol>> listed, int declaredOnLine) {
             fake.refactorEditAnswers(proposal())
                     .publishesOnOpen(totals, List.of())
-                    .documentSymbolAnswers(members("extracted(int) : int", existing));
+                    .documentSymbolAnswers(CompletableFuture.completedFuture(listed))
+                    .definitionAnswers(declaredOnLine(declaredOnLine))
+                    .renameAnswers(CompletableFuture.completedFuture(renamesTo("doubled")));
+        }
 
+        private void assertRefused() throws Exception {
             try (var server = started()) {
                 assertThatThrownBy(() -> server.extractMethod(totals, selection, "doubled"))
                         .isInstanceOfSatisfying(
@@ -2331,13 +2375,7 @@ class JdtlsLanguageServerTest {
             }
         }
 
-        @Test
-        void acceptsTheNameOfAMethodThatTheClassHasWithOtherParameters() throws Exception {
-            fake.refactorEditAnswers(proposal())
-                    .publishesOnOpen(totals, List.of())
-                    .documentSymbolAnswers(members("extracted(int) : int", "doubled(String) : int"))
-                    .renameAnswers(CompletableFuture.completedFuture(renamesTo("doubled")));
-
+        private void assertAccepted() throws Exception {
             try (var server = started()) {
                 ChangeSet changes = server.extractMethod(totals, selection, "doubled");
 
@@ -2346,29 +2384,168 @@ class JdtlsLanguageServerTest {
         }
 
         @Test
+        void refusesTheNameOfAGenericMethodWhoseLabelCarriesItsTypeParametersAfterTheParameters() throws Exception {
+            scriptTheExtractionIn(
+                    List.of(
+                            method("doubled(T) <T>", "Totals", 1),
+                            method("extracted(T) <T>", "Totals", 5),
+                            type("Totals", "", 0)),
+                    5);
+
+            assertRefused();
+        }
+
+        @Test
+        void acceptsTheNameOfAMethodThatTheClassHasWithOtherParametersWhereverTheExtractedOneIsListed()
+                throws Exception {
+            scriptTheExtractionIn(
+                    List.of(
+                            method("tripled(int)", "Totals", 9),
+                            method("doubled(String)", "Totals", 1),
+                            method("extracted(int)", "Totals", 5),
+                            type("Totals", "", 0)),
+                    5);
+
+            assertAccepted();
+        }
+
+        @Test
         void acceptsTheNameOfAMethodOfAnotherClassAndOfAFieldWithTheSameParameters() throws Exception {
-            var other = symbol("doubled(int) : int", SymbolKind.Method).getLeft();
-            other.setContainerName("Other");
-            fake.refactorEditAnswers(proposal())
-                    .publishesOnOpen(totals, List.of())
-                    .documentSymbolAnswers(CompletableFuture.completedFuture(List.of(
-                            symbol("extracted(int) : int", SymbolKind.Method),
-                            Either.forLeft(other),
-                            symbol("doubled(int) : int", SymbolKind.Field))))
-                    .renameAnswers(CompletableFuture.completedFuture(renamesTo("doubled")));
+            scriptTheExtractionIn(
+                    List.of(
+                            method("doubled(int)", "Other", 1),
+                            type("Other", "", 0),
+                            symbol("doubled(int)", SymbolKind.Field, "Totals", 3),
+                            method("extracted(int)", "Totals", 5),
+                            type("Totals", "", 4)),
+                    5);
 
-            try (var server = started()) {
-                ChangeSet changes = server.extractMethod(totals, selection, "doubled");
+            assertAccepted();
+        }
 
-                assertThat(applied(ORIGINAL, changes)).isEqualTo(PROPOSED.replace("extracted", "doubled"));
-            }
+        @Test
+        void checksTheMethodJdtlsDeclaredAndNotTheFirstOneWhoseNameStartsLikeTheOneItProposed() throws Exception {
+            // Outer.extracted(String) comes first; the extraction is in Inner, which has doubled(int).
+            scriptTheExtractionIn(
+                    List.of(
+                            method("extracted(String)", "Outer", 1),
+                            method("doubled(int)", "Inner", 3),
+                            method("extracted(int)", "Inner", 5),
+                            type("Inner", "Outer", 2),
+                            type("Outer", "", 0)),
+                    5);
+
+            assertRefused();
+        }
+
+        @Test
+        void doesNotTakeTheParametersOfTheOuterClassMethodForThoseOfTheExtractedOne() throws Exception {
+            // Outer.extracted(String) comes first and Outer has doubled(String); Inner gets extracted(int).
+            scriptTheExtractionIn(
+                    List.of(
+                            method("extracted(String)", "Outer", 1),
+                            method("doubled(String)", "Outer", 2),
+                            method("extracted(int)", "Inner", 5),
+                            type("Inner", "Outer", 4),
+                            type("Outer", "", 0)),
+                    5);
+
+            assertAccepted();
+        }
+
+        @Test
+        void acceptsTheNameOfAMethodOfAClassNestedInAnotherOneThatHasTheSameSimpleName() throws Exception {
+            // A.Inner.doubled(int), and the extraction goes into B.Inner.
+            scriptTheExtractionIn(
+                    List.of(
+                            method("doubled(int)", "Inner", 1),
+                            type("Inner", "A", 2),
+                            type("A", "", 0),
+                            method("extracted(int)", "Inner", 5),
+                            type("Inner", "B", 6),
+                            type("B", "", 4)),
+                    5);
+
+            assertAccepted();
+        }
+
+        @Test
+        void refusesTheNameOfAMethodOfTheSameClassWhenAnotherNestedClassHasTheSameSimpleName() throws Exception {
+            scriptTheExtractionIn(
+                    List.of(
+                            method("doubled(int)", "Inner", 1),
+                            type("Inner", "A", 2),
+                            type("A", "", 0),
+                            method("doubled(int)", "Inner", 4),
+                            method("extracted(int)", "Inner", 5),
+                            type("Inner", "B", 6),
+                            type("B", "", 3)),
+                    5);
+
+            assertRefused();
+        }
+
+        @Test
+        void tellsApartTheMethodsOfTwoClassesThatHaveNoName() throws Exception {
+            // Two anonymous classes, each with doubled(int); the extraction goes into the second, which has none.
+            scriptTheExtractionIn(
+                    List.of(
+                            method("doubled(int)", "", 1),
+                            type("{...}", "run", 2),
+                            method("extracted(int)", "", 5),
+                            type("{...}", "run", 6),
+                            type("Totals", "", 0)),
+                    5);
+
+            assertAccepted();
+        }
+
+        @Test
+        void refusesTheNameOfAMethodOfAClassThatHasNoNameWhenTheExtractedMethodIsInIt() throws Exception {
+            scriptTheExtractionIn(
+                    List.of(
+                            method("doubled(int)", "", 1),
+                            method("extracted(int)", "", 5),
+                            type("{...}", "run", 6),
+                            type("Totals", "", 0)),
+                    5);
+
+            assertRefused();
+        }
+
+        @Test
+        void doesNotTakeAClassThatIsNestedInAClassWithNoNameForThatClass() throws Exception {
+            // Helper is a member of the anonymous class, so its container is empty as well, and it is listed first.
+            scriptTheExtractionIn(
+                    List.of(
+                            method("doubled(int)", "", 1),
+                            type("Helper", "", 2),
+                            method("extracted(int)", "", 5),
+                            type("{...}", "run", 6),
+                            type("Totals", "", 0)),
+                    5);
+
+            assertRefused();
+        }
+
+        @Test
+        void refusesTheNameOfAMethodOfAGenericClassWhoseLabelCarriesItsTypeParameters() throws Exception {
+            scriptTheExtractionIn(
+                    List.of(
+                            method("doubled(int)", "Totals", 1),
+                            method("extracted(int)", "Totals", 5),
+                            type("Totals<T>", "", 0)),
+                    5);
+
+            assertRefused();
         }
 
         @Test
         void failsWhenJdtlsDoesNotListTheMethodItExtracted() throws Exception {
             fake.refactorEditAnswers(proposal())
                     .publishesOnOpen(totals, List.of())
-                    .documentSymbolAnswers(members("doubled(int) : int"));
+                    .documentSymbolAnswers(members("doubled(int)"))
+                    .definitionAnswers(declaredOnLine(5));
 
             try (var server = started()) {
                 assertThatThrownBy(() -> server.extractMethod(totals, selection, "scaled"))
@@ -2382,7 +2559,8 @@ class JdtlsLanguageServerTest {
         void failsWhenJdtlsListsNothingForTheText() throws Exception {
             fake.refactorEditAnswers(proposal())
                     .publishesOnOpen(totals, List.of())
-                    .documentSymbolAnswers(CompletableFuture.completedFuture(null));
+                    .documentSymbolAnswers(CompletableFuture.completedFuture(null))
+                    .definitionAnswers(declaredOnLine(5));
 
             try (var server = started()) {
                 assertThatThrownBy(() -> server.extractMethod(totals, selection, "scaled"))
@@ -2391,11 +2569,57 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @ParameterizedTest
+        @ValueSource(booleans = {true, false})
+        void failsWhenJdtlsDoesNotSayWhereTheNewMethodIsDeclared(boolean nothing) throws Exception {
+            fake.refactorEditAnswers(proposal())
+                    .publishesOnOpen(totals, List.of())
+                    .documentSymbolAnswers(members("extracted(int)"))
+                    .definitionAnswers(
+                            CompletableFuture.completedFuture(nothing ? null : Either.forLeft(List.<Location>of())));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractMethod(totals, selection, "scaled"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("did not say where the method extracted is declared");
+                assertThat(fake.closed(1)).containsExactly(totals.toUri().toString());
+            }
+        }
+
+        @Test
+        void failsWhenJdtlsGivesTheDeclarationOfTheNewMethodAsLinks() throws Exception {
+            var link = new LocationLink(
+                    totals.toUri().toString(), nameRange("extracted(int)", 5), nameRange("extracted(int)", 5));
+            fake.refactorEditAnswers(proposal())
+                    .publishesOnOpen(totals, List.of())
+                    .documentSymbolAnswers(members("extracted(int)"))
+                    .definitionAnswers(CompletableFuture.completedFuture(Either.forRight(List.of(link))));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractMethod(totals, selection, "scaled"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("did not say where the method extracted is declared");
+            }
+        }
+
+        @Test
+        void saysItIsTheMethodWhenJdtlsDoesNotSayWhereTheNameIs() throws Exception {
+            fake.refactorEditAnswers(
+                    CompletableFuture.completedFuture(new JdtlsServer.RefactorEdit(extractsTheMethod(), null, null)));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.extractMethod(totals, selection, "scaled"))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("jdtls made the extracted method but did not say where its name is");
+            }
+        }
+
         @Test
         void refusesANameJdtlsDeclinesForTheMethod() throws Exception {
             fake.refactorEditAnswers(proposal())
                     .publishesOnOpen(totals, List.of())
-                    .documentSymbolAnswers(members("extracted(int) : int"))
+                    .documentSymbolAnswers(members("extracted(int)"))
+                    .definitionAnswers(declaredOnLine(1))
                     .renameAnswers(CompletableFuture.failedFuture(new ResponseErrorException(
                             new ResponseError(ResponseErrorCode.InvalidRequest, "not an identifier", null))));
 
