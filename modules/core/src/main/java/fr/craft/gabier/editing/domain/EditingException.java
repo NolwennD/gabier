@@ -66,6 +66,33 @@ public final class EditingException extends GeneratorException {
                 .addParameter("known", names));
     }
 
+    /**
+     * The server offers no action with this title on the range.
+     *
+     * @param offered what it offers there, one entry per action, as {@code kind: title}
+     */
+    static EditingException noSuchCodeAction(String title, List<String> offered) {
+        String listing = offered.isEmpty() ? "it offers none" : "it offers " + String.join("; ", offered);
+
+        return new EditingException(GeneratorException.badRequest(EditingErrorKey.NO_SUCH_CODE_ACTION)
+                .message("The language server offers no action titled \"" + title + "\" on this range: " + listing)
+                .addParameter("title", title)
+                .addParameter("choices", String.join("\n", offered)));
+    }
+
+    /**
+     * The server offers several actions with this title on the range: a narrower range may leave one.
+     *
+     * @param offered the actions that have the title, one entry per action, as {@code kind: title}
+     */
+    static EditingException ambiguousCodeAction(String title, List<String> offered) {
+        return new EditingException(GeneratorException.badRequest(EditingErrorKey.AMBIGUOUS_CODE_ACTION)
+                .message("The language server offers several actions titled \"" + title + "\" on this range: "
+                        + String.join("; ", offered) + ". Try a narrower range")
+                .addParameter("title", title)
+                .addParameter("choices", String.join("\n", offered)));
+    }
+
     static EditingException fileMissing(Path file) {
         return new EditingException(GeneratorException.badRequest(EditingErrorKey.FILE_MISSING)
                 .message("The file " + file + " does not exist")

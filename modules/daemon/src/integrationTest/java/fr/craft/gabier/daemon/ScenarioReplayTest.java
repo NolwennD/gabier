@@ -7,6 +7,7 @@ import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
+import fr.craft.gabier.editing.domain.OfferedActions;
 import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.fixtures.Scenario;
 import fr.craft.gabier.editing.fixtures.Scenario.Answer;
@@ -99,7 +100,9 @@ class ScenarioReplayTest {
                 || scenario.request() instanceof Request.MoveToPackage
                 || scenario.request() instanceof Request.Inline
                 || scenario.request() instanceof Request.CreateType
-                || scenario.request() instanceof Request.References;
+                || scenario.request() instanceof Request.References
+                || scenario.request() instanceof Request.CodeActions
+                || scenario.request() instanceof Request.ApplyCodeAction;
     }
 
     /**
@@ -253,6 +256,32 @@ class ScenarioReplayTest {
                         .isEqualTo(inlined.changes());
                 compile(scenario, root, answer, differences);
             }
+            case Answer.CodeActionApplied applied -> {
+                var answer = (ChangeSet) ask(server, request);
+                System.out.println(scenario.name() + ": jdtls answered " + answer);
+                differences
+                        .assertThat(answer)
+                        .as("%s: the change set jdtls answers", scenario.name())
+                        .isEqualTo(applied.changes());
+                compile(scenario, root, answer, differences);
+            }
+            case Answer.Offered offered -> {
+                var answer = (OfferedActions) ask(server, request);
+                System.out.println(scenario.name() + ": jdtls answered " + answer);
+                // The titles are jdtls's text: the scenario names what it must offer, and it may offer more. Nothing
+                // offered is exact.
+                if (offered.offered().actions().isEmpty()) {
+                    differences
+                            .assertThat(answer.actions())
+                            .as("%s: jdtls offers nothing", scenario.name())
+                            .isEmpty();
+                } else {
+                    differences
+                            .assertThat(answer.actions())
+                            .as("%s: what jdtls offers", scenario.name())
+                            .containsAll(offered.offered().actions());
+                }
+            }
             case Answer.Created created -> {
                 var answer = (ChangeSet) ask(server, request);
                 System.out.println(scenario.name() + ": jdtls answered " + answer);
@@ -377,6 +406,8 @@ class ScenarioReplayTest {
             case Request.CreateType create -> server.createType(create.file(), create.kind());
             case Request.References references ->
                 server.references(references.file(), references.position(), references.includeDeclaration());
+            case Request.CodeActions actions -> server.codeActions(actions.file(), actions.range());
+            case Request.ApplyCodeAction apply -> server.codeActionEdit(apply.file(), apply.range(), apply.action());
         };
     }
 

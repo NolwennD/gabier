@@ -1,5 +1,6 @@
 package fr.craft.gabier.daemon;
 
+import fr.craft.gabier.editing.application.ApplyCodeAction;
 import fr.craft.gabier.editing.application.CleanUpFile;
 import fr.craft.gabier.editing.application.CreateType;
 import fr.craft.gabier.editing.application.ExtractConstant;
@@ -43,6 +44,7 @@ final class ChangeRequest {
     static final String START_COLUMN = "startColumn";
     static final String END_LINE = "endLine";
     static final String END_COLUMN = "endColumn";
+    static final String TITLE = "title";
 
     private final String method;
     private final Map<String, String> params;
@@ -91,6 +93,13 @@ final class ChangeRequest {
         } catch (NumberFormatException e) {
             throw ParameterException.invalid(method, name);
         }
+    }
+
+    /** The range of a request that takes one: its four numbers, from 0, the end excluded. */
+    Range range() {
+        return new Range(
+                new Position(number(START_LINE), number(START_COLUMN)),
+                new Position(number(END_LINE), number(END_COLUMN)));
     }
 
     /** An identifier to look for: text that is not blank. */
@@ -172,6 +181,15 @@ final class ChangeRequest {
     DaemonMethod.Outcome run(Inline inline, Position position) {
         Path file = file();
         ChangeReport report = dryRun() ? inline.dryRun(file, position) : inline.apply(file, position);
+
+        return DaemonMethod.Outcome.of(changed(report).toJson());
+    }
+
+    /** What applying the code action with the title on the range does, written unless the request is a dry run. */
+    DaemonMethod.Outcome run(ApplyCodeAction apply, Range range) {
+        Path file = file();
+        String title = token(TITLE);
+        ChangeReport report = dryRun() ? apply.dryRun(file, range, title) : apply.apply(file, range, title);
 
         return DaemonMethod.Outcome.of(changed(report).toJson());
     }

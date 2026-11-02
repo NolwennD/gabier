@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import fr.craft.gabier.editing.fixtures.CleanUpScenarios;
+import fr.craft.gabier.editing.fixtures.CodeActionScenarios;
 import fr.craft.gabier.editing.fixtures.FakeJavaLanguageServer;
 import fr.craft.gabier.editing.fixtures.PackageMoveScenarios;
 import fr.craft.gabier.editing.fixtures.Scenarios;
@@ -108,7 +109,10 @@ class DaemonServerTest {
                         .scripted(Scenarios.CREATE_A_CLASS)
                         .scripted(Scenarios.CREATE_A_TYPE_OUTSIDE_THE_PROJECT)
                         .scripted(Scenarios.REFERENCES_OF_A_TYPE)
-                        .scripted(Scenarios.REFERENCES_WHERE_THERE_IS_NO_SYMBOL));
+                        .scripted(Scenarios.REFERENCES_WHERE_THERE_IS_NO_SYMBOL)
+                        .scripted(CodeActionScenarios.CODE_ACTIONS_ON_A_TYPE_THAT_IS_NOT_IMPORTED)
+                        .scripted(CodeActionScenarios.CODE_ACTIONS_WHERE_NOTHING_IS_OFFERED)
+                        .scripted(CodeActionScenarios.APPLY_THE_IMPORT_OF_A_TYPE));
     }
 
     private DaemonServer open() {
@@ -793,6 +797,79 @@ class DaemonServerTest {
                         .contains("\"key\":\"language-server-not-inlinable\"");
                 assertThat(Files.readString(prices)).isEqualTo(before);
             }
+        }
+
+        @Test
+        void codeActionsListsWhatTheRangeOffersAndWritesNothing() throws IOException {
+            serving();
+            CodeActionScenarios.CODE_ACTIONS_ON_A_TYPE_THAT_IS_NOT_IMPORTED.writeProject(directory);
+            var offers = directory.resolve("src/main/java/demo/Offers.java");
+            var before = Files.readString(offers);
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask(rangeRequest("actions", offers, "3", "4", "3", "8", "")))
+                        .contains("\"actions\":[{\"kind\":\"quickfix\",\"title\":\"Import 'List' (java.util)\"}]");
+                assertThat(client.ask(rangeRequest("actions", offers, "6", "0", "6", "0", "")))
+                        .contains("\"actions\":[]");
+                assertThat(Files.readString(offers)).isEqualTo(before);
+            }
+        }
+
+        @Test
+        void applyCodeActionAnswersWhatWasChangedAndWritesTheFileUnlessItIsADryRun() throws IOException {
+            serving();
+            CodeActionScenarios.CODE_ACTIONS_ON_A_TYPE_THAT_IS_NOT_IMPORTED.writeProject(directory);
+            var offers = directory.resolve("src/main/java/demo/Offers.java");
+            var title = ",\"title\":\"Import 'List' (java.util)\"";
+
+            try (var client = connect(socket())) {
+                var dryRun = client.ask(
+                        rangeRequest("apply-action", offers, "3", "4", "3", "8", title + ",\"dryRun\":\"true\""));
+
+                assertThat(dryRun).contains("\"modified\":[").contains("Offers.java");
+                assertThat(Files.readString(offers)).doesNotContain("import java.util.List");
+
+                var done = client.ask(
+                        rangeRequest("apply-action", offers, "3", "4", "3", "8", title + ",\"dryRun\":\"false\""));
+
+                assertThat(done).contains("\"modified\":[");
+                assertThat(Files.readString(offers)).contains("import java.util.List;");
+            }
+        }
+
+        @Test
+        void aTitleTheRangeDoesNotOfferIsRefusedWithItsProblemObjectAndNothingIsWritten() throws IOException {
+            serving();
+            CodeActionScenarios.CODE_ACTIONS_ON_A_TYPE_THAT_IS_NOT_IMPORTED.writeProject(directory);
+            var offers = directory.resolve("src/main/java/demo/Offers.java");
+            var before = Files.readString(offers);
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask(rangeRequest(
+                                "apply-action",
+                                offers,
+                                "3",
+                                "4",
+                                "3",
+                                "8",
+                                ",\"title\":\"Nope\",\"dryRun\":\"false\"")))
+                        .contains("\"key\":\"editing-no-such-code-action\"");
+                assertThat(Files.readString(offers)).isEqualTo(before);
+            }
+        }
+
+        private static String rangeRequest(
+                String method,
+                Path file,
+                String startLine,
+                String startColumn,
+                String endLine,
+                String endColumn,
+                String more) {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"%s","params":{"file":"%s","startLine":"%s","startColumn":"%s",\
+                "endLine":"%s","endColumn":"%s"%s}}
+                """.formatted(method, file, startLine, startColumn, endLine, endColumn, more);
         }
 
         @Test

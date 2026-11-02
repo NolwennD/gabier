@@ -11,10 +11,12 @@ class EditingErrorKeyTest {
     void givesTheKeyThatReportsAreMappedFrom() {
         assertThat(Arrays.stream(EditingErrorKey.values()).map(EditingErrorKey::get))
                 .containsExactly(
+                        "editing-ambiguous-code-action",
                         "editing-file-exists",
                         "editing-file-missing",
                         "editing-folder-missing",
                         "editing-invalid-range",
+                        "editing-no-such-code-action",
                         "editing-not-a-package-name",
                         "editing-not-a-type-name",
                         "editing-overlapping-edits",

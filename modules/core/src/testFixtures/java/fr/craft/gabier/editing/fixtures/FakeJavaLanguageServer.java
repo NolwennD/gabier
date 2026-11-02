@@ -4,6 +4,8 @@ import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.CleanUp;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.JavaLanguageServer;
+import fr.craft.gabier.editing.domain.OfferedAction;
+import fr.craft.gabier.editing.domain.OfferedActions;
 import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
@@ -145,6 +147,20 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
         Request request = new Request.References(file, position, includeDeclaration).resolvedIn(root);
 
         return ((Answer.Referenced) answerTo(request)).locations();
+    }
+
+    @Override
+    public OfferedActions codeActions(Path file, Range range) {
+        Request request = new Request.CodeActions(file, range).resolvedIn(root);
+
+        return ((Answer.Offered) answerTo(request)).offered();
+    }
+
+    @Override
+    public ChangeSet codeActionEdit(Path file, Range range, OfferedAction action) {
+        Request request = new Request.ApplyCodeAction(file, range, action).resolvedIn(root);
+
+        return ((Answer.CodeActionApplied) answerTo(request)).changes();
     }
 
     @Override

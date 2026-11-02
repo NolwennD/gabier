@@ -4,6 +4,8 @@ import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.CleanUp;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.LanguageServerException;
+import fr.craft.gabier.editing.domain.OfferedAction;
+import fr.craft.gabier.editing.domain.OfferedActions;
 import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
@@ -168,6 +170,16 @@ final class ProjectServer implements ServedProject {
     @Override
     public ReferenceLocations references(Path file, Position position, boolean includeDeclaration) {
         return ready().references(file, position, includeDeclaration);
+    }
+
+    @Override
+    public OfferedActions codeActions(Path file, Range range) {
+        return ready().codeActions(file, range);
+    }
+
+    @Override
+    public ChangeSet codeActionEdit(Path file, Range range, OfferedAction action) {
+        return ready().codeActionEdit(file, range, action);
     }
 
     @Override

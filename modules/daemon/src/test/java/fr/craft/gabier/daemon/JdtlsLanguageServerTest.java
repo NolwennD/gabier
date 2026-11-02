@@ -3491,6 +3491,420 @@ class JdtlsLanguageServerTest {
     }
 
     @Nested
+    class OfferingCodeActions {
+
+        private static final String OFFERS = """
+            package demo;
+
+            public class Offers {
+                List<String> names() {
+                    return null;
+                }
+
+                int count() {
+                    return 1;
+                }
+            }
+            """;
+
+        private final fr.craft.gabier.editing.domain.Range onTheType =
+                new fr.craft.gabier.editing.domain.Range(new Position(3, 4), new Position(3, 8));
+        private Path offers;
+
+        @BeforeEach
+        void writeTheSources() throws IOException {
+            offers = write("src/main/java/demo/Offers.java", OFFERS);
+        }
+
+        private org.eclipse.lsp4j.Position at(int line, int column) {
+            return new org.eclipse.lsp4j.Position(line, column);
+        }
+
+        private org.eclipse.lsp4j.Diagnostic problem(int line, int from, int to) {
+            return new org.eclipse.lsp4j.Diagnostic(
+                    new Range(at(line, from), at(line, to)),
+                    "List cannot be resolved",
+                    DiagnosticSeverity.Error,
+                    "Java");
+        }
+
+        private CodeAction action(String kind, String title) {
+            var action = new CodeAction(title);
+            action.setKind(kind);
+            action.setData("data of " + title);
+            return action;
+        }
+
+        private CodeAction withEdit(CodeAction action) {
+            var edit = new TextDocumentEdit(
+                    new VersionedTextDocumentIdentifier(offers.toUri().toString(), null),
+                    List.of(Either.forLeft(new TextEdit(new Range(at(1, 0), at(1, 0)), "\nimport java.util.List;\n"))));
+            action.setEdit(new WorkspaceEdit(List.of(Either.forLeft(edit))));
+            return action;
+        }
+
+        private ChangeSet imported() {
+            return new ChangeSet(List.of(new FileChange.EditFile(
+                    offers,
+                    List.of(new fr.craft.gabier.editing.domain.TextEdit(
+                            new fr.craft.gabier.editing.domain.Range(new Position(1, 0), new Position(1, 0)),
+                            "\nimport java.util.List;\n")))));
+        }
+
+        private CompletableFuture<List<Either<Command, CodeAction>>> offered(CodeAction... actions) {
+            return CompletableFuture.completedFuture(Arrays.stream(actions)
+                    .map(Either::<Command, CodeAction>forRight)
+                    .toList());
+        }
+
+        private fr.craft.gabier.editing.domain.OfferedAction importList() {
+            return new fr.craft.gabier.editing.domain.OfferedAction("quickfix", "Import 'List' (java.util)");
+        }
+
+        @Test
+        void listsTheActionsWithTheirKindAndTheirTitleInTheOrderOfJdtls() throws Exception {
+            fake.publishesOnOpen(offers, List.of(problem(3, 4, 8)))
+                    .codeActionAnswers(offered(
+                            action(CodeActionKind.QuickFix, "Import 'List' (java.util)"),
+                            action("quickassist", "Add Javadoc comment"),
+                            action(CodeActionKind.RefactorExtract, "Extract to method")));
+
+            try (var server = started()) {
+                assertThat(server.codeActions(offers, onTheType).actions())
+                        .containsExactly(
+                                importList(),
+                                new fr.craft.gabier.editing.domain.OfferedAction("quickassist", "Add Javadoc comment"),
+                                new fr.craft.gabier.editing.domain.OfferedAction(
+                                        "refactor.extract", "Extract to method"));
+            }
+        }
+
+        @Test
+        void asksForTheKindsOfTheFixesAndTheRewritesNotTheActionsOfTheWholeFile() throws Exception {
+            fake.publishesOnOpen(offers, List.of(problem(3, 4, 8))).codeActionAnswers(offered());
+
+            try (var server = started()) {
+                server.codeActions(offers, onTheType);
+
+                assertThat(fake.codeActionRequests()).hasSize(1);
+                CodeActionParams request = fake.codeActionRequests().getFirst();
+                assertThat(request.getTextDocument().getUri())
+                        .isEqualTo(offers.toUri().toString());
+                assertThat(request.getRange()).isEqualTo(new Range(at(3, 4), at(3, 8)));
+                assertThat(request.getContext().getOnly()).containsExactly("quickfix", "refactor", "quickassist");
+                assertThat(offers).hasContent(OFFERS);
+            }
+        }
+
+        @Test
+        void sendsTheDiagnosticsOfTheFileThatJdtlsPublishedAsTheContextOfTheRequest() throws Exception {
+            fake.publishesOnOpen(offers, List.of(problem(3, 4, 8))).codeActionAnswers(offered());
+
+            try (var server = started()) {
+                server.codeActions(offers, onTheType);
+
+                assertThat(fake.opened())
+                        .containsExactly(new FakeJdtls.Opened(offers.toUri().toString(), OFFERS));
+                assertThat(fake.codeActionRequests().getFirst().getContext().getDiagnostics())
+                        .containsExactly(problem(3, 4, 8));
+            }
+        }
+
+        @ParameterizedTest
+        @CsvSource({
+            "3, 0, 3, 4, true", // the range ends where the problem starts
+            "3, 8, 3, 12, true", // the range starts where the problem ends
+            "3, 5, 3, 5, true", // a point inside the problem
+            "3, 0, 3, 3, false", // before it
+            "3, 9, 3, 12, false", // after it
+            "2, 0, 2, 30, false", // on another line above
+            "4, 0, 5, 0, false", // on other lines below
+            "1, 0, 6, 0, true" // lines that hold it
+        })
+        void givesTheServerTheDiagnosticsThatTouchTheRange(
+                int startLine, int startColumn, int endLine, int endColumn, boolean given) throws Exception {
+            fake.publishesOnOpen(offers, List.of(problem(3, 4, 8))).codeActionAnswers(offered());
+
+            try (var server = started()) {
+                server.codeActions(
+                        offers,
+                        new fr.craft.gabier.editing.domain.Range(
+                                new Position(startLine, startColumn), new Position(endLine, endColumn)));
+
+                assertThat(fake.codeActionRequests().getFirst().getContext().getDiagnostics())
+                        .hasSize(given ? 1 : 0);
+            }
+        }
+
+        @Test
+        void listsNothingWhenJdtlsOffersNothingAnswersNothingOrDeclines() throws Exception {
+            fake.publishesOnOpen(offers, List.of()).codeActionAnswers(CompletableFuture.completedFuture(List.of()));
+
+            try (var server = started()) {
+                assertThat(server.codeActions(offers, onTheType).actions()).isEmpty();
+
+                fake.codeActionAnswers(CompletableFuture.completedFuture(null));
+                assertThat(server.codeActions(offers, onTheType).actions()).isEmpty();
+
+                fake.codeActionAnswers(CompletableFuture.failedFuture(new ResponseErrorException(
+                        new ResponseError(ResponseErrorCode.InvalidRequest, "cannot offer", null))));
+                assertThat(server.codeActions(offers, onTheType).actions()).isEmpty();
+            }
+        }
+
+        @Test
+        void leavesOutACommandWhichIsNoActionAndTakesAnActionWithoutAKindForOneOfAnEmptyKind() throws Exception {
+            fake.publishesOnOpen(offers, List.of())
+                    .codeActionAnswers(CompletableFuture.completedFuture(List.of(
+                            Either.forLeft(new Command("Fix", "java.apply.workspaceEdit")),
+                            Either.forRight(new CodeAction("Without a kind")))));
+
+            try (var server = started()) {
+                assertThat(server.codeActions(offers, onTheType).actions())
+                        .containsExactly(new fr.craft.gabier.editing.domain.OfferedAction("", "Without a kind"));
+            }
+        }
+
+        @Test
+        void refusesAFileOutsideTheProjectAMissingFileAndAFolderWithoutAskingJdtls() throws Exception {
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.codeActions(root.resolve("../Elsewhere.java"), onTheType))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key())
+                                        .isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+                assertThatThrownBy(() -> server.codeActions(root.resolve("src/main/java/demo/Nope.java"), onTheType))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.FILE_MISSING));
+                assertThatThrownBy(() -> server.codeActions(root.resolve("src/main/java/demo"), onTheType))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_A_FILE));
+                assertThat(fake.codeActionRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesAsNotReadyWhileJdtlsIsStillImporting() throws Exception {
+            fake.neverAnswersInitialize();
+
+            try (var server = start()) {
+                assertThatThrownBy(() -> server.codeActions(offers, onTheType))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+                assertThat(fake.codeActionRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
+            fake.publishesOnOpen(offers, List.of())
+                    .codeActionAnswers(
+                            CompletableFuture.failedFuture(new IllegalStateException("the model is broken")));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.codeActions(offers, onTheType))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("waiting for the code actions on")
+                        .hasMessageContaining("Internal error");
+            }
+        }
+
+        /** Interrupts the thread that calls the adapter once jdtls has been asked what the test waits for. */
+        private void interruptTheCallerOnceAsked(Supplier<Boolean> asked) {
+            var caller = Thread.currentThread();
+            Thread.ofPlatform().daemon().start(() -> {
+                try {
+                    while (!asked.get()) {
+                        Thread.sleep(5);
+                    }
+                    caller.interrupt();
+                } catch (InterruptedException stopped) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+
+        @Test
+        void keepsTheInterruptionOfTheThreadThatWaitsForTheDiagnosticsOfTheActions() throws Exception {
+            fake.publishesOnOpen(offers, List.of()).codeActionAnswers(offered());
+
+            try (var server = started()) {
+                Thread.currentThread().interrupt();
+
+                assertThatThrownBy(() -> server.codeActions(offers, onTheType)).isInstanceOf(JdtlsException.class);
+                assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+
+        @Test
+        void keepsTheInterruptionOfTheThreadThatWaitsForTheActions() throws Exception {
+            fake.publishesOnOpen(offers, List.of()).codeActionAnswers(new CompletableFuture<>());
+
+            try (var server = started()) {
+                interruptTheCallerOnceAsked(() -> !fake.codeActionRequests().isEmpty());
+
+                assertThatThrownBy(() -> server.codeActions(offers, onTheType))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Interrupted while waiting for the code actions on");
+                assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+
+        @Test
+        void keepsTheInterruptionOfTheThreadThatWaitsForTheEditOfAnAction() throws Exception {
+            fake.publishesOnOpen(offers, List.of())
+                    .codeActionAnswers(offered(action(CodeActionKind.QuickFix, "Import 'List' (java.util)")))
+                    .resolveAnswers(new CompletableFuture<>());
+
+            try (var server = started()) {
+                interruptTheCallerOnceAsked(() -> !fake.resolveRequests().isEmpty());
+
+                assertThatThrownBy(() -> server.codeActionEdit(offers, onTheType, importList()))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining(
+                                "Interrupted while waiting for the edit of the action \"Import 'List' (java.util)\"");
+                assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+
+        @Test
+        void resolvesTheActionOfTheKindAndTheTitleAndAnswersItsEditInTheTermsOfTheDomain() throws Exception {
+            fake.publishesOnOpen(offers, List.of(problem(3, 4, 8)))
+                    .codeActionAnswers(offered(
+                            action(CodeActionKind.QuickFix, "Import 'List' (java.awt)"),
+                            action(CodeActionKind.QuickFix, "Import 'List' (java.util)")))
+                    .resolveAnswers(CompletableFuture.completedFuture(
+                            withEdit(action(CodeActionKind.QuickFix, "Import 'List' (java.util)"))));
+
+            try (var server = started()) {
+                assertThat(server.codeActionEdit(offers, onTheType, importList()))
+                        .isEqualTo(imported());
+
+                assertThat(fake.resolveRequests()).hasSize(1);
+                assertThat(fake.resolveRequests().getFirst().getData())
+                        .isEqualTo(new JsonPrimitive("data of Import 'List' (java.util)"));
+                assertThat(fake.codeActionRequests().getFirst().getContext().getDiagnostics())
+                        .containsExactly(problem(3, 4, 8));
+                assertThat(offers).hasContent(OFFERS);
+            }
+        }
+
+        @Test
+        void takesTheEditOfTheActionWhenJdtlsGivesItWithoutBeingAskedToResolve() throws Exception {
+            fake.publishesOnOpen(offers, List.of())
+                    .codeActionAnswers(offered(withEdit(action(CodeActionKind.QuickFix, "Import 'List' (java.util)"))));
+
+            try (var server = started()) {
+                assertThat(server.codeActionEdit(offers, onTheType, importList()))
+                        .isEqualTo(imported());
+                assertThat(fake.resolveRequests()).isEmpty();
+            }
+        }
+
+        private void assertNotApplicable(JdtlsLanguageServer server) {
+            assertThatThrownBy(() -> server.codeActionEdit(offers, onTheType, importList()))
+                    .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                        assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_APPLICABLE);
+                        assertThat(refusal.parameters())
+                                .containsEntry("file", offers.toString())
+                                .containsEntry("title", "Import 'List' (java.util)")
+                                .containsEntry("line", "3")
+                                .containsEntry("endColumn", "8");
+                    });
+        }
+
+        @Test
+        void refusesAnActionThatIsACommandForAnEditor() throws Exception {
+            var command = action(CodeActionKind.QuickFix, "Import 'List' (java.util)");
+            command.setCommand(new Command("Import", "java.action.applyRefactoringCommand"));
+            fake.publishesOnOpen(offers, List.of())
+                    .codeActionAnswers(offered(command))
+                    .resolveAnswers(CompletableFuture.completedFuture(command));
+
+            try (var server = started()) {
+                assertNotApplicable(server);
+            }
+        }
+
+        @Test
+        void refusesAnActionJdtlsNoLongerOffers() throws Exception {
+            fake.publishesOnOpen(offers, List.of())
+                    .codeActionAnswers(offered(action(CodeActionKind.QuickFix, "Another fix")));
+
+            try (var server = started()) {
+                assertNotApplicable(server);
+                assertThat(fake.resolveRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void refusesTheActionOfTheSameTitleButAnotherKind() throws Exception {
+            fake.publishesOnOpen(offers, List.of())
+                    .codeActionAnswers(offered(withEdit(action("source", "Import 'List' (java.util)"))));
+
+            try (var server = started()) {
+                assertNotApplicable(server);
+            }
+        }
+
+        @Test
+        void refusesWhenTheResolveIsDeclinedOrAnswersNothing() throws Exception {
+            fake.publishesOnOpen(offers, List.of())
+                    .codeActionAnswers(offered(action(CodeActionKind.QuickFix, "Import 'List' (java.util)")))
+                    .resolveAnswers(CompletableFuture.completedFuture(null));
+
+            try (var server = started()) {
+                assertNotApplicable(server);
+
+                fake.resolveAnswers(CompletableFuture.failedFuture(new ResponseErrorException(
+                        new ResponseError(ResponseErrorCode.InvalidRequest, "cannot resolve", null))));
+                assertNotApplicable(server);
+            }
+        }
+
+        @Test
+        void refusesAnEditThatChangesNothing() throws Exception {
+            var empty = action(CodeActionKind.QuickFix, "Import 'List' (java.util)");
+            empty.setEdit(new WorkspaceEdit(List.of()));
+            fake.publishesOnOpen(offers, List.of()).codeActionAnswers(offered(empty));
+
+            try (var server = started()) {
+                assertNotApplicable(server);
+            }
+        }
+
+        @Test
+        void refusesAFileOutsideTheProjectWithoutAskingJdtls() throws Exception {
+            try (var server = started()) {
+                assertThatThrownBy(
+                                () -> server.codeActionEdit(root.resolve("../Elsewhere.java"), onTheType, importList()))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key())
+                                        .isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+                assertThat(fake.codeActionRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void saysWhatWentWrongWhenTheResolveFailsInsteadOfDeclining() throws Exception {
+            fake.publishesOnOpen(offers, List.of())
+                    .codeActionAnswers(offered(action(CodeActionKind.QuickFix, "Import 'List' (java.util)")))
+                    .resolveAnswers(CompletableFuture.failedFuture(new IllegalStateException("the model is broken")));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.codeActionEdit(offers, onTheType, importList()))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("waiting for the edit of the action \"Import 'List' (java.util)\"")
+                        .hasMessageContaining("Internal error");
+            }
+        }
+    }
+
+    @Nested
     class CreatingAType {
 
         private static final String SNIPPET = "package demo;\n\npublic class Widget {\n\n\t${0}\n}";

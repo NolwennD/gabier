@@ -27,7 +27,7 @@ import java.util.stream.Stream;
  * a method extracted under the name given, refusals), {@code extract-constant} (a dry run, a constant extracted under the
  * name given, refusals), {@code extract-field} (a dry run, a field extracted under the name given, refusals), {@code move-type-to-file} (a dry run, a type moved to a file of
  * its own, a refusal), {@code move} (a dry run that makes no folder, classes moved to a new package, refusals), {@code inline} (a dry run, a constant inlined, a refusal) and {@code create} (a dry run, a class
- * created, refusals) and {@code references} (the uses of a type, the declaration apart, a symbol nothing uses, refusals);
+ * created, refusals), {@code references} (the uses of a type, the declaration apart, a symbol nothing uses, refusals), {@code actions} (the fixes of a range, none, as JSON, refusals) and {@code apply-action} (a dry run, an action applied by its title, refusals);
  * a request command with no daemon running starts {@code gabier-daemon} (found on the {@code PATH} or next to the cli;
  * not found, exiting at once), the next request uses it, and {@code stop} ends it. Runs in the current directory, the
  * checkout under verification. It starts and signals only the processes it started, by their handle, and the daemons
@@ -324,6 +324,7 @@ public final class Native {
                 inlineWithTheFakeServer();
                 createWithTheFakeServer();
                 referencesWithTheFakeServer();
+                actionsWithTheFakeServer();
                 fakeServedRefusesAFolderThatIsNotEmpty();
             } finally {
                 for (Process process : started) {
@@ -1326,6 +1327,82 @@ public final class Native {
                     "gabier references writes nothing");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after the references");
+        }
+
+        /**
+         * {@code gabier actions} and {@code gabier apply-action} against the daemon served by the fake language server:
+         * the actions of a range as text and as JSON, a blank line that offers none (exit 0), an action applied by its
+         * title after a dry run that writes nothing, a title that is not offered and an action that is a command for an
+         * editor, both refused as problem objects, and the usage errors.
+         */
+        private void actionsWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("actions-project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            Path offers = project.resolve("src/main/java/demo/Offers.java");
+            String file = "actions-project/src/main/java/demo/Offers.java";
+            String title = "Import 'List' (java.util)";
+            String before = Files.readString(offers);
+
+            Run offered = gabier("actions", file, "4:5", "4:9");
+            expect(
+                    offered.exit() == 0
+                            && offered.err().isEmpty()
+                            && offered.out().equals("1 quickfix " + title),
+                    "gabier actions lists the actions of a range, with their number, kind and title");
+
+            Run json = gabier("--json", "actions", file, "4:5", "4:9");
+            expect(
+                    json.exit() == 0
+                            && json.out().equals("{\"actions\":[{\"kind\":\"quickfix\",\"title\":\"" + title + "\"}]}"),
+                    "gabier --json actions gives the result as the daemon gave it");
+
+            Run nothing = gabier("actions", file, "7:1", "7:1");
+            expect(
+                    nothing.exit() == 0 && nothing.err().isEmpty() && nothing.out().equals("no actions"),
+                    "gabier actions says that a range with nothing offered has no actions, exit 0");
+
+            Run dryRun = gabier("apply-action", "--dry-run", file, "4:5", "4:9", title);
+            expect(
+                    dryRun.exit() == 0
+                            && dryRun.out().lines().findFirst().orElse("").equals("dry run, nothing written")
+                            && dryRun.out().contains("modified " + offers)
+                            && dryRun.out().contains("+import java.util.List;")
+                            && Files.readString(offers).equals(before),
+                    "gabier apply-action --dry-run shows the change and writes nothing");
+
+            Run unknown = gabier("apply-action", file, "4:5", "4:9", "No such action");
+            expect(
+                    unknown.exit() == 2
+                            && unknown.out().isEmpty()
+                            && unknown.err().contains("(editing-no-such-code-action; ")
+                            && Files.readString(offers).equals(before),
+                    "apply-action of a title the range does not offer is refused as a problem object, exit 2");
+
+            Run command = gabier("apply-action", file, "4:18", "4:23", "Change signature for 'names'");
+            expect(
+                    command.exit() == 2
+                            && command.out().isEmpty()
+                            && command.err().contains("(language-server-not-applicable; ")
+                            && Files.readString(offers).equals(before),
+                    "apply-action of an action that is a command for an editor is refused, nothing written");
+
+            Run listDryRun = gabier("actions", "--dry-run", file, "4:5", "4:9");
+            expect(
+                    listDryRun.exit() == 2 && listDryRun.err().contains("(usage-error"),
+                    "actions has no dry run: the option is a usage error");
+
+            Run applied = gabier("apply-action", file, "4:5", "4:9", title);
+            expect(
+                    applied.exit() == 0
+                            && applied.out().startsWith("modified " + offers)
+                            && Files.readString(offers).contains("import java.util.List;"),
+                    "gabier apply-action applies the action of the title on disk");
+            gabier("stop");
+            expect(ends(process), "the daemon served by the fake stops after the actions");
         }
 
         /** A {@code gabier-daemon} in the folder: a script with this body, which the cli finds and launches. */

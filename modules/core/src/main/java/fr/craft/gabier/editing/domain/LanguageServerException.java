@@ -101,6 +101,20 @@ public final class LanguageServerException extends GeneratorException {
                 .addParameter("kind", kind.keyword()));
     }
 
+    /**
+     * The server offers the action on the range but gives no edit for it: it is a command for a client to run (it opens
+     * a dialog, or asks to choose a place), or it has nothing to change there.
+     */
+    public static LanguageServerException notApplicable(Path file, Range range, String title) {
+        return new LanguageServerException(positioned(LanguageServerErrorKey.NOT_APPLICABLE, file, range.start())
+                .message("The action \"" + title + "\" on " + format(range.start()) + "-" + format(range.end()) + " of "
+                        + file + " cannot be applied: the language server gives no edit for it (it is a command for"
+                        + " an editor, such as a dialog to fill in, or it changes nothing)")
+                .addParameter("endLine", String.valueOf(range.end().line()))
+                .addParameter("endColumn", String.valueOf(range.end().column()))
+                .addParameter("title", title));
+    }
+
     /** The server does not accept the name for the symbol at the position. */
     public static LanguageServerException invalidName(Path file, Position position, String name) {
         return new LanguageServerException(positioned(LanguageServerErrorKey.INVALID_NAME, file, position)

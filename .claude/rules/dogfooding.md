@@ -32,7 +32,13 @@ repository does it with `gabier` (installed on the PATH by `mise run install`; t
   right `package` line and no comment, instead of writing the file by hand (the folders of a new package are made with it);
 - `gabier references [--include-declaration] <file> <line>:<column>` to list where a symbol is used (1-based; a type, a
   method, a field, a local variable or a parameter of the project, tests included; the accessors of a field are not
-  listed), instead of searching the text. A Java refactoring that gabier has a command for goes through it.
+  listed), instead of searching the text;
+- `gabier actions <file> <line>:<column> <line>:<column>` to list what jdtls offers on a range (the fixes of an error, such
+  as the import of a type that is missing or a method to create, and the rewrites of code, such as a concatenation to a text
+  block; 1-based, end excluded, a point is the same position twice), and `gabier apply-action [--dry-run] <file>
+  <line>:<column> <line>:<column> <title>` to apply one by its title (the title is the key, the number of the list changes
+  from one call to the next): a fix of what `gabier diagnostics` reports goes through them, not through a text edit. A Java
+  refactoring that gabier has a command for goes through it.
 
 An operation gabier does not have yet is done as a text edit and becomes an issue (`.claude/rules/workflow.md`, step 4 of the
 development loop). The daemon serves one project, and there is one socket per project: `gabier` picks the socket of the

@@ -22,6 +22,7 @@ class LanguageServerExceptionTest {
                         "language-server-file-outside-project",
                         "language-server-invalid-name",
                         "language-server-no-such-symbol",
+                        "language-server-not-applicable",
                         "language-server-not-creatable",
                         "language-server-not-inlinable",
                         "language-server-not-extractable",
@@ -91,6 +92,33 @@ class LanguageServerExceptionTest {
                 .hasMessage("Nothing at 4:7 in " + FILE + " can be inlined: the position is not on a local variable,"
                         + " a method or a constant, or the server refuses it (a variable assigned more than once, a"
                         + " method that is recursive or abstract, a declaration that nothing uses)");
+    }
+
+    @Test
+    void saysWhichActionOfWhichRangeHasNoEdit() {
+        LanguageServerException exception = LanguageServerException.notApplicable(
+                FILE, new Range(new Position(3, 17), new Position(4, 22)), "Change signature for 'names'");
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_APPLICABLE);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters())
+                .isEqualTo(Map.of(
+                        "file",
+                        FILE.toString(),
+                        "line",
+                        "3",
+                        "column",
+                        "17",
+                        "endLine",
+                        "4",
+                        "endColumn",
+                        "22",
+                        "title",
+                        "Change signature for 'names'"));
+        assertThat(exception)
+                .hasMessage("The action \"Change signature for 'names'\" on 3:17-4:22 of " + FILE + " cannot be"
+                        + " applied: the language server gives no edit for it (it is a command for an editor, such as a"
+                        + " dialog to fill in, or it changes nothing)");
     }
 
     @Test

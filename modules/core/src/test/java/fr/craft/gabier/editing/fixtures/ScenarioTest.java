@@ -15,6 +15,8 @@ import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Location;
 import fr.craft.gabier.editing.domain.NotMovableReason;
+import fr.craft.gabier.editing.domain.OfferedAction;
+import fr.craft.gabier.editing.domain.OfferedActions;
 import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
@@ -732,6 +734,99 @@ class ScenarioTest {
                     .as(key.toString())
                     .isThrownBy(() -> references.refusal(key));
         }
+    }
+
+    @Test
+    void buildsTheRefusalsOfTheRequestsAboutCodeActions() {
+        var actions = new Request.CodeActions(FILE, SELECTION);
+        var apply = new Request.ApplyCodeAction(FILE, SELECTION, new OfferedAction("quickfix", "Fix it"));
+
+        for (Request request : List.<Request>of(actions, apply)) {
+            assertThat(request.refusal(LanguageServerErrorKey.NOT_READY).key())
+                    .isEqualTo(LanguageServerErrorKey.NOT_READY);
+            assertThat(request.refusal(LanguageServerErrorKey.FILE_MISSING).key())
+                    .isEqualTo(LanguageServerErrorKey.FILE_MISSING);
+            assertThat(request.refusal(LanguageServerErrorKey.NOT_A_FILE).key())
+                    .isEqualTo(LanguageServerErrorKey.NOT_A_FILE);
+            assertThat(request.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT)
+                            .parameters())
+                    .isEqualTo(Map.of("file", FILE.toString()));
+        }
+        assertThat(apply.refusal(LanguageServerErrorKey.NOT_APPLICABLE).parameters())
+                .containsEntry("title", "Fix it")
+                .containsEntry("line", "0")
+                .containsEntry("endColumn", "7");
+        for (var key : List.of(
+                LanguageServerErrorKey.NO_SUCH_SYMBOL,
+                LanguageServerErrorKey.INVALID_NAME,
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                LanguageServerErrorKey.NOT_INLINABLE,
+                LanguageServerErrorKey.NOT_MOVABLE,
+                LanguageServerErrorKey.NOT_MOVABLE_TO_PACKAGE,
+                LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
+                LanguageServerErrorKey.UNRESOLVED_IMPORTS,
+                LanguageServerErrorKey.NOT_CREATABLE)) {
+            assertThatExceptionOfType(IllegalArgumentException.class)
+                    .as(key.toString())
+                    .isThrownBy(() -> actions.refusal(key));
+            assertThatExceptionOfType(IllegalArgumentException.class)
+                    .as(key.toString())
+                    .isThrownBy(() -> apply.refusal(key));
+        }
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> actions.refusal(LanguageServerErrorKey.NOT_APPLICABLE));
+    }
+
+    @Test
+    void refusesAnActionThatIsNotApplicableOnlyForTheEditOfACodeAction() {
+        var requests = List.<Request>of(
+                new Request.Diagnostics(FILE),
+                new Request.OrganizeImports(FILE),
+                new Request.CleanUpFile(FILE, List.of(CleanUp.ADD_OVERRIDE)),
+                new Request.Rename(FILE, POSITION, "B"),
+                new Request.ExtractVariable(FILE, SELECTION, "v"),
+                new Request.ExtractMethod(FILE, SELECTION, "m"),
+                new Request.ExtractConstant(FILE, SELECTION, "C"),
+                new Request.ExtractField(FILE, SELECTION, "f"),
+                new Request.MoveTypeToFile(FILE, POSITION),
+                new Request.MoveToPackage(List.of(FILE), PackageName.of("a.b")),
+                new Request.Inline(FILE, POSITION),
+                new Request.References(FILE, POSITION, false),
+                new Request.CreateType(FILE, TypeKind.CLASS));
+
+        for (Request request : requests) {
+            assertThatExceptionOfType(IllegalArgumentException.class)
+                    .as(request.toString())
+                    .isThrownBy(() -> request.refusal(LanguageServerErrorKey.NOT_APPLICABLE));
+        }
+    }
+
+    @Test
+    void rejectsAnAnswerAboutCodeActionsThatDoesNotFitTheRequest() {
+        var offered = new Answer.Offered(new OfferedActions(List.of()));
+        var applied = new Answer.CodeActionApplied(set(new CreateFile(FILE)));
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(new Request.Diagnostics(FILE), offered));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(new Request.CodeActions(FILE, SELECTION), applied));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() ->
+                        scenario(new Request.ApplyCodeAction(FILE, SELECTION, new OfferedAction("", "x")), offered));
+        assertThat(scenario(new Request.CodeActions(FILE, SELECTION), offered).answer())
+                .isSameAs(offered);
+    }
+
+    @Test
+    void resolvesTheFileOfTheRequestsAboutCodeActionsAndOfTheEditOfTheAnswerAgainstARoot() {
+        var action = new OfferedAction("quickfix", "Fix it");
+
+        assertThat(new Request.CodeActions(FILE, SELECTION).resolvedIn(ROOT))
+                .isEqualTo(new Request.CodeActions(Path.of("/project/src/A.java"), SELECTION));
+        assertThat(new Request.ApplyCodeAction(FILE, SELECTION, action).resolvedIn(ROOT))
+                .isEqualTo(new Request.ApplyCodeAction(Path.of("/project/src/A.java"), SELECTION, action));
+        assertThat(new Answer.CodeActionApplied(set(new CreateFile(FILE))).resolvedIn(ROOT))
+                .isEqualTo(new Answer.CodeActionApplied(set(new CreateFile(Path.of("/project/src/A.java")))));
     }
 
     @Test

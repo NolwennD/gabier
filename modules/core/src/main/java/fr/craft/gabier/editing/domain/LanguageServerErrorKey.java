@@ -9,6 +9,7 @@ public enum LanguageServerErrorKey implements ErrorKey {
     FILE_OUTSIDE_PROJECT("language-server-file-outside-project"),
     INVALID_NAME("language-server-invalid-name"),
     NO_SUCH_SYMBOL("language-server-no-such-symbol"),
+    NOT_APPLICABLE("language-server-not-applicable"),
     NOT_CREATABLE("language-server-not-creatable"),
     NOT_INLINABLE("language-server-not-inlinable"),
     NOT_EXTRACTABLE("language-server-not-extractable"),

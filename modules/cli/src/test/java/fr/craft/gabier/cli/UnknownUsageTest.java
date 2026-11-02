@@ -27,7 +27,9 @@ class UnknownUsageTest extends CliTest {
                         moveWithoutAFileAndAPackage(),
                         withoutAFileAndOnePosition("inline"),
                         createWithoutAFileAndAKind(),
-                        referencesWithoutAFileAndOnePosition())
+                        referencesWithoutAFileAndOnePosition(),
+                        actionsWithoutAFileAndTwoPositions(),
+                        applyActionWithoutAFileTwoPositionsAndATitle())
                 .flatMap(List::stream);
     }
 
@@ -152,6 +154,29 @@ class UnknownUsageTest extends CliTest {
                 List.of("references", "A.java", "3:four"),
                 List.of("references", "--dry-run", "A.java", "3:4"),
                 List.of("references", "--token", "A.java", "3:4"));
+    }
+
+    private static List<List<String>> actionsWithoutAFileAndTwoPositions() {
+        return List.of(
+                List.of("actions"),
+                List.of("actions", "A.java"),
+                List.of("actions", "A.java", "3:4"),
+                List.of("actions", "A.java", "3:4", "3:9", "3:10"),
+                List.of("actions", "A.java", "3", "3:9"),
+                List.of("actions", "A.java", "0:4", "3:9"),
+                List.of("actions", "A.java", "3:4", "3:nine"),
+                List.of("actions", "--dry-run", "A.java", "3:4", "3:9"));
+    }
+
+    private static List<List<String>> applyActionWithoutAFileTwoPositionsAndATitle() {
+        return List.of(
+                List.of("apply-action"),
+                List.of("apply-action", "--dry-run"),
+                List.of("apply-action", "A.java", "3:4", "3:9"),
+                List.of("apply-action", "A.java", "3:4", "3:9", "title", "more"),
+                List.of("apply-action", "A.java", "3", "3:9", "title"),
+                List.of("apply-action", "A.java", "3:4", "0:9", "title"),
+                List.of("apply-action", "--token", "A.java", "3:4", "3:9", "title"));
     }
 
     private static List<List<String>> moveWithoutAFileAndAPackage() {

@@ -9,6 +9,8 @@ import fr.craft.gabier.editing.domain.JavaLanguageServer;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Location;
 import fr.craft.gabier.editing.domain.NotMovableReason;
+import fr.craft.gabier.editing.domain.OfferedAction;
+import fr.craft.gabier.editing.domain.OfferedActions;
 import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
@@ -196,6 +198,13 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * @throws JdtlsException if jdtls dies or does not answer in time
      */
     synchronized SequencedMap<Path, List<Diagnostic>> diagnostics(List<Path> files) {
+        SequencedMap<Path, List<Diagnostic>> answers = new LinkedHashMap<>();
+        published(files).forEach((file, found) -> answers.put(file, domain(found)));
+        return answers;
+    }
+
+    /** What {@link #diagnostics(List)} asks of jdtls, as jdtls publishes it. */
+    private synchronized SequencedMap<Path, List<org.eclipse.lsp4j.Diagnostic>> published(List<Path> files) {
         JdtlsSession session = ready();
         Map<Path, String> texts = new LinkedHashMap<>();
         for (Path file : files) {
@@ -215,8 +224,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         } finally {
             close(session, texts.keySet());
         }
-        SequencedMap<Path, List<Diagnostic>> answers = new LinkedHashMap<>();
-        texts.keySet().forEach(file -> answers.put(file, domain(diagnostics.latest(file))));
+        SequencedMap<Path, List<org.eclipse.lsp4j.Diagnostic>> answers = new LinkedHashMap<>();
+        texts.keySet().forEach(file -> answers.put(file, diagnostics.latest(file)));
         return answers;
     }
 
@@ -889,6 +898,119 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                                 found.getRange().getStart().getLine(),
                                 found.getRange().getStart().getCharacter())))
                 .toList();
+    }
+
+    /**
+     * The code actions of the range, with {@code textDocument/codeAction}. jdtls computes the fixes of a problem only for
+     * the diagnostics the request carries (without them it offers none: {@code CodeActionHandler} reads the problems
+     * from {@code context.diagnostics}), so the adapter opens the file, takes the diagnostics jdtls publishes for it as
+     * {@link #diagnostics} does, and sends those that touch the range. The {@code only} of the request names the
+     * processors jdtls runs: {@code quickfix}, {@code refactor} and {@code quickassist}, which is jdtls's own kind for
+     * the rewrites of a piece of code (a concatenation to a text block) and which it gives only to a client that
+     * declares it ({@link JdtlsCapabilities#QUICK_ASSIST}); the {@code source} actions, which are about a whole file
+     * (organize the imports, generate accessors) and are offered whatever the range, are left out, so that a range with
+     * nothing to offer has an empty answer. A bare command, which a client without literal support is answered, is not
+     * an action and is not listed.
+     *
+     * @throws LanguageServerException if jdtls is not ready or the file is not in its project
+     * @throws JdtlsException if jdtls dies or does not answer in time
+     */
+    @Override
+    public synchronized OfferedActions codeActions(Path file, Range range) {
+        return new OfferedActions(offered(file, range).stream()
+                .map(offer -> new OfferedAction(kindOf(offer), offer.getTitle()))
+                .toList());
+    }
+
+    /**
+     * The edit of the action, taken from the actions jdtls offers on the range now (the one of the same kind and title)
+     * and resolved ({@code codeAction/resolve}) when jdtls does not give it with the action: the client declares {@code
+     * codeAction.resolveSupport} for {@code edit}. An action that jdtls no longer offers, one that has no edit once
+     * resolved (a command for the editor: {@code java.action.applyRefactoringCommand} for "Change signature", which
+     * opens a dialog) and one whose edit changes nothing are one refusal, {@code not-applicable}.
+     *
+     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, or there is no edit for
+     *     the action
+     * @throws JdtlsException if jdtls dies or does not answer in time
+     */
+    @Override
+    public synchronized ChangeSet codeActionEdit(Path file, Range range, OfferedAction action) {
+        Path path = normalized(file);
+        Optional<CodeAction> found = offered(file, range).stream()
+                .filter(offer ->
+                        kindOf(offer).equals(action.kind()) && offer.getTitle().equals(action.title()))
+                .findFirst();
+        JdtlsSession session = ready();
+        var service = session.server().getTextDocumentService();
+        JdtlsWatch watch = session.newWatch();
+        try {
+            if (found.isPresent() && found.get().getEdit() == null) {
+                var unresolved = found.get();
+                found = watch.await(
+                        "the edit of the action \"" + action.title() + "\" on " + range + " of " + path,
+                        () -> JdtlsRequests.unlessDeclined(service.resolveCodeAction(unresolved)));
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException(
+                    "Interrupted while waiting for the edit of the action \"" + action.title() + "\" on " + range
+                            + " of " + path,
+                    interrupted);
+        }
+        List<FileChange> changes = found.map(CodeAction::getEdit)
+                .map(edit -> WorkspaceEdits.of(edit, JdtlsLanguageServer::textOnDisk))
+                .orElse(List.of());
+        if (changes.isEmpty()) {
+            throw LanguageServerException.notApplicable(path, range, action.title());
+        }
+
+        return new ChangeSet(changes);
+    }
+
+    private List<CodeAction> offered(Path file, Range range) {
+        Path path = normalized(file);
+        var asked = lsp(range);
+        List<org.eclipse.lsp4j.Diagnostic> problems = published(List.of(path)).sequencedValues().getFirst().stream()
+                .filter(problem -> touches(problem.getRange(), asked))
+                .toList();
+        JdtlsSession session = ready();
+        var context = new CodeActionContext(
+                problems, List.of(CodeActionKind.QuickFix, CodeActionKind.Refactor, JdtlsCapabilities.QUICK_ASSIST));
+        var params =
+                new CodeActionParams(new TextDocumentIdentifier(path.toUri().toString()), asked, context);
+        var service = session.server().getTextDocumentService();
+        JdtlsWatch watch = session.newWatch();
+        try {
+            takeInChangesOnDisk(session, watch);
+            var offered = watch.await(
+                    "the code actions on " + range + " of " + path,
+                    () -> JdtlsRequests.unlessDeclined(service.codeAction(params)));
+            return offered.stream()
+                    .flatMap(List::stream)
+                    .filter(Either::isRight)
+                    .map(Either::getRight)
+                    .toList();
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException(
+                    "Interrupted while waiting for the code actions on " + range + " of " + path, interrupted);
+        }
+    }
+
+    /** Whether the problem is on the range or touches it: a point inside a problem is on it. */
+    private static boolean touches(org.eclipse.lsp4j.Range problem, org.eclipse.lsp4j.Range range) {
+        return compare(problem.getStart(), range.getEnd()) <= 0 && compare(range.getStart(), problem.getEnd()) <= 0;
+    }
+
+    private static int compare(org.eclipse.lsp4j.Position first, org.eclipse.lsp4j.Position second) {
+        return first.getLine() != second.getLine()
+                ? Integer.compare(first.getLine(), second.getLine())
+                : Integer.compare(first.getCharacter(), second.getCharacter());
+    }
+
+    /** The kind of an action, empty when the server gave none: the protocol makes it optional. */
+    private static String kindOf(CodeAction offer) {
+        return Objects.requireNonNullElse(offer.getKind(), "");
     }
 
     private static boolean isAnInlining(CodeAction offer) {

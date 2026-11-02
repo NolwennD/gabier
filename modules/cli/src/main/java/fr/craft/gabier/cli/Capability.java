@@ -19,6 +19,8 @@ sealed interface Capability
                 Inline,
                 Create,
                 References,
+                Actions,
+                ApplyAction,
                 Status,
                 Stop,
                 RemoveWorkspace,

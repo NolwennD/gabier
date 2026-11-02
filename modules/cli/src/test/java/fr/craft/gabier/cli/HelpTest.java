@@ -29,6 +29,8 @@ class HelpTest extends CliTest {
             "inline",
             "create",
             "references",
+            "actions",
+            "apply-action",
             "status",
             "stop",
             "remove-workspace",
@@ -162,7 +164,8 @@ class HelpTest extends CliTest {
         assertThat(err()).startsWith("""
             Usage error: Unknown command; the commands are diagnostics, rename, organize-imports,\
              cleanup, extract-variable, extract-method, extract-constant, extract-field,\
-             move-type-to-file, move, inline, create, references, status, stop, remove-workspace, help\
+             move-type-to-file, move, inline, create, references, actions, apply-action, status, stop, remove-workspace,\
+             help\
              (usage-error; command=frobnicate)\
             """);
     }

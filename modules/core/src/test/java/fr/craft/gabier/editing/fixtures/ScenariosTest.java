@@ -227,7 +227,104 @@ class ScenariosTest {
                         "clean-up-with-two-clean-ups",
                         "clean-up-a-file-that-is-clean",
                         "clean-up-while-the-server-imports",
-                        "clean-up-a-file-outside-the-project");
+                        "clean-up-a-file-outside-the-project",
+                        "code-actions-on-a-type-that-is-not-imported",
+                        "code-actions-on-a-concatenation",
+                        "code-actions-on-the-name-of-a-method",
+                        "code-actions-where-nothing-is-offered",
+                        "code-actions-while-the-server-imports",
+                        "code-actions-of-a-file-outside-the-project",
+                        "apply-the-import-of-a-type",
+                        "apply-a-rewrite-of-a-concatenation",
+                        "apply-an-action-that-is-a-command");
+    }
+
+    @Test
+    void refusesForEachReasonOfThePortOnTheCodeActionsOfARange() {
+        assertThat(answeredWith(Answer.Refused.class).stream()
+                        .filter(scenario -> scenario.request() instanceof Request.CodeActions)
+                        .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.NOT_READY, LanguageServerErrorKey.FILE_OUTSIDE_PROJECT);
+    }
+
+    @Test
+    void asksForTheActionsOfTheTypeThatIsNotImportedWhereItIsWritten() {
+        var request = (Request.CodeActions) CodeActionScenarios.CODE_ACTIONS_ON_A_TYPE_THAT_IS_NOT_IMPORTED.request();
+        String source = CodeActionScenarios.CODE_ACTIONS_ON_A_TYPE_THAT_IS_NOT_IMPORTED
+                .files()
+                .get(request.file());
+
+        assertThat(selected(source, request.range())).isEqualTo("List");
+        assertThat(source).doesNotContain("import java.util.List");
+    }
+
+    @Test
+    void asksForTheActionsOfTheConcatenationFromItsFirstLiteralToItsLast() {
+        var request = (Request.CodeActions) CodeActionScenarios.CODE_ACTIONS_ON_A_CONCATENATION.request();
+        String source =
+                CodeActionScenarios.CODE_ACTIONS_ON_A_CONCATENATION.files().get(request.file());
+        List<String> lines = source.lines().toList();
+
+        assertThat(lines.get(request.range().start().line())
+                        .substring(request.range().start().column()))
+                .startsWith("\"Hello, ");
+        assertThat(lines.get(request.range().end().line())
+                        .substring(0, request.range().end().column()))
+                .endsWith("\"Bye.\\n\"");
+    }
+
+    @Test
+    void asksForTheActionsOfTheBlankLineAndOfTheNameOfTheMethodWhereTheyAre() {
+        var blank = (Request.CodeActions) CodeActionScenarios.CODE_ACTIONS_WHERE_NOTHING_IS_OFFERED.request();
+        var name = (Request.ApplyCodeAction) CodeActionScenarios.APPLY_AN_ACTION_THAT_IS_A_COMMAND.request();
+        String source = CodeActionScenarios.CODE_ACTIONS_WHERE_NOTHING_IS_OFFERED
+                .files()
+                .get(blank.file());
+
+        assertThat(source.lines().toList().get(blank.range().start().line())).isEmpty();
+        assertThat(selected(source, name.range())).isEqualTo("names");
+        assertThat(name.action().title()).contains("'" + selected(source, name.range()) + "'");
+    }
+
+    @Test
+    void importsTheTypeAndWritesTheTextBlockOnceTheChangeSetsAreApplied(@TempDir Path directory) throws IOException {
+        for (Scenario scenario : answeredWith(Answer.CodeActionApplied.class)) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.CodeActionApplied) inside.answer()).changes());
+
+            assertThat(Files.readString(inside.request().file()))
+                    .as(scenario.name())
+                    .satisfiesAnyOf(
+                            text -> assertThat(text)
+                                    .contains("import java.util.List;")
+                                    .contains("public class Offers"),
+                            text -> assertThat(text)
+                                    .contains("return \"\"\"\n            Hello, \"world\"!\n")
+                                    .endsWith("    }\n}\n"));
+        }
+    }
+
+    @Test
+    void refusesAnActionThatIsACommandAndAppliesTheOthers() {
+        assertThat(answeredWith(Answer.Refused.class).stream()
+                        .filter(scenario -> scenario.request() instanceof Request.ApplyCodeAction)
+                        .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
+                .containsExactly(LanguageServerErrorKey.NOT_APPLICABLE);
+        assertThat(answeredWith(Answer.CodeActionApplied.class)).hasSize(2);
+    }
+
+    @Test
+    void offersNothingOnABlankLineAndTheActionsAScenarioMustSeeElsewhere() {
+        assertThat(answeredWith(Answer.Offered.class).stream()
+                        .map(scenario -> ((Answer.Offered) scenario.answer())
+                                .offered()
+                                .actions()
+                                .size()))
+                .containsExactly(1, 1, 1, 0);
     }
 
     @Test

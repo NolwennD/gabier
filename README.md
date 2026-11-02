@@ -32,6 +32,9 @@ in [The daemon](docs/daemon.md). The daemon starts by itself at the first comman
   right `package` line and no comment.
 - [`gabier references`](docs/commands/references.md): list where a symbol is used, in every file of the project and its
   tests (the declaration on request).
+- [`gabier actions`](docs/commands/actions.md): list the fixes (a missing import) and the rewrites (a concatenation to a
+  text block) the language server offers on a range of a file.
+- [`gabier apply-action`](docs/commands/apply-action.md): apply one of them, chosen by its title.
 - [`gabier remove-workspace [<project folder>]`](docs/commands/remove-workspace.md): remove the jdtls workspace kept for
   a project, with no daemon (before a worktree is removed).
 - [`gabier help [<command>]`](docs/commands/help.md): list the commands, or explain one (usage, example, refusals).

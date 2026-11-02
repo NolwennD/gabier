@@ -4,10 +4,12 @@ import fr.craft.gabier.shared.error.domain.ErrorKey;
 
 /** The keys of the refusals of the editing context, for the mapper that turns an exception into a problem report. */
 public enum EditingErrorKey implements ErrorKey {
+    AMBIGUOUS_CODE_ACTION("editing-ambiguous-code-action"),
     FILE_EXISTS("editing-file-exists"),
     FILE_MISSING("editing-file-missing"),
     FOLDER_MISSING("editing-folder-missing"),
     INVALID_RANGE("editing-invalid-range"),
+    NO_SUCH_CODE_ACTION("editing-no-such-code-action"),
     NOT_A_PACKAGE_NAME("editing-not-a-package-name"),
     NOT_A_TYPE_NAME("editing-not-a-type-name"),
     OVERLAPPING_EDITS("editing-overlapping-edits"),

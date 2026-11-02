@@ -9,6 +9,7 @@ import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
+import fr.craft.gabier.editing.domain.OfferedAction;
 import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
@@ -71,6 +72,44 @@ class FakeJavaLanguageServerTest {
                         List.of(new TextEdit(
                                 new Range(new Position(6, 15), new Position(7, 22)),
                                 "text = greeting + \", \" + name;\n        return text"))));
+    }
+
+    @Test
+    void answersWhatACodeActionsScenarioSaysIsOfferedAndTheEditOfOneOfThem() {
+        var offers = ROOT.resolve("src/main/java/demo/Offers.java");
+        var type = new Range(new Position(3, 4), new Position(3, 8));
+        server.scripted(CodeActionScenarios.CODE_ACTIONS_ON_A_TYPE_THAT_IS_NOT_IMPORTED)
+                .scripted(CodeActionScenarios.CODE_ACTIONS_WHERE_NOTHING_IS_OFFERED)
+                .scripted(CodeActionScenarios.APPLY_THE_IMPORT_OF_A_TYPE)
+                .scripted(CodeActionScenarios.APPLY_AN_ACTION_THAT_IS_A_COMMAND);
+
+        assertThat(server.codeActions(offers, type).actions())
+                .containsExactly(new OfferedAction("quickfix", "Import 'List' (java.util)"));
+        assertThat(server.codeActions(offers, new Range(new Position(6, 0), new Position(6, 0)))
+                        .actions())
+                .isEmpty();
+        assertThat(server.codeActionEdit(offers, type, new OfferedAction("quickfix", "Import 'List' (java.util)")))
+                .isEqualTo(((Answer.CodeActionApplied) CodeActionScenarios.APPLY_THE_IMPORT_OF_A_TYPE
+                                .inside(ROOT)
+                                .answer())
+                        .changes());
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.codeActionEdit(
+                        offers,
+                        new Range(new Position(3, 17), new Position(3, 22)),
+                        new OfferedAction("refactor.change.signature", "Change signature for 'names'")))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_APPLICABLE));
+    }
+
+    @Test
+    void throwsTheRefusalsOfACodeActionsScenario() {
+        server.scripted(CodeActionScenarios.CODE_ACTIONS_OUTSIDE_THE_PROJECT);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> server.codeActions(
+                        ROOT.resolve("../outside/Elsewhere.java"), new Range(new Position(3, 4), new Position(3, 8))))
+                .satisfies(exception ->
+                        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
     }
 
     @Test

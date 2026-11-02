@@ -59,6 +59,19 @@ class JdtlsCapabilitiesTest {
     }
 
     @Test
+    void declaresTheKindOfTheRewritesOfJdtlsWhichItDropsOtherwise() {
+        var kinds = capabilities
+                .getTextDocument()
+                .getCodeAction()
+                .getCodeActionLiteralSupport()
+                .getCodeActionKind()
+                .getValueSet();
+
+        assertThat(kinds).contains("quickassist");
+        assertThat(JdtlsCapabilities.QUICK_ASSIST).isEqualTo("quickassist");
+    }
+
+    @Test
     void resolvesTheEditOfACodeActionAndKeepsItsData() {
         var codeAction = capabilities.getTextDocument().getCodeAction();
 

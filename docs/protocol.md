@@ -53,3 +53,5 @@ daemon ([help](commands/help.md)).
 | `inline`           | `file`, `line`, `column`, `dryRun`                                          | [inline](commands/inline.md)                               |
 | `create`           | `file`, `kind`, `dryRun`                                                    | [create](commands/create.md)                               |
 | `references`       | `file`, `line`, `column`, `includeDeclaration`                              | [references](commands/references.md)                       |
+| `actions`          | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`                  | [actions](commands/actions.md)                             |
+| `apply-action`     | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `title`, `dryRun` | [apply-action](commands/apply-action.md)                 |

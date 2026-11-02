@@ -22,6 +22,8 @@ final class Capabilities {
             new Inline(),
             new Create(),
             new References(),
+            new Actions(),
+            new ApplyAction(),
             new Status(),
             new Stop(),
             new RemoveWorkspace(),

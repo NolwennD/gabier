@@ -1,5 +1,6 @@
 package fr.craft.gabier.daemon;
 
+import fr.craft.gabier.editing.application.ApplyCodeAction;
 import fr.craft.gabier.editing.application.CleanUpFile;
 import fr.craft.gabier.editing.application.CreateType;
 import fr.craft.gabier.editing.application.Diagnose;
@@ -9,6 +10,7 @@ import fr.craft.gabier.editing.application.ExtractMethod;
 import fr.craft.gabier.editing.application.ExtractVariable;
 import fr.craft.gabier.editing.application.FindReferences;
 import fr.craft.gabier.editing.application.Inline;
+import fr.craft.gabier.editing.application.ListCodeActions;
 import fr.craft.gabier.editing.application.MoveToPackage;
 import fr.craft.gabier.editing.application.MoveTypeToFile;
 import fr.craft.gabier.editing.application.OrganizeImports;
@@ -80,6 +82,8 @@ final class DaemonServer implements AutoCloseable {
                 new MoveMethod(new MoveToPackage(project, new NioFileStore())),
                 new InlineMethod(new Inline(project, new NioFileStore())),
                 new CreateTypeMethod(new CreateType(project, new NioFileStore())),
+                new CodeActionsMethod(new ListCodeActions(project)),
+                new ApplyCodeActionMethod(new ApplyCodeAction(project, new NioFileStore())),
                 new ReferencesMethod(new FindReferences(project, new NioFileStore()))));
     }
 

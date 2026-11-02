@@ -142,6 +142,10 @@ import java.util.stream.Stream;
  *   <li>the clean-ups of a file ({@link CleanUpScenarios}, {@code gabier cleanup}): {@code java/cleanup} runs the
  *       identifiers of the setting {@code java.cleanup.actions}, which the adapter sets before the request; jdtls
  *       answers one edit of the whole text, or none.
+ *   <li>the code actions of a range ({@link CodeActionScenarios}, {@code gabier actions} and {@code gabier
+ *       apply-action}): {@code textDocument/codeAction} with the diagnostics of the range in its context and the kinds
+ *       {@code quickfix}, {@code refactor} and {@code quickassist}, then {@code codeAction/resolve} for the edit of the
+ *       one that is chosen; the titles are jdtls's text, which gabier does not read.
  *   <li>the creation of a type ({@link #CREATE_A_CLASS}, {@link #CREATE_AN_INTERFACE}, {@link #CREATE_A_RECORD}, {@link
  *       #CREATE_AN_ENUM}): the file need not exist. The adapter opens it in jdtls with no text and asks for the
  *       completion at its start: the snippet of the kind is the text of the file, with the {@code package} line that
@@ -1657,9 +1661,12 @@ public final class Scenarios {
 
     private Scenarios() {}
 
-    /** Every scenario of the catalogue, those of {@link PackageMoveScenarios} and {@link CleanUpScenarios} included. */
+    /**
+     * Every scenario of the catalogue, those of {@link PackageMoveScenarios}, {@link CleanUpScenarios} and {@link
+     * CodeActionScenarios} included.
+     */
     public static List<Scenario> all() {
-        return Stream.of(own(), PackageMoveScenarios.all(), CleanUpScenarios.all())
+        return Stream.of(own(), PackageMoveScenarios.all(), CleanUpScenarios.all(), CodeActionScenarios.all())
                 .flatMap(List::stream)
                 .toList();
     }

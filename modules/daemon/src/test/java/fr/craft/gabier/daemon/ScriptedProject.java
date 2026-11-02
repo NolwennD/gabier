@@ -4,6 +4,8 @@ import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.CleanUp;
 import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.JavaLanguageServer;
+import fr.craft.gabier.editing.domain.OfferedAction;
+import fr.craft.gabier.editing.domain.OfferedActions;
 import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
@@ -181,6 +183,16 @@ final class ScriptedProject implements ServedProject {
     @Override
     public ReferenceLocations references(Path file, Position position, boolean includeDeclaration) {
         return server.references(file, position, includeDeclaration);
+    }
+
+    @Override
+    public OfferedActions codeActions(Path file, Range range) {
+        return server.codeActions(file, range);
+    }
+
+    @Override
+    public ChangeSet codeActionEdit(Path file, Range range, OfferedAction action) {
+        return server.codeActionEdit(file, range, action);
     }
 
     @Override

@@ -3,12 +3,15 @@ package fr.craft.gabier.daemon;
 import fr.craft.gabier.editing.domain.ChangeSet;
 import fr.craft.gabier.editing.domain.CleanUp;
 import fr.craft.gabier.editing.domain.Diagnostic;
+import fr.craft.gabier.editing.domain.OfferedAction;
+import fr.craft.gabier.editing.domain.OfferedActions;
 import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
 import fr.craft.gabier.editing.domain.ReferenceLocations;
 import fr.craft.gabier.editing.domain.TypeKind;
 import fr.craft.gabier.editing.fixtures.CleanUpScenarios;
+import fr.craft.gabier.editing.fixtures.CodeActionScenarios;
 import fr.craft.gabier.editing.fixtures.FakeJavaLanguageServer;
 import fr.craft.gabier.editing.fixtures.PackageMoveScenarios;
 import fr.craft.gabier.editing.fixtures.Scenario;
@@ -101,7 +104,15 @@ public final class FakeServedMain {
                 Scenarios.REFERENCES_OF_A_METHOD_WITH_ITS_DECLARATION,
                 Scenarios.REFERENCES_OF_A_SYMBOL_NOTHING_USES,
                 Scenarios.REFERENCES_WHERE_THERE_IS_NO_SYMBOL,
-                Scenarios.REFERENCES_OF_A_FILE_OUTSIDE_THE_PROJECT);
+                Scenarios.REFERENCES_OF_A_FILE_OUTSIDE_THE_PROJECT,
+                CodeActionScenarios.CODE_ACTIONS_ON_A_TYPE_THAT_IS_NOT_IMPORTED,
+                CodeActionScenarios.CODE_ACTIONS_ON_A_CONCATENATION,
+                CodeActionScenarios.CODE_ACTIONS_ON_THE_NAME_OF_A_METHOD,
+                CodeActionScenarios.CODE_ACTIONS_WHERE_NOTHING_IS_OFFERED,
+                CodeActionScenarios.CODE_ACTIONS_OUTSIDE_THE_PROJECT,
+                CodeActionScenarios.APPLY_THE_IMPORT_OF_A_TYPE,
+                CodeActionScenarios.APPLY_A_REWRITE_OF_A_CONCATENATION,
+                CodeActionScenarios.APPLY_AN_ACTION_THAT_IS_A_COMMAND);
         for (var scenario : scenarios) {
             scenario.writeProject(root);
             server.scripted(scenario);
@@ -196,6 +207,16 @@ public final class FakeServedMain {
         @Override
         public ReferenceLocations references(Path file, Position position, boolean includeDeclaration) {
             return server.references(file, position, includeDeclaration);
+        }
+
+        @Override
+        public OfferedActions codeActions(Path file, Range range) {
+            return server.codeActions(file, range);
+        }
+
+        @Override
+        public ChangeSet codeActionEdit(Path file, Range range, OfferedAction action) {
+            return server.codeActionEdit(file, range, action);
         }
 
         @Override

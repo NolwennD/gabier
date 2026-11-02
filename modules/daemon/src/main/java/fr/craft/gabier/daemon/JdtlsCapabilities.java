@@ -25,9 +25,17 @@ import org.eclipse.lsp4j.WorkspaceEditCapabilities;
  * edits made on disk, only for a client that declares the dynamic registration of {@code
  * workspace/didChangeWatchedFiles}. It offers the code action {@code source.organizeImports}, which computes its edit
  * only when it is resolved, to a client that declares the kind among its literals and {@code resolveSupport} for {@code
- * edit}; the preferences that decide what it writes are {@link JdtlsSettings#javaPreferences}, not capabilities.
+ * edit}; the preferences that decide what it writes are {@link JdtlsSettings#javaPreferences}, not capabilities. The
+ * same list of kinds decides which code actions of a range it gives (see {@link #QUICK_ASSIST}).
  */
 final class JdtlsCapabilities {
+
+    /**
+     * The kind jdtls gives the rewrites it offers on a piece of code (a concatenation to a text block, a lambda to a
+     * method reference): its own, not one of the Language Server Protocol, so LSP4J has no constant for it. jdtls
+     * (ClientPreferences.isSupportedCodeActionKind) drops an action whose kind the client does not declare, by prefix.
+     */
+    static final String QUICK_ASSIST = "quickassist";
 
     private JdtlsCapabilities() {}
 
@@ -72,7 +80,8 @@ final class JdtlsCapabilities {
                 CodeActionKind.RefactorInline,
                 CodeActionKind.RefactorRewrite,
                 CodeActionKind.Source,
-                CodeActionKind.SourceOrganizeImports));
+                CodeActionKind.SourceOrganizeImports,
+                QUICK_ASSIST));
         var codeAction = new CodeActionCapabilities();
         codeAction.setCodeActionLiteralSupport(new CodeActionLiteralSupportCapabilities(kinds));
         // The edit of a code action is computed when the action is chosen, not when the list is asked for.

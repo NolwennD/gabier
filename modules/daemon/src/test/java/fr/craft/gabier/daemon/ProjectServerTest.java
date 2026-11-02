@@ -10,6 +10,8 @@ import fr.craft.gabier.editing.domain.Diagnostic;
 import fr.craft.gabier.editing.domain.FileChange;
 import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
+import fr.craft.gabier.editing.domain.OfferedAction;
+import fr.craft.gabier.editing.domain.OfferedActions;
 import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
@@ -85,6 +87,7 @@ class ProjectServerTest {
         static final ChangeSet RENAMED =
                 new ChangeSet(List.of(new FileChange.CreateFile(Path.of("/work/demo/Other.java"))));
         static final ReferenceLocations NO_REFERENCES = new ReferenceLocations(List.of(), List.of());
+        static final OfferedActions OFFERED = new OfferedActions(List.of(new OfferedAction("quickfix", "Fix it")));
         static final Diagnostic WARNING = new Diagnostic(Diagnostic.Severity.WARNING, new Position(1, 2), "unused");
 
         private final CountDownLatch released = new CountDownLatch(1);
@@ -196,6 +199,16 @@ class ProjectServerTest {
         @Override
         public ReferenceLocations references(Path file, Position position, boolean includeDeclaration) {
             return NO_REFERENCES;
+        }
+
+        @Override
+        public OfferedActions codeActions(Path file, Range range) {
+            return OFFERED;
+        }
+
+        @Override
+        public ChangeSet codeActionEdit(Path file, Range range, OfferedAction action) {
+            return RENAMED;
         }
 
         @Override
@@ -349,6 +362,25 @@ class ProjectServerTest {
         @Test
         void aSearchForReferencesStartsItToo() {
             assertThat(project.references(FILE, new Position(0, 0), true)).isEqualTo(ScriptedServer.NO_REFERENCES);
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
+        void aListOfCodeActionsStartsItToo() {
+            var range = new Range(new Position(0, 0), new Position(0, 1));
+
+            assertThat(project.codeActions(FILE, range)).isEqualTo(ScriptedServer.OFFERED);
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
+        void theEditOfACodeActionStartsItToo() {
+            var range = new Range(new Position(0, 0), new Position(0, 1));
+
+            assertThat(project.codeActionEdit(FILE, range, new OfferedAction("quickfix", "Fix it")))
+                    .isEqualTo(ScriptedServer.RENAMED);
 
             assertThat(starter.starts).hasValue(1);
         }

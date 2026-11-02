@@ -27,12 +27,12 @@ import java.util.Map;
  */
 public final class CleanUpScenarios {
 
-    private static final Path BANNER = Path.of("src/main/java/demo/Banner.java");
+    static final Path BANNER = Path.of("src/main/java/demo/Banner.java");
     private static final Path NOTICE = Path.of("src/main/java/demo/Notice.java");
     private static final Path PLAIN = Path.of("src/main/java/demo/Plain.java");
     private static final Path ELSEWHERE = Path.of("../outside/Elsewhere.java");
 
-    private static final Map<Path, String> PROJECT = Map.of(
+    static final Map<Path, String> PROJECT = Map.of(
             BANNER, """
             package demo;
 

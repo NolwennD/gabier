@@ -12,6 +12,8 @@ import fr.craft.gabier.editing.domain.LanguageServerErrorKey;
 import fr.craft.gabier.editing.domain.LanguageServerException;
 import fr.craft.gabier.editing.domain.Location;
 import fr.craft.gabier.editing.domain.NotMovableReason;
+import fr.craft.gabier.editing.domain.OfferedAction;
+import fr.craft.gabier.editing.domain.OfferedActions;
 import fr.craft.gabier.editing.domain.PackageName;
 import fr.craft.gabier.editing.domain.Position;
 import fr.craft.gabier.editing.domain.Range;
@@ -89,6 +91,9 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             case Answer.Inlined _ -> require(request instanceof Request.Inline, "inlined", request);
             case Answer.Referenced _ -> require(request instanceof Request.References, "referenced", request);
             case Answer.Created _ -> require(request instanceof Request.CreateType, "created", request);
+            case Answer.Offered _ -> require(request instanceof Request.CodeActions, "offered", request);
+            case Answer.CodeActionApplied _ ->
+                require(request instanceof Request.ApplyCodeAction, "code action applied", request);
             case Answer.Organized _ -> require(request instanceof Request.OrganizeImports, "organized", request);
             case Answer.AlreadyOrganized _ ->
                 require(request instanceof Request.OrganizeImports, "already organized", request);
@@ -161,6 +166,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
+                            NOT_APPLICABLE,
                             NOT_CREATABLE ->
                         throw new IllegalArgumentException("A request for diagnostics cannot get " + key);
                 };
@@ -194,6 +200,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             NOT_MOVABLE_TO_PACKAGE,
+                            NOT_APPLICABLE,
                             NOT_CREATABLE ->
                         throw new IllegalArgumentException("A request to organize imports cannot get " + key);
                 };
@@ -233,6 +240,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
+                            NOT_APPLICABLE,
                             NOT_CREATABLE -> throw new IllegalArgumentException("A clean-up cannot get " + key);
                 };
             }
@@ -267,6 +275,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
+                            NOT_APPLICABLE,
                             NOT_CREATABLE -> throw new IllegalArgumentException("A rename cannot get " + key);
                 };
             }
@@ -301,6 +310,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
+                            NOT_APPLICABLE,
                             NOT_CREATABLE ->
                         throw new IllegalArgumentException("An extraction of a variable cannot get " + key);
                 };
@@ -336,6 +346,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
+                            NOT_APPLICABLE,
                             NOT_CREATABLE ->
                         throw new IllegalArgumentException("An extraction of a method cannot get " + key);
                 };
@@ -371,6 +382,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
+                            NOT_APPLICABLE,
                             NOT_CREATABLE ->
                         throw new IllegalArgumentException("An extraction of a constant cannot get " + key);
                 };
@@ -406,6 +418,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
+                            NOT_APPLICABLE,
                             NOT_CREATABLE ->
                         throw new IllegalArgumentException("An extraction of a field cannot get " + key);
                 };
@@ -440,6 +453,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
+                            NOT_APPLICABLE,
                             NOT_CREATABLE -> throw new IllegalArgumentException("A move of a type cannot get " + key);
                 };
             }
@@ -489,6 +503,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_MOVABLE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
+                            NOT_APPLICABLE,
                             NOT_CREATABLE ->
                         throw new IllegalArgumentException("A move to a package cannot get " + key);
                 };
@@ -535,6 +550,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_MOVABLE_TO_PACKAGE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS,
+                            NOT_APPLICABLE,
                             NOT_CREATABLE -> throw new IllegalArgumentException("An inlining cannot get " + key);
                 };
             }
@@ -566,10 +582,82 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             NOT_MOVABLE_TO_PACKAGE,
+                            NOT_APPLICABLE,
                             NOT_CREATABLE,
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS ->
                         throw new IllegalArgumentException("A request for references cannot get " + key);
+                };
+            }
+        }
+
+        /** The code actions offered on a range of a file. */
+        record CodeActions(Path file, Range range) implements Request {
+
+            public CodeActions {
+                Assert.notNull("file", file);
+                Assert.notNull("range", range);
+            }
+
+            @Override
+            public CodeActions resolvedIn(Path root) {
+                return new CodeActions(resolve(root, file), range);
+            }
+
+            @Override
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
+                return switch (key) {
+                    case NOT_READY -> LanguageServerException.notReady();
+                    case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
+                    case FILE_MISSING -> LanguageServerException.fileMissing(file);
+                    case NOT_A_FILE -> LanguageServerException.notAFile(file);
+                    case NOT_APPLICABLE,
+                            NO_SUCH_SYMBOL,
+                            INVALID_NAME,
+                            NOT_EXTRACTABLE,
+                            NOT_INLINABLE,
+                            NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
+                            AMBIGUOUS_IMPORTS,
+                            UNRESOLVED_IMPORTS,
+                            NOT_CREATABLE ->
+                        throw new IllegalArgumentException("A request for code actions cannot get " + key);
+                };
+            }
+        }
+
+        /** The edit of one of the code actions offered on a range of a file. */
+        record ApplyCodeAction(Path file, Range range, OfferedAction action) implements Request {
+
+            public ApplyCodeAction {
+                Assert.notNull("file", file);
+                Assert.notNull("range", range);
+                Assert.notNull("action", action);
+            }
+
+            @Override
+            public ApplyCodeAction resolvedIn(Path root) {
+                return new ApplyCodeAction(resolve(root, file), range, action);
+            }
+
+            @Override
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
+                return switch (key) {
+                    case NOT_READY -> LanguageServerException.notReady();
+                    case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
+                    case FILE_MISSING -> LanguageServerException.fileMissing(file);
+                    case NOT_A_FILE -> LanguageServerException.notAFile(file);
+                    case NOT_APPLICABLE -> LanguageServerException.notApplicable(file, range, action.title());
+                    case NO_SUCH_SYMBOL,
+                            INVALID_NAME,
+                            NOT_EXTRACTABLE,
+                            NOT_INLINABLE,
+                            NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
+                            AMBIGUOUS_IMPORTS,
+                            UNRESOLVED_IMPORTS,
+                            NOT_CREATABLE ->
+                        throw new IllegalArgumentException("The edit of a code action cannot get " + key);
                 };
             }
         }
@@ -595,6 +683,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_CREATABLE -> LanguageServerException.notCreatable(file, kind);
                     case FILE_MISSING,
                             NOT_A_FILE,
+                            NOT_APPLICABLE,
                             NO_SUCH_SYMBOL,
                             INVALID_NAME,
                             NOT_EXTRACTABLE,
@@ -726,6 +815,36 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             @Override
             public Created resolvedIn(Path root) {
                 return new Created(Renamed.resolvedIn(root, changes));
+            }
+        }
+
+        /**
+         * The code actions the server offers on a range, none when it offers nothing there. A replay compares them as
+         * the Java and the protocol say, not as one run printed them: an empty answer is exact, a non-empty one lists
+         * the actions the server must offer (it may offer others, whose titles are its own).
+         */
+        record Offered(OfferedActions offered) implements Answer {
+
+            public Offered {
+                Assert.notNull("offered", offered);
+            }
+
+            @Override
+            public Offered resolvedIn(Path root) {
+                return this;
+            }
+        }
+
+        /** The change set of one code action: the edits it makes, to the files it changes. */
+        record CodeActionApplied(ChangeSet changes) implements Answer {
+
+            public CodeActionApplied {
+                Assert.notNull("changes", changes);
+            }
+
+            @Override
+            public CodeActionApplied resolvedIn(Path root) {
+                return new CodeActionApplied(Renamed.resolvedIn(root, changes));
             }
         }
 

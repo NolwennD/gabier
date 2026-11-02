@@ -145,6 +145,30 @@ public interface JavaLanguageServer {
     ReferenceLocations references(Path file, Position position, boolean includeDeclaration);
 
     /**
+     * The code actions the server offers on a range: the fixes of the problems the range holds (a type that is not
+     * imported, a method to create) and the rewrites of the code it covers (a concatenation to a text block, an
+     * extraction). The actions of the whole file (organizing the imports, generating accessors) are not about a range
+     * and are not listed. A range with nothing offered is an empty answer, not a refusal. Nothing is written.
+     *
+     * @param range the range, from its first character to the end of its last; a point is an empty range
+     * @return what the server offers, in its order
+     * @throws LanguageServerException if the server is not ready or the file is not a file of its project (outside it,
+     *     missing or a folder)
+     */
+    OfferedActions codeActions(Path file, Range range);
+
+    /**
+     * What applying one of the actions offered on a range changes. The action is one that {@link #codeActions} gave
+     * for the same file and range, and the server is asked again for it: it computes the edit when the action is chosen.
+     *
+     * @return the change set to apply
+     * @throws LanguageServerException if the server is not ready, the file is not a file of its project (outside it,
+     *     missing or a folder), the server does not offer the action on the range any more, or it gives no edit for it
+     *     (it is a command for an editor: a dialog to fill in, a place to choose)
+     */
+    ChangeSet codeActionEdit(Path file, Range range, OfferedAction action);
+
+    /**
      * What organizing the imports of a file changes: the missing imports are added, the unused ones removed, and the
      * rest ordered as the server is configured to (for gabier, as the project keeps them, with no import collapsed into
      * a star). Only the file itself is edited.
