@@ -1,8 +1,8 @@
 # Use gabier on gabier
 
 gabier exists so that an agent writes Java through a language server. Since 31-10-2026 an agent working on this
-repository does it with `gabier` (installed on the PATH by `mise run install`, which copies it out of the checkout, so a clean or another branch does not
-break it; the cli starts the daemon of its own copy by itself):
+repository does it with `gabier` (installed on the PATH by `mise run install`, which copies it out of the checkout, so a
+clean or another branch does not break it; the cli starts the daemon of its own copy by itself):
 
 - `gabier diagnostics <file>` to see the errors of a Java file instead of waiting for a build;
 - `gabier rename` (position or `--token`, `--dry-run` first on a rename that crosses files) instead of editing every

@@ -238,8 +238,8 @@ class InstalledDaemonTest {
     @Test
     void startsThePinnedJdtlsInstalledUnderTheHomeFolderWhenGabierJdtlsIsNotSet() throws Exception {
         // A home folder of its own, where the pinned jdtls is installed the way `mise run jdtls:install` does it (a
-        // link to
-        // the distribution of GABIER_JDTLS), and a PATH with no jdtls: only the pinned location can be the one found.
+        // link to the distribution of GABIER_JDTLS), and a PATH with no jdtls: only the pinned location can be the one
+        // found.
         var home = Files.createDirectory(directory.resolve("home"));
         var installed = home.resolve(".local/share/jdtls").resolve(System.getProperty("gabier.jdtlsVersion"));
         Files.createDirectories(installed.getParent());

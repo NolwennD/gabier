@@ -13,9 +13,8 @@ set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 folder=${1:-${GABIER_BIN_DIR:-$HOME/.local/bin}}
 home=${2:-${GABIER_INSTALL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/gabier}}
-mkdir -p "$folder" "$home"
+mkdir -p "$folder"
 folder=$(cd "$folder" && pwd)
-home=$(cd "$home" && pwd)
 
 for name in gabier gabier-daemon; do
   if [ -e "$folder/$name" ] && [ ! -L "$folder/$name" ]; then
@@ -23,6 +22,8 @@ for name in gabier gabier-daemon; do
     exit 1
   fi
 done
+mkdir -p "$home"
+home=$(cd "$home" && pwd)
 
 cd "$root"
 cat <<EOF2
@@ -52,16 +53,23 @@ case $version in
     ;;
 esac
 
-# The copy is made beside its place and moved into it, so that an interrupted install leaves the previous one.
+# The copy is made beside its place, the previous one is moved aside, and the new one moved in. Whatever stops the
+# install (a failed copy, Ctrl-C) removes the staging folder and puts the previous copy back if it was moved aside.
 target="$home/$version"
 staging="$home/.$version.new"
-rm -rf "$staging"
+previous="$home/.$version.old"
+rm -rf "$staging" "$previous"
+trap 'rm -rf "$staging"; if [ ! -e "$target" ] && [ -e "$previous" ]; then mv "$previous" "$target"; fi' EXIT
+trap 'exit 130' INT TERM HUP
 mkdir "$staging"
 cp "$cli" "$staging/gabier"
 cp -R "$daemon" "$staging/daemon"
 ln -s daemon/bin/gabier-daemon "$staging/gabier-daemon"
-rm -rf "$target"
+if [ -e "$target" ]; then
+  mv "$target" "$previous"
+fi
 mv "$staging" "$target"
+rm -rf "$previous"
 echo "copied gabier and gabier-daemon into $target"
 
 for name in gabier gabier-daemon; do

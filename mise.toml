@@ -31,7 +31,7 @@ description = "Install the pinned jdtls (checksum verified) outside the reposito
 run = "sh scripts/jdtls-install.sh {{ vars.jdtls_version }} {{ vars.jdtls_sha256 }}"
 
 [tasks.install]
-description = "Build the native cli and the daemon and link gabier and gabier-daemon into ~/.local/bin (GABIER_BIN_DIR to change it)"
+description = "Build the native cli and the daemon, copy them into ~/.local/share/gabier/<version> (GABIER_INSTALL_DIR) and link gabier and gabier-daemon from ~/.local/bin (GABIER_BIN_DIR) to the copy"
 run = "sh scripts/install.sh"
 
 [hooks]
