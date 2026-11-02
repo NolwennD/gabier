@@ -4,8 +4,8 @@ Opened: 02-11-2026 10:42
 On hold: for later (the user, 02-11-2026); it waits for the batch of the jdtls workspace tickets (`02-11-2026-0900-...`, `0901`, `0902`), which creates what it watches.
 Depends on: 02-11-2026-0902-jdtls-workspace-can-be-kept-between-daemons.md
 
-An agent or a person is told when gabier left caches behind, instead of finding a full disk: the kept jdtls workspaces whose root no
-longer exists (a deleted worktree, about 227 Mo each) and the `gabier-jdtls-data-*` folders that no live jdtls uses. The daemon
+An agent or a person is told when gabier left caches behind, instead of finding a full disk: the `gabier-jdtls-data-*` folders that no live jdtls uses (the kept workspaces are removed by
+`02-11-2026-*-the-kept-jdtls-workspace-feature-is-removed.md`). The daemon
 and the cli already know where they are and how to tell a live one (the lock of the Eclipse workspace).
 
 Done when:
