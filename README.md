@@ -42,8 +42,19 @@ gabier --version
 `~/.local/bin` must be in the `PATH`.
 
 jdtls (the Eclipse JDT Language Server) is not in the release. Install the milestone that gabier is tested against
-into `~/.local/share/jdtls/<jdtls version>`, where the daemon looks for it. The notes of each release give the exact
-commands, with the version and its checksum.
+into `~/.local/share/jdtls/<version>`, where the daemon looks for it. The notes of each release name that milestone and
+the sha256 of its archive:
+
+```sh
+version=<jdtls version>; sha256=<sha256 of its archive>
+base=https://download.eclipse.org/jdtls/milestones/$version
+archive=$(curl -fsSL "$base/latest.txt" | tr -d '[:space:]')
+curl -fsSLO "$base/$archive"
+echo "$sha256  $archive" | sha256sum --check
+mkdir -p ~/.local/share/jdtls/$version && tar -xzf "$archive" -C ~/.local/share/jdtls/$version
+```
+
+`GABIER_JDTLS` can name another launcher instead.
 
 ## Build gabier from its sources
 
