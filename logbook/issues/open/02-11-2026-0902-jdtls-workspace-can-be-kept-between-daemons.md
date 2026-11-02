@@ -16,6 +16,11 @@ Done when:
 - [ ] A second daemon on the same root while the first runs gets a refusal that says why (the lock of the Eclipse
       workspace), not an opaque jdtls failure.
 - [ ] The time of a restart is measured with and without the option and written in the `## Resolution`.
+- [ ] The kept workspace of a worktree is deleted when the worktree is (decision of the user, 02-11-2026): a command that takes
+      the root of a project and removes its kept workspace, with no daemon running (it needs only the name of the folder, computed
+      as the daemon does), refused while a live jdtls holds the lock, idempotent when there is nothing to remove (tested red first);
+      the skill `ship` (step 5, before `git worktree remove`) runs it for the worktree it removes, and the rules say so. The command
+      is documented in `docs/daemon.md` and listed by `help`.
 - [ ] The option is on for this project (decision of the user, 02-11-2026: a warm cache): `mise.toml` sets the variable in its
       `[env]`, so every worktree of gabier keeps its workspace. A kept workspace whose root no longer exists (a deleted
       worktree) is removed, by the daemon at start or by `scripts/stop-stray-daemons.sh` (which the skills `ticket` and `ship`
