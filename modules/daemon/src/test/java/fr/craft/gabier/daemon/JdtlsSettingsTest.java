@@ -68,7 +68,11 @@ class JdtlsSettingsTest {
                                                 "staticStarThreshold",
                                                 Integer.MAX_VALUE)),
                                 "completion",
-                                Map.of("importOrder", List.of("#", "")),
+                                Map.of(
+                                        "importOrder",
+                                        List.of("#", ""),
+                                        "filteredTypes",
+                                        List.of("com.sun.*", "sun.*", "jdk.*")),
                                 "templates",
                                 Map.of("typeComment", List.of(" ")),
                                 "references",

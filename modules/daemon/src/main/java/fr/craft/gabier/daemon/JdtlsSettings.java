@@ -28,6 +28,7 @@ record JdtlsSettings(
 
     private static final Duration TREE_INTERVAL = Duration.ofMillis(250);
     private static final Duration SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
+    private static final List<String> FILTERED_TYPES = List.of("com.sun.*", "sun.*", "jdk.*");
 
     JdtlsSettings {
         expectedProjects = expectedProjects.stream()
@@ -60,6 +61,15 @@ record JdtlsSettings(
      *       {@code javax}, {@code org}, {@code com}) puts a blank line between the groups; the project keeps the static
      *       imports first, a blank line, then one block of all the others in ASCII order (open-java-format), which is
      *       {@code "#"} then {@code ""};
+     *   <li>{@code java.completion.filteredTypes}: the types jdtls never offers, where the organization of the imports
+     *       looks for the type a name stands for: a type of a package that matches is not a candidate. The default
+     *       (Eclipse JDT LS, {@code Preferences.JAVA_COMPLETION_FILTERED_TYPES_DEFAULT}: {@code com.sun.*}, {@code
+     *       io.micrometer.shaded.*}, {@code java.awt.*}, {@code jdk.*}, {@code org.graalvm.*}, {@code sun.*}) is held
+     *       by jdtls only when the client sends the setting: without it, {@code Pattern} has two candidates, {@code
+     *       java.util.regex.Pattern} and {@code com.sun.org.apache.xalan.internal.xsltc.compiler.Pattern}, and the
+     *       organization asks the client to choose. It is the classes of the JDK that are not meant to be used
+     *       ({@code com.sun.*}, {@code sun.*}, {@code jdk.*}); {@code java.awt.*}, which is public, is not filtered, so
+     *       that {@code List} stays a real choice between {@code java.util.List} and {@code java.awt.List};
      *   <li>{@code java.templates.typeComment}: the Javadoc jdtls writes above the type of a file it creates (the
      *       snippets of {@code SnippetCompletionProposal} use it). By default it is a Javadoc with the name of the
      *       type, and an empty setting means that default. A comment of white space only, which the evaluation of the template
@@ -86,7 +96,7 @@ record JdtlsSettings(
 
         return Map.of(
                 "sources", Map.of("organizeImports", thresholds),
-                "completion", Map.of("importOrder", List.of("#", "")),
+                "completion", Map.of("importOrder", List.of("#", ""), "filteredTypes", FILTERED_TYPES),
                 "templates", Map.of("typeComment", List.of(" ")),
                 "references", Map.of("includeAccessors", false, "includeDecompiledSources", false));
     }

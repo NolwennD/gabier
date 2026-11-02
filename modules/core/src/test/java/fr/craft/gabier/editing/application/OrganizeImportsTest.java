@@ -151,6 +151,24 @@ class OrganizeImportsTest {
         assertThat(snapshot()).isEqualTo(before);
     }
 
+    @Test
+    void importsThePublicClassWhenTheOtherCandidateIsAnInternalClassOfTheJdk() throws IOException {
+        project(Scenarios.ORGANIZE_IMPORTS_OF_A_TYPE_A_JDK_INTERNAL_CLASS_ALSO_DECLARES);
+
+        ChangeReport report = organize.apply(path("src/main/java/demo/Matching.java"));
+
+        assertThat(text("src/main/java/demo/Matching.java")).isEqualTo("""
+            package demo;
+
+            import java.util.regex.Pattern;
+
+            public class Matching {
+                Pattern digits = Pattern.compile("[0-9]+");
+            }
+            """);
+        assertThat(report.modified()).containsExactly(path("src/main/java/demo/Matching.java"));
+    }
+
     private void assertRefused(Scenario scenario, LanguageServerErrorKey key, String message) throws IOException {
         project(scenario);
         Map<String, String> before = snapshot();
@@ -181,8 +199,7 @@ class OrganizeImportsTest {
                 Scenarios.ORGANIZE_IMPORTS_OF_A_TYPE_TWO_PACKAGES_DECLARE,
                 LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
                 "The file {root}/" + TWICE + " uses types that several packages declare, so none was imported: "
-                        + "Date (java.sql.Date, java.util.Date, sun.util.calendar.BaseCalendar.Date, "
-                        + "sun.util.calendar.LocalGregorianCalendar.Date)");
+                        + "Date (java.sql.Date, java.util.Date)");
     }
 
     @Test

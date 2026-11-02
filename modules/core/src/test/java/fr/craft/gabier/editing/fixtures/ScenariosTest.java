@@ -134,6 +134,7 @@ class ScenariosTest {
                         "organize-imports-of-a-file-in-order",
                         "organize-imports-keeps-explicit-imports",
                         "organize-imports-of-a-type-two-packages-declare",
+                        "organize-imports-of-a-type-a-jdk-internal-class-also-declares",
                         "organize-imports-removes-an-unused-import-of-a-class-that-does-not-exist",
                         "organize-imports-refuses-a-used-import-jdtls-cannot-resolve",
                         "organize-imports-while-the-server-imports",

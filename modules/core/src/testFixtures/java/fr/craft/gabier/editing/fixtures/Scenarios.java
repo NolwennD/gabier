@@ -129,7 +129,10 @@ import java.util.stream.Stream;
  *       that several packages declare and that a file uses without importing it is left out by jdtls, without a word,
  *       unless the client declares that it can choose ({@code advancedOrganizeImportsSupport}): jdtls then sends {@code
  *       java.action.organizeImports.chooseImports} with the candidates, which the adapter keeps and refuses with
- *       ({@link #ORGANIZE_IMPORTS_OF_A_TYPE_TWO_PACKAGES_DECLARE}). The imports of a file that jdtls cannot resolve
+ *       ({@link #ORGANIZE_IMPORTS_OF_A_TYPE_TWO_PACKAGES_DECLARE}). The classes of the JDK that are not meant to be
+ *       used ({@code com.sun.*}, {@code sun.*}, {@code jdk.*}) are not candidates, because the adapter sends {@code
+ *       java.completion.filteredTypes}: {@code Pattern} is then {@code java.util.regex.Pattern} alone and is
+ *       imported ({@link #ORGANIZE_IMPORTS_OF_A_TYPE_A_JDK_INTERNAL_CLASS_ALSO_DECLARES}). The imports of a file that jdtls cannot resolve
  *       ("The package p is not accessible") are deleted by its edit, with the ones nothing uses; one that the file
  *       still uses is refused by the adapter, which names it ({@link
  *       #ORGANIZE_IMPORTS_REFUSES_A_USED_IMPORT_JDTLS_CANNOT_RESOLVE}). An import of a class that does not exist is
@@ -179,6 +182,7 @@ public final class Scenarios {
     private static final Path TIDY = Path.of("src/main/java/demo/Tidy.java");
     private static final Path WIDE = Path.of("src/main/java/demo/Wide.java");
     private static final Path TWICE = Path.of("src/main/java/demo/Twice.java");
+    private static final Path MATCHING = Path.of("src/main/java/demo/Matching.java");
     private static final Path STALE = Path.of("src/main/java/demo/Stale.java");
     private static final Path LOST = Path.of("src/main/java/demo/Lost.java");
     private static final Path MODULE_INFO = Path.of("src/main/java/module-info.java");
@@ -537,6 +541,18 @@ public final class Scenarios {
         }
         """;
 
+    /**
+     * {@code Pattern}, used without an import: {@code java.util.regex} declares it, and so does a class of the JDK that
+     * is not meant to be used ({@code com.sun.org.apache.xalan.internal.xsltc.compiler}).
+     */
+    private static final String MATCHING_SOURCE = """
+        package demo;
+
+        public class Matching {
+            Pattern digits = Pattern.compile("[0-9]+");
+        }
+        """;
+
     /** {@code demo.gone.Gone} was deleted: the import is unused, and jdtls cannot resolve it. */
     private static final String STALE_SOURCE = """
         package demo;
@@ -575,6 +591,9 @@ public final class Scenarios {
 
     /** {@code Twice} uses a type that two packages declare: the project does not compile as it is, on purpose. */
     private static final Map<Path, String> AMBIGUOUS_IMPORTS_PROJECT = Map.of(TWICE, TWICE_SOURCE);
+
+    /** {@code Matching} uses {@code Pattern} with no import: a project of its own, since organizing it makes it compile. */
+    private static final Map<Path, String> MATCHING_PROJECT = Map.of(MATCHING, MATCHING_SOURCE);
 
     /** The module that cannot read the package {@code Lost} imports: the project does not compile, on purpose. */
     private static final Map<Path, String> NOT_ACCESSIBLE_IMPORT_PROJECT =
@@ -753,8 +772,9 @@ public final class Scenarios {
             new Answer.AlreadyOrganized());
 
     /**
-     * {@code Date}, used without an import: several packages declare it (jdtls offers the nested types of the JDK as
-     * well). jdtls cannot choose and asks the client
+     * {@code Date}, used without an import: two public packages declare it ({@code java.sql}, {@code java.util}; the
+     * nested types of the JDK that jdtls would offer too are filtered out, see {@link
+     * #ORGANIZE_IMPORTS_OF_A_TYPE_A_JDK_INTERNAL_CLASS_ALSO_DECLARES}). jdtls cannot choose and asks the client
      * ({@code java.action.organizeImports.chooseImports}); gabier cannot either, so the refusal names the candidates
      * and nothing is written.
      */
@@ -762,13 +782,19 @@ public final class Scenarios {
             "organize-imports-of-a-type-two-packages-declare",
             AMBIGUOUS_IMPORTS_PROJECT,
             new Request.OrganizeImports(TWICE),
-            new Answer.Refused(
-                    LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
-                    List.of(
-                            "java.sql.Date",
-                            "java.util.Date",
-                            "sun.util.calendar.BaseCalendar.Date",
-                            "sun.util.calendar.LocalGregorianCalendar.Date")));
+            new Answer.Refused(LanguageServerErrorKey.AMBIGUOUS_IMPORTS, List.of("java.sql.Date", "java.util.Date")));
+
+    /**
+     * {@code Pattern}, used without an import, is declared by {@code java.util.regex} and by a class of the JDK that is
+     * not meant to be used: jdtls does not offer the latter ({@code java.completion.filteredTypes}, which the adapter
+     * sends), so there is nothing to choose and {@code java.util.regex.Pattern} is imported.
+     */
+    public static final Scenario ORGANIZE_IMPORTS_OF_A_TYPE_A_JDK_INTERNAL_CLASS_ALSO_DECLARES = new Scenario(
+            "organize-imports-of-a-type-a-jdk-internal-class-also-declares",
+            MATCHING_PROJECT,
+            new Request.OrganizeImports(MATCHING),
+            new Answer.Organized(new ChangeSet(
+                    List.of(edits(MATCHING, replace(0, 13, 2, 0, "\n\nimport java.util.regex.Pattern;\n\n"))))));
 
     /**
      * {@code Stale} imports {@code demo.gone.Gone}, a class that does not exist, and nothing uses it: the import is
@@ -1659,6 +1685,7 @@ public final class Scenarios {
                 ORGANIZE_IMPORTS_IN_ORDER,
                 ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS,
                 ORGANIZE_IMPORTS_OF_A_TYPE_TWO_PACKAGES_DECLARE,
+                ORGANIZE_IMPORTS_OF_A_TYPE_A_JDK_INTERNAL_CLASS_ALSO_DECLARES,
                 ORGANIZE_IMPORTS_REMOVES_AN_UNUSED_IMPORT_OF_A_CLASS_THAT_DOES_NOT_EXIST,
                 ORGANIZE_IMPORTS_REFUSES_A_USED_IMPORT_JDTLS_CANNOT_RESOLVE,
                 ORGANIZE_IMPORTS_WHILE_THE_SERVER_IMPORTS,

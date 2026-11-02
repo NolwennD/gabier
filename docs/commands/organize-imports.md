@@ -35,6 +35,14 @@ $ gabier organize-imports src/main/java/demo/Tidy.java
 nothing to change
 ```
 
+**Which types are candidates.** When a file uses a name with no import, jdtls looks for the types of that name, and
+the setting `java.completion.filteredTypes` says which packages it never offers. Its default (`com.sun.*`,
+`io.micrometer.shaded.*`, `java.awt.*`, `jdk.*`, `org.graalvm.*`, `sun.*`) holds only when the client sends the setting,
+so the daemon sends it, in `JdtlsSettings.javaPreferences`, as `com.sun.*`, `sun.*` and `jdk.*`: the classes of the JDK
+that are not meant to be used. `java.awt.*` is left out of the list because it is public: `List` stays a choice between
+`java.util.List` and `java.awt.List`, and a project that uses AWT still gets `java.awt.Color`. The filter is by package,
+so a class of your own project in a package that starts with `com.sun.` or `sun.` is never a candidate either.
+
 **What jdtls cannot judge, gabier does not write.** Two cases are refused as a problem object (exit code 2), and nothing
 is written:
 
@@ -44,7 +52,9 @@ is written:
   jdtls with (`JdtlsCapabilities.extended`), without which jdtls leaves the type unimported and says nothing. gabier
   answers the command that nothing is chosen, and refuses with `language-server-ambiguous-imports`: the parameter
   `candidates` lists the qualified names, those of one name together and in order. Choose, add the import by hand,
-  then organize.
+  then organize. The candidates are the public ones (see "Which types are candidates" above): `Pattern` is not
+  ambiguous, since `com.sun.org.apache.xalan.internal.xsltc.compiler.Pattern` is not offered, and is imported with no
+  question.
 - An import that jdtls would delete, that the file still uses and that jdtls reports an error on, such as a package of
   a module the file cannot read (`The package java.sql is not accessible` on `import java.sql.*;`, or a class of a source
   set it has no classpath for): jdtls answers an edit that deletes the imports the file uses along with the unused ones.
