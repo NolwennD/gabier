@@ -13,8 +13,8 @@ cd "$(dirname "$0")/.." || exit 1
 folder="${XDG_RUNTIME_DIR:+$XDG_RUNTIME_DIR/gabier}"
 folder="${folder:-/tmp/gabier-$(id -u)}"
 
-for socket in "$folder"/*.sock; do
-  [ -S "$socket" ] || continue
+# find, not a glob: zsh fails on a glob that matches nothing (a folder with no socket, or no folder at all)
+find "$folder" -maxdepth 1 -type s -name '*.sock' 2>/dev/null | while IFS= read -r socket; do
   project=$(GABIER_SOCKET="$socket" gabier --json status 2>/dev/null | jq -r '.project // empty')
   [ -n "$project" ] || continue # nobody answers on this socket
   stray=false
