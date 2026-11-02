@@ -1,6 +1,6 @@
 # Command line
 
-`gabier --version` prints `gabier <protocol version>` on the standard output and exits with 0. Every refusal of
+`gabier --version` prints `gabier <version>` (`0.1.0`: the version of the release, `0.0.0-dev` in a build made with no version given, see the README) on the standard output and exits with 0. Every refusal of
 gabier (a usage error: any other argument, or none; no daemon running, for `status` and `stop`; a daemon that does not start...) is reported as a **problem object** on the
 standard error, never on the standard output: one line of text by default, one line of JSON with `--json` (the option
 can come anywhere on the command line).

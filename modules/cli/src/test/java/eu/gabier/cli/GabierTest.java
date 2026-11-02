@@ -2,6 +2,7 @@ package eu.gabier.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import eu.gabier.protocol.ProtocolVersion;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Nested;
@@ -16,7 +17,7 @@ class GabierTest extends CliTest {
         void printsTheNameAndTheProtocolVersionOnTheStandardOutput() {
             run("--version");
 
-            assertThat(out()).isEqualTo("gabier 0.1" + System.lineSeparator());
+            assertThat(out()).isEqualTo("gabier " + ProtocolVersion.CURRENT + System.lineSeparator());
         }
 
         @Test
@@ -67,7 +68,7 @@ class GabierTest extends CliTest {
         void doesNotChangeTheVersion() {
             assertThat(run("--json", "--version")).isZero();
 
-            assertThat(out()).isEqualTo("gabier 0.1" + System.lineSeparator());
+            assertThat(out()).isEqualTo("gabier " + ProtocolVersion.CURRENT + System.lineSeparator());
             assertThat(err()).isEmpty();
         }
 
@@ -75,7 +76,7 @@ class GabierTest extends CliTest {
         void afterTheVersionDoesNotChangeItEither() {
             assertThat(run("--version", "--json")).isZero();
 
-            assertThat(out()).isEqualTo("gabier 0.1" + System.lineSeparator());
+            assertThat(out()).isEqualTo("gabier " + ProtocolVersion.CURRENT + System.lineSeparator());
         }
     }
 

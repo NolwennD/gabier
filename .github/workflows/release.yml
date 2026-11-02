@@ -1,0 +1,77 @@
+# A tag `v<version>` (semantic version: v0.1.0, v1.2.0-rc.1) publishes a GitHub release with the native cli, the archive of
+# the daemon and SHA256SUMS. Steps, in order, each one needing the one before:
+#   1. version: the tag is checked, the version is the tag without its `v`;
+#   2. check: the full bin/ci (ci.yml, the same job as the pull requests) on the tagged commit;
+#   3. release: the build with that version, the version the programs print is checked, the assets are packaged
+#      (scripts/package-release.sh) and attached to the release of the tag.
+# Only the last job can write to the repository.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - name: Read the version of the tag
+        id: tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=${TAG#v}
+          if [ "$version" = "$TAG" ] || ! printf '%s' "$version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+            echo "The tag '$TAG' is not v<semantic version>" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  check:
+    name: check
+    needs: version
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: release
+    needs: [version, check]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up the build
+        uses: ./.github/actions/setup-build
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # The version reaches the programs through this property (modules/protocol/build.gradle.kts).
+      - name: Build the cli and the daemon with the version of the tag
+        run: mise exec -- ./gradlew :cli:nativeCompile :daemon:installDist "-PgabierVersion=$VERSION" --console=plain
+
+      - name: Package the assets
+        run: mise exec -- scripts/package-release.sh "$VERSION" dist
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          prerelease=
+          case "$VERSION" in *-*) prerelease=--prerelease ;; esac
+          gh release create "$TAG" dist/gabier-linux-x86_64 "dist/gabier-daemon-$VERSION.tar.gz" dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --title "gabier $VERSION" --notes-file dist/release-notes.md $prerelease

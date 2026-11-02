@@ -37,6 +37,12 @@ public final class Native {
 
     private static final long TIMEOUT_SECONDS = 60;
 
+    /** A semantic version, as a regular expression with no group of its own: the one the build is given, else 0.0.0-dev. */
+    private static final String VERSION =
+            "(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?";
+
+    private static final Pattern SEMANTIC_VERSION_LINE = Pattern.compile("gabier " + VERSION);
+
     /** The whole problem object of {@code gabier --json --bogus}, member by member, on one line. */
     private static final String USAGE_ERROR_JSON =
             """
@@ -168,12 +174,18 @@ public final class Native {
         return runBinary(binary, directory, List.of(), args);
     }
 
-    /** 0 when {@code gabier --version} prints the version on the standard output, nothing on the other, and exits 0. */
+    /**
+     * 0 when {@code gabier --version} prints {@code gabier <semantic version>} on the standard output, nothing on the
+     * other, and exits 0: the native image carries the version the build was given ({@code 0.0.0-dev} with none), so it
+     * reads its resource.
+     */
     private static int version(Path binary, Path directory) throws IOException, InterruptedException {
         Run run = runBinary(binary, directory, "--version");
         System.out.println("gabier --version -> \"" + run.out() + "\" (exit " + run.exit() + ")");
 
-        return run.exit() == 0 && run.out().startsWith("gabier ") && run.err().isEmpty() ? 0 : 1;
+        return run.exit() == 0 && SEMANTIC_VERSION_LINE.matcher(run.out().strip()).matches() && run.err().isEmpty()
+                ? 0
+                : 1;
     }
 
     /**
@@ -243,13 +255,13 @@ public final class Native {
     private static final class Daemon {
 
         private static final Pattern STATUS =
-                Pattern.compile("gabier-daemon 0\\.1, pid (\\d+), up \\d+s, project \\S+, jdtls not-started");
+                Pattern.compile("gabier-daemon " + VERSION + ", pid (\\d+), up \\d+s, project \\S+, jdtls not-started");
         private static final Pattern STATUS_JSON = Pattern.compile(
-                "\\{\"version\":\"0\\.1\",\"pid\":(\\d+),\"uptimeMillis\":\\d+,\"project\":\"[^\"]+\",\"jdtls\":\"not-started\"\\}");
+                "\\{\"version\":\"" + VERSION + "\",\"pid\":(\\d+),\"uptimeMillis\":\\d+,\"project\":\"[^\"]+\",\"jdtls\":\"not-started\"\\}");
 
         /** The status of a daemon the cli started: the project is the folder its script gave. */
         private static final Pattern STARTED_STATUS = Pattern.compile(
-                "gabier-daemon 0\\.1, pid (\\d+), up \\d+s, project \\S+-project, jdtls \\w+");
+                "gabier-daemon " + VERSION + ", pid (\\d+), up \\d+s, project \\S+-project, jdtls \\w+");
 
         private final Path cli;
         private final Path daemon;

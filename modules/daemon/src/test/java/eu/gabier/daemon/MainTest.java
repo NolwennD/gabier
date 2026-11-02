@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.ProtocolVersion;
 import eu.gabier.protocol.RpcResponse;
 import eu.gabier.protocol.SocketLocation;
 import eu.gabier.protocol.UserId;
@@ -70,7 +71,7 @@ class MainTest {
         void printsTheNameAndTheProtocolVersion() {
             run(PASSING, "--version");
 
-            assertThat(out()).isEqualTo("gabier-daemon 0.1" + System.lineSeparator());
+            assertThat(out()).isEqualTo("gabier-daemon " + ProtocolVersion.CURRENT + System.lineSeparator());
         }
 
         @Test
@@ -224,8 +225,9 @@ class MainTest {
             assertThat(daemon.orTimeout(10, TimeUnit.SECONDS).join()).isZero();
             assertThat(socket).doesNotExist();
             assertThat(out())
-                    .isEqualTo("gabier-daemon 0.1 listening on " + socket + System.lineSeparator()
-                            + "serving the project " + directory.toRealPath() + System.lineSeparator());
+                    .isEqualTo("gabier-daemon " + ProtocolVersion.CURRENT + " listening on " + socket
+                            + System.lineSeparator() + "serving the project " + directory.toRealPath()
+                            + System.lineSeparator());
             assertThat(err()).isEmpty();
         }
 

@@ -14,7 +14,7 @@ final class Status implements Capability {
             .usage("gabier [--json] status")
             .example("""
                 $ gabier status
-                gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls not-started\
+                gabier-daemon 0.1.0, pid 4242, up 65s, project /work/demo, jdtls not-started\
                 """)
             .asksARunningDaemon();
 

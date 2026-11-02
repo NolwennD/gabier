@@ -14,6 +14,7 @@ import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FileDiagnostics.Diagnosis;
 import eu.gabier.protocol.FileDiagnostics.Severity;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.ProtocolVersion;
 import eu.gabier.protocol.RpcResponse;
 import eu.gabier.protocol.UserId;
 import eu.gabier.shared.error.domain.ErrorStatus;
@@ -334,7 +335,12 @@ class DaemonServerTest {
                 var answer = RpcResponse.parse(client.ask(STATUS_REQUEST));
 
                 assertThat(DaemonStatus.of(((RpcResponse.Success) answer).result()))
-                        .isEqualTo(new DaemonStatus("0.1", PID, Duration.ofSeconds(90), directory, JdtlsState.READY));
+                        .isEqualTo(new DaemonStatus(
+                                ProtocolVersion.CURRENT.toString(),
+                                PID,
+                                Duration.ofSeconds(90),
+                                directory,
+                                JdtlsState.READY));
             }
         }
 

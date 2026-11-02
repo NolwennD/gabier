@@ -34,6 +34,32 @@ minutes. The details are in [The daemon](docs/daemon.md). The daemon starts by i
 
 In a new Git worktree, run `mise trust` once first: mise trusts a configuration per path.
 
+### Install from a release
+
+Without building: each [release](https://github.com/NolwennD/gabier/releases) of a tag `v<version>` holds the native
+`gabier` cli for Linux x86-64 (`gabier-linux-x86_64`), the daemon (`gabier-daemon-<version>.tar.gz`: its start script and
+its jars, which need a JDK 25 or later) and `SHA256SUMS`. jdtls is not bundled; the notes of the release say how to
+install the pinned one by hand, which in a checkout of the tag is `mise run jdtls:install`.
+
+```sh
+sha256sum --check --ignore-missing SHA256SUMS
+install -m 755 gabier-linux-x86_64 ~/.local/bin/gabier
+mkdir -p ~/.local/share/gabier && tar -C ~/.local/share/gabier -xzf gabier-daemon-<version>.tar.gz
+ln -sf ~/.local/share/gabier/gabier-daemon/bin/gabier-daemon ~/.local/bin/gabier-daemon
+gabier --version
+```
+
+### Releasing
+
+Pushing a tag `v<semantic version>` (`v0.1.0-rc.1`, then `v0.1.0`) runs `.github/workflows/release.yml`: it runs the full
+`bin/ci` on the tagged commit (the check of the pull requests), builds with the version of the tag, checks that the cli
+and the daemon print it, and attaches the assets to the release of the tag. A version with a pre-release suffix
+(`-rc.1`, any `-...`) gives a release marked pre-release, and the programs print the whole version (`0.1.0-rc.1`); a
+version with no suffix gives a normal release. The version that `gabier --version` and
+`gabier status` print is the Gradle property `gabierVersion` (`-PgabierVersion=0.1.0`), written in a resource of the
+`protocol` module at build time; a build made with no such property, such as `mise run install`, is `0.0.0-dev`.
+`scripts/package-release.sh <version> <folder>` makes the assets from a build made with that property.
+
 ## Capabilities
 
 - [`gabier diagnostics <file>`](docs/commands/diagnostics.md): the errors and warnings of a Java file, without a build.

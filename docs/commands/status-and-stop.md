@@ -8,9 +8,9 @@ member `jdtlsFailure`, which is absent otherwise. It never starts jdtls.
 
 ```text
 $ gabier status
-gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls not-started
+gabier-daemon 0.1.0, pid 4242, up 65s, project /work/demo, jdtls not-started
 $ gabier --json status
-{"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"not-started"}
+{"version":"0.1.0","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"not-started"}
 $ gabier stop
 gabier-daemon stopped
 $ gabier status
