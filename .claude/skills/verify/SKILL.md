@@ -81,37 +81,27 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   `GABIER_JDTLS`, the path of the `jdtls` launcher (`mise exec -- ./gradlew jdtlsProbe` outside an activated mise); they
   fail at once, never skip, without it. `check` only compiles them. `./gradlew jdtlsProbe` runs them (`--tests` picks a
   class), and shows their output, which is the evidence:
-  - `JdtlsProbeTest` starts jdtls on the checkout through `JdtlsLanguageServer`, in a fresh temporary `-data` directory,
-    which waits, up to ten minutes in all for its waits together (about a minute and a half here), until jdtls has
-    imported every module. Asked at once, it must refuse as not ready. It then asks the diagnostics of the
-    `module-info.java` and the classes of each module (and the sources of `architecture`) in one request: jdtls
-    publishes in stages, so the adapter answers the latest publication of each file once jdtls has published nothing
-    for five seconds. No file may have an error; a file without any diagnostic, asked for alone, gets an empty list. A
-    temporary broken source (`GabierProbeBroken.java`, deleted whatever happens) next to it must get its error, and a
-    file outside the checkout is refused. It fails at once, with the exit code in the message, when jdtls exits, and at
-    once on a `language/status` of type `Error`; a timeout says what was awaited and for how long. It then organizes
-    the imports of every source of the checkout (main, test, fixtures, integration tests, `architecture`): none may
-    change, and a copy of a main source and of a test source with an unused import added must get the edit that removes
-    it. The `fakeServed` source set, whose fixtures jdtls cannot see, is the file of the refusal: organizing its imports
-    is refused as `language-server-unresolved-imports`, naming the three imports jdtls would delete, and the file is not
-    touched. (The scenarios of the imports, replayed by `ScenarioReplayTest`, say the same on a small project, and the
-    replay checks that an organization that loses no code, asked a second time, takes less than the five seconds of
-    the diagnostics.)
   - `ScenarioReplayTest` replays the contract scenarios of the core (`Scenarios.all()`) that the adapter implements
     against a real jdtls started on each scenario's project (written in a temporary folder, with an Eclipse `.project`
     and `.classpath` that jdtls imports without network), and fails on any difference. The answer of a rename is
     compared exactly (jdtls merges the edits of a file, and the scenarios hold what it answered), must compile once
     applied to a copy of the project, and no request may change the sources. The organization of the imports is replayed
     on a project that includes `Wide`, which imports 100 types of one package and 100 constants of one class: with the
-    default preferences of jdtls the replay fails (a star import, groups apart), which is what proves the settings. How to add one:
-    `.claude/skills/add-scenario/SKILL.md`.
+    default preferences of jdtls the replay fails (a star import, groups apart), which is what proves the settings. The small cases
+    of the adapter's answers are scenarios too: not ready while jdtls imports (`diagnostics-while-the-server-imports`, asked
+    before the import is over), a file without a diagnostic and a file with an error (`diagnostics-of-a-clean-file`,
+    `diagnostics-of-a-file-with-an-error`), a file outside the project (`diagnostics-of-a-file-outside-the-project`), the
+    imports removed or refused (`organize-imports-*`); an organization that loses no code, asked a second time, takes less
+    than the five seconds of the diagnostics. jdtls is not made to import this repository: that it works on gabier is
+    proven by using gabier on gabier (`.claude/rules/dogfooding.md`). How to add one: `.claude/skills/add-scenario/SKILL.md`.
   - `InstalledDaemonTest` runs the installed daemon (`jdtlsProbe` depends on `:daemon:installDist`) on a small project
     (the scenario `FILE_WITH_AN_ERROR` and an Eclipse `.project`, `EclipseProject`), as a client on its socket: `status`
     is `not-started` and starts nothing, the first `diagnostics` starts jdtls and answers the error, `status` is `ready`,
     `stop` ends the daemon and every process jdtls started (watched by handle); a second test stops the daemon while
     jdtls still starts.
   `JdtlsSession` stops jdtls (the whole process tree) and deletes the data directory in every case. jdtls leaves its
-  Eclipse files (`.project`, `.classpath`, `.settings/`, `bin/`) in the checkout: they are git-ignored.
+  Eclipse files (`.project`, `.classpath`, `.settings/`, `bin/`) in a folder it is started on: when that is the checkout,
+  they are git-ignored.
 
 ## 1. Choose the scope
 

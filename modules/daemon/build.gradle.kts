@@ -94,16 +94,15 @@ tasks.check {
   dependsOn(tasks.named(integrationTest.classesTaskName))
 }
 
-// The real jdtls: the probe on this checkout and the replay of the contract scenarios of the core.
+// The real jdtls: the replay of the contract scenarios of the core and the installed daemon.
 tasks.register<Test>("jdtlsProbe") {
   group = "verification"
-  description = "Starts a real jdtls (GABIER_JDTLS): the probe on this project and the replay of the contract scenarios."
+  description = "Starts a real jdtls (GABIER_JDTLS): the replay of the contract scenarios and the installed daemon."
   testClassesDirs = integrationTest.output.classesDirs
   classpath = integrationTest.runtimeClasspath
   // The coverage gate is about the unit tests: the JaCoCo plugin would otherwise attach its agent to every Test task.
   extensions.configure<JacocoTaskExtension> { isEnabled = false }
-  // The checkout whose modules jdtls must import; GABIER_JDTLS is the jdtls launcher, which mise exports.
-  systemProperty("gabier.projectRoot", rootProject.projectDir.path)
+  // GABIER_JDTLS is the jdtls launcher, which mise exports.
   // The installed daemon (what a user runs): InstalledDaemonTest serves a small project with it.
   dependsOn(tasks.installDist)
   systemProperty(

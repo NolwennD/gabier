@@ -22,7 +22,7 @@ jdtls_sha256 = "b1f2abe0b3cccb462cf64fb4a5587c7d09df60cf8be7748b152cbd89d018bdc4
 [env]
 # Outside the repository: every worktree shares one install.
 JDTLS_HOME = "{{ env.HOME }}/.local/share/jdtls/{{ vars.jdtls_version }}"
-# The path of the jdtls launcher, read by the probe tests.
+# The path of the jdtls launcher, read by the integration tests.
 GABIER_JDTLS = "{{ env.JDTLS_HOME }}/bin/jdtls"
 _.path = ["{{ env.JDTLS_HOME }}/bin"]
 

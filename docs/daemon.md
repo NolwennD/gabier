@@ -33,7 +33,7 @@ serve another.
 
 It serves **one project**: `gabier-daemon [<project folder>]`, else the folder named by `GABIER_PROJECT`, else the
 directory it is started in (a relative folder is relative to that directory; one that is not a folder is a usage error).
-Starting the daemon starts nothing else. jdtls (the launcher `GABIER_JDTLS` names, as for the probe) is started by the
+Starting the daemon starts nothing else. jdtls (the launcher `GABIER_JDTLS` names, as for the integration tests) is started by the
 first request that needs it, on that folder, and the request waits until it has imported the project: the first
 `diagnostics` takes seconds for a small project and about a minute and a half for this checkout. Requests that arrive
 meanwhile wait for the same start, never for another. jdtls then stays up for the next requests, and is ended, with every

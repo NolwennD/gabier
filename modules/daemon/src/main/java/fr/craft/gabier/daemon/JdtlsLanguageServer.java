@@ -99,7 +99,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
 
     /**
      * How long jdtls must have published nothing before its diagnostics are taken as final. In the real runs of the
-     * probe the publications of the opened files came within this pause of each other.
+     * replay the publications of the opened files came within this pause of each other.
      */
     static final Duration QUIET = Duration.ofSeconds(5);
 

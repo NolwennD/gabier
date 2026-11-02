@@ -20,7 +20,7 @@ The core never waits for a real language server. Behaviour of the domain and of 
 apply the answer, how to report a refusal) is built and tested against a **hand-written fake** of the port
 (`JavaLanguageServer`), scripted by the test with what the server would answer. No jdtls, no process, no network, so
 `check` stays fast and a core ticket never depends on an instance running. A real server appears only at the edge: the
-adapter's own tests (`integrationTest`, the jdtls probe), which prove that the real server answers the way the fake was
+adapter's own tests (`integrationTest`, the scenario replay and the installed daemon), which prove that the real server answers the way the fake was
 scripted. The same holds one level up: the daemon and the CLI are first run against the fake. A ticket that needs a
 running jdtls for a point of the core is cut badly: split the core from the adapter.
 
