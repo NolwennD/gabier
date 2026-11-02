@@ -5,16 +5,61 @@ a Java language server instead: it drives jdtls, which works on the syntax tree,
 their diff, or a structured refusal. It is a command-line tool, `gabier`, backed by a daemon that keeps jdtls running
 for the project; both are written in Java.
 
-## Prerequisites
+There are two ways to get it:
 
-- A JDK 25 or later, to run the daemon (`JAVA_HOME`, else the `java` of the `PATH`).
-- Python 3, to run the launcher of jdtls (a Python script; it also needs that JDK).
-- GraalVM 25, to compile the native `gabier` binary.
-- [mise](https://mise.jdx.dev), which installs the pinned tools and jdtls (see below).
-- Optionally [SDKMAN!](https://sdkman.io), which selects the JDK pinned in `.sdkmanrc` when you enter the folder
-  (`sdk env install` once); the build finds the GraalVM among its candidates.
+- **[Use gabier on your project](#use-gabier-on-your-project)**: download a release. You need no clone, no build and
+  no mise.
+- **[Build gabier from its sources](#build-gabier-from-its-sources)**: for a version that is not released yet, or to
+  work on gabier itself.
 
-## Install
+Both end with `gabier` on the `PATH`, and both are used the same way, as [Using it](#using-it) explains.
+
+## Use gabier on your project
+
+You need:
+
+- Linux on x86-64 (the only platform released so far);
+- a JDK 25 or later, which runs the daemon (`JAVA_HOME`, else the `java` of the `PATH`);
+- Python 3, which runs the launcher of jdtls.
+
+Each [release](https://github.com/NolwennD/gabier/releases) holds three files:
+
+- `gabier-linux-x86_64`, the native cli;
+- `gabier-daemon-<version>.tar.gz`, the daemon: its start script and its jars;
+- `SHA256SUMS`, the checksums of the two files above.
+
+Download them into one folder, then:
+
+```sh
+sha256sum --check --ignore-missing SHA256SUMS
+mkdir -p ~/.local/bin ~/.local/share/gabier
+install -m 755 gabier-linux-x86_64 ~/.local/bin/gabier
+tar -C ~/.local/share/gabier -xzf gabier-daemon-<version>.tar.gz
+ln -sf ~/.local/share/gabier/gabier-daemon/bin/gabier-daemon ~/.local/bin/gabier-daemon
+gabier --version
+```
+
+`~/.local/bin` must be in the `PATH`.
+
+jdtls (the Eclipse JDT Language Server) is not in the release. Install the milestone that gabier is tested against
+into `~/.local/share/jdtls/<jdtls version>`, where the daemon looks for it. The notes of each release give the exact
+commands, with the version and its checksum.
+
+## Build gabier from its sources
+
+You need:
+
+- a JDK 25 or later and Python 3, as above;
+- GraalVM 25, which compiles the native cli;
+- [mise](https://mise.jdx.dev), which installs the pinned tools and jdtls;
+- optionally [SDKMAN!](https://sdkman.io), which selects the JDK pinned in `.sdkmanrc` when you enter the folder
+  (`sdk env install` once). The build finds the GraalVM among its candidates.
+
+```sh
+git clone https://github.com/NolwennD/gabier && cd gabier
+mise trust && mise install
+mise run install
+```
 
 `mise install` reads `mise.toml` and:
 
@@ -22,52 +67,42 @@ for the project; both are written in Java.
    [open-java-format](https://github.com/openjavaformat/open-java-format) (the formatter) and
    [ripwire](https://github.com/redhat-et/ripwire) (code search);
 2. installs the Git pre-commit hook that formats the staged Java files (`hk install --mise`);
-3. downloads the pinned jdtls (Eclipse JDT Language Server), checks its archive against the sha256 written in
-   `mise.toml`, and unpacks it into `~/.local/share/jdtls/<version>`, outside the repository and shared by every checkout
-   (from `https://download.eclipse.org/jdtls/milestones/<version>/`; `mise run jdtls:install` does this step alone);
-4. exports, in a shell where mise is active, `GABIER_JDTLS` (the path of the jdtls launcher) and adds that launcher to
-   the `PATH`.
+3. downloads the pinned jdtls from `https://download.eclipse.org/jdtls/milestones/<version>/`, checks its archive
+   against the sha256 written in `mise.toml`, and unpacks it into `~/.local/share/jdtls/<version>` (`mise run
+   jdtls:install` does this step alone);
+4. in a shell where mise is active, exports `GABIER_JDTLS` (the path of the jdtls launcher), which the tests of gabier
+   read.
 
-The daemon does not need that variable: when `GABIER_JDTLS` is not set it looks for the pinned jdtls in
-`~/.local/share/jdtls/<version>/bin/jdtls`, then for a `jdtls` on the `PATH` (see [The daemon](docs/daemon.md)), so
-`gabier` works in any Java project once step 3 has run.
+`mise run install` builds the native `gabier` and the daemon, which takes a few minutes. It **copies** them into
+`~/.local/share/gabier/<version>` and links `gabier` and `gabier-daemon` from `~/.local/bin` to that copy.
+`GABIER_INSTALL_DIR` and `GABIER_BIN_DIR` change the two folders. The copy does not depend on the clone: a `./gradlew
+clean`, or a checkout of another version, leaves it working. Run `mise run install` again to install a new state of the
+clone. To change gabier itself, read [AGENTS.md](AGENTS.md).
 
-Then `mise run install` builds the native `gabier` and the daemon `gabier-daemon`, **copies** them into
-`~/.local/share/gabier/<version>` (`GABIER_INSTALL_DIR` to change it; `<version>` is what `gabier --version` prints) and
-links `gabier` and `gabier-daemon` from `~/.local/bin` to that copy (`GABIER_BIN_DIR` to change it; the arguments of
-`scripts/install.sh` are the two folders, links first), so that `gabier` is called by name in any project. The copy does
-not depend on the checkout: `./gradlew clean`, or a checkout of another version, leaves the install working, and the cli
-starts the daemon of the same copy. A second install of a version replaces its copy; a file of the links folder that is
-not a link is never touched. The native image takes a few minutes. The details are in [The daemon](docs/daemon.md). The
-daemon starts by itself at the first command.
+## Using it
 
-In a new Git worktree, run `mise trust` once first: mise trusts a configuration per path.
-
-### Install from a release
-
-Without building: each [release](https://github.com/NolwennD/gabier/releases) of a tag `v<version>` holds the native
-`gabier` cli for Linux x86-64 (`gabier-linux-x86_64`), the daemon (`gabier-daemon-<version>.tar.gz`: its start script and
-its jars, which need a JDK 25 or later) and `SHA256SUMS`. jdtls is not bundled; the notes of the release say how to
-install the pinned one by hand, which in a checkout of the tag is `mise run jdtls:install`.
+Run `gabier` from anywhere inside a Java project built with Gradle, Maven or Eclipse: no file, variable or
+configuration is added to that project.
 
 ```sh
-sha256sum --check --ignore-missing SHA256SUMS
-install -m 755 gabier-linux-x86_64 ~/.local/bin/gabier
-mkdir -p ~/.local/share/gabier && tar -C ~/.local/share/gabier -xzf gabier-daemon-<version>.tar.gz
-ln -sf ~/.local/share/gabier/gabier-daemon/bin/gabier-daemon ~/.local/bin/gabier-daemon
-gabier --version
+cd ~/my-project
+gabier diagnostics src/main/java/com/example/App.java
+gabier rename --dry-run --token src/main/java/com/example/App.java App Application
 ```
 
-### Releasing
+- **The project.** It is the nearest folder above the working directory that holds a `.git`, else the working
+  directory. `GABIER_PROJECT` names another one.
+- **The daemon.** The first command starts a daemon for that project, which starts jdtls. The first answer waits until
+  jdtls has imported the project, which takes seconds for a small project and a minute or more for a large one. The
+  following commands are fast.
+- **One per project.** Each project has a daemon of its own. `gabier status` says what the daemon serves, and
+  `gabier stop` stops it.
+- **jdtls.** The daemon starts the jdtls that `GABIER_JDTLS` names, else the pinned one under
+  `~/.local/share/jdtls/<version>`, else a `jdtls` of the `PATH`. Without one, the first request says where it looked.
+- **A project jdtls cannot import** (no Gradle, Maven or Eclipse build) is refused with `no-build-to-import`.
 
-Pushing a tag `v<semantic version>` (`v0.1.0-rc.1`, then `v0.1.0`) runs `.github/workflows/release.yml`: it runs the full
-`bin/ci` on the tagged commit (the check of the pull requests), builds with the version of the tag, checks that the cli
-and the daemon print it, and attaches the assets to the release of the tag. A version with a pre-release suffix
-(`-rc.1`, any `-...`) gives a release marked pre-release, and the programs print the whole version (`0.1.0-rc.1`); a
-version with no suffix gives a normal release. The version that `gabier --version` and
-`gabier status` print is the Gradle property `gabierVersion` (`-PgabierVersion=0.1.0`), written in a resource of the
-`protocol` module at build time; a build made with no such property, such as `mise run install`, is `0.0.0-dev`.
-`scripts/package-release.sh <version> <folder>` makes the assets from a build made with that property.
+For a coding agent, point its instructions to `gabier help`. It lists the commands, and `gabier help <command>` gives
+the usage, an example and the refusals of each one.
 
 ## Capabilities
 

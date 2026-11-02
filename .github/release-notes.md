@@ -32,7 +32,12 @@ curl -fsSLO "$base/$archive"
 echo "@JDTLS_SHA256@  $archive" | sha256sum --check
 mkdir -p ~/.local/share/jdtls/@JDTLS_VERSION@
 tar -xzf "$archive" -C ~/.local/share/jdtls/@JDTLS_VERSION@
-export GABIER_JDTLS=~/.local/share/jdtls/@JDTLS_VERSION@/bin/jdtls
 ```
 
-The launcher is a Python 3 script that needs a JDK 21 or later; `GABIER_JDTLS` names it.
+The daemon finds it there by itself. `GABIER_JDTLS` can name another launcher. The launcher is a Python 3 script that
+needs a JDK 21 or later.
+
+## Use
+
+Run `gabier` inside a Java project built with Gradle, Maven or Eclipse: `gabier help` lists the commands. The first
+command starts the daemon of the project, which waits until jdtls has imported it. `gabier stop` ends it.
