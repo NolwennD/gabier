@@ -16,4 +16,4 @@ Done when:
 - the folders match the new package names;
 - `bin/ci` passes, the architecture tests included.
 
-Depends on: architecture-tests-for-a-pure-java-core.
+Depends on: architecture-tests-for-a-pure-java-core, move-rewrites-references-in-other-modules, move-removes-the-folders-it-empties.

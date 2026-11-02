@@ -10,7 +10,12 @@ no import of the moved type, and `organize-imports` answers `nothing to change`,
 with `language-server-unresolved-imports`. Reproduce: in a worktree of `a2310c2`, `gabier move
 modules/shared/src/main/java/fr/craft/gabier/shared/error/domain/*.java eu.gabier.shared.error.domain`, then `gabier
 diagnostics modules/protocol/src/main/java/fr/craft/gabier/protocol/ChangedFiles.java`. Start from the JDT LS
-documentation (how the Gradle import of a multi-module build links the projects) before any workaround.
+documentation (how the Gradle import of a multi-module build links the projects) before any workaround. Leads from the
+issues of eclipse.jdt.ls (02-11-2026, none on this exact case): #3924 (open), with Gradle 9.7 and later the
+annotation-processor model build aborts the Gradle import, and the build uses Gradle 9.8.2 with Error Prone and NullAway
+on the annotation processor path (workaround verified there: `java.import.gradle.annotationProcessing.enabled=false`);
+the change after `./gradlew :shared:jar` hints that the other modules see `shared` as a jar, not as a project; the
+moved package is no longer the one the `exports` of the module-info names. Check the jdtls log first.
 
 Done when:
 - a move of classes of one module rewrites the imports and qualified references in every module that depends on it, or
