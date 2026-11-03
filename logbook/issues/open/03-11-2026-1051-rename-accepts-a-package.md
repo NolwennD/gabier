@@ -14,7 +14,9 @@ Done when:
 - `gabier rename <file> <line>:<column> <new-name>` on the name in a `package` line (the full new name is given; the
   clicked segment decides the prefix renamed, as jdtls does) renames that package in the source folder of the file:
   `--dry-run` writes nothing, the folder of the package matches the new name and no empty old folder is left,
-  `gabier diagnostics` is clean on a fixture with a main and a test source set after the two calls;
+  `gabier diagnostics` reports no error on a fixture with a main and a test source set after the two calls (the import
+  that jdtls adds to the test class stays a redundant-import warning, which `gabier organize-imports` removes: the docs say
+  so);
 - a scenario of the catalogue (`add-scenario`) observed on the real jdtls first, replayed against it, and scripted in the
   fake; a package that cannot be renamed (invalid name, a name already taken) is a refusal with a key, listed in
   `gabier help rename`;
