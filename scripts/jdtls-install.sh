@@ -15,6 +15,15 @@ if [ -x "$home/bin/jdtls" ]; then
   exit 0
 fi
 
+# JDTLS_HOME may name any folder: one that is not a usable jdtls is replaced only when it is missing, empty, or a broken
+# install (it holds a bin/jdtls that cannot be run). Anything else is refused, never deleted.
+if [ -e "$home" ]; then
+  if [ ! -d "$home" ] || { [ ! -e "$home/bin/jdtls" ] && [ -n "$(ls -A "$home")" ]; }; then
+    echo "jdtls $version: $home exists and is not a jdtls install (no bin/jdtls) nor empty: not replaced" >&2
+    exit 1
+  fi
+fi
+
 if ! printf '%s' "$expected" | grep -Eq '^[0-9a-f]{64}$'; then
   echo "jdtls $version: the pinned checksum is not a sha256 (got '$expected')" >&2
   exit 1

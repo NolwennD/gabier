@@ -7,8 +7,8 @@ for the project; both are written in Java.
 
 There are two ways to get it:
 
-- **[Use gabier on your project](#use-gabier-on-your-project)**: use a release, pinned with mise or installed by a script. You need
-  no clone and no build.
+- **[Use gabier on your project](#use-gabier-on-your-project)**: use a release, pinned with mise or installed by a
+  script. You need no clone and no build.
 - **[Build gabier from its sources](#build-gabier-from-its-sources)**: for a version that is not released yet, or to
   work on gabier itself.
 

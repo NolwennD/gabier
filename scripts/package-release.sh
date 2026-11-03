@@ -1,16 +1,16 @@
 #!/bin/sh
-# Package the release assets of a version, from the build of this checkout, into a folder: the native cli, the archive of
-# the daemon (the folder `installDist` makes, `gabier-daemon/bin` and `gabier-daemon/lib`), the archive of mise
+# Package the release assets of a version, from the build of this checkout, into a folder: the native cli, the archive
+# of the daemon (the folder `installDist` makes, `gabier-daemon/bin` and `gabier-daemon/lib`), the archive of mise
 # (`gabier-linux-x86_64.tar.gz`: `bin/gabier`, `bin/gabier-daemon`, `lib/` and the pinned `jdtls/`, see below),
 # `install.sh` (written from scripts/release-install.sh.template), `SHA256SUMS` (which lists the four), and the release
 # notes. It first checks that the two programs print the version they were built with: a release that says another
 # version than its tag is refused.
 #
-# The archive of mise is what `mise use github:NolwennD/gabier@<version>` installs: mise puts its `bin/` on the PATH, the
-# cli starts the `gabier-daemon` next to it, and the daemon finds the `jdtls/` folder next to its `lib/` (JdtlsLocation).
-# jdtls is downloaded from Eclipse by scripts/jdtls-install.sh, checked against the sha256 pinned in mise.toml
-# (JDTLS_DOWNLOAD_BASE moves the download, for a test). Its name carries no version, so that the autodetection of mise
-# picks it over the bare cli `gabier-linux-x86_64` (same name, +10 for an archive): the tag gives the version.
+# The archive of mise is what `mise use github:NolwennD/gabier@<version>` installs: mise puts its `bin/` on the PATH,
+# the cli starts the `gabier-daemon` next to it, and the daemon finds the `jdtls/` folder next to its `lib/`
+# (JdtlsLocation). jdtls is downloaded from Eclipse by scripts/jdtls-install.sh, checked against the sha256 pinned in
+# mise.toml (JDTLS_DOWNLOAD_BASE moves the download, for a test). Its name carries no version, so that the autodetection
+# of mise picks it over the bare cli `gabier-linux-x86_64` (same name, +10 for an archive): the tag gives the version.
 #
 # The build is made with the same version beforehand (what .github/workflows/release.yml does):
 #   ./gradlew :cli:nativeCompile :daemon:installDist -PgabierVersion=<version>
@@ -57,7 +57,8 @@ rm -f "$out/$cli_asset" "$out/$daemon_asset" "$out/$mise_asset" "$out/install.sh
 cp "$cli" "$out/$cli_asset"
 chmod 755 "$out/$cli_asset"
 tar -C "$install" -czf "$out/$daemon_asset" gabier-daemon
-# The jdtls that gabier is built and tested against: the pins of mise.toml, which the notes quote and install.sh carries.
+# The jdtls that gabier is built and tested against: the pins of mise.toml, which the notes quote and install.sh
+# carries.
 jdtls_version=$(sed -n 's/^jdtls_version = "\(.*\)"$/\1/p' "$root/mise.toml")
 jdtls_sha256=$(sed -n 's/^jdtls_sha256 = "\(.*\)"$/\1/p' "$root/mise.toml")
 if [ -z "$jdtls_version" ] || [ -z "$jdtls_sha256" ]; then
