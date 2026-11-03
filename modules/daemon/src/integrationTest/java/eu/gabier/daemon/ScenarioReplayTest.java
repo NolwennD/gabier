@@ -13,6 +13,7 @@ import eu.gabier.editing.domain.OfferedActions;
 import eu.gabier.editing.domain.Position;
 import eu.gabier.editing.domain.ReferenceLocations;
 import eu.gabier.editing.fixtures.Effect;
+import eu.gabier.editing.fixtures.PackageRenameScenarios;
 import eu.gabier.editing.fixtures.Scenario;
 import eu.gabier.editing.fixtures.Scenario.Answer;
 import eu.gabier.editing.fixtures.Scenario.Request;
@@ -63,6 +64,15 @@ import org.junit.jupiter.api.Test;
 class ScenarioReplayTest {
 
     private static final Duration TIMEOUT = Duration.ofMinutes(5);
+
+    /**
+     * The organizations that remove an import the file still uses by its simple name (here, an import of the package
+     * the class is now in): the adapter asks the diagnostics for them, which costs the wait for jdtls to be quiet, so
+     * the time they take is not the one of a file that loses no code.
+     */
+    private static final Set<String> WAITING_FOR_THE_DIAGNOSTICS =
+            Set.of(PackageRenameScenarios.ORGANIZE_IMPORTS_AFTER_RENAMING_A_PACKAGE_IN_BOTH_SOURCE_SETS.name());
+
     private static final Pattern MODULE = Pattern.compile("\\bmodule\\s+([\\w.]+)");
 
     @Test
@@ -221,9 +231,10 @@ class ScenarioReplayTest {
                         .isEqualTo(located(diagnosed.diagnostics()));
             }
             case Answer.Changing changing -> {
-                Object asked = changing instanceof Answer.Organized
-                        ? askWithoutWaitingForDiagnostics(server, scenario, differences)
-                        : ask(server, request);
+                Object asked =
+                        changing instanceof Answer.Organized && !WAITING_FOR_THE_DIAGNOSTICS.contains(scenario.name())
+                                ? askWithoutWaitingForDiagnostics(server, scenario, differences)
+                                : ask(server, request);
                 System.out.println(scenario.name() + ": jdtls answered " + asked);
                 compareEffect(scenario, root, changesIn(asked), changing.changes(), differences);
             }

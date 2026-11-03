@@ -109,6 +109,20 @@ class HelpTest extends CliTest {
                 .contains("language-server-invalid-name");
     }
 
+    @Test
+    void helpOfRenameSaysItRenamesAPackageFromItsPackageLineAndWhatItLeavesToATextEdit() {
+        assertThat(run("help", "rename")).isZero();
+
+        assertThat(out())
+                .contains("Notes:")
+                .contains("package")
+                .contains("Sub-packages")
+                .contains("another source set")
+                .contains("module-info.java")
+                .contains("string literals")
+                .contains("build files");
+    }
+
     static Stream<String> commandNames() {
         return Capabilities.all().stream()
                 .map(capability -> capability.command().commandName());

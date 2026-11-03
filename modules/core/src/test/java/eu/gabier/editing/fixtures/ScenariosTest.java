@@ -121,6 +121,17 @@ class ScenariosTest {
                 .toList();
     }
 
+    private static boolean renamesAPackage(Scenario scenario) {
+        return PackageRenameScenarios.all().contains(scenario);
+    }
+
+    /** The renames of a symbol that is not a package: the next tests are about what such a rename has in common. */
+    private static List<Scenario> symbolRenames() {
+        return answeredWith(Answer.Renamed.class).stream()
+                .filter(scenario -> !renamesAPackage(scenario))
+                .toList();
+    }
+
     @Test
     void holdsTheCleanFileTheErrorTheWarningTheFourRenamesAndTheRefusals() {
         assertThat(ALL.stream().map(Scenario::name))
@@ -237,6 +248,12 @@ class ScenariosTest {
                         "move-a-folder",
                         "move-a-file-outside-the-project",
                         "move-while-the-server-imports",
+                        "rename-a-package",
+                        "rename-a-package-up-to-the-source-folder",
+                        "rename-a-package-to-an-invalid-name",
+                        "rename-a-package-to-a-package-that-exists",
+                        "diagnostics-after-renaming-a-package-in-both-source-sets",
+                        "organize-imports-after-renaming-a-package-in-both-source-sets",
                         "clean-up-a-concatenation-into-a-text-block",
                         "clean-up-with-two-clean-ups",
                         "clean-up-a-file-that-is-clean",
@@ -396,12 +413,55 @@ class ScenariosTest {
     void refusesForEachReasonOfThePortOnARename() {
         assertThat(answeredWith(Answer.Refused.class).stream()
                         .filter(scenario -> scenario.request() instanceof Request.Rename)
+                        .filter(scenario -> !renamesAPackage(scenario))
                         .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
                 .containsExactlyInAnyOrder(
                         LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
                         LanguageServerErrorKey.INVALID_NAME,
                         LanguageServerErrorKey.NO_SUCH_SYMBOL,
                         LanguageServerErrorKey.NOT_READY);
+    }
+
+    @Test
+    void startsEveryRenameOfAPackageOnTheNameInAPackageLine() {
+        for (Scenario scenario : PackageRenameScenarios.all()) {
+            if (!(scenario.request() instanceof Request.Rename request)) {
+                continue;
+            }
+            String line = lineOf(scenario, request.file(), request.position().line());
+            int start = line.indexOf("package ") + "package ".length();
+            int end = line.indexOf(';');
+
+            assertThat(line).as(scenario.name()).startsWith("package ");
+            assertThat(request.position().column()).as(scenario.name()).isBetween(start, end - 1);
+        }
+    }
+
+    @Test
+    void movesEveryFileOfARenamedPackageToTheFolderOfItsNewPackageLine(@TempDir Path directory) throws IOException {
+        for (Scenario scenario : answeredWith(Answer.Renamed.class)) {
+            if (!renamesAPackage(scenario)) {
+                continue;
+            }
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.Renamed) inside.answer()).changes());
+
+            Request.Rename request = (Request.Rename) scenario.request();
+            String newName = request.newName();
+            Path folder = root.resolve(sourceFolderOf(request.file())).resolve(newName.replace('.', '/'));
+            try (Stream<Path> written = Files.list(folder)) {
+                List<Path> moved = written.filter(Files::isRegularFile).toList();
+                assertThat(moved).as(scenario.name()).isNotEmpty();
+                for (Path file : moved) {
+                    assertThat(Files.readString(file))
+                            .as(scenario.name() + " in " + file)
+                            .startsWith("package " + newName + ";");
+                }
+            }
+        }
     }
 
     @Test
@@ -700,7 +760,7 @@ class ScenariosTest {
      */
     @Test
     void startsEveryRenameOnTheSymbolAndGivesEditsThatStartWhereItIsAndFitTheirFile() {
-        for (Scenario scenario : answeredWith(Answer.Renamed.class)) {
+        for (Scenario scenario : symbolRenames()) {
             Request.Rename request = (Request.Rename) scenario.request();
             String symbol = identifierAt(scenario, request.file(), request.position());
             List<FileChange> changes =
@@ -746,7 +806,7 @@ class ScenariosTest {
 
     @Test
     void leavesNoWholeWordOfTheOldNameOnceTheRenameIsApplied(@TempDir Path directory) throws IOException {
-        for (Scenario scenario : answeredWith(Answer.Renamed.class)) {
+        for (Scenario scenario : symbolRenames()) {
             Path root = Files.createTempDirectory(directory, "project");
             Scenario inside = scenario.inside(root);
             inside.writeProject(root);
@@ -771,7 +831,7 @@ class ScenariosTest {
     @Test
     void turnsEveryFileIntoItsSourceWithTheWholeWordOfTheOldNameReplacedByTheNewOne(@TempDir Path directory)
             throws IOException {
-        for (Scenario scenario : answeredWith(Answer.Renamed.class)) {
+        for (Scenario scenario : symbolRenames()) {
             Path root = Files.createTempDirectory(directory, "project");
             Scenario inside = scenario.inside(root);
             inside.writeProject(root);
@@ -838,7 +898,12 @@ class ScenariosTest {
 
             new ChangeApplier(new NioFileStore()).apply(((Answer.Organized) inside.answer()).changes());
 
-            List<String> block = importBlock(Files.readString(inside.request().file()));
+            String organized = Files.readString(inside.request().file());
+            if (organized.lines().noneMatch(line -> line.startsWith("import "))) {
+                // Every import was unused and is gone: there is no block left to keep in order.
+                continue;
+            }
+            List<String> block = importBlock(organized);
             assertThat(block).as(scenario.name()).isEqualTo(inTheOrderOfTheProject(block));
             assertThat(block).as(scenario.name()).noneMatch(line -> line.endsWith(".*;"));
         }

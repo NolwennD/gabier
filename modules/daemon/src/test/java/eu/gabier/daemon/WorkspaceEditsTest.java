@@ -91,6 +91,76 @@ class WorkspaceEditsTest {
     }
 
     @Test
+    void dropsAFileThatIsCreatedThenDeletedWhileNoOtherChangeNamesIt() {
+        // jdtls makes the folder of a renamed package with a file `.temp` that it deletes after the move.
+        Path temp = Path.of("/project/shop/.temp");
+        var create = new org.eclipse.lsp4j.CreateFile(temp.toUri().toString());
+        var move = new org.eclipse.lsp4j.RenameFile(
+                GREETER.toUri().toString(), WELCOMER.toUri().toString());
+        var delete = new org.eclipse.lsp4j.DeleteFile(temp.toUri().toString());
+
+        assertThat(of(workspaceEdit(
+                        edits(GREETER, lsp(0, 6, 0, 13)),
+                        Either.forRight(create),
+                        Either.forRight(move),
+                        Either.forRight(delete))))
+                .containsExactly(
+                        new EditFile(GREETER, List.of(domain(0, 6, 0, 13))), new RenameFile(GREETER, WELCOMER));
+    }
+
+    @Test
+    void keepsTheCreationsAndTheDeletionsOfOtherFilesBetweenAFileCreatedAndDeleted() {
+        Path temp = Path.of("/project/shop/.temp");
+        var createTemp = new org.eclipse.lsp4j.CreateFile(temp.toUri().toString());
+        var createOther = new org.eclipse.lsp4j.CreateFile(WELCOMER.toUri().toString());
+        var deleteOther = new org.eclipse.lsp4j.DeleteFile(GREETER.toUri().toString());
+        var deleteTemp = new org.eclipse.lsp4j.DeleteFile(temp.toUri().toString());
+
+        assertThat(of(workspaceEdit(
+                        Either.forRight(createTemp),
+                        Either.forRight(createOther),
+                        Either.forRight(deleteOther),
+                        Either.forRight(deleteTemp))))
+                .containsExactly(new CreateFile(WELCOMER), new DeleteFile(GREETER));
+    }
+
+    @Test
+    void keepsAFileThatIsCreatedThenDeletedWhenAnotherChangeBetweenNamesIt() {
+        Path temp = Path.of("/project/shop/.temp");
+        var create = new org.eclipse.lsp4j.CreateFile(temp.toUri().toString());
+        var delete = new org.eclipse.lsp4j.DeleteFile(temp.toUri().toString());
+
+        assertThat(of(workspaceEdit(Either.forRight(create), edits(temp, lsp(0, 0, 0, 0)), Either.forRight(delete))))
+                .containsExactly(
+                        new CreateFile(temp), new EditFile(temp, List.of(domain(0, 0, 0, 0))), new DeleteFile(temp));
+    }
+
+    @Test
+    void keepsAFileThatIsMovedBetweenItsCreationAndItsDeletion() {
+        Path temp = Path.of("/project/shop/.temp");
+        var create = new org.eclipse.lsp4j.CreateFile(temp.toUri().toString());
+        var moveIn = new org.eclipse.lsp4j.RenameFile(
+                temp.toUri().toString(), GREETER.toUri().toString());
+        var moveOut = new org.eclipse.lsp4j.RenameFile(
+                WELCOMER.toUri().toString(), temp.toUri().toString());
+        var delete = new org.eclipse.lsp4j.DeleteFile(temp.toUri().toString());
+
+        assertThat(of(workspaceEdit(Either.forRight(create), Either.forRight(moveIn), Either.forRight(delete))))
+                .hasSize(3);
+        assertThat(of(workspaceEdit(Either.forRight(create), Either.forRight(moveOut), Either.forRight(delete))))
+                .hasSize(3);
+    }
+
+    @Test
+    void keepsADeletionThatComesBeforeTheCreationOfTheSameFile() {
+        var create = new org.eclipse.lsp4j.CreateFile(GREETER.toUri().toString());
+        var delete = new org.eclipse.lsp4j.DeleteFile(GREETER.toUri().toString());
+
+        assertThat(of(workspaceEdit(Either.forRight(delete), Either.forRight(create))))
+                .containsExactly(new DeleteFile(GREETER), new CreateFile(GREETER));
+    }
+
+    @Test
     void ordersTheChangesOfAMoveWithTheCreationsAndTheEditsFirstThenTheMovesThenTheRemovalsEachByPath() {
         Path creator = Path.of("/project/Creator.java");
         Path zebra = Path.of("/project/Zebra.java");

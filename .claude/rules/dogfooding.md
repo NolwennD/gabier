@@ -6,7 +6,9 @@ clean or another branch does not break it; the cli starts the daemon of its own 
 
 - `gabier diagnostics <file>` to see the errors of a Java file instead of waiting for a build;
 - `gabier rename <file> <line>:<column> <new-name>` (1-based position, or `--token`; `--dry-run` first on a rename that
-  crosses files) instead of editing every occurrence by hand;
+  crosses files) instead of editing every occurrence by hand; on the name in a `package` line it renames the package,
+  its files moved to the folder of the new name (whole new name; one source folder at a time: the same package of the
+  tests is a second call; `module-info.java`, string literals and build files stay text edits);
 - `gabier organize-imports <file>` after adding or removing a usage, instead of editing the import lines by hand (it keeps
   the order of the formatter and never writes a star import; run `gabier diagnostics <file>` first, a file whose imports
   jdtls cannot resolve loses them);

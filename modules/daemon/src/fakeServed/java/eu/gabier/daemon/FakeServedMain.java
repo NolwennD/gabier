@@ -14,6 +14,7 @@ import eu.gabier.editing.fixtures.CleanUpScenarios;
 import eu.gabier.editing.fixtures.CodeActionScenarios;
 import eu.gabier.editing.fixtures.FakeJavaLanguageServer;
 import eu.gabier.editing.fixtures.PackageMoveScenarios;
+import eu.gabier.editing.fixtures.PackageRenameScenarios;
 import eu.gabier.editing.fixtures.Scenario;
 import eu.gabier.editing.fixtures.Scenarios;
 import eu.gabier.protocol.JdtlsState;
@@ -72,6 +73,7 @@ public final class FakeServedMain {
                 Scenarios.RENAME_TYPE,
                 Scenarios.RENAME_WHERE_THERE_IS_NO_SYMBOL,
                 Scenarios.RENAME_OUTSIDE_THE_PROJECT,
+                PackageRenameScenarios.RENAME_A_PACKAGE_UP_TO_THE_SOURCE_FOLDER,
                 Scenarios.ORGANIZE_IMPORTS,
                 Scenarios.ORGANIZE_IMPORTS_IN_ORDER,
                 Scenarios.ORGANIZE_IMPORTS_OUTSIDE_THE_PROJECT,

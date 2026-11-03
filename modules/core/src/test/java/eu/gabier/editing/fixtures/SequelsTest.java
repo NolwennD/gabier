@@ -17,6 +17,8 @@ import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /** The sequels are data that adapters replay: the second scenario must start where the first one leaves the disk. */
 class SequelsTest {
@@ -44,12 +46,17 @@ class SequelsTest {
     @Test
     void holdsTheRenameAfterARenameAndTheDiagnosticsAfterAnEdit() {
         assertThat(ALL.stream().map(Sequel::name))
-                .containsExactly("rename-after-a-rename", "diagnostics-after-an-edit");
+                .containsExactly(
+                        "rename-after-a-rename",
+                        "diagnostics-after-an-edit",
+                        "rename-a-package-then-the-same-package-of-the-tests");
     }
 
-    @Test
-    void startsTheSecondRenameWhereTheChangeSetOfTheFirstLeavesTheDisk(@TempDir Path directory) throws IOException {
-        Sequel sequel = named("rename-after-a-rename");
+    @ParameterizedTest
+    @ValueSource(strings = {"rename-after-a-rename", "rename-a-package-then-the-same-package-of-the-tests"})
+    void startsTheSecondRenameWhereTheChangeSetOfTheFirstLeavesTheDisk(String name, @TempDir Path directory)
+            throws IOException {
+        Sequel sequel = named(name);
         Scenario first = sequel.first().inside(directory);
         first.writeProject(directory);
 

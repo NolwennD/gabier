@@ -1684,11 +1684,16 @@ public final class Scenarios {
     private Scenarios() {}
 
     /**
-     * Every scenario of the catalogue, those of {@link PackageMoveScenarios}, {@link CleanUpScenarios} and {@link
-     * CodeActionScenarios} included.
+     * Every scenario of the catalogue, those of {@link PackageMoveScenarios}, {@link PackageRenameScenarios}, {@link
+     * CleanUpScenarios} and {@link CodeActionScenarios} included.
      */
     public static List<Scenario> all() {
-        return Stream.of(own(), PackageMoveScenarios.all(), CleanUpScenarios.all(), CodeActionScenarios.all())
+        return Stream.of(
+                        own(),
+                        PackageMoveScenarios.all(),
+                        PackageRenameScenarios.all(),
+                        CleanUpScenarios.all(),
+                        CodeActionScenarios.all())
                 .flatMap(List::stream)
                 .toList();
     }
@@ -1795,7 +1800,10 @@ public final class Scenarios {
 
     /** The sequels of the catalogue: scenarios in a row, with the files changed on disk between them. */
     public static List<Sequel> sequels() {
-        return List.of(RENAME_AFTER_A_RENAME, DIAGNOSTICS_AFTER_AN_EDIT);
+        return List.of(
+                RENAME_AFTER_A_RENAME,
+                DIAGNOSTICS_AFTER_AN_EDIT,
+                PackageRenameScenarios.RENAME_A_PACKAGE_THEN_THE_SAME_PACKAGE_OF_THE_TESTS);
     }
 
     /** The project with the two files that have something to report, so that their scenarios share one project. */

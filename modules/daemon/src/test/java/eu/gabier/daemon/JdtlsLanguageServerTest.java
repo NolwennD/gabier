@@ -957,6 +957,67 @@ class JdtlsLanguageServerTest {
         }
 
         @Test
+        void asksForTheRenameOfAPackageNameEvenThoughJdtlsDeclinesToPrepareIt() throws Exception {
+            Path ruler = write("src/main/java/legacy/tools/Ruler.java", "package legacy.tools;\n\nclass Ruler {}\n");
+            Path moved = root.resolve("src/main/java/tools/Ruler.java");
+            Path temp = root.resolve("src/main/java/tools/.temp");
+            var answer = new WorkspaceEdit(List.of(
+                    Either.<TextDocumentEdit, ResourceOperation>forLeft(editsOf(ruler, replace(0, 8, 20, "tools"))),
+                    Either.<TextDocumentEdit, ResourceOperation>forRight(
+                            new org.eclipse.lsp4j.CreateFile(temp.toUri().toString())),
+                    Either.<TextDocumentEdit, ResourceOperation>forRight(new org.eclipse.lsp4j.RenameFile(
+                            ruler.toUri().toString(), moved.toUri().toString())),
+                    Either.<TextDocumentEdit, ResourceOperation>forRight(
+                            new org.eclipse.lsp4j.DeleteFile(temp.toUri().toString()))));
+            fake.prepareRenameAnswers(declined("Renaming this element is not supported."))
+                    .renameAnswers(CompletableFuture.completedFuture(answer));
+
+            try (var server = started()) {
+                assertThat(server.rename(ruler, new Position(0, 18), "tools").changes())
+                        .containsExactly(
+                                domainEdits(ruler, domainReplace(0, 8, 20, "tools")),
+                                new FileChange.RenameFile(ruler, moved));
+                assertThat(fake.prepared()).hasSize(1);
+                assertThat(fake.renamed()).hasSize(1);
+                assertThat(fake.renamed().getFirst().getNewName()).isEqualTo("tools");
+                assertThat(fake.renamed().getFirst().getPosition()).isEqualTo(new org.eclipse.lsp4j.Position(0, 18));
+            }
+        }
+
+        @ParameterizedTest
+        @CsvSource({"0,0", "0,7", "0,20", "0,21", "2,0", "9,0"})
+        void doesNotAskForTheRenameWhereJdtlsDeclinesToPrepareItOutsideTheNameOfAPackageLine(int line, int column)
+                throws Exception {
+            Path ruler = write("src/main/java/legacy/tools/Ruler.java", "package legacy.tools;\n\nclass Ruler {}\n");
+            fake.prepareRenameAnswers(declined("Renaming this element is not supported."));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.rename(ruler, new Position(line, column), "tools"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+                assertThat(fake.renamed()).isEmpty();
+            }
+        }
+
+        @ParameterizedTest
+        @ValueSource(
+                strings = {"// package legacy.tools;", "String s = \"package legacy.tools;\";", "packages legacy.tools;"
+                })
+        void doesNotTakeALineThatIsNotAPackageDeclarationForOne(String line) throws Exception {
+            Path ruler = write("src/main/java/legacy/tools/Ruler.java", line + "\n");
+            fake.prepareRenameAnswers(declined("Renaming this element is not supported."));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.rename(ruler, new Position(0, line.length() - 3), "tools"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+                assertThat(fake.renamed()).isEmpty();
+            }
+        }
+
+        @Test
         void refusesAnInvalidNameWhichJdtlsDeclinesAsAnInvalidName() throws Exception {
             fake.prepareRenameAnswers(renamable()).renameAnswers(declined("'1st' is not a valid Java identifier"));
 

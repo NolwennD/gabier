@@ -1,7 +1,8 @@
 # gabier rename
 
-`gabier rename <file> <line>:<column> <new-name>` renames the Java symbol at a position, and everything that refers to
-it, in every file of the project: it asks the language server what the rename changes and writes it, all or nothing.
+`gabier rename <file> <line>:<column> <new-name>` renames the Java symbol at a position (a package too, on its name in a
+`package` line: see [Renaming a package](#renaming-a-package)), and everything that refers to it, in every file of the
+project: it asks the language server what the rename changes and writes it, all or nothing.
 `gabier rename --token <file> <identifier> <new-name>` names the symbol by the first occurrence of an identifier in the
 file, as a whole word (`greet` is not found in `greeting`; comments and strings are text like any other, so the first
 occurrence may be in one of them). `--dry-run` (anywhere after `rename`) writes nothing and shows what would change. The
@@ -36,6 +37,27 @@ modified /work/demo/src/main/java/demo/Greeter.java
 modified /work/demo/src/main/java/demo/Main.java
 ...
 ```
+
+## Renaming a package
+
+A position on the name in a `package` line (`package demo.app;`) renames the **package**, not a symbol of the file: the
+`package` lines of its files, the imports and the qualified names that refer to it, and the folder. Give the whole new
+name (`gabier rename src/main/java/demo/app/Greeter.java 1:14 demo.shop`). The files of the package move to the folder
+of the new name, which is made when it is missing, and the folders the move leaves empty are removed, up to the source
+folder (a dry run removes none). The segment the position is on decides how much of the old name is renamed: on `app`
+the package `demo.app`, on `demo` the package `demo`.
+
+jdtls renames the package in **the source folder of the file** only, and gives:
+
+- the sub-packages keep their names and their folders (`demo.app.sub` stays; its imports of `demo.app` are rewritten);
+- the same package in another source set (the tests, `src/test/java/demo/app`) keeps its name and its folder, and
+  gets an import of the classes that moved. Renaming it too is a second call, on a file of that source set
+  (`gabier rename src/test/java/demo/app/GreeterTest.java 1:14 demo.shop`). After the two calls `gabier diagnostics`
+  reports no error. The test classes keep the import that the first call gave them, now of their own package, which
+  it shows as a warning (`The import demo.shop.Greeter is never used`) and `gabier organize-imports` removes.
+
+A package that exists, or a name that is not a package name, is refused as `language-server-invalid-name`. What stays a
+text edit: `module-info.java` (`exports`, `opens`), string literals and comments, and build files.
 
 The daemon's methods are `rename` (parameters `file`, `line`, `column`, `newName`, `dryRun`) and `rename-token`
 (`file`, `token`, `newName`, `dryRun`); `dryRun` is `true` or `false`, and line and column are numbers from 0.

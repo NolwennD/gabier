@@ -27,7 +27,7 @@ class JdtlsCouplingTest {
     private static final int MOST_EXACT_COMPARISONS = 4;
 
     /** The messages of diagnostics the fixtures hold, written as the Eclipse compiler words them (not compared). */
-    private static final int MOST_COMPILER_MESSAGES = 4;
+    private static final int MOST_COMPILER_MESSAGES = 5;
 
     /** The titles of actions the fixtures hold, written as jdtls words them (compared exactly). */
     private static final int MOST_ACTION_TITLES = 3;

@@ -9,11 +9,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 import org.eclipse.lsp4j.CreateFile;
 import org.eclipse.lsp4j.DeleteFile;
 import org.eclipse.lsp4j.RenameFile;
@@ -79,7 +82,55 @@ final class WorkspaceEdits {
                 changes.add(resource(change.getRight()));
             }
         }
-        return changes;
+        return withoutTransientFiles(changes);
+    }
+
+    /**
+     * The changes without the files that are created and then deleted while no other change names them. jdtls makes the
+     * folder of a renamed package with such a file ({@code .temp}); the domain makes the folder of a file that is moved
+     * into it, so the pair would only show as a file created and deleted.
+     */
+    private static List<FileChange> withoutTransientFiles(List<FileChange> changes) {
+        Set<Integer> dropped = new HashSet<>();
+        for (int created = 0; created < changes.size(); created++) {
+            if (changes.get(created) instanceof FileChange.CreateFile(Path file)) {
+                int deleted = deletionOfATransientFile(changes, created, file);
+                if (deleted >= 0) {
+                    dropped.add(created);
+                    dropped.add(deleted);
+                }
+            }
+        }
+
+        return IntStream.range(0, changes.size())
+                .filter(index -> !dropped.contains(index))
+                .mapToObj(changes::get)
+                .toList();
+    }
+
+    /** The index of the deletion of the file created at this index when no change between names it, else -1. */
+    private static int deletionOfATransientFile(List<FileChange> changes, int created, Path file) {
+        for (int next = created + 1; next < changes.size(); next++) {
+            FileChange change = changes.get(next);
+            if (change.equals(new FileChange.DeleteFile(file))) {
+                return next;
+            }
+            if (names(change, file)) {
+                return -1;
+            }
+        }
+
+        return -1;
+    }
+
+    private static boolean names(FileChange change, Path file) {
+        return switch (change) {
+            case FileChange.CreateFile create -> create.file().equals(file);
+            case FileChange.EditFile edit -> edit.file().equals(file);
+            case FileChange.RenameFile rename ->
+                rename.from().equals(file) || rename.to().equals(file);
+            case FileChange.DeleteFile delete -> delete.file().equals(file);
+        };
     }
 
     /**

@@ -241,7 +241,9 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * the terms of the domain ({@link WorkspaceEdits}). jdtls reads the files as it knows them (nothing is opened), after
      * it has been told of the changes on disk. A
      * symbol that jdtls says it cannot rename is no symbol (jdtls answers so for a blank, a keyword, a position past
-     * the text), and a name that jdtls declines is invalid for the symbol.
+     * the text), and a name that jdtls declines is invalid for the symbol. The name in a {@code package} line is the
+     * exception: jdtls declines to prepare the rename of a package but renames it (the files move to the folder of the
+     * new name, see {@link PackageDeclarations}).
      *
      * @throws LanguageServerException if jdtls is not ready, the file is not in its project, there is no symbol at the
      *     position or jdtls declines the name
@@ -251,7 +253,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     public synchronized ChangeSet rename(Path file, Position position, String newName) {
         JdtlsSession session = ready();
         Path path = normalized(file);
-        textInProject(session, path);
+        String text = textInProject(session, path);
         var document = new TextDocumentIdentifier(path.toUri().toString());
         var at = new org.eclipse.lsp4j.Position(position.line(), position.column());
         var service = session.server().getTextDocumentService();
@@ -261,7 +263,9 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             var renamable = watch.await(
                     "whether the symbol at " + position + " of " + path + " can be renamed",
                     () -> JdtlsRequests.unlessDeclined(service.prepareRename(new PrepareRenameParams(document, at))));
-            if (renamable.isEmpty()) {
+            // jdtls declines to prepare the rename of a package, which it renames all the same: its name is not a
+            // symbol it would answer for, so the position is checked here.
+            if (renamable.isEmpty() && !PackageDeclarations.nameIsAt(text, position)) {
                 throw LanguageServerException.noSuchSymbol(path, position);
             }
             var edit = watch.await(

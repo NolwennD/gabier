@@ -617,6 +617,25 @@ public final class Native {
                             && Files.exists(source.resolve("Welcomer.java"))
                             && !Files.exists(source.resolve("Greeter.java")),
                     "gabier --json rename of a type gives the files moved and the diff, and moves the file");
+
+            String ruler = "rename-project/src/main/java/legacy/tools/Ruler.java";
+            Path tools = project.resolve("src/main/java/tools/Ruler.java");
+            Run packageDryRun = gabier("rename", "--dry-run", ruler, "1:19", "tools");
+            expect(
+                    packageDryRun.exit() == 0
+                            && packageDryRun.out().contains("renamed " + project.resolve("src/main/java/legacy/tools/Ruler.java")
+                                    + " -> " + tools)
+                            && Files.exists(project.resolve("src/main/java/legacy/tools/Ruler.java"))
+                            && !Files.exists(tools),
+                    "gabier rename --dry-run on a package line lists the move of its files and writes nothing");
+            Run packageRename = gabier("rename", ruler, "1:19", "tools");
+            expect(
+                    packageRename.exit() == 0
+                            && Files.readString(tools).startsWith("package tools;")
+                            && !Files.exists(project.resolve("src/main/java/legacy"))
+                            && Files.isDirectory(project.resolve("src/main/java")),
+                    "gabier rename on a package line moves its files to the folder of the new name and removes the"
+                            + " folders it empties");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after the renames");
         }

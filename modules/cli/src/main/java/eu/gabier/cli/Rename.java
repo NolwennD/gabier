@@ -32,7 +32,16 @@ final class Rename implements Capability {
                     Refusal.FILE_MISSING,
                     Refusal.NOT_A_FILE,
                     Refusal.STALE_EDIT_OF_FILES,
-                    Refusal.NOT_READY);
+                    Refusal.NOT_READY)
+            .withNotes("""
+                A position on the name in a package line renames the package, with its imports and its references: its files
+                move to the folder of the new name and the folders left empty are removed. Give the whole new name
+                (demo.shop); the segment the position is on decides how much of the old name is renamed (on app in
+                demo.app.sub, demo.app). Sub-packages keep their names, and the same package in another source set
+                (the tests) is a rename of its own. A package that exists, or a name that is not a package name, is
+                refused as language-server-invalid-name. module-info.java, string literals and build files are not
+                changed: edit them as text.\
+                """);
 
     @Override
     public Command command() {

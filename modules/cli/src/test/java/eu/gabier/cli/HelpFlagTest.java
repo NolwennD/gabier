@@ -121,7 +121,7 @@ class HelpFlagTest {
 
     @Test
     void theHelpOfACommandWithoutNotesHasNoNotesSection() {
-        assertThat(printedBy("help", "rename")).doesNotContain("Notes:");
+        assertThat(printedBy("help", "diagnostics")).doesNotContain("Notes:");
     }
 
     @ParameterizedTest

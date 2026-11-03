@@ -7,12 +7,14 @@ import eu.gabier.editing.application.RenameTarget.At;
 import eu.gabier.editing.application.RenameTarget.Token;
 import eu.gabier.editing.domain.ChangeReport;
 import eu.gabier.editing.domain.ChangeReport.Renamed;
+import eu.gabier.editing.domain.Diagnostic;
 import eu.gabier.editing.domain.EditingErrorKey;
 import eu.gabier.editing.domain.EditingException;
 import eu.gabier.editing.domain.LanguageServerErrorKey;
 import eu.gabier.editing.domain.LanguageServerException;
 import eu.gabier.editing.domain.Position;
 import eu.gabier.editing.fixtures.FakeJavaLanguageServer;
+import eu.gabier.editing.fixtures.PackageRenameScenarios;
 import eu.gabier.editing.fixtures.Scenario;
 import eu.gabier.editing.fixtures.Scenario.Request;
 import eu.gabier.editing.fixtures.Scenarios;
@@ -164,6 +166,190 @@ class RenameTest {
             ChangeReport done = rename.apply(target, "Welcomer");
 
             assertThat(done).isEqualTo(planned);
+        }
+    }
+
+    @Nested
+    class OfAPackage {
+
+        private static final String APP = "src/main/java/demo/app/";
+        private static final String SHOP = "src/main/java/demo/shop/";
+        private static final String RULER = "src/main/java/legacy/tools/Ruler.java";
+
+        private void renameApp() {
+            rename.apply(new At(path(APP + "Greeter.java"), new Position(0, 13)), "demo.shop");
+        }
+
+        @Test
+        void givesItsFilesTheNewPackageLineAndTheFolderOfTheNewNameAndUpdatesTheirUsers() throws IOException {
+            project(PackageRenameScenarios.RENAME_A_PACKAGE);
+
+            ChangeReport report = rename.apply(new At(path(APP + "Greeter.java"), new Position(0, 13)), "demo.shop");
+
+            assertThat(text(SHOP + "Greeter.java")).startsWith("package demo.shop;\n");
+            assertThat(text(SHOP + "Farewell.java")).startsWith("package demo.shop;\n");
+            assertThat(path(APP + "Greeter.java")).doesNotExist();
+            assertThat(path(APP + "Farewell.java")).doesNotExist();
+            assertThat(text("src/main/java/demo/other/Main.java"))
+                    .contains("import demo.shop.Farewell;\nimport demo.shop.Greeter;\n");
+            assertThat(report.renamed())
+                    .containsExactly(
+                            new Renamed(path(APP + "Greeter.java"), path(SHOP + "Greeter.java")),
+                            new Renamed(path(APP + "Farewell.java"), path(SHOP + "Farewell.java")));
+            assertThat(report.created()).isEmpty();
+            assertThat(report.deleted()).isEmpty();
+        }
+
+        @Test
+        void leavesTheSubPackageAndThePackageOfTheOtherSourceSetWhereTheyAre() throws IOException {
+            project(PackageRenameScenarios.RENAME_A_PACKAGE);
+
+            renameApp();
+
+            assertThat(text(APP + "sub/Helper.java"))
+                    .startsWith("package demo.app.sub;\n")
+                    .contains("import demo.shop.Greeter;");
+            assertThat(text("src/test/java/demo/app/GreeterTest.java"))
+                    .startsWith("package demo.app;\n")
+                    .contains("import demo.shop.Greeter;");
+            assertThat(path(APP + "sub")).isDirectory();
+        }
+
+        @Test
+        void removesTheFolderTheRenameEmptiesAndItsEmptyParentsUpToTheSourceFolder() throws IOException {
+            project(PackageRenameScenarios.RENAME_A_PACKAGE_UP_TO_THE_SOURCE_FOLDER);
+
+            rename.apply(new At(path(RULER), new Position(0, 18)), "tools");
+
+            assertThat(text("src/main/java/tools/Ruler.java")).startsWith("package tools;\n");
+            assertThat(path("src/main/java/legacy")).doesNotExist();
+            assertThat(path("src/main/java")).isDirectory();
+        }
+
+        @Test
+        void keepsTheOldFolderThatStillHoldsAFile() throws IOException {
+            project(PackageRenameScenarios.RENAME_A_PACKAGE);
+
+            renameApp();
+
+            assertThat(path(APP)).isDirectory();
+        }
+
+        @Test
+        void writesNothingOnADryRunAndRemovesNoFolder() throws IOException {
+            project(PackageRenameScenarios.RENAME_A_PACKAGE_UP_TO_THE_SOURCE_FOLDER);
+            Map<String, String> before = snapshot();
+
+            ChangeReport report = rename.dryRun(new At(path(RULER), new Position(0, 18)), "tools");
+
+            assertThat(snapshot()).isEqualTo(before);
+            assertThat(report.renamed())
+                    .containsExactly(new Renamed(path(RULER), path("src/main/java/tools/Ruler.java")));
+        }
+
+        @Test
+        void givesTheSameReportOnADryRunAndOnTheRealRun() throws IOException {
+            project(PackageRenameScenarios.RENAME_A_PACKAGE_UP_TO_THE_SOURCE_FOLDER);
+            At target = new At(path(RULER), new Position(0, 18));
+
+            ChangeReport planned = rename.dryRun(target, "tools");
+            ChangeReport done = rename.apply(target, "tools");
+
+            assertThat(done).isEqualTo(planned);
+        }
+
+        @Test
+        void removesNoFolderWhenATypeIsRenamedInPlace() throws IOException {
+            project(Scenarios.RENAME_TYPE);
+
+            rename.apply(new At(path(GREETER), new Position(2, 13)), "Welcomer");
+
+            assertThat(path("src/main/java/demo")).isDirectory();
+        }
+
+        /** The two calls, the main sources then the test sources, applied one after the other. */
+        private void renameInTheMainAndInTheTestSources() throws IOException {
+            project(PackageRenameScenarios.RENAME_A_PACKAGE);
+            server.scripted(PackageRenameScenarios.RENAME_THE_SAME_PACKAGE_OF_THE_TESTS)
+                    .scripted(PackageRenameScenarios.DIAGNOSTICS_AFTER_RENAMING_A_PACKAGE_IN_BOTH_SOURCE_SETS)
+                    .scripted(PackageRenameScenarios.ORGANIZE_IMPORTS_AFTER_RENAMING_A_PACKAGE_IN_BOTH_SOURCE_SETS);
+            renameApp();
+            rename.apply(new At(path("src/test/java/demo/app/GreeterTest.java"), new Position(0, 13)), "demo.shop");
+        }
+
+        private Map<Path, String> sources() throws IOException {
+            Map<Path, String> sources = new TreeMap<>();
+            try (Stream<Path> paths = Files.walk(root)) {
+                for (Path file : paths.filter(Files::isRegularFile).toList()) {
+                    sources.put(root.relativize(file), Files.readString(file));
+                }
+            }
+
+            return sources;
+        }
+
+        @Test
+        void givesTheProjectTheDiagnosticsScenarioStartsFromOnceThePackageIsRenamedInTheMainAndInTheTestSources()
+                throws IOException {
+            renameInTheMainAndInTheTestSources();
+
+            assertThat(sources()).isEqualTo(new TreeMap<>(PackageRenameScenarios.afterTheTwoCalls()));
+            assertThat(path("src/test/java/demo/app")).doesNotExist();
+            assertThat(path(APP + "Greeter.java")).doesNotExist();
+        }
+
+        @Test
+        void reportsNoErrorOnTheProjectOnceThePackageIsRenamedInTheMainAndInTheTestSources() throws IOException {
+            renameInTheMainAndInTheTestSources();
+
+            assertThat(new Diagnose(server).diagnose(path("src/test/java/demo/shop/GreeterTest.java")))
+                    .extracting(Diagnostic::severity)
+                    .containsExactly(Diagnostic.Severity.WARNING);
+        }
+
+        @Test
+        void removesTheImportThatTheTwoCallsLeaveWithTheOrganizationOfTheImports() throws IOException {
+            renameInTheMainAndInTheTestSources();
+
+            new OrganizeImports(server, new NioFileStore()).apply(path("src/test/java/demo/shop/GreeterTest.java"));
+
+            assertThat(text("src/test/java/demo/shop/GreeterTest.java")).isEqualTo("""
+                package demo.shop;
+
+                class GreeterTest {
+                    String run() {
+                        return new Greeter().greet();
+                    }
+                }
+                """);
+        }
+
+        private void assertRefused(Scenario scenario, String message) throws IOException {
+            project(scenario);
+            Map<String, String> before = snapshot();
+            Request.Rename request = (Request.Rename) scenario.request();
+            At target = new At(root.resolve(request.file()).normalize(), request.position());
+
+            assertThatExceptionOfType(LanguageServerException.class)
+                    .isThrownBy(() -> rename.apply(target, request.newName()))
+                    .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.INVALID_NAME))
+                    .withMessage(message.replace("{root}", root.toString()));
+
+            assertThat(snapshot()).isEqualTo(before);
+        }
+
+        @Test
+        void refusesANameThatIsNotAPackageName() throws IOException {
+            assertRefused(
+                    PackageRenameScenarios.RENAME_A_PACKAGE_TO_AN_INVALID_NAME,
+                    "\"demo.1st\" is not a valid name for the symbol at 0:13 in {root}/" + APP + "Greeter.java");
+        }
+
+        @Test
+        void refusesAPackageThatExists() throws IOException {
+            assertRefused(
+                    PackageRenameScenarios.RENAME_A_PACKAGE_TO_A_PACKAGE_THAT_EXISTS,
+                    "\"demo.other\" is not a valid name for the symbol at 0:13 in {root}/" + APP + "Greeter.java");
         }
     }
 
