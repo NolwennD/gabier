@@ -7,8 +7,8 @@ for the project; both are written in Java.
 
 There are two ways to get it:
 
-- **[Use gabier on your project](#use-gabier-on-your-project)**: download a release. You need no clone, no build and
-  no mise.
+- **[Use gabier on your project](#use-gabier-on-your-project)**: use a release, pinned with mise or installed by a script. You need
+  no clone and no build.
 - **[Build gabier from its sources](#build-gabier-from-its-sources)**: for a version that is not released yet, or to
   work on gabier itself.
 
@@ -22,14 +22,38 @@ You need:
 - a JDK 25 or later, which runs the daemon (`JAVA_HOME`, else the `java` of the `PATH`);
 - Python 3, which runs the launcher of jdtls.
 
-Each [release](https://github.com/NolwennD/gabier/releases) holds four files:
+### With mise
+
+If your project already pins its tools with [mise](https://mise.jdx.dev), pin gabier the same way:
+
+```sh
+mise use github:NolwennD/gabier@<version>
+```
+
+The `mise.toml` of the project then holds one line, next to the JDK 25 (`java = "temurin-25"`) that runs the daemon:
+
+```toml
+[tools]
+java = "temurin-25"
+"github:NolwennD/gabier" = "<version>"
+```
+
+`mise install` in each clone gives the same `gabier`: the cli, the daemon it starts and the jdtls the daemon starts all
+come from one archive of the release, so they are of one version, and changing the version in `mise.toml` and running
+`mise install` changes the three together. Nothing else is set: no variable and no `postinstall`. Python 3 must be
+installed, for the launcher of jdtls. `~/.local/share/jdtls` and `~/.local/bin` are not used.
+
+### With the files of the release
+
+Each [release](https://github.com/NolwennD/gabier/releases) holds five files:
 
 - `gabier-linux-x86_64`, the native cli;
 - `gabier-daemon-<version>.tar.gz`, the daemon: its start script and its jars;
-- `install.sh`, which installs the two files above and jdtls;
-- `SHA256SUMS`, the checksums of the three files above.
+- `gabier-linux-x86_64.tar.gz`, what mise installs: the cli, the daemon and jdtls in one archive;
+- `install.sh`, which installs the cli and the daemon, and jdtls;
+- `SHA256SUMS`, the checksums of the four files above.
 
-Download them into one folder, then:
+Download the cli, the daemon, `install.sh` and `SHA256SUMS` into one folder, then:
 
 ```sh
 sh install.sh
@@ -101,8 +125,9 @@ gabier rename --dry-run --token src/main/java/com/example/App.java App Applicati
   following commands are fast.
 - **One per project.** Each project has a daemon of its own. `gabier status` says what the daemon serves, and
   `gabier stop` stops it.
-- **jdtls.** The daemon starts the jdtls that `GABIER_JDTLS` names, else the pinned one under
-  `~/.local/share/jdtls/<version>`, else a `jdtls` of the `PATH`. Without one, the first request says where it looked.
+- **jdtls.** The daemon starts the jdtls that `GABIER_JDTLS` names, else the one shipped with it (the `jdtls/` folder of
+  the archive that mise installs), else the pinned one under `~/.local/share/jdtls/<version>`, else a `jdtls` of the
+  `PATH`. Without one, the first request says where it looked.
 - **A project jdtls cannot import** (no Gradle, Maven or Eclipse build) is refused with `no-build-to-import`.
 
 For a coding agent, point its instructions to `gabier help`. It lists the commands, and `gabier help <command>` gives

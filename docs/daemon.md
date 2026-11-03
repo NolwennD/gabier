@@ -53,12 +53,14 @@ standard error of the daemon, prefixed with `jdtls:`, with control characters wr
 `gabier diagnostics`.
 
 **Where the daemon finds jdtls.** At each start of jdtls, in this order: the launcher that `GABIER_JDTLS` names (used as it
-is, even when nothing is there, so that the failure names it), else the pinned jdtls that `mise run jdtls:install`
-installs, `~/.local/share/jdtls/<version>/bin/jdtls` (the home folder is the one of the user; the version is the
+is, even when nothing is there, so that the failure names it), else the jdtls shipped with the daemon, `jdtls/bin/jdtls`
+in the folder above the `lib` folder of the daemon's own jar (the archive of a release holds `bin/`, `lib/` and `jdtls/`
+side by side, so a gabier installed by mise brings its jdtls and switches with it), else the pinned jdtls that
+`mise run jdtls:install` installs, `~/.local/share/jdtls/<version>/bin/jdtls` (the home folder is the one of the user; the version is the
 `jdtls_version` of `mise.toml`, written by the build in the resource `jdtls.properties` of the daemon, so the number
 exists once), else a `jdtls` on the `PATH`. So the daemon serves any Java project once `mise run jdtls:install` has run,
-with no `mise.toml` and no variable in that project. With none of the three, the request gets `jdtls-start-failed` whose
-message names the three places and `mise run jdtls:install`; the next request looks again, so a jdtls installed meanwhile
+with no `mise.toml` and no variable in that project. With none of them, the request gets `jdtls-start-failed` whose
+message names the places and `mise run jdtls:install`; the next request looks again, so a jdtls installed meanwhile
 is found without restarting the daemon.
 
 jdtls is ready when it says so itself: its `ServiceReady` status comes once its import is over, and the daemon then asks

@@ -10,11 +10,15 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Map;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -40,6 +44,10 @@ class JdtlsLocationTest {
         return launcherAt(home().resolve(".local/share/jdtls/" + JdtlsLocation.PINNED_VERSION + "/bin/jdtls"));
     }
 
+    private Path shipped() throws IOException {
+        return launcherAt(directory.resolve("distribution/jdtls/bin/jdtls"));
+    }
+
     private Path onThePath() throws IOException {
         return launcherAt(directory.resolve("path/bin/jdtls"));
     }
@@ -62,6 +70,51 @@ class JdtlsLocationTest {
                     directory.resolve("path/bin").toString());
 
             assertThat(JdtlsLocation.launcher(environment, home())).isEqualTo(Path.of("/chosen/jdtls"));
+        }
+
+        @Test
+        void takesTheJdtlsShippedWithTheDaemonBeforeTheInstalledOneAndThePath() throws IOException {
+            var launcher = shipped();
+            installed();
+            onThePath();
+
+            assertThat(JdtlsLocation.launcher(pathOfTheLauncher(), home(), directory.resolve("distribution")))
+                    .isEqualTo(launcher);
+        }
+
+        @Test
+        void takesTheLauncherTheVariableNamesBeforeTheShippedOne() throws IOException {
+            shipped();
+
+            assertThat(JdtlsLocation.launcher(
+                            Map.of("GABIER_JDTLS", "/chosen/jdtls"), home(), directory.resolve("distribution")))
+                    .isEqualTo(Path.of("/chosen/jdtls"));
+        }
+
+        @Test
+        void looksOnlyWhereTheDaemonIsNotShippedWhenItsFolderIsNotKnown() throws IOException {
+            shipped();
+            var launcher = installed();
+
+            assertThat(JdtlsLocation.launcher(pathOfTheLauncher(), home(), null))
+                    .isEqualTo(launcher);
+        }
+
+        @Test
+        void ignoresAShippedLauncherThatIsNotThere() throws IOException {
+            var launcher = installed();
+
+            assertThat(JdtlsLocation.launcher(pathOfTheLauncher(), home(), directory.resolve("distribution")))
+                    .isEqualTo(launcher);
+        }
+
+        @Test
+        void ignoresAShippedLauncherThatCannotBeRun() throws IOException {
+            Files.setPosixFilePermissions(shipped(), PosixFilePermissions.fromString("rw-------"));
+            var launcher = installed();
+
+            assertThat(JdtlsLocation.launcher(pathOfTheLauncher(), home(), directory.resolve("distribution")))
+                    .isEqualTo(launcher);
         }
 
         @Test
@@ -110,6 +163,33 @@ class JdtlsLocationTest {
 
             assertThatThrownBy(() -> JdtlsLocation.launcher(environment, home()))
                     .isInstanceOf(IOException.class);
+        }
+    }
+
+    @Nested
+    class Shipping {
+
+        @Test
+        void findsTheFolderAboveTheLibFolderOfTheJarThatHoldsTheClass() throws Exception {
+            var lib = Files.createDirectories(directory.resolve("distribution/lib"));
+            var jar = lib.resolve("gabier-daemon.jar");
+            var entry = "eu/gabier/daemon/JdtlsLocation.class";
+            try (var out = new JarOutputStream(Files.newOutputStream(jar));
+                    var bytes = JdtlsLocation.class.getClassLoader().getResourceAsStream(entry)) {
+                out.putNextEntry(new JarEntry(entry));
+                out.write(bytes.readAllBytes());
+                out.closeEntry();
+            }
+            try (var loader = new URLClassLoader(new URL[] {jar.toUri().toURL()}, null)) {
+                var type = Class.forName("eu.gabier.daemon.JdtlsLocation", false, loader);
+
+                assertThat(JdtlsLocation.distributionOf(type)).contains(directory.resolve("distribution"));
+            }
+        }
+
+        @Test
+        void findsNothingForAClassThatHasNoCodeSource() {
+            assertThat(JdtlsLocation.distributionOf(String.class)).isEmpty();
         }
     }
 

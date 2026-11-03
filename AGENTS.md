@@ -51,8 +51,8 @@ The way of working, the quality gates, the logbook of issues and the use of gabi
 
 Pushing a tag `v<semantic version>` (`v0.1.0-rc.1`, then `v0.1.0`) runs `.github/workflows/release.yml`. It runs the
 full `bin/ci` on the tagged commit (the check of the pull requests), builds with the version of the tag, checks that the
-cli and the daemon print it, and attaches the assets to the release of the tag (the cli, the daemon archive, `install.sh`
-and `SHA256SUMS`), with the notes of `.github/release-notes.md`.
+cli and the daemon print it, and attaches the assets to the release of the tag (the cli, the daemon archive, the archive
+of mise, `install.sh` and `SHA256SUMS`), with the notes of `.github/release-notes.md`.
 
 - A version with a pre-release suffix (`-rc.1`, any `-...`) gives a release marked pre-release, and the programs print
   the whole version (`0.1.0-rc.1`). A version with no suffix gives a normal release.
@@ -63,3 +63,12 @@ and `SHA256SUMS`), with the notes of `.github/release-notes.md`.
   `install.sh` of the release from `scripts/release-install.sh.template`, filling the version and the jdtls pins of
   `mise.toml` (the placeholders `@VERSION@`, `@JDTLS_VERSION@`, `@JDTLS_SHA256@`, as in the release notes). Change the
   template, not a release's file; a bump of the jdtls pin reaches the next release by itself.
+- The archive of mise, `gabier-linux-x86_64.tar.gz`, is what `mise use github:NolwennD/gabier@<version>` installs: `bin/gabier`
+  (native cli), `bin/gabier-daemon` (the start script), `lib/` (its jars) and `jdtls/` (the pinned jdtls, downloaded from
+  Eclipse and checked against the sha256 of `mise.toml` by `scripts/jdtls-install.sh` while packaging). mise puts `bin/` on
+  the PATH, the cli starts the daemon next to it, and the daemon finds `jdtls/bin/jdtls` above its own `lib/`
+  (`JdtlsLocation`): no `postinstall` and no variable in the `mise.toml` of the user, and a change of version changes the
+  three together. The name has no version and no longer matches the bare cli `gabier-linux-x86_64`, so that the
+  autodetection of the github backend of mise picks the archive over it (same score, +10 for an archive): do not rename
+  these two, and do not add an asset that scores as high for linux x86-64. The release also keeps the bare cli, the daemon
+  archive and `install.sh`, which `scripts/release-install.sh.template` uses.
