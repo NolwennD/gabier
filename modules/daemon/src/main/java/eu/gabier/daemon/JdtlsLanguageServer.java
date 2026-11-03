@@ -243,10 +243,11 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * symbol that jdtls says it cannot rename is no symbol (jdtls answers so for a blank, a keyword, a position past
      * the text), and a name that jdtls declines is invalid for the symbol. The name in a {@code package} line is the
      * exception: jdtls declines to prepare the rename of a package but renames it (the files move to the folder of the
-     * new name, see {@link PackageDeclarations}).
+     * new name, see {@link PackageDeclarations}), and renames nothing when the package named up to the segment of the
+     * position has no class of its own (a refusal of its own, which says which package is empty).
      *
      * @throws LanguageServerException if jdtls is not ready, the file is not in its project, there is no symbol at the
-     *     position or jdtls declines the name
+     *     position, the package at the position holds no class or jdtls declines the name
      * @throws JdtlsException if jdtls dies or does not answer in time
      */
     @Override
@@ -265,7 +266,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                     () -> JdtlsRequests.unlessDeclined(service.prepareRename(new PrepareRenameParams(document, at))));
             // jdtls declines to prepare the rename of a package, which it renames all the same: its name is not a
             // symbol it would answer for, so the position is checked here.
-            if (renamable.isEmpty() && !PackageDeclarations.nameIsAt(text, position)) {
+            var packageName = PackageDeclarations.nameAt(text, position);
+            if (renamable.isEmpty() && packageName.isEmpty()) {
                 throw LanguageServerException.noSuchSymbol(path, position);
             }
             var edit = watch.await(
@@ -275,7 +277,12 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                     edit.orElseThrow(() -> LanguageServerException.invalidName(path, position, newName)),
                     JdtlsLanguageServer::textOnDisk);
             if (changes.isEmpty()) {
-                throw LanguageServerException.noSuchSymbol(path, position);
+                // jdtls renames the package up to the segment of the position, and answers no change at all when that
+                // package holds no class of its own (a prefix of the name that only has sub-packages).
+                throw packageName
+                        .map(name ->
+                                LanguageServerException.emptyPackage(path, position, name.upToPosition(), name.whole()))
+                        .orElseGet(() -> LanguageServerException.noSuchSymbol(path, position));
             }
             return new ChangeSet(changes);
         } catch (InterruptedException interrupted) {

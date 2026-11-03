@@ -18,6 +18,7 @@ class LanguageServerExceptionTest {
         assertThat(Arrays.stream(LanguageServerErrorKey.values()).map(LanguageServerErrorKey::get))
                 .containsExactly(
                         "language-server-ambiguous-imports",
+                        "language-server-empty-package",
                         "language-server-file-missing",
                         "language-server-file-outside-project",
                         "language-server-invalid-name",
@@ -186,6 +187,27 @@ class LanguageServerExceptionTest {
         assertThat(exception.parameters())
                 .isEqualTo(Map.of("file", FILE.toString(), "line", "4", "column", "7", "name", "1st"));
         assertThat(exception).hasMessage("\"1st\" is not a valid name for the symbol at 4:7 in " + FILE);
+    }
+
+    @Test
+    void saysWhichPackageHasNothingToRename() {
+        LanguageServerException exception =
+                LanguageServerException.emptyPackage(FILE, new Position(0, 9), "eu.gabier", "eu.gabier.shared");
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.EMPTY_PACKAGE);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters())
+                .isEqualTo(Map.of(
+                        "file", FILE.toString(),
+                        "line", "0",
+                        "column", "9",
+                        "package", "eu.gabier",
+                        "declaredPackage", "eu.gabier.shared"));
+        assertThat(exception)
+                .hasMessage("The package eu.gabier, the name up to the segment at 0:9 in " + FILE
+                        + ", has no class of its own in its source folder, so there is nothing to rename. The segment"
+                        + " at the position decides how much of the name is renamed: to rename eu.gabier.shared, the"
+                        + " package of the file, put the position on its last segment and give its whole new name");
     }
 
     @Test

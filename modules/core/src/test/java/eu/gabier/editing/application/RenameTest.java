@@ -346,6 +346,26 @@ class RenameTest {
         }
 
         @Test
+        void saysWhichPackageHoldsNoClassWhenThePositionIsOnASegmentThatNamesOne() throws IOException {
+            Scenario scenario = PackageRenameScenarios.RENAME_A_PACKAGE_THAT_HOLDS_NO_CLASS;
+            project(scenario);
+            Map<String, String> before = snapshot();
+            Request.Rename request = (Request.Rename) scenario.request();
+            At target = new At(root.resolve(request.file()).normalize(), request.position());
+
+            assertThatExceptionOfType(LanguageServerException.class)
+                    .isThrownBy(() -> rename.dryRun(target, request.newName()))
+                    .satisfies(exception -> {
+                        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.EMPTY_PACKAGE);
+                        assertThat(exception.parameters())
+                                .containsEntry("package", "legacy")
+                                .containsEntry("declaredPackage", "legacy.tools");
+                    });
+
+            assertThat(snapshot()).isEqualTo(before);
+        }
+
+        @Test
         void refusesAPackageThatExists() throws IOException {
             assertRefused(
                     PackageRenameScenarios.RENAME_A_PACKAGE_TO_A_PACKAGE_THAT_EXISTS,

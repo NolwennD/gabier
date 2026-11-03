@@ -1,6 +1,7 @@
 package eu.gabier.daemon;
 
 import eu.gabier.editing.domain.Position;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
@@ -16,16 +17,30 @@ final class PackageDeclarations {
 
     private PackageDeclarations() {}
 
-    /** Whether the position is on a character of the name in a {@code package} line of the text. */
-    static boolean nameIsAt(String text, Position position) {
+    /**
+     * The name in a {@code package} line, seen from a position on one of its characters.
+     *
+     * @param whole the whole name in the line
+     * @param upToPosition the name up to the segment the position is on (a dot belongs to the segment before it): the
+     *     package that jdtls renames
+     */
+    record Name(String whole, String upToPosition) {}
+
+    /** The name in the {@code package} line when the position is on a character of it, else nothing. */
+    static Optional<Name> nameAt(String text, Position position) {
         String[] lines = text.split("\\R", position.line() + 2);
         if (position.line() >= lines.length) {
-            return false;
+            return Optional.empty();
         }
         var declaration = DECLARATION.matcher(lines[position.line()]);
+        if (!declaration.find()
+                || position.column() < declaration.start(1)
+                || position.column() >= declaration.end(1)) {
+            return Optional.empty();
+        }
+        String whole = declaration.group(1);
+        int segmentEnd = whole.indexOf('.', position.column() - declaration.start(1));
 
-        return declaration.find()
-                && position.column() >= declaration.start(1)
-                && position.column() < declaration.end(1);
+        return Optional.of(new Name(whole, segmentEnd < 0 ? whole : whole.substring(0, segmentEnd)));
     }
 }

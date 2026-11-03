@@ -35,6 +35,25 @@ public final class LanguageServerException extends GeneratorException {
     }
 
     /**
+     * The position is on the name in a {@code package} line, on a segment whose package (the name up to that segment)
+     * holds no class of its own in its source folder, so renaming it changes nothing.
+     *
+     * @param emptyPackage the name up to the segment at the position
+     * @param declaredPackage the whole name in the {@code package} line
+     */
+    public static LanguageServerException emptyPackage(
+            Path file, Position position, String emptyPackage, String declaredPackage) {
+        return new LanguageServerException(positioned(LanguageServerErrorKey.EMPTY_PACKAGE, file, position)
+                .message("The package " + emptyPackage + ", the name up to the segment at " + format(position) + " in "
+                        + file + ", has no class of its own in its source folder, so there is nothing to rename. The"
+                        + " segment at the position decides how much of the name is renamed: to rename "
+                        + declaredPackage + ", the package of the file, put the position on its last segment and give"
+                        + " its whole new name")
+                .addParameter("package", emptyPackage)
+                .addParameter("declaredPackage", declaredPackage));
+    }
+
+    /**
      * The server cannot extract the selection, whichever of the four extractions was asked (variable, method, constant,
      * field): it is not an expression, or statements, that can be extracted there. The server does not tell why, and
      * the text says no more than that.

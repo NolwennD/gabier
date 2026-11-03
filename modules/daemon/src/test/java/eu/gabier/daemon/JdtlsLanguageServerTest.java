@@ -985,6 +985,40 @@ class JdtlsLanguageServerTest {
         }
 
         @ParameterizedTest
+        @CsvSource({"8,legacy", "13,legacy", "15,legacy.tools", "19,legacy.tools"})
+        void refusesAPackageThatHoldsNoClassWhereJdtlsAnswersTheRenameOfThePackageWithNoChange(
+                int column, String emptyPackage) throws Exception {
+            Path ruler = write("src/main/java/legacy/tools/Ruler.java", "package legacy.tools;\n\nclass Ruler {}\n");
+            fake.prepareRenameAnswers(declined("Renaming this element is not supported."))
+                    .renameAnswers(CompletableFuture.completedFuture(edit()));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.rename(ruler, new Position(0, column), "elsewhere.tools"))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.EMPTY_PACKAGE);
+                            assertThat(refusal.parameters())
+                                    .containsEntry("file", ruler.toString())
+                                    .containsEntry("line", "0")
+                                    .containsEntry("column", String.valueOf(column))
+                                    .containsEntry("package", emptyPackage)
+                                    .containsEntry("declaredPackage", "legacy.tools");
+                        });
+            }
+        }
+
+        @Test
+        void refusesAnEmptyRenameOfASymbolThatIsNotAPackageAsNoSymbol() throws Exception {
+            fake.prepareRenameAnswers(renamable()).renameAnswers(CompletableFuture.completedFuture(edit()));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.rename(greeter, new Position(1, 10), "hello"))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+            }
+        }
+
+        @ParameterizedTest
         @CsvSource({"0,0", "0,7", "0,20", "0,21", "2,0", "9,0"})
         void doesNotAskForTheRenameWhereJdtlsDeclinesToPrepareItOutsideTheNameOfAPackageLine(int line, int column)
                 throws Exception {

@@ -133,8 +133,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
         /**
          * The exception that a refusal with this key and these details is for this request.
          *
-         * @param details what the refusal names: the imports the server cannot resolve, or the types it cannot choose
-         *     between
+         * @param details what the refusal names: the imports the server cannot resolve, the types it cannot choose
+         *     between, or the empty package and the package of the file for {@code EMPTY_PACKAGE}
          * @throws IllegalArgumentException if the request cannot be refused for this reason
          */
         LanguageServerException refusal(LanguageServerErrorKey key, List<String> details);
@@ -158,7 +158,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
-                    case NO_SUCH_SYMBOL,
+                    case EMPTY_PACKAGE,
+                            NO_SUCH_SYMBOL,
                             INVALID_NAME,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
@@ -194,7 +195,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case AMBIGUOUS_IMPORTS -> LanguageServerException.ambiguousImports(file, details);
                     case UNRESOLVED_IMPORTS -> LanguageServerException.unresolvedImports(file, details);
-                    case NO_SUCH_SYMBOL,
+                    case EMPTY_PACKAGE,
+                            NO_SUCH_SYMBOL,
                             INVALID_NAME,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
@@ -232,7 +234,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
-                    case NO_SUCH_SYMBOL,
+                    case EMPTY_PACKAGE,
+                            NO_SUCH_SYMBOL,
                             INVALID_NAME,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
@@ -269,6 +272,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NO_SUCH_SYMBOL -> LanguageServerException.noSuchSymbol(file, position);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, position, newName);
+                    case EMPTY_PACKAGE ->
+                        LanguageServerException.emptyPackage(file, position, details.get(0), details.get(1));
                     case NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
@@ -304,7 +309,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NOT_EXTRACTABLE -> LanguageServerException.notExtractable(file, selection);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, selection.start(), name);
-                    case NO_SUCH_SYMBOL,
+                    case EMPTY_PACKAGE,
+                            NO_SUCH_SYMBOL,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             NOT_MOVABLE_TO_PACKAGE,
@@ -340,7 +346,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NOT_EXTRACTABLE -> LanguageServerException.notExtractable(file, selection);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, selection.start(), name);
-                    case NO_SUCH_SYMBOL,
+                    case EMPTY_PACKAGE,
+                            NO_SUCH_SYMBOL,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             NOT_MOVABLE_TO_PACKAGE,
@@ -376,7 +383,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NOT_EXTRACTABLE -> LanguageServerException.notExtractable(file, selection);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, selection.start(), name);
-                    case NO_SUCH_SYMBOL,
+                    case EMPTY_PACKAGE,
+                            NO_SUCH_SYMBOL,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             NOT_MOVABLE_TO_PACKAGE,
@@ -412,7 +420,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NOT_EXTRACTABLE -> LanguageServerException.notExtractable(file, selection);
                     case INVALID_NAME -> LanguageServerException.invalidName(file, selection.start(), name);
-                    case NO_SUCH_SYMBOL,
+                    case EMPTY_PACKAGE,
+                            NO_SUCH_SYMBOL,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
                             NOT_MOVABLE_TO_PACKAGE,
@@ -446,7 +455,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NOT_MOVABLE -> LanguageServerException.notMovable(file, position);
-                    case NO_SUCH_SYMBOL,
+                    case EMPTY_PACKAGE,
+                            NO_SUCH_SYMBOL,
                             INVALID_NAME,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
@@ -496,7 +506,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_MISSING -> LanguageServerException.fileMissing(file());
                     case NOT_A_FILE -> LanguageServerException.notAFile(file());
                     case NOT_MOVABLE_TO_PACKAGE -> notMovable(details.getFirst());
-                    case NO_SUCH_SYMBOL,
+                    case EMPTY_PACKAGE,
+                            NO_SUCH_SYMBOL,
                             INVALID_NAME,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
@@ -543,7 +554,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NOT_INLINABLE -> LanguageServerException.notInlinable(file, position);
-                    case NO_SUCH_SYMBOL,
+                    case EMPTY_PACKAGE,
+                            NO_SUCH_SYMBOL,
                             INVALID_NAME,
                             NOT_EXTRACTABLE,
                             NOT_MOVABLE,
@@ -577,7 +589,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NO_SUCH_SYMBOL -> LanguageServerException.noSuchSymbol(file, position);
-                    case INVALID_NAME,
+                    case EMPTY_PACKAGE,
+                            INVALID_NAME,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
                             NOT_MOVABLE,
@@ -612,6 +625,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NOT_APPLICABLE,
+                            EMPTY_PACKAGE,
                             NO_SUCH_SYMBOL,
                             INVALID_NAME,
                             NOT_EXTRACTABLE,
@@ -648,7 +662,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
                     case NOT_APPLICABLE -> LanguageServerException.notApplicable(file, range, action.title());
-                    case NO_SUCH_SYMBOL,
+                    case EMPTY_PACKAGE,
+                            NO_SUCH_SYMBOL,
                             INVALID_NAME,
                             NOT_EXTRACTABLE,
                             NOT_INLINABLE,
@@ -684,6 +699,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                     case FILE_MISSING,
                             NOT_A_FILE,
                             NOT_APPLICABLE,
+                            EMPTY_PACKAGE,
                             NO_SUCH_SYMBOL,
                             INVALID_NAME,
                             NOT_EXTRACTABLE,

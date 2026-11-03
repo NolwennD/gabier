@@ -110,6 +110,15 @@ class HelpTest extends CliTest {
     }
 
     @Test
+    void helpOfRenameListsTheRefusalOfAPackageThatHoldsNoClass() {
+        assertThat(run("help", "rename")).isZero();
+
+        assertThat(out())
+                .contains("language-server-empty-package: the package named up to the position holds no class")
+                .contains("put the position on its last segment");
+    }
+
+    @Test
     void helpOfRenameSaysItRenamesAPackageFromItsPackageLineAndWhatItLeavesToATextEdit() {
         assertThat(run("help", "rename")).isZero();
 

@@ -41,6 +41,10 @@ import java.util.Map;
  *   <li>jdtls declines a name that is not a package name, and a package that exists ({@link
  *       #RENAME_A_PACKAGE_TO_AN_INVALID_NAME}, {@link #RENAME_A_PACKAGE_TO_A_PACKAGE_THAT_EXISTS}); both are an invalid
  *       name for the adapter.
+ *   <li>A segment whose package holds no class of its own ({@code legacy} of {@code legacy.tools}) is renamed with no
+ *       change at all, with no word on why: the adapter knows the position is on a package name and refuses with the
+ *       empty package it names ({@link #RENAME_A_PACKAGE_THAT_HOLDS_NO_CLASS}), the first and the whole name being the
+ *       details of the refusal.
  * </ul>
  */
 public final class PackageRenameScenarios {
@@ -176,6 +180,17 @@ public final class PackageRenameScenarios {
             new Answer.Refused(LanguageServerErrorKey.INVALID_NAME));
 
     /**
+     * {@code legacy} of {@code package legacy.tools;}: the package {@code legacy} has no class of its own (its
+     * sub-package {@code legacy.tools} has one, and the sub-packages keep their names), so jdtls answers the rename with
+     * no change at all, and the adapter says which package is empty instead of that there is no symbol.
+     */
+    public static final Scenario RENAME_A_PACKAGE_THAT_HOLDS_NO_CLASS = new Scenario(
+            "rename-a-package-that-holds-no-class",
+            PROJECT,
+            new Request.Rename(RULER, new Position(0, 10), "elsewhere.tools"),
+            new Answer.Refused(LanguageServerErrorKey.EMPTY_PACKAGE, List.of("legacy", "legacy.tools")));
+
+    /**
      * The same package of the test sources, once {@link #RENAME_A_PACKAGE} is on disk: the second call that the first one
      * leaves to make. The test class takes the package line and the folder of the new name, and keeps the import that
      * the first call gave it, which is now of its own package (a warning of the compiler, not an error).
@@ -233,6 +248,7 @@ public final class PackageRenameScenarios {
                 RENAME_A_PACKAGE_UP_TO_THE_SOURCE_FOLDER,
                 RENAME_A_PACKAGE_TO_AN_INVALID_NAME,
                 RENAME_A_PACKAGE_TO_A_PACKAGE_THAT_EXISTS,
+                RENAME_A_PACKAGE_THAT_HOLDS_NO_CLASS,
                 DIAGNOSTICS_AFTER_RENAMING_A_PACKAGE_IN_BOTH_SOURCE_SETS,
                 ORGANIZE_IMPORTS_AFTER_RENAMING_A_PACKAGE_IN_BOTH_SOURCE_SETS);
     }

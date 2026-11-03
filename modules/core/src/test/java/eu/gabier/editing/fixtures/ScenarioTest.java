@@ -274,8 +274,19 @@ class ScenarioTest {
                 .isEqualTo(Map.of("file", FILE.toString(), "line", "0", "column", "6"));
         LanguageServerException invalidName = rename.refusal(LanguageServerErrorKey.INVALID_NAME);
         assertThat(invalidName.parameters()).containsEntry("name", "1st");
+        LanguageServerException emptyPackage =
+                rename.refusal(LanguageServerErrorKey.EMPTY_PACKAGE, List.of("a", "a.b"));
+        assertThat(emptyPackage.parameters())
+                .isEqualTo(Map.of(
+                        "file", FILE.toString(),
+                        "line", "0",
+                        "column", "6",
+                        "package", "a",
+                        "declaredPackage", "a.b"));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> rename.refusal(LanguageServerErrorKey.NOT_EXTRACTABLE));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> diagnostics.refusal(LanguageServerErrorKey.EMPTY_PACKAGE));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> rename.refusal(LanguageServerErrorKey.AMBIGUOUS_IMPORTS));
         assertThatExceptionOfType(IllegalArgumentException.class)

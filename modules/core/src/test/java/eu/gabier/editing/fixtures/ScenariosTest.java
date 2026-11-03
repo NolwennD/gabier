@@ -252,6 +252,7 @@ class ScenariosTest {
                         "rename-a-package-up-to-the-source-folder",
                         "rename-a-package-to-an-invalid-name",
                         "rename-a-package-to-a-package-that-exists",
+                        "rename-a-package-that-holds-no-class",
                         "diagnostics-after-renaming-a-package-in-both-source-sets",
                         "organize-imports-after-renaming-a-package-in-both-source-sets",
                         "clean-up-a-concatenation-into-a-text-block",
@@ -435,6 +436,23 @@ class ScenariosTest {
             assertThat(line).as(scenario.name()).startsWith("package ");
             assertThat(request.position().column()).as(scenario.name()).isBetween(start, end - 1);
         }
+    }
+
+    @Test
+    void namesTheEmptyPackageUpToTheSegmentOfThePositionAndThePackageOfTheFile() {
+        var scenario = PackageRenameScenarios.RENAME_A_PACKAGE_THAT_HOLDS_NO_CLASS;
+        var request = (Request.Rename) scenario.request();
+        String name = lineOf(scenario, request.file(), request.position().line())
+                .substring("package ".length())
+                .replace(";", "");
+        int segmentEnd = name.indexOf('.', request.position().column() - "package ".length());
+        var details = ((Answer.Refused) scenario.answer()).details();
+
+        assertThat(details).containsExactly(name.substring(0, segmentEnd), name);
+        assertThat(request.newName()).doesNotStartWith(details.getFirst());
+        assertThat(scenario.files().entrySet())
+                .filteredOn(file -> file.getKey().startsWith("src/main"))
+                .noneMatch(file -> file.getValue().startsWith("package " + details.getFirst() + ";"));
     }
 
     @Test
