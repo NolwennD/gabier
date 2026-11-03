@@ -15,6 +15,7 @@ import eu.gabier.editing.domain.LanguageServerException;
 import eu.gabier.editing.domain.Position;
 import eu.gabier.editing.fixtures.FakeJavaLanguageServer;
 import eu.gabier.editing.fixtures.PackageRenameScenarios;
+import eu.gabier.editing.fixtures.RecordRenameScenarios;
 import eu.gabier.editing.fixtures.Scenario;
 import eu.gabier.editing.fixtures.Scenario.Request;
 import eu.gabier.editing.fixtures.Scenarios;
@@ -361,6 +362,22 @@ class RenameTest {
                                 .containsEntry("package", "legacy")
                                 .containsEntry("declaredPackage", "legacy.tools");
                     });
+
+            assertThat(snapshot()).isEqualTo(before);
+        }
+
+        @Test
+        void refusesAComponentOfARecordWhereTheServerCannotRenameItAndWritesNothing() throws IOException {
+            Scenario scenario = RecordRenameScenarios.RENAME_A_COMPONENT_OF_A_RECORD_WITH_A_COMPACT_CONSTRUCTOR;
+            project(scenario);
+            Map<String, String> before = snapshot();
+            Request.Rename request = (Request.Rename) scenario.request();
+            At target = new At(root.resolve(request.file()).normalize(), request.position());
+
+            assertThatExceptionOfType(LanguageServerException.class)
+                    .isThrownBy(() -> rename.apply(target, request.newName()))
+                    .satisfies(exception ->
+                            assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.RECORD_COMPONENT));
 
             assertThat(snapshot()).isEqualTo(before);
         }

@@ -119,6 +119,17 @@ class HelpTest extends CliTest {
     }
 
     @Test
+    void helpOfRenameListsTheRefusalOfAComponentOfARecordAndSaysToEditItAsText() {
+        assertThat(run("help", "rename")).isZero();
+
+        assertThat(out())
+                .contains("language-server-record-component: the symbol is a component of a record, which the language"
+                        + " server does not rename correctly (edit it as text)")
+                .contains("is refused as language-server-record-component: rename the")
+                .contains("component, its accessor and its uses as a text edit");
+    }
+
+    @Test
     void helpOfRenameSaysItRenamesAPackageFromItsPackageLineAndWhatItLeavesToATextEdit() {
         assertThat(run("help", "rename")).isZero();
 

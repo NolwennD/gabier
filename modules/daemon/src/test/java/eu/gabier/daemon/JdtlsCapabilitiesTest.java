@@ -39,6 +39,15 @@ class JdtlsCapabilitiesTest {
     }
 
     @Test
+    void asksForTheSemanticTokensOfAWholeFileSoThatJdtlsSaysWhichDeclarationsAreRecordComponents() {
+        // Without it jdtls announces no provider of semantic tokens, and so no legend with the type recordComponent.
+        var tokens = capabilities.getTextDocument().getSemanticTokens();
+
+        assertThat(tokens.getRequests().getFull().getLeft()).isTrue();
+        assertThat(tokens.getFormats()).containsExactly("relative");
+    }
+
+    @Test
     void acceptsCodeActionsAsLiteralsOfTheKindsOfARefactoring() {
         var kinds = capabilities
                 .getTextDocument()

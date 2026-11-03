@@ -64,6 +64,8 @@ import org.eclipse.lsp4j.PrepareRenameParams;
 import org.eclipse.lsp4j.ReferenceContext;
 import org.eclipse.lsp4j.ReferenceParams;
 import org.eclipse.lsp4j.RenameParams;
+import org.eclipse.lsp4j.SemanticTokens;
+import org.eclipse.lsp4j.SemanticTokensParams;
 import org.eclipse.lsp4j.SymbolInformation;
 import org.eclipse.lsp4j.SymbolKind;
 import org.eclipse.lsp4j.TextDocumentIdentifier;
@@ -261,6 +263,9 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         JdtlsWatch watch = session.newWatch();
         try {
             takeInChangesOnDisk(session, watch);
+            if (isARecordComponent(session, watch, document, at)) {
+                throw LanguageServerException.recordComponent(path, position);
+            }
             var renamable = watch.await(
                     "whether the symbol at " + position + " of " + path + " can be renamed",
                     () -> JdtlsRequests.unlessDeclined(service.prepareRename(new PrepareRenameParams(document, at))));
@@ -291,6 +296,48 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                     "Interrupted while waiting for the rename of the symbol at " + position + " of " + path,
                     interrupted);
         }
+    }
+
+    /**
+     * Whether the symbol at the position is a component of a record, from the header of the record or from any use of
+     * the component (an accessor call, the name read in the body): {@code textDocument/definition} gives its
+     * declaration whatever the position, and the semantic tokens of the file of the declaration say whether the name
+     * there is a {@code recordComponent} ({@link RecordComponents}). A declaration that is not in a file (a type of the
+     * JDK, in a class file), none, or a legend without that type (the check cannot be made) is no component. jdtls
+     * answers the declaration as locations; links are not read.
+     */
+    private static boolean isARecordComponent(
+            JdtlsSession session, JdtlsWatch watch, TextDocumentIdentifier document, org.eclipse.lsp4j.Position at)
+            throws InterruptedException {
+        var recordComponent = session.recordComponentTokenType();
+        if (recordComponent.isEmpty()) {
+            return false;
+        }
+        var service = session.server().getTextDocumentService();
+        var definition = watch.await(
+                "where the symbol at " + at.getLine() + ":" + at.getCharacter() + " of " + document.getUri()
+                        + " is declared",
+                () -> service.definition(new DefinitionParams(document, at)));
+        Optional<org.eclipse.lsp4j.Location> declaration = Optional.ofNullable(definition)
+                .filter(Either::isLeft)
+                .flatMap(places -> places.getLeft().stream()
+                        .<org.eclipse.lsp4j.Location>map(place -> place)
+                        .findFirst())
+                .filter(place -> place.getUri().startsWith("file:"));
+        if (declaration.isEmpty()) {
+            return false;
+        }
+        var declared = declaration.get();
+        var tokens = watch.await(
+                "the semantic tokens of " + declared.getUri(),
+                () -> service.semanticTokensFull(
+                        new SemanticTokensParams(new TextDocumentIdentifier(declared.getUri()))));
+
+        return Optional.ofNullable(tokens)
+                .map(SemanticTokens::getData)
+                .filter(data -> RecordComponents.areDeclaredAt(
+                        data, recordComponent.getAsInt(), declared.getRange().getStart()))
+                .isPresent();
     }
 
     /**

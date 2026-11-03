@@ -31,6 +31,7 @@ class LanguageServerExceptionTest {
                         "language-server-not-movable",
                         "language-server-not-movable-to-package",
                         "language-server-not-ready",
+                        "language-server-record-component",
                         "language-server-unresolved-imports");
     }
 
@@ -208,6 +209,20 @@ class LanguageServerExceptionTest {
                         + ", has no class of its own in its source folder, so there is nothing to rename. The segment"
                         + " at the position decides how much of the name is renamed: to rename eu.gabier.shared, the"
                         + " package of the file, put the position on its last segment and give its whole new name");
+    }
+
+    @Test
+    void saysThatTheComponentOfARecordIsNotRenamedByTheServer() {
+        LanguageServerException exception = LanguageServerException.recordComponent(FILE, new Position(2, 27));
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.RECORD_COMPONENT);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters()).isEqualTo(Map.of("file", FILE.toString(), "line", "2", "column", "27"));
+        assertThat(exception)
+                .hasMessage("The symbol at 2:27 in " + FILE + " is a component of a record, which the language server"
+                        + " does not rename correctly: it fails on a record with a compact constructor and leaves the"
+                        + " uses in the body of the others. Rename the component, its accessor and its uses as a text"
+                        + " edit");
     }
 
     @Test

@@ -17,7 +17,8 @@ run, nothing written` for a dry run. With `--json`, the result is
 the daemon names them (absolute, normalized) and the diff exact. In text, the paths and the diff are neutralised as in
 [Text in a terminal](../cli.md#text-in-a-terminal), so a tab shows as `\u0009` and a backslash as two. A refusal is the
 problem object, exit code 2: no symbol at the position (`language-server-no-such-symbol`), a name the server declines
-(`language-server-invalid-name`), a package with no class of its own at the position (`language-server-empty-package`), a file outside the project, a server that is not ready, an identifier that is not in
+(`language-server-invalid-name`), a package with no class of its own at the position (`language-server-empty-package`),
+a component of a record (`language-server-record-component`), a file outside the project, a server that is not ready, an identifier that is not in
 the file (`editing-token-not-found`), and a change set that cannot be applied to the files as they are
 (`editing-stale-edit` and the other `editing-` keys): in every case nothing is written. A rename is asked of jdtls after
 it was told of what changed on disk since its last request, so a second rename sees the files the first one wrote.
@@ -63,6 +64,17 @@ to the segment and has nothing to change there. The refusal names that package a
 package of the file, put the position on its last segment and give its whole new name. What stays a
 text edit: `module-info.java` (`exports`, `opens`), string literals and comments, and build files.
 
+A component of a record (`file` of `record Location(Path file, Position position)`) is refused as
+`language-server-record-component`, wherever the position is: on the name in the header of the record, on a use of the
+component in the record, or on a call of its accessor. jdtls does not rename a component correctly. With a compact
+constructor in the record it fails (an internal error of the rename of a local variable, which it takes the component
+for), and without one it renames the component, its accessor calls and `this.file`, and leaves the uses by simple name
+in the body of the record, which no longer compiles; nothing tells from outside when it is right. The adapter asks
+`textDocument/definition` for the declaration of the symbol, and the semantic tokens of the file of that declaration
+(the client declares them in `JdtlsCapabilities`; the legend of jdtls has the token type `recordComponent`) for whether
+the name there is a component. The method of a record is renamed like that of any class. A jdtls that
+does not announce that token type is not checked, and renames as before.
+
 The daemon's methods are `rename` (parameters `file`, `line`, `column`, `newName`, `dryRun`) and `rename-token`
 (`file`, `token`, `newName`, `dryRun`); `dryRun` is `true` or `false`, and line and column are numbers from 0.
 
@@ -75,6 +87,8 @@ command can answer, and the help of the command (`gabier help rename`) lists the
 - `language-server-invalid-name`: the language server declines the new name.
 - `language-server-empty-package`: the package named up to the position (a package line) holds no class of its own, so
   there is nothing to rename; put the position on the last segment.
+- `language-server-record-component`: the symbol is a component of a record, which the language server does not rename
+  correctly; rename the component, its accessor and its uses as a text edit.
 - `editing-token-not-found`: the identifier is not in the file (`--token`).
 - `editing-file-missing`: with `--token`, no file is at the path.
 - `language-server-file-outside-project`: the file is not in the project the daemon serves.

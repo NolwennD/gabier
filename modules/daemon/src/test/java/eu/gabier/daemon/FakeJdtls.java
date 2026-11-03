@@ -54,6 +54,10 @@ import org.eclipse.lsp4j.ReferenceParams;
 import org.eclipse.lsp4j.Registration;
 import org.eclipse.lsp4j.RegistrationParams;
 import org.eclipse.lsp4j.RenameParams;
+import org.eclipse.lsp4j.SemanticTokens;
+import org.eclipse.lsp4j.SemanticTokensLegend;
+import org.eclipse.lsp4j.SemanticTokensParams;
+import org.eclipse.lsp4j.SemanticTokensWithRegistrationOptions;
 import org.eclipse.lsp4j.ServerCapabilities;
 import org.eclipse.lsp4j.SymbolInformation;
 import org.eclipse.lsp4j.TextDocumentIdentifier;
@@ -94,6 +98,26 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         FAILS,
         NEVER_ANSWERS
     }
+
+    /** The token types of the legend of jdtls 1.63 (as it announces them), in the order that decides their number. */
+    static final List<String> JDTLS_SEMANTIC_TOKEN_TYPES = List.of(
+            "namespace",
+            "class",
+            "interface",
+            "enum",
+            "enumMember",
+            "type",
+            "typeParameter",
+            "method",
+            "property",
+            "variable",
+            "parameter",
+            "modifier",
+            "keyword",
+            "decorator",
+            "annotationMember",
+            "record",
+            "recordComponent");
 
     private static final String METHOD = "workspace/didChangeWatchedFiles";
 
@@ -139,6 +163,10 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> definitionAnswer =
             new CompletableFuture<>();
     private final List<DefinitionParams> definitionRequests = new CopyOnWriteArrayList<>();
+    private CompletableFuture<SemanticTokens> semanticTokensAnswer = new CompletableFuture<>();
+    private final List<SemanticTokensParams> semanticTokensRequests = new CopyOnWriteArrayList<>();
+    private List<String> semanticTokenTypes = JDTLS_SEMANTIC_TOKEN_TYPES;
+    private boolean announcesSemanticTokens = true;
     private CompletableFuture<List<Either<Command, CodeAction>>> codeActionAnswer = new CompletableFuture<>();
     private CompletableFuture<CodeAction> resolveAnswer = new CompletableFuture<>();
     private final List<CodeActionParams> codeActionRequests = new CopyOnWriteArrayList<>();
@@ -303,6 +331,37 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /** The {@code textDocument/definition} requests received, in order. */
     List<DefinitionParams> definitionRequests() {
         return List.copyOf(definitionRequests);
+    }
+
+    /**
+     * The answer to {@code textDocument/semanticTokens/full}, whatever the request: the tokens, null or a failed future.
+     * Unscripted, the request never gets an answer.
+     */
+    FakeJdtls semanticTokensAnswers(CompletableFuture<SemanticTokens> answer) {
+        this.semanticTokensAnswer = scripted("semanticTokens", answer);
+        return this;
+    }
+
+    /** The {@code textDocument/semanticTokens/full} requests received, in order. */
+    List<SemanticTokensParams> semanticTokensRequests() {
+        return List.copyOf(semanticTokensRequests);
+    }
+
+    /** The token types of the legend jdtls announces at {@code initialize}: by default the ones jdtls 1.63 announces. */
+    FakeJdtls announcesSemanticTokenTypes(String... types) {
+        this.semanticTokenTypes = List.of(types);
+        return this;
+    }
+
+    /** The server announces no provider of semantic tokens at {@code initialize}, as when the client did not declare them. */
+    FakeJdtls announcesNoSemanticTokens() {
+        this.announcesSemanticTokens = false;
+        return this;
+    }
+
+    /** The index of a token type in the legend that {@code initialize} announces. */
+    int semanticTokenType(String type) {
+        return semanticTokenTypes.indexOf(type);
     }
 
     /**
@@ -673,7 +732,12 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
             if (!answersInitialize) {
                 return new CompletableFuture<>();
             }
-            return CompletableFuture.completedFuture(new InitializeResult(new ServerCapabilities()));
+            var capabilities = new ServerCapabilities();
+            if (announcesSemanticTokens) {
+                capabilities.setSemanticTokensProvider(new SemanticTokensWithRegistrationOptions(
+                        new SemanticTokensLegend(semanticTokenTypes, List.of()), true));
+            }
+            return CompletableFuture.completedFuture(new InitializeResult(capabilities));
         }
 
         @Override
@@ -810,6 +874,14 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                     received.add("definition " + named(params.getTextDocument().getUri()));
                     definitionRequests.add(params);
                     return definitionAnswer;
+                }
+
+                @Override
+                public CompletableFuture<SemanticTokens> semanticTokensFull(SemanticTokensParams params) {
+                    received.add("semanticTokensFull "
+                            + named(params.getTextDocument().getUri()));
+                    semanticTokensRequests.add(params);
+                    return semanticTokensAnswer;
                 }
 
                 @Override

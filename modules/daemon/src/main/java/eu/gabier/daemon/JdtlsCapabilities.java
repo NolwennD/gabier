@@ -13,6 +13,8 @@ import org.eclipse.lsp4j.CompletionItemCapabilities;
 import org.eclipse.lsp4j.DidChangeWatchedFilesCapabilities;
 import org.eclipse.lsp4j.RenameCapabilities;
 import org.eclipse.lsp4j.ResourceOperationKind;
+import org.eclipse.lsp4j.SemanticTokensCapabilities;
+import org.eclipse.lsp4j.SemanticTokensClientCapabilitiesRequests;
 import org.eclipse.lsp4j.TextDocumentClientCapabilities;
 import org.eclipse.lsp4j.WorkspaceClientCapabilities;
 import org.eclipse.lsp4j.WorkspaceEditCapabilities;
@@ -26,7 +28,8 @@ import org.eclipse.lsp4j.WorkspaceEditCapabilities;
  * workspace/didChangeWatchedFiles}. It offers the code action {@code source.organizeImports}, which computes its edit
  * only when it is resolved, to a client that declares the kind among its literals and {@code resolveSupport} for {@code
  * edit}; the preferences that decide what it writes are {@link JdtlsSettings#javaPreferences}, not capabilities. The
- * same list of kinds decides which code actions of a range it gives (see {@link #QUICK_ASSIST}).
+ * same list of kinds decides which code actions of a range it gives (see {@link #QUICK_ASSIST}). The semantic tokens
+ * of a file are what tells a component of a record from a field ({@link RecordComponents}).
  */
 final class JdtlsCapabilities {
 
@@ -72,6 +75,17 @@ final class JdtlsCapabilities {
         return workspace;
     }
 
+    /**
+     * The semantic tokens of a whole file: jdtls announces its provider, and its legend of token types (among them
+     * {@code recordComponent}, which tells a component of a record from a field), only to a client that declares them.
+     */
+    private static SemanticTokensCapabilities semanticTokens() {
+        var requests = new SemanticTokensClientCapabilitiesRequests();
+        requests.setFull(true);
+
+        return new SemanticTokensCapabilities(requests, List.of(), List.of(), List.of("relative"));
+    }
+
     private static TextDocumentClientCapabilities textDocument() {
         var kinds = new CodeActionKindCapabilities(List.of(
                 CodeActionKind.QuickFix,
@@ -96,6 +110,7 @@ final class JdtlsCapabilities {
         var rename = new RenameCapabilities();
         rename.setPrepareSupport(true);
         var textDocument = new TextDocumentClientCapabilities();
+        textDocument.setSemanticTokens(semanticTokens());
         textDocument.setCodeAction(codeAction);
         textDocument.setCompletion(completion);
         textDocument.setRename(rename);

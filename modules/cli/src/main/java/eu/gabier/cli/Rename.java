@@ -28,6 +28,8 @@ final class Rename implements Capability {
                     "language-server-invalid-name: the language server declines the new name",
                     "language-server-empty-package: the package named up to the position holds no class of its own,"
                             + " so there is nothing to rename (put the position on its last segment)",
+                    "language-server-record-component: the symbol is a component of a record, which the language"
+                            + " server does not rename correctly (edit it as text)",
                     "editing-token-not-found: the identifier is not in the file (--token)",
                     "editing-file-missing: with --token, no file is at the path",
                     Refusal.FILE_OUTSIDE_PROJECT,
@@ -42,8 +44,10 @@ final class Rename implements Capability {
                 demo.app.sub, demo.app); a package with no class of its own (demo in demo.app) is refused as
                 language-server-empty-package. Sub-packages keep their names, and the same package in another source set
                 (the tests) is a rename of its own. A package that exists, or a name that is not a package name, is
-                refused as language-server-invalid-name. module-info.java, string literals and build files are not
-                changed: edit them as text.\
+                refused as language-server-invalid-name. A component of a record (from its header, from a use in the
+                record or from a call of its accessor) is refused as language-server-record-component: rename the
+                component, its accessor and its uses as a text edit. module-info.java, string literals and build files
+                are not changed: edit them as text.\
                 """);
 
     @Override

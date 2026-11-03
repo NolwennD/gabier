@@ -55,6 +55,7 @@ import org.eclipse.lsp4j.PrepareRenameDefaultBehavior;
 import org.eclipse.lsp4j.PrepareRenameResult;
 import org.eclipse.lsp4j.Range;
 import org.eclipse.lsp4j.ResourceOperation;
+import org.eclipse.lsp4j.SemanticTokens;
 import org.eclipse.lsp4j.SnippetTextEdit;
 import org.eclipse.lsp4j.SymbolInformation;
 import org.eclipse.lsp4j.SymbolKind;
@@ -768,6 +769,25 @@ class JdtlsLanguageServerTest {
         @BeforeEach
         void writeTheSources() throws IOException {
             greeter = write("src/main/java/demo/Greeter.java", "class Greeter {\n    void greet() {}\n}\n");
+            fake.definitionAnswers(declaredNowhere());
+        }
+
+        private CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> declaredNowhere() {
+            return CompletableFuture.completedFuture(Either.forLeft(List.of()));
+        }
+
+        private CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> declaredAt(
+                String uri, int line, int column) {
+            var name = new Range(
+                    new org.eclipse.lsp4j.Position(line, column), new org.eclipse.lsp4j.Position(line, column + 4));
+
+            return CompletableFuture.completedFuture(Either.forLeft(List.of(new Location(uri, name))));
+        }
+
+        /** The tokens of a file where one token, of the type given, is at the line and column given. */
+        private CompletableFuture<SemanticTokens> tokenAt(int line, int column, String type) {
+            return CompletableFuture.completedFuture(
+                    new SemanticTokens(List.of(line, column, 4, fake.semanticTokenType(type), 0)));
         }
 
         private CompletableFuture<Either3<Range, PrepareRenameResult, PrepareRenameDefaultBehavior>> renamable() {
@@ -826,6 +846,146 @@ class JdtlsLanguageServerTest {
         }
 
         @Test
+        void refusesAComponentOfARecordWithoutAskingForTheRenameThatJdtlsGetsWrong() throws Exception {
+            Path spot = write("src/main/java/demo/Spot.java", "package demo;\n\nrecord Spot(String file) {}\n");
+            fake.definitionAnswers(declaredAt(spot.toUri().toString(), 2, 20))
+                    .semanticTokensAnswers(tokenAt(2, 20, "recordComponent"));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.rename(greeter, new Position(1, 10), "hello"))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.RECORD_COMPONENT);
+                            assertThat(refusal.parameters())
+                                    .containsEntry("file", greeter.toString())
+                                    .containsEntry("line", "1")
+                                    .containsEntry("column", "10");
+                        });
+                assertThat(fake.definitionRequests()).hasSize(1);
+                assertThat(fake.definitionRequests().getFirst().getPosition())
+                        .isEqualTo(new org.eclipse.lsp4j.Position(1, 10));
+                assertThat(fake.semanticTokensRequests()).hasSize(1);
+                assertThat(fake.semanticTokensRequests()
+                                .getFirst()
+                                .getTextDocument()
+                                .getUri())
+                        .isEqualTo(spot.toUri().toString());
+                assertThat(fake.prepared()).isEmpty();
+                assertThat(fake.renamed()).isEmpty();
+            }
+        }
+
+        @ParameterizedTest
+        @CsvSource({"property,2,20", "class,2,20", "recordComponent,2,21", "recordComponent,3,20"})
+        void renamesWhatIsNotTheComponentOfARecordThatJdtlsDeclares(String type, int line, int column)
+                throws Exception {
+            Path spot = write("src/main/java/demo/Spot.java", "package demo;\n\nrecord Spot(String file) {}\n");
+            fake.definitionAnswers(declaredAt(spot.toUri().toString(), 2, 20))
+                    .semanticTokensAnswers(tokenAt(line, column, type))
+                    .prepareRenameAnswers(renamable())
+                    .renameAnswers(CompletableFuture.completedFuture(edit(editsOf(greeter, replace(1, 9, 14, "hi")))));
+
+            try (var server = started()) {
+                assertThat(server.rename(greeter, new Position(1, 10), "hi").changes())
+                        .containsExactly(domainEdits(greeter, domainReplace(1, 9, 14, "hi")));
+                assertThat(fake.semanticTokensRequests()).hasSize(1);
+            }
+        }
+
+        @Test
+        void renamesWithoutAskingForTokensWhenJdtlsDeclaresNothingAtThePosition() throws Exception {
+            fake.prepareRenameAnswers(renamable())
+                    .renameAnswers(CompletableFuture.completedFuture(edit(editsOf(greeter, replace(1, 9, 14, "hi")))));
+
+            try (var server = started()) {
+                server.rename(greeter, new Position(1, 10), "hi");
+
+                assertThat(fake.definitionRequests()).hasSize(1);
+                assertThat(fake.semanticTokensRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void renamesWithoutAskingForTokensWhenJdtlsAnswersNoDeclaration() throws Exception {
+            fake.definitionAnswers(CompletableFuture.completedFuture(null))
+                    .prepareRenameAnswers(renamable())
+                    .renameAnswers(CompletableFuture.completedFuture(edit(editsOf(greeter, replace(1, 9, 14, "hi")))));
+
+            try (var server = started()) {
+                server.rename(greeter, new Position(1, 10), "hi");
+
+                assertThat(fake.semanticTokensRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void renamesWithoutAskingForTokensWhenTheDeclarationIsNotInAFile() throws Exception {
+            fake.definitionAnswers(declaredAt("jdt://contents/java.base/java.lang/String.class", 2, 20))
+                    .prepareRenameAnswers(renamable())
+                    .renameAnswers(CompletableFuture.completedFuture(edit(editsOf(greeter, replace(1, 9, 14, "hi")))));
+
+            try (var server = started()) {
+                server.rename(greeter, new Position(1, 10), "hi");
+
+                assertThat(fake.semanticTokensRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void renamesWithoutAskingForTokensWhenJdtlsAnswersTheDeclarationAsLinks() throws Exception {
+            var range = new Range(new org.eclipse.lsp4j.Position(2, 20), new org.eclipse.lsp4j.Position(2, 24));
+            var link = new LocationLink(greeter.toUri().toString(), range, range);
+            fake.definitionAnswers(CompletableFuture.completedFuture(Either.forRight(List.of(link))))
+                    .prepareRenameAnswers(renamable())
+                    .renameAnswers(CompletableFuture.completedFuture(edit(editsOf(greeter, replace(1, 9, 14, "hi")))));
+
+            try (var server = started()) {
+                server.rename(greeter, new Position(1, 10), "hi");
+
+                assertThat(fake.semanticTokensRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void renamesWhenJdtlsGivesNoTokensForTheFileOfTheDeclaration() throws Exception {
+            fake.definitionAnswers(declaredAt(greeter.toUri().toString(), 2, 20))
+                    .semanticTokensAnswers(CompletableFuture.completedFuture(null))
+                    .prepareRenameAnswers(renamable())
+                    .renameAnswers(CompletableFuture.completedFuture(edit(editsOf(greeter, replace(1, 9, 14, "hi")))));
+
+            try (var server = started()) {
+                assertThat(server.rename(greeter, new Position(1, 10), "hi").changes())
+                        .containsExactly(domainEdits(greeter, domainReplace(1, 9, 14, "hi")));
+            }
+        }
+
+        @Test
+        void renamesWithoutTheCheckWhenJdtlsAnnouncesNoSemanticTokens() throws Exception {
+            fake.announcesNoSemanticTokens()
+                    .prepareRenameAnswers(renamable())
+                    .renameAnswers(CompletableFuture.completedFuture(edit(editsOf(greeter, replace(1, 9, 14, "hi")))));
+
+            try (var server = started()) {
+                server.rename(greeter, new Position(1, 10), "hi");
+
+                assertThat(fake.definitionRequests()).isEmpty();
+            }
+        }
+
+        @Test
+        void renamesWithoutTheCheckWhenJdtlsDoesNotNameTheTokenTypeOfARecordComponent() throws Exception {
+            fake.announcesSemanticTokenTypes("class", "property")
+                    .prepareRenameAnswers(renamable())
+                    .renameAnswers(CompletableFuture.completedFuture(edit(editsOf(greeter, replace(1, 9, 14, "hi")))));
+
+            try (var server = started()) {
+                server.rename(greeter, new Position(1, 10), "hi");
+
+                assertThat(fake.definitionRequests()).isEmpty();
+                assertThat(fake.semanticTokensRequests()).isEmpty();
+            }
+        }
+
+        @Test
         void tellsJdtlsOfTheFilesEditedSinceTheLastRequestBeforeAskingWhetherTheSymbolCanBeRenamed() throws Exception {
             fake.registersWatchersFor("**/*.java")
                     .prepareRenameAnswers(renamable())
@@ -840,6 +1000,7 @@ class JdtlsLanguageServerTest {
                         .containsExactly(
                                 "didChangeWatchedFiles",
                                 "acknowledged .gabier-changes-taken-1",
+                                "definition Greeter.java",
                                 "prepareRename Greeter.java",
                                 "rename Greeter.java");
                 assertThat(fake.watched()).hasSize(1);

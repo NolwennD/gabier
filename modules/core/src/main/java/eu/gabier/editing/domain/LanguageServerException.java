@@ -54,6 +54,19 @@ public final class LanguageServerException extends GeneratorException {
     }
 
     /**
+     * The symbol at the position is a component of a record, which the server does not rename correctly: it fails on a
+     * record that has a compact constructor, and renames the component and its accessor calls but not the uses by simple
+     * name in the body of a record that has none, which leaves code that does not compile.
+     */
+    public static LanguageServerException recordComponent(Path file, Position position) {
+        return new LanguageServerException(positioned(LanguageServerErrorKey.RECORD_COMPONENT, file, position)
+                .message("The symbol at " + format(position) + " in " + file + " is a component of a record, which the"
+                        + " language server does not rename correctly: it fails on a record with a compact constructor"
+                        + " and leaves the uses in the body of the others. Rename the component, its accessor and its"
+                        + " uses as a text edit"));
+    }
+
+    /**
      * The server cannot extract the selection, whichever of the four extractions was asked (variable, method, constant,
      * field): it is not an expression, or statements, that can be extracted there. The server does not tell why, and
      * the text says no more than that.

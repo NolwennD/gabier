@@ -283,10 +283,15 @@ class ScenarioTest {
                         "column", "6",
                         "package", "a",
                         "declaredPackage", "a.b"));
+        LanguageServerException recordComponent = rename.refusal(LanguageServerErrorKey.RECORD_COMPONENT);
+        assertThat(recordComponent.key()).isEqualTo(LanguageServerErrorKey.RECORD_COMPONENT);
+        assertThat(recordComponent.parameters()).isEqualTo(Map.of("file", FILE.toString(), "line", "0", "column", "6"));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> rename.refusal(LanguageServerErrorKey.NOT_EXTRACTABLE));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> diagnostics.refusal(LanguageServerErrorKey.EMPTY_PACKAGE));
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> diagnostics.refusal(LanguageServerErrorKey.RECORD_COMPONENT));
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> rename.refusal(LanguageServerErrorKey.AMBIGUOUS_IMPORTS));
         assertThatExceptionOfType(IllegalArgumentException.class)

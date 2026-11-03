@@ -5,6 +5,7 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -17,6 +18,7 @@ import org.eclipse.lsp4j.DidChangeWatchedFilesParams;
 import org.eclipse.lsp4j.ExecuteCommandParams;
 import org.eclipse.lsp4j.FileEvent;
 import org.eclipse.lsp4j.InitializeParams;
+import org.eclipse.lsp4j.InitializeResult;
 import org.eclipse.lsp4j.InitializedParams;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
 import org.eclipse.lsp4j.launch.LSPLauncher;
@@ -49,6 +51,7 @@ final class JdtlsSession implements AutoCloseable {
     private final JdtlsWatch watch;
     private final Future<Void> listening;
     private List<Path> projects = List.of();
+    private OptionalInt recordComponentTokenType = OptionalInt.empty();
     private final Set<ProcessHandle> started = ConcurrentHashMap.newKeySet();
     private final Thread recorder;
     private final Future<Void> exitLog;
@@ -149,6 +152,24 @@ final class JdtlsSession implements AutoCloseable {
         return workspace.data();
     }
 
+    /**
+     * The number of the token type {@code recordComponent} in the legend of the semantic tokens that jdtls announced at
+     * {@code initialize}, none when it announced no semantic tokens or no such type.
+     */
+    OptionalInt recordComponentTokenType() {
+        return recordComponentTokenType;
+    }
+
+    private static OptionalInt recordComponentTokenTypeOf(InitializeResult announced) {
+        var provider = announced.getCapabilities().getSemanticTokensProvider();
+        if (provider == null) {
+            return OptionalInt.empty();
+        }
+        int type = provider.getLegend().getTokenTypes().indexOf(RecordComponents.TOKEN_TYPE);
+
+        return type < 0 ? OptionalInt.empty() : OptionalInt.of(type);
+    }
+
     /** The folders of the projects jdtls has imported, as it listed them when the session became ready. */
     List<Path> projects() {
         return projects;
@@ -221,7 +242,8 @@ final class JdtlsSession implements AutoCloseable {
         initialize.setInitializationOptions(Map.of(
                 "settings", JdtlsSettings.javaPreferences(),
                 "extendedClientCapabilities", JdtlsCapabilities.extended()));
-        watch.await("the answer to initialize", () -> server.initialize(initialize));
+        var announced = watch.await("the answer to initialize", () -> server.initialize(initialize));
+        recordComponentTokenType = recordComponentTokenTypeOf(announced);
         // Telling jdtls that the client is ready is part of the wait: writing to a jdtls that died throws.
         watch.await("the language/status notification of type ServiceReady", () -> {
             server.initialized(new InitializedParams());

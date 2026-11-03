@@ -1685,13 +1685,14 @@ public final class Scenarios {
 
     /**
      * Every scenario of the catalogue, those of {@link PackageMoveScenarios}, {@link PackageRenameScenarios}, {@link
-     * CleanUpScenarios} and {@link CodeActionScenarios} included.
+     * RecordRenameScenarios}, {@link CleanUpScenarios} and {@link CodeActionScenarios} included.
      */
     public static List<Scenario> all() {
         return Stream.of(
                         own(),
                         PackageMoveScenarios.all(),
                         PackageRenameScenarios.all(),
+                        RecordRenameScenarios.all(),
                         CleanUpScenarios.all(),
                         CodeActionScenarios.all())
                 .flatMap(List::stream)

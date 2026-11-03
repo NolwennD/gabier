@@ -255,6 +255,11 @@ class ScenariosTest {
                         "rename-a-package-that-holds-no-class",
                         "diagnostics-after-renaming-a-package-in-both-source-sets",
                         "organize-imports-after-renaming-a-package-in-both-source-sets",
+                        "rename-a-component-of-a-record-with-a-compact-constructor",
+                        "rename-a-component-of-a-record-without-a-compact-constructor",
+                        "rename-a-component-from-its-use-in-the-record",
+                        "rename-a-component-from-a-call-of-its-accessor",
+                        "rename-a-method-of-a-record",
                         "clean-up-a-concatenation-into-a-text-block",
                         "clean-up-with-two-clean-ups",
                         "clean-up-a-file-that-is-clean",
@@ -420,7 +425,40 @@ class ScenariosTest {
                         LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
                         LanguageServerErrorKey.INVALID_NAME,
                         LanguageServerErrorKey.NO_SUCH_SYMBOL,
-                        LanguageServerErrorKey.NOT_READY);
+                        LanguageServerErrorKey.NOT_READY,
+                        LanguageServerErrorKey.RECORD_COMPONENT,
+                        LanguageServerErrorKey.RECORD_COMPONENT,
+                        LanguageServerErrorKey.RECORD_COMPONENT,
+                        LanguageServerErrorKey.RECORD_COMPONENT);
+    }
+
+    @Test
+    void startsEveryRefusedRenameOfARecordComponentOnAComponentOfARecordOfTheProject() {
+        var refused = RecordRenameScenarios.all().stream()
+                .filter(scenario -> scenario.answer() instanceof Answer.Refused)
+                .toList();
+
+        assertThat(refused).hasSize(4);
+        for (Scenario scenario : refused) {
+            var request = (Request.Rename) scenario.request();
+            String name = identifierAt(scenario, request.file(), request.position());
+
+            assertThat(name).as(scenario.name()).isIn("file", "label");
+            assertThat(scenario.files().values())
+                    .as(scenario.name())
+                    .anyMatch(source -> source.matches("(?s).*record \\w+\\([^)]*String " + name + "[,)].*"));
+        }
+    }
+
+    @Test
+    void startsTheRenameOfARecordThatIsAllowedOnAMethodAndNotOnAComponent() {
+        var scenario = RecordRenameScenarios.RENAME_A_METHOD_OF_A_RECORD;
+        var request = (Request.Rename) scenario.request();
+
+        assertThat(identifierAt(scenario, request.file(), request.position())).isEqualTo("describe");
+        assertThat(scenario.files().get(request.file()))
+                .contains("record Spot(")
+                .contains("describe() {");
     }
 
     @Test
