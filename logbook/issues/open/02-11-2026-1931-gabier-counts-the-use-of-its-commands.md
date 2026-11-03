@@ -1,6 +1,7 @@
 # gabier counts the use of its commands
 
 Opened: 02-11-2026 19:31
+On hold: the user wants to rework the intent before it is worked, for a later release, no urgency (03-11-2026).
 
 The user can see which commands the agents call, how often each is refused and why, and how long each takes: the
 frictions that `.claude/rules/dogfooding.md` turns into tickets, measured instead of remembered. Event sourcing
