@@ -174,6 +174,12 @@ the work goes to what an agent can then do that it could not before.
   capabilities give that behaviour. The code stays in `JdtlsSettings` and `JdtlsCapabilities` and in relaying the
   answer; a workaround of the Python driver is taken over only when the documentation shows no setting that makes it
   useless.
+- **jdtls is never fought** (decision of the user, 04-11-2026). A wrong or failed answer of jdtls is relayed to the
+  agent, documented in the help of the command, and fixed or reported upstream; a `Done when` never asks gabier to
+  guess, or to sort out in advance, what jdtls will get wrong (a check before the request, a copy of what jdtls knows).
+  Only a light workaround, in the adapter (the secondary adapter of the port, so the core never sees it), is allowed,
+  and only to make gabier smoother to use: giving the failures of jdtls the one shape of the other refusals is the
+  example. A ticket that adds one says why in its `## Resolution`.
 
 ## Orientation (decision of the user, 01-11-2026)
 
