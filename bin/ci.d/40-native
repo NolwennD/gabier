@@ -587,19 +587,19 @@ public final class Native {
                             && Files.readString(source.resolve("Greeter.java")).equals(original),
                     "gabier rename --dry-run --token lists the files and the diff and writes nothing");
 
-            Run noSymbol = gabier("rename", greeter, "5", "1", "anything");
+            Run noSymbol = gabier("rename", greeter, "5:1", "anything");
             expect(
                     noSymbol.exit() == 2
                             && noSymbol.out().isEmpty()
                             && noSymbol.err().contains("(language-server-no-such-symbol; ")
                             && Files.readString(source.resolve("Greeter.java")).equals(original),
                     "a rename where there is no symbol is refused as a problem object, exit 2, nothing written");
-            Run outside = gabier("rename", "outside/Elsewhere.java", "1", "1", "anything");
+            Run outside = gabier("rename", "outside/Elsewhere.java", "1:1", "anything");
             expect(
                     outside.exit() == 2 && outside.err().contains("(language-server-file-outside-project; "),
                     "a rename of a file outside the project is refused as a problem object, exit 2");
 
-            Run byPosition = gabier("rename", greeter, "6", "19", "welcome");
+            Run byPosition = gabier("rename", greeter, "6:19", "welcome");
             expect(
                     byPosition.exit() == 0
                             && byPosition.out().contains("modified " + source.resolve("Greeter.java"))
@@ -608,7 +608,7 @@ public final class Native {
                             && Files.readString(source.resolve("Main.java")).contains("greeter.welcome(\"world\")"),
                     "gabier rename by position, from 1, writes the files that use the symbol and lists them");
 
-            Run type = gabier("--json", "rename", greeter, "3", "14", "Welcomer");
+            Run type = gabier("--json", "rename", greeter, "3:14", "Welcomer");
             expect(
                     type.exit() == 0
                             && type.out().contains("\"renamed\":[{\"from\":\"" + source.resolve("Greeter.java")

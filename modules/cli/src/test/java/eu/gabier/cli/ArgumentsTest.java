@@ -113,10 +113,10 @@ class ArgumentsTest {
 
     @Test
     void aPositionIsCountedFromOneAndKeptFromZero() {
-        var arguments = Arguments.of(List.of("extract-method", "A.java", "3:5", "1", "2"));
+        var arguments = Arguments.of(List.of("extract-method", "A.java", "3:5", "1:2"));
 
         assertThat(arguments.position(1)).isEqualTo(new Arguments.Position(2, 4));
-        assertThat(arguments.position(2, 3)).isEqualTo(new Arguments.Position(0, 1));
+        assertThat(arguments.position(2)).isEqualTo(new Arguments.Position(0, 1));
     }
 
     @ParameterizedTest
@@ -127,15 +127,7 @@ class ArgumentsTest {
         assertThatThrownBy(() -> arguments.position(1))
                 .isInstanceOf(UsageException.class)
                 .satisfies(failure -> assertThat(((GeneratorException) failure).parameters())
-                        .containsEntry("arguments", "extract-method A.java " + position));
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"0", "-1", "x", "1.5", ""})
-    void twoNumbersWhereOneIsNotFromOneAreAUsageError(String number) {
-        var arguments = Arguments.of(List.of("rename", "A.java", "1", number));
-
-        assertThatThrownBy(() -> arguments.position(1, 2)).isInstanceOf(UsageException.class);
-        assertThatThrownBy(() -> arguments.position(2, 1)).isInstanceOf(UsageException.class);
+                        .containsEntry("arguments", "extract-method A.java " + position)
+                        .containsEntry("position", position));
     }
 }

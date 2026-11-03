@@ -5,8 +5,8 @@ repository does it with `gabier` (installed on the PATH by `mise run install`, w
 clean or another branch does not break it; the cli starts the daemon of its own copy by itself):
 
 - `gabier diagnostics <file>` to see the errors of a Java file instead of waiting for a build;
-- `gabier rename` (position or `--token`, `--dry-run` first on a rename that crosses files) instead of editing every
-  occurrence by hand;
+- `gabier rename <file> <line>:<column> <new-name>` (1-based position, or `--token`; `--dry-run` first on a rename that
+  crosses files) instead of editing every occurrence by hand;
 - `gabier organize-imports <file>` after adding or removing a usage, instead of editing the import lines by hand (it keeps
   the order of the formatter and never writes a star import; run `gabier diagnostics <file>` first, a file whose imports
   jdtls cannot resolve loses them);

@@ -105,30 +105,26 @@ record Arguments(List<String> all, List<String> operands) {
 
     /** The operand at this index as {@code line:column}, each from 1. */
     Position position(int index) {
-        var parts = operand(index).split(":", -1);
+        var text = operand(index);
+        var parts = text.split(":", -1);
         if (parts.length != 2) {
-            throw UsageException.unsupportedArguments(all);
+            throw UsageException.invalidPosition(all, text);
         }
 
-        return new Position(zeroBased(parts[0]), zeroBased(parts[1]));
-    }
-
-    /** The operands at these two indexes as a line and a column, each from 1. */
-    Position position(int lineIndex, int columnIndex) {
-        return new Position(zeroBased(operand(lineIndex)), zeroBased(operand(columnIndex)));
-    }
-
-    private int zeroBased(String number) {
         try {
-            int value = Integer.parseInt(number);
-            if (value >= 1) {
-                return value - 1;
-            }
-        } catch (NumberFormatException notANumber) {
-            // The usage error below says it.
+            return new Position(zeroBased(parts[0]), zeroBased(parts[1]));
+        } catch (NumberFormatException notAPosition) {
+            throw UsageException.invalidPosition(all, text);
+        }
+    }
+
+    private static int zeroBased(String number) {
+        int value = Integer.parseInt(number);
+        if (value < 1) {
+            throw new NumberFormatException("not from 1: " + number);
         }
 
-        throw UsageException.unsupportedArguments(all);
+        return value - 1;
     }
 
     /**

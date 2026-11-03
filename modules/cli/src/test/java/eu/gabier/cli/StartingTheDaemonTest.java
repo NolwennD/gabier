@@ -44,7 +44,7 @@ class StartingTheDaemonTest extends CliTest {
     void renameStartsTheDaemonOfThePathAndPrintsTheAnswer() throws IOException {
         FakeDaemonScripts.installListening(bin());
 
-        assertThat(run(environment(), "rename", "--dry-run", "/project/Greeter.java", "6", "18", "welcome"))
+        assertThat(run(environment(), "rename", "--dry-run", "/project/Greeter.java", "6:18", "welcome"))
                 .isZero();
 
         assertThat(out()).isEqualTo("dry run, nothing written" + System.lineSeparator());
@@ -90,7 +90,7 @@ class StartingTheDaemonTest extends CliTest {
     void aDaemonThatDoesNotStartIsAProblemObjectAsJsonWithTheJsonOption() throws IOException {
         FakeDaemonScripts.install(bin(), "echo no good; exit 4");
 
-        assertThat(run(environment(), "--json", "rename", "/project/Greeter.java", "6", "18", "welcome"))
+        assertThat(run(environment(), "--json", "rename", "/project/Greeter.java", "6:18", "welcome"))
                 .isEqualTo(1);
 
         assertThat(err())

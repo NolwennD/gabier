@@ -24,7 +24,7 @@ class RenamingTest extends CliTest {
     @Test
     void asksTheDaemonToRenameTheSymbolAtAPositionGivenFromOneAndSendsItFromZero() throws IOException {
         try (var daemon = daemonAnswering(MODIFIED.toJson())) {
-            assertThat(runWithSocket("rename", "/project/Greeter.java", "6", "18", "welcome"))
+            assertThat(runWithSocket("rename", "/project/Greeter.java", "6:18", "welcome"))
                     .isZero();
 
             assertThat(daemon.requests())
@@ -55,7 +55,7 @@ class RenamingTest extends CliTest {
     @Test
     void printsNothingWhenNothingChanged() throws IOException {
         try (var daemon = daemonAnswering(NOTHING.toJson())) {
-            assertThat(runWithSocket("rename", "/project/Greeter.java", "6", "18", "welcome"))
+            assertThat(runWithSocket("rename", "/project/Greeter.java", "6:18", "welcome"))
                     .isZero();
 
             assertThat(out()).isEmpty();
@@ -88,7 +88,7 @@ class RenamingTest extends CliTest {
 
         @Override
         public List<String> afterTheFile() {
-            return List.of("6", "18", "welcome");
+            return List.of("6:18", "welcome");
         }
 
         @Override

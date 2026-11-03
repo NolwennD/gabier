@@ -15,11 +15,9 @@ class UnknownUsageTest extends CliTest {
                         wordsThatAreNoCommand(),
                         diagnosticsWithoutExactlyOneFile(),
                         renamesThatNameNeitherAPositionNorAnIdentifierCompletely(),
-                        renamesWithALineOrAColumnThatIsNotANumberFromOne(),
                         organizeImportsWithoutExactlyOneFile(),
                         cleanupWithoutAFileAndACleanUp(),
                         extractVariableWithoutAFileTwoPositionsAndAName(),
-                        extractVariableWithAPositionThatIsNotLineColonColumnFromOne(),
                         extractMethodWithoutAFileTwoPositionsAndAName(),
                         extractConstantWithoutAFileTwoPositionsAndAName(),
                         extractFieldWithoutAFileTwoPositionsAndAName(),
@@ -51,24 +49,11 @@ class UnknownUsageTest extends CliTest {
     private static List<List<String>> renamesThatNameNeitherAPositionNorAnIdentifierCompletely() {
         return List.of(
                 List.of("rename"),
-                List.of("rename", "A.java", "3", "5"),
-                List.of("rename", "A.java", "3", "5", "name", "more"),
-                List.of("rename", "--dry-run", "A.java", "3", "name"),
+                List.of("rename", "A.java", "3:5", "name", "more"),
+                List.of("rename", "A.java", "3:5"),
                 List.of("rename", "--token", "A.java", "name"),
                 List.of("rename", "--token", "A.java", "id", "name", "more"),
                 List.of("rename", "--token", "A.java", "3", "5", "name"));
-    }
-
-    private static List<List<String>> renamesWithALineOrAColumnThatIsNotANumberFromOne() {
-        return Stream.of(
-                        List.of("0", "5"),
-                        List.of("3", "0"),
-                        List.of("-1", "5"),
-                        List.of("three", "5"),
-                        List.of("3", "five"),
-                        List.of("3", "1.5"))
-                .map(position -> List.of("rename", "A.java", position.get(0), position.get(1), "name"))
-                .toList();
     }
 
     private static List<List<String>> organizeImportsWithoutExactlyOneFile() {
@@ -97,42 +82,20 @@ class UnknownUsageTest extends CliTest {
                 List.of("extract-variable", "--token", "A.java", "3:4", "3:9", "name"));
     }
 
-    private static List<List<String>> extractVariableWithAPositionThatIsNotLineColonColumnFromOne() {
-        return Stream.of(
-                        List.of("3", "3:9"),
-                        List.of("3:4", "9"),
-                        List.of("3:4:5", "3:9"),
-                        List.of("0:4", "3:9"),
-                        List.of("3:0", "3:9"),
-                        List.of("3:4", "-3:9"),
-                        List.of("three:4", "3:9"),
-                        List.of("3:4", "3:nine"),
-                        List.of("3:4", "3:1.5"))
-                .map(positions -> List.of("extract-variable", "A.java", positions.get(0), positions.get(1), "name"))
-                .toList();
-    }
-
     private static List<List<String>> extractMethodWithoutAFileTwoPositionsAndAName() {
         return List.of(
                 List.of("extract-method"),
                 List.of("extract-method", "--dry-run"),
                 List.of("extract-method", "A.java", "3:4", "3:9"),
-                List.of("extract-method", "A.java", "3:4", "3:9", "name", "more"),
-                List.of("extract-method", "A.java", "3", "3:9", "name"));
+                List.of("extract-method", "A.java", "3:4", "3:9", "name", "more"));
     }
 
     private static List<List<String>> extractConstantWithoutAFileTwoPositionsAndAName() {
-        return List.of(
-                List.of("extract-constant"),
-                List.of("extract-constant", "A.java", "3:4", "3:9"),
-                List.of("extract-constant", "A.java", "3", "3:9", "NAME"));
+        return List.of(List.of("extract-constant"), List.of("extract-constant", "A.java", "3:4", "3:9"));
     }
 
     private static List<List<String>> extractFieldWithoutAFileTwoPositionsAndAName() {
-        return List.of(
-                List.of("extract-field"),
-                List.of("extract-field", "A.java", "3:4", "3:9"),
-                List.of("extract-field", "A.java", "3", "3:9", "name"));
+        return List.of(List.of("extract-field"), List.of("extract-field", "A.java", "3:4", "3:9"));
     }
 
     private static List<List<String>> createWithoutAFileAndAKind() {
@@ -149,9 +112,6 @@ class UnknownUsageTest extends CliTest {
                 List.of("references", "--include-declaration"),
                 List.of("references", "A.java"),
                 List.of("references", "A.java", "3:4", "3:9"),
-                List.of("references", "A.java", "3"),
-                List.of("references", "A.java", "0:4"),
-                List.of("references", "A.java", "3:four"),
                 List.of("references", "--dry-run", "A.java", "3:4"),
                 List.of("references", "--token", "A.java", "3:4"));
     }
@@ -162,9 +122,6 @@ class UnknownUsageTest extends CliTest {
                 List.of("actions", "A.java"),
                 List.of("actions", "A.java", "3:4"),
                 List.of("actions", "A.java", "3:4", "3:9", "3:10"),
-                List.of("actions", "A.java", "3", "3:9"),
-                List.of("actions", "A.java", "0:4", "3:9"),
-                List.of("actions", "A.java", "3:4", "3:nine"),
                 List.of("actions", "--dry-run", "A.java", "3:4", "3:9"));
     }
 
@@ -174,8 +131,6 @@ class UnknownUsageTest extends CliTest {
                 List.of("apply-action", "--dry-run"),
                 List.of("apply-action", "A.java", "3:4", "3:9"),
                 List.of("apply-action", "A.java", "3:4", "3:9", "title", "more"),
-                List.of("apply-action", "A.java", "3", "3:9", "title"),
-                List.of("apply-action", "A.java", "3:4", "0:9", "title"),
                 List.of("apply-action", "--token", "A.java", "3:4", "3:9", "title"));
     }
 
@@ -192,10 +147,7 @@ class UnknownUsageTest extends CliTest {
                 List.of(command),
                 List.of(command, "--dry-run"),
                 List.of(command, "A.java"),
-                List.of(command, "A.java", "3:4", "3:9"),
-                List.of(command, "A.java", "3"),
-                List.of(command, "A.java", "0:4"),
-                List.of(command, "A.java", "3:four"));
+                List.of(command, "A.java", "3:4", "3:9"));
     }
 
     @ParameterizedTest(name = "{0}")

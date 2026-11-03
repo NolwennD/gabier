@@ -101,10 +101,10 @@ class HelpTest extends CliTest {
 
         assertThat(err()).isEmpty();
         assertThat(out())
-                .contains("gabier [--json] rename [--dry-run] <file> <line> <column> <new-name>")
+                .contains("gabier [--json] rename [--dry-run] <file> <line>:<column> <new-name>")
                 .contains("gabier [--json] rename [--dry-run] --token <file> <identifier> <new-name>")
                 .contains("Example")
-                .contains("$ gabier rename --dry-run src/main/java/demo/Greeter.java 6 19 welcome")
+                .contains("$ gabier rename --dry-run src/main/java/demo/Greeter.java 6:19 welcome")
                 .contains("Refusals")
                 .contains("language-server-invalid-name");
     }

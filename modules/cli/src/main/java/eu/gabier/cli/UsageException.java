@@ -18,6 +18,15 @@ final class UsageException extends GeneratorException {
                 .addParameter("arguments", String.join(" ", arguments)));
     }
 
+    /** The operand {@code position} is not {@code line:column}, each from 1: the problem names it and the form. */
+    static UsageException invalidPosition(List<String> arguments, String position) {
+        return new UsageException(GeneratorException.badRequest(CliErrorKey.USAGE)
+                .message("Invalid position \"" + position + "\"; expected <line>:<column>, each a number from 1, "
+                        + "as in 12:5")
+                .addParameter("arguments", String.join(" ", arguments))
+                .addParameter("position", position));
+    }
+
     /** The first of the arguments is a command with a typo: the problem names the command it was meant for. */
     static UsageException unknownCommandTypo(List<String> arguments, Command meant) {
         return new UsageException(GeneratorException.badRequest(CliErrorKey.USAGE)
