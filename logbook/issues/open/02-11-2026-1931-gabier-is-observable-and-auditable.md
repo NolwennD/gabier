@@ -25,8 +25,9 @@ The **correlation id** is a UUIDv4 (`UUID.randomUUID`, no class of our own) made
 (decision of the user, 03-11-2026: the daemon is the backend of the cli, so the cli stays thin and depends little on the
 evolutions of the daemon: it makes no id and knows nothing of the log). The daemon sends it back in the answer. It is in
 every event, trace and timing of the request, and in the problem object of a refusal or an error (text and `--json`), so
-that it can be quoted. What the cli sees alone (no daemon answers, the start failed, the connection was lost) has no id,
-since no daemon made one: whether the cli records it, and how, is decided at the start of the work. A new context
+that it can be quoted. What the cli sees alone (no daemon answers, the start failed, the connection was lost) has no id
+and is not audited (decision of the user, 03-11-2026: without the daemon the cli can do nothing and it has no memory);
+the user is informed by the message of the cli (issue `the-cli-explains-an-unreachable-daemon`). A new context
 `usage`: events, projections and the ports (the log, the source of ids, the clock) in a pure domain, the JSON-lines file
 as adapter, the writing in `RequestHandler.call`, the reading by `gabier stats`.
 
