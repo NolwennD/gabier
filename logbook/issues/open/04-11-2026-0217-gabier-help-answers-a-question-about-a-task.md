@@ -17,6 +17,12 @@ whitespace only, so `stringConcatToTextBlock` and `text-block,` would not match 
 ranker with the same formula (k1 = 1.5, b = 0.75), words split at case changes, punctuation and hyphens, a weight for
 the title over the body, a confidence and an abstention. A stemmer is added only if the table of questions shows it is
 needed, and then it is the user's decision.
+[FeliciaCoding/bm25-search-engine-java](https://github.com/FeliciaCoding/bm25-search-engine-java) was looked at too: it
+is a command-line application, not a library, over `maxmakovskiy/bm25`, which has no licence (nothing may be copied),
+lives in GitHub Packages as a snapshot, needs OpenNLP and Jackson, drops one-letter words, does not split at case
+changes and tests little. Both candidates write the same textbook formula (the Lucene idf, `k1` 1.2 or 1.5, `b` 0.75),
+read, not run. gabier's tests therefore check the formula against a corpus of three short documents whose scores are
+worked out by hand in the test, not copied from a run of any of these.
 
 Done when:
 - [ ] a table of 12 to 15 real questions (the logbook, the frictions met here, two of each kind) with the expected
