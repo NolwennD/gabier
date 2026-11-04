@@ -64,8 +64,9 @@ Count the workers in flight first: **two at most** (`.claude/rules/workflow.md`,
 two running, the issue stays open and waits for a merge.
 
 Launch it with the Agent tool, `subagent_type: "general-purpose"`, `model: "sonnet"` (the user prefers a Sonnet for the
-worker; use a stronger model only when the ticket is hard or the user asks) and `isolation: "worktree"`: the worktree starts from
-`main`, which must hold the issue, which is why the commit comes first. The prompt is self-contained, the subagent has
+worker; use a stronger model only when the ticket is hard or the user asks) and `isolation: "worktree"`: the worktree is created from
+`origin/main`, which must hold the issue: the commit comes first, then `git push origin main` (when `main` is ahead of
+`origin/main` by `.md` commits only; a code commit goes through a pull request). The prompt is self-contained, the subagent has
 none of this conversation. **Take the other ready issues of the same module with it** (`.claude/rules/workflow.md`,
 "Tickets": a batch): the prompt lists every issue file, each one's `Done when` points are the scope, and the subagent
 delivers one commit per issue (each one builds and passes its tests, the full `bin/ci` is run once on the last) and proves

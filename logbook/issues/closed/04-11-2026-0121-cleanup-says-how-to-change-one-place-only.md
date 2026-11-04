@@ -34,8 +34,10 @@ Done in `17c97e8` (pull request 13).
 - Not done, on purpose: the help of `actions` and `apply-action` is unchanged, since it already names the commands the
   issue asks for.
 - No unrelated bug and no friction with `gabier`: the ticket changed text only, so no Java refactoring was needed.
-- The worktree started before the issue was committed; the worker fast-forwarded it to `main`. The skill `ticket`
-  commits the issue first, so this happens only when the worker is launched in the same second.
+- The worktree had no issue: it was created from `5b11afc`, the `origin/main` of the launch, while the issue was
+  committed on the local `main` only (seven commits ahead, not pushed). The worker fast-forwarded it to `main`. The
+  skill `ticket` and `workflow.md` said the worktree starts from the local `main`; they now say `origin/main`, and that
+  the supervisor pushes the `.md` commits before it launches a worker.
 
 Tokens:
 - worker: 84411 (`subagent_tokens`)

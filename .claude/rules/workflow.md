@@ -207,8 +207,10 @@ the work it reports is cut.
 
 ## Worktrees
 
-Several sessions may write in this repository at once. The local `main` is the reference, and a ticket's worktree
-branches from it, which is why the skill `ticket` commits the issue first. What the request says wins.
+Several sessions may write in this repository at once. The local `main` is the reference, but a ticket's worktree is
+created from `origin/main` (seen on 04-11-2026: the branch of a worker started at the `origin/main` of the launch, seven
+commits behind the local `main`, and had no issue). The skill `ticket` therefore commits the issue and pushes `main`
+(`.md` commits only, see "Ending a task") before it launches a worker. What the request says wins.
 
 **A commit of `.md` files only never blocks** (issues of the logbook, rules, skills, documents): the supervisor commits it
 on `main` at any time, without `bin/ci`, and the branches in flight are rebased over it by the supervisor at merge time,
