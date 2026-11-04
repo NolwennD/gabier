@@ -182,6 +182,18 @@ sh scripts/stop-stray-daemons.sh
 It leaves alone the daemon of every project that exists, those of the workers in flight included, so it is safe whatever
 is running.
 
+Then install what was merged, so that the next ticket (and the supervisor) work with the gabier that was just delivered
+(`.claude/rules/dogfooding.md`), when the ticket changed code (a ticket of `.md` files only changes nothing to install):
+
+```bash
+mise run install && gabier status
+```
+
+`mise run install` builds the native cli and the daemon, which takes a few minutes, and **copies** them: the work in
+flight is not touched. `gabier status` shows the version and the daemon of the project. A build or an install that fails
+leaves the version installed before in place (the workflow rule: the latest installed version that works, not the build
+in progress): say so in the report and open a ticket for the failure with `--issue-only`; do not hold the next ticket.
+
 ### 6. Report, then the next ticket
 
 Report faithfully: the issue closed, the commits now on `main` (`git log --oneline main -n <count>`), the `bin/ci`
@@ -220,4 +232,5 @@ independent tickets may run in parallel.
 | Merge    | check green, then `git merge --ff-only <branch>` from the main checkout |
 | Close    | `git mv` to `closed/`, `## Resolution`, commit that file, push `main` |
 | Clean up | `git worktree remove <worktree> && git branch -d <branch>`           |
+| Install  | `mise run install && gabier status` (a ticket that changed code)     |
 | Next     | earliest open issue, dependencies closed, not on hold: skill `ticket` |
