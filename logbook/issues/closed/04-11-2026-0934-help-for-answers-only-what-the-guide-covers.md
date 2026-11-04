@@ -30,3 +30,30 @@ Done when:
 - [ ] a question with a known word in common but no real answer abstains (a rule of abstention that does not rest on the
   confidence alone, or a threshold shown with the new table); the Javadoc of `THRESHOLD` cites only questions that are
   in `questionsWithNoAnswer`; `bin/ci` passes.
+
+## Resolution
+
+Done in `41730c9` (pull request 17, a batch with `help-for-shows-the-question-safely`).
+
+- The questions came first in `GuideQuestionsTest`: the three variants of the text block question, the one-word
+  questions (`the`, `block`), "combine two ifs", and the commands asked by their task (rename, fix the imports, move a
+  class, find where it is used, see the errors, create a file). `docs/improve.md` now has 43 sections: seven are new,
+  one per command a person asks for by its task, each naming the command to run; the `Words:` lines that moved are
+  listed in the commit.
+- Rule of abstention in `Ranking.answer()`: an answer needs at least two distinctive words (idf of 1.0 or more) of the
+  question in the title or the `Words:` line of a section, on top of the threshold. A one-word question never has an
+  answer (`docs/commands/help.md` says so). The Javadoc of `THRESHOLD` cites only questions of
+  `questionsWithNoAnswer`. `bin/ci.d/40-native` checks `help --for="rename this method"` on the native cli.
+- Review (neutral, once, shared with the other issue): nothing blocking. Suggestions, opened as
+  `help-for-answers-two-word-questions`: two-word questions that name a command abstain (`organize imports`, `new file`,
+  `extract variable`, ...) because one word is only in the body of a section or is frequent; `this` counts as
+  distinctive (`this used`, `rename this method` list extra entries); the abstention line should point to `gabier help`.
+- Admitted by the worker: two cli tests were not watched red before the code, and one scratch use of Python outside
+  the repository. Not repeated in the follow-up.
+- `bin/ci` of the worker: format 15 s, build 37 s, test 232 s, native 176 s, jdtls 488 s, all passed; the check `bin-ci`
+  of the pull request passed (12 min).
+
+Tokens:
+- worker: 263821 (`subagent_tokens`; one worker for the two issues of the batch, the figure is the same on both)
+- reviewer: 87580 (`subagent_tokens`; one review for the batch)
+- supervisor: see `help-for-shows-the-question-safely` (one figure for the batch)
