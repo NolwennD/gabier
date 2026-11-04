@@ -11,6 +11,7 @@ final class Help implements Capability {
             .usage("""
                 gabier [--json] help [<command>]
                 gabier [--json] help guide
+                gabier [--json] help --for=<task>
                 gabier [--json] --help
                 gabier [--json] -h\
                 """)
@@ -35,6 +36,16 @@ final class Help implements Capability {
             return;
         }
         var name = arguments.exactly(1).operand(0);
+        if (name.equals(Guide.FOR) || name.startsWith(Guide.FOR + "=")) {
+            var task = name.substring(Math.min(name.length(), Guide.FOR.length() + 1))
+                    .strip();
+            if (task.isEmpty()) {
+                throw UsageException.unsupportedArguments(arguments.all());
+            }
+            invocation.out().println(HelpText.answer(task, invocation.json()));
+
+            return;
+        }
         if (name.equals(Guide.TOPIC)) {
             invocation.out().println(HelpText.guide(invocation.json()));
 

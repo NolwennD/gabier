@@ -161,6 +161,9 @@ the usage, an example and the refusals of each one.
 - [`gabier help guide`](docs/improve.md): which problem each improvement of the code solves (a text block, a switch
   expression, a condition to turn round...), what jdtls offers for it and what it leaves to you. The page is inside the
   installed cli: no clone needed.
+- [`gabier help --for="<task>"`](docs/commands/help.md): ask the guide a question in English ("turn this string
+  concatenation into a text block") and get the one to three sections that answer, with the command to run and a
+  confidence, or the plain word that nothing matches. No daemon, no network.
 - [`gabier status` and `gabier stop`](docs/commands/status-and-stop.md): see what the daemon serves, and stop it.
 
 ## Reference

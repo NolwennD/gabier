@@ -41,7 +41,12 @@ clean or another branch does not break it; the cli starts the daemon of its own 
   block; 1-based, end excluded, a point is the same position twice), and `gabier apply-action [--dry-run] <file>
   <line>:<column> <line>:<column> <title>` to apply one by its title (the title is the key, the number of the list changes
   from one call to the next): a fix of what `gabier diagnostics` reports goes through them, not through a text edit. A Java
-  refactoring that gabier has a command for goes through it.
+  refactoring that gabier has a command for goes through it;
+- `gabier help --for="<the task, in English>"` **before editing Java by hand**, to learn whether jdtls does the move and
+  with which command: it answers one to three sections of the guide (`gabier help guide`) with the command to run and a
+  confidence, or says that nothing matches (a task that jdtls does not offer is answered as `By hand:`, with the reason).
+  A wrong answer, or an abstention, on a real task is a friction, so a ticket (below), and the fix is usually an entry of
+  the guide or the words of its `Words:` line (skill `extend-guide`).
 
 An operation gabier does not have yet is done as a text edit and becomes an issue (`.claude/rules/workflow.md`, step 4 of the
 development loop). The daemon serves one project, and there is one socket per project: `gabier` picks the socket of the

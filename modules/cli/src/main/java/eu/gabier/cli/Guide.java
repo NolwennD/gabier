@@ -16,6 +16,9 @@ final class Guide {
     /** The word after {@code help} that asks for the guide. */
     static final String TOPIC = "guide";
 
+    /** The option after {@code help} that asks the guide a question, as {@code --for=<task>}. */
+    static final String FOR = "--for";
+
     /** What the guide is for, in one line. */
     static final String SUMMARY = "which problem each improvement of the code solves, and how to ask for it";
 

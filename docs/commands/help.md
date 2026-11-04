@@ -19,6 +19,33 @@ is printed with no clone of the repository. `guide` is a topic of `help`, not a 
 commands and no `gabier guide`); `gabier help` points to it on its last lines. With `--json` it is one object,
 `{"name":"guide","summary":"...","text":"..."}`, the text being the page. To add an entry, see the skill `extend-guide`.
 
+`gabier help --for="<task>"` asks the guide a question: the task in English ("turn this string concatenation into a text
+block"), and the answer is one to three sections of the guide, best first, each with its title, its line `Ask:` or `By
+hand:` and a confidence from 0 to 1 (two decimals):
+
+```text
+$ gabier help --for="turn this string concatenation into a text block"
+For "turn this string concatenation into a text block":
+
+1. A string built from literals with `+` and line breaks (confidence 0.65)
+   Ask: `gabier cleanup --dry-run <file> stringConcatToTextBlock`
+
+2. A concatenation that is not only literals (confidence 0.41)
+   Ask: `gabier actions <file> ...
+```
+
+A task that no section answers is said plainly, with exit code 0 (it is an answer, not a refusal): `Nothing in the guide
+matches "<task>".` With `--json` the answer is one object, `{"question":"...","matches":[{"rank":1,"title":"...",
+"kind":"ask","how":"...","confidence":0.65}]}`, `kind` being `ask` or `by-hand` and `how` the line without its label; the
+`matches` of a task that nothing answers is `[]`. An empty task (`--for=`, `--for`) is a usage error. The sections are
+ranked by BM25 over the words of their title, their `Words:` line and their text (`ranking` package of the cli, written
+in plain Java): a word is cut at case changes, punctuation, hyphens and digits, so `stringConcatToTextBlock` is "string
+concat to text block"; there is no stemming, so the `Words:` line of an entry holds the forms a person uses. A section
+is part of the answer when its confidence (its score over the highest score the words of the task could get) is at
+least 0.3 and at least 0.6 of the best one's; the best one under 0.3 means that nothing matches. It reads the guide of
+the build, so it needs no clone, no daemon and no network. A wrong answer, or no answer, to a real task is a friction:
+see the rule `dogfooding.md`.
+
 `help` is the one command that never talks to the daemon: it starts none, opens no socket and works with no project. It is
 not a daemon method, so it has no row in [the protocol](../protocol.md#methods).
 

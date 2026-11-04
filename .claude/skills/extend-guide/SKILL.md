@@ -29,7 +29,10 @@ situation: its title is the situation, never the name of a tool. A situation met
 3. **Write the entry** in the section that fits (situations met on gabier; the language, clean-ups; the language,
    one place; the structure; what jdtls does not offer), as a `###` section with these lines, each starting a
    line, in this order:
-   - `Words:` one line, plain English, what a person says about the problem (a ranker will index it later);
+   - `Words:` one line, plain English, what a person says about the problem. `gabier help --for="<task>"` ranks the
+     sections by BM25 over their title, this line (which weighs 3 against 2 for the title and 1 for the rest) and
+     their text, with no stemming: write the forms a person types ("concatenation", not only "concat") and a phrase for the move the
+     entry is the answer to ("turn a string concatenation into a text block");
    - `Ask:` the command or the action, or `By hand:` when gabier has none (exactly one of the two);
    - `Before:` and `After:` with a fenced `java` block each, when there is code;
    - `Limits:` one paragraph: the Java release it needs when there is one, then when it does not work and
@@ -38,9 +41,12 @@ situation: its title is the situation, never the name of a tool. A situation met
    `` Ask: `gabier cleanup --dry-run <file> <id>` ``.
 4. **Run the test of the guide**: `./gradlew :cli:test --tests '*GuideTest' --tests '*HelpTest'`, read to the end
    (`GuideTest` checks the lines of every section and that each clean-up of `gabier help cleanup` has its section). A
-   situation that must always stay covered (a case met on gabier) gets a line in `GuideTest`.
+   situation that must always stay covered (a case met on gabier) gets a line in `GuideTest`. Add the question that
+   leads to the entry to the table of `GuideQuestionsTest` (`./gradlew :cli:test --tests '*GuideQuestionsTest'`): it
+   must rank the entry first, and the entries around it must keep their questions. If it does not, change the `Words:`
+   line, not the weights.
 5. **Check the printed guide** with the native cli, run from a folder with no clone: `bin/ci --stage native` does
-   (`help guide`), and the binary is `modules/cli/build/native/nativeCompile/gabier`.
+   (`help guide`, `help --for=...`), and the binary is `modules/cli/build/native/nativeCompile/gabier`.
 6. A new clean-up in `CleanUp` (core) is listed in the notes of `Cleanup` (cli), and `GuideTest` reads its identifiers
    from those notes: it fails until the guide has a section whose `Ask:` line names the new one.
 

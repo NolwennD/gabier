@@ -255,7 +255,10 @@ class HelpTest extends CliTest {
     void theListPointsToTheGuide() {
         run("help");
 
-        assertThat(out()).contains("gabier help guide").contains("which problem each improvement of the code solves");
+        assertThat(out())
+                .contains("gabier help guide")
+                .contains("which problem each improvement of the code solves")
+                .contains("gabier help --for=<task> gives the sections of that guide that answer a task");
     }
 
     @Test

@@ -13,8 +13,8 @@ import java.util.stream.Stream;
 
 /**
  * Stage {@code native} of the local CI (see {@code bin/ci}): builds the native cli and runs the binary alone, in an
- * empty directory with an empty environment, so that it cannot lean on anything of the checkout: {@code --version}, a
- * usage error reported as a problem object (text, then JSON with {@code --json}) with its exit code, the two output
+ * empty directory with an empty environment, so that it cannot lean on anything of the checkout: {@code --version},
+ * {@code help}, {@code help guide} and {@code help --for=<task>} (the guide is a resource of the image), a usage error reported as a problem object (text, then JSON with {@code --json}) with its exit code, the two output
  * streams kept apart, and then the cli against a real daemon: the installed {@code gabier-daemon} is started on a socket
  * in a temporary directory ({@code GABIER_SOCKET}, never the default path of the user), and {@code status} and {@code
  * stop} are run against it, with no daemon, with a stale socket and with a second daemon; {@code diagnostics} is run
@@ -71,7 +71,7 @@ public final class Native {
             skip = "no changed file reaches the native cli or the daemon (bin/ci --all forces it)";
         }
         if (args.length > 0 && args[0].equals("--describe")) {
-            System.out.println("native cli, run alone in an empty directory (version, help, usage error as text and JSON),"
+            System.out.println("native cli, run alone in an empty directory (version, help, the guide and a question to it, usage error as text and JSON),"
                     + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move and inline included, the daemon started on demand)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
@@ -222,11 +222,55 @@ public final class Native {
         Run guide = runBinary(binary, directory, "help", "guide");
         System.out.println("gabier help guide -> " + guide.out().lines().count() + " lines (exit " + guide.exit() + ")");
 
-        return failures + (guide.exit() == 0
+        failures += guide.exit() == 0
                         && guide.err().isEmpty()
                         && guide.out().startsWith("# Improving Java with gabier")
                         && guide.out().contains("stringConcatToTextBlock")
                         && guide.out().contains("By hand: ")
+                ? 0
+                : 1;
+
+        return failures + askTheGuide(binary, directory);
+    }
+
+    /**
+     * 0 when {@code help --for=<task>} answers from the guide in the resources of the image, in an empty directory with
+     * an empty environment: the clean-up for the text block task first, with its command and a confidence; the same
+     * answer as JSON; the section to do by hand for a task jdtls does not offer; and, for a task with no relation to
+     * the guide, the plain word that nothing matches, with exit 0.
+     */
+    private static int askTheGuide(Path binary, Path directory) throws IOException, InterruptedException {
+        Run text = runBinary(binary, directory, "help", "--for=turn this string concatenation into a text block");
+        System.out.println("gabier help --for=<text block task> -> " + text.out().lines().count() + " lines (exit " + text.exit() + ")");
+        Run json = runBinary(binary, directory, "--json", "help", "--for=turn this string concatenation into a text block");
+        System.out.println("gabier --json help --for=<text block task> -> " + json.out().length() + " characters (exit " + json.exit() + ")");
+        Run byHand = runBinary(binary, directory, "help", "--for=invert this if");
+        System.out.println("gabier help --for=<invert this if> -> " + byHand.out().lines().count() + " lines (exit " + byHand.exit() + ")");
+        Run nothing = runBinary(binary, directory, "help", "--for=how do I bake bread");
+        System.out.println("gabier help --for=<bake bread> -> \"" + nothing.out().lines().findFirst().orElse("") + "\" (exit " + nothing.exit() + ")");
+
+        int failures = text.exit() == 0
+                        && text.err().isEmpty()
+                        && text.out().contains("\n1. A string built from literals with `+` and line breaks (confidence ")
+                        && text.out().contains("stringConcatToTextBlock")
+                ? 0
+                : 1;
+        failures += json.exit() == 0
+                        && json.err().isEmpty()
+                        && json.out().startsWith("{\"question\":\"turn this string concatenation into a text block\",\"matches\":[{\"rank\":1,\"title\":\"A string built from literals")
+                        && json.out().contains("\"kind\":\"ask\"")
+                ? 0
+                : 1;
+        failures += byHand.exit() == 0
+                        && byHand.err().isEmpty()
+                        && byHand.out().contains("\n1. An `if` whose branches must trade places (confidence ")
+                        && byHand.out().contains("   By hand: ")
+                ? 0
+                : 1;
+
+        return failures + (nothing.exit() == 0
+                        && nothing.err().isEmpty()
+                        && nothing.out().startsWith("Nothing in the guide matches \"how do I bake bread\".")
                 ? 0
                 : 1);
     }

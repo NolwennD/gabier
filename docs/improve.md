@@ -1,6 +1,7 @@
 # Improving Java with gabier: the problem each move solves
 
-`gabier help guide` prints this page from the installed cli, with no clone of the repository.
+`gabier help guide` prints this page from the installed cli, with no clone of the repository, and `gabier help
+--for="<what you want to do>"` gives the one to three entries below that answer a task, with their command.
 
 You have a piece of Java and a problem with it: a string built with `+`, a cast after an `instanceof`, a loop on an
 index, a condition to turn round. Find the situation below; each entry says what jdtls (the Java language server behind
@@ -32,7 +33,7 @@ may not allow what was written (a text block needs Java 15, a pattern in `instan
 
 ### A concatenation that is not only literals
 
-Words: string concatenation, plus signs, build a json string, string with calls and quotes, text block does not apply
+Words: string concatenation, plus signs, json string, calls and quotes, cleanup says nothing to change
 
 Ask: `gabier actions <file> <line>:<column> <line>:<column>` on a point of the concatenation, then `gabier apply-action
 <file> <line>:<column> <line>:<column> "Use 'String.format' for string concatenation"`. jdtls also offers these
@@ -166,7 +167,7 @@ level or later; `gabier diagnostics` shows the errors if it is not.
 
 ### A string built from literals with `+` and line breaks
 
-Words: text block, multi-line string, string concatenation of literals, escaped quotes, backslash n
+Words: turn a string concatenation into a text block, multi-line string, concatenation of literals, escaped quotes
 
 Ask: `gabier cleanup --dry-run <file> stringConcatToTextBlock`
 
