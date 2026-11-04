@@ -25,7 +25,7 @@ import org.eclipse.lsp4j.WorkspaceEditCapabilities;
  * edits made on disk, only for a client that declares the dynamic registration of {@code
  * workspace/didChangeWatchedFiles}. It offers the code action {@code source.organizeImports}, which computes its edit
  * only when it is resolved, to a client that declares the kind among its literals and {@code resolveSupport} for {@code
- * edit}; the preferences that decide what it writes are {@link JdtlsSettings#javaPreferences}, not capabilities. The
+ * edit}; the preferences that decide what it writes are those of the project ({@link JdtlsSettings#imports}), not capabilities. The
  * same list of kinds decides which code actions of a range it gives (see {@link #QUICK_ASSIST}).
  */
 final class JdtlsCapabilities {

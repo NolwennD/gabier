@@ -9,8 +9,9 @@ clean or another branch does not break it; the cli starts the daemon of its own 
   crosses files) instead of editing every occurrence by hand; on the name in a `package` line it renames the package,
   its files moved to the folder of the new name (whole new name; one source folder at a time: the same package of the
   tests is a second call; `module-info.java`, string literals and build files stay text edits);
-- `gabier organize-imports <file>` after adding or removing a usage, instead of editing the import lines by hand (it keeps
-  the order of the formatter and never writes a star import; run `gabier diagnostics <file>` first, a file whose imports
+- `gabier organize-imports <file>` after adding or removing a usage, instead of editing the import lines by hand (it follows
+  the import preferences of the project, here `.vscode/settings.json`: the order of the formatter and no star import;
+  run `gabier diagnostics <file>` first, a file whose imports
   jdtls cannot resolve loses them);
 - `gabier cleanup [--dry-run] <file> <cleanup>...` to rewrite a whole file with clean-ups of jdtls, applied in the order
   given, instead of editing the text (for instance `stringConcatToTextBlock` for a concatenation of string literals that

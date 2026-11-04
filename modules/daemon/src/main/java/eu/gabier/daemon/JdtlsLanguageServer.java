@@ -18,6 +18,7 @@ import eu.gabier.editing.domain.ReferenceLocations;
 import eu.gabier.editing.domain.SourceText;
 import eu.gabier.editing.domain.TextEdit;
 import eu.gabier.editing.domain.TypeKind;
+import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -127,6 +128,9 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     private final List<FileEvent> untaken = new ArrayList<>();
 
     private int batches;
+
+    /** The import settings jdtls has: its own defaults at its start, then what the adapter last gave it. */
+    private ImportSettings importsOfJdtls = ImportSettings.DEFAULTS;
 
     private JdtlsLanguageServer(
             Diagnostics diagnostics, Duration quiet, CompletableFuture<JdtlsSession> starting, Thread starter) {
@@ -260,7 +264,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         var service = session.server().getTextDocumentService();
         JdtlsWatch watch = session.newWatch();
         try {
-            takeInChangesOnDisk(session, watch);
+            prepare(session, watch);
             var renamable = watch.await(
                     "whether the symbol at " + position + " of " + path + " can be renamed",
                     () -> JdtlsRequests.unlessDeclined(service.prepareRename(new PrepareRenameParams(document, at))));
@@ -397,7 +401,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                 command, new CodeActionParams(document, lsp(selection), new CodeActionContext(List.of())));
         JdtlsWatch watch = session.newWatch();
         try {
-            takeInChangesOnDisk(session, watch);
+            prepare(session, watch);
             var proposal = watch.await(
                     what + " at " + selection + " of " + path,
                     () -> JdtlsRequests.unlessDeclined(session.server().getRefactorEdit(refactoring)));
@@ -646,7 +650,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         var move = JdtlsServer.MoveParams.typeToNewFile(context);
         JdtlsWatch watch = session.newWatch();
         try {
-            takeInChangesOnDisk(session, watch);
+            prepare(session, watch);
             var proposal = watch.await(
                     "the move of the type at " + position + " of " + path,
                     () -> JdtlsRequests.unlessDeclined(session.server().move(move)));
@@ -700,7 +704,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                 + target.value();
         JdtlsWatch watch = session.newWatch();
         try {
-            takeInChangesOnDisk(session, watch);
+            prepare(session, watch);
             Path folder = folderOfThePackage(paths, target, sourceFolders(session, watch));
             List<Path> made = makeFolders(paths, folder, target);
             try {
@@ -864,7 +868,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         var service = session.server().getTextDocumentService();
         JdtlsWatch watch = session.newWatch();
         try {
-            takeInChangesOnDisk(session, watch);
+            prepare(session, watch);
             var offered = watch.await(
                     "the inlining of the symbol at " + position + " of " + path,
                     () -> JdtlsRequests.unlessDeclined(service.codeAction(params)));
@@ -1052,7 +1056,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         var service = session.server().getTextDocumentService();
         JdtlsWatch watch = session.newWatch();
         try {
-            takeInChangesOnDisk(session, watch);
+            prepare(session, watch);
             var offered = watch.await(
                     "the code actions on " + range + " of " + path,
                     () -> JdtlsRequests.unlessDeclined(service.codeAction(params)));
@@ -1114,7 +1118,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         String what = "the snippet of a " + kind.keyword() + " for " + path;
         JdtlsWatch watch = session.newWatch();
         try {
-            takeInChangesOnDisk(session, watch);
+            prepare(session, watch);
             if (sourceFolders(session, watch).stream().noneMatch(path::startsWith)) {
                 throw LanguageServerException.notCreatable(path, kind);
             }
@@ -1192,7 +1196,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * (jdtls computes it at that point, the client declares {@code codeAction.resolveSupport} for {@code edit}), and
      * gives the edit in the terms of the domain ({@link WorkspaceEdits}). jdtls reads the file as it knows it (nothing is
      * opened), after it has been told of the changes on disk. It has no edit for a file whose imports are as the
-     * preferences of {@link JdtlsSettings#javaPreferences} want them: that is not a refusal, the answer is none.
+     * preferences of the project want them (the settings of {@link JdtlsSettings#imports}, given before the request: see
+     * {@link #followTheImportPreferences}): that is not a refusal, the answer is none.
      *
      * <p>jdtls does not always judge the imports, and gabier does not write what jdtls could not judge. A type that
      * several packages declare and that the file uses without importing it is left out by jdtls, which asks the client
@@ -1218,7 +1223,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         var service = session.server().getTextDocumentService();
         JdtlsWatch watch = session.newWatch();
         try {
-            takeInChangesOnDisk(session, watch);
+            prepare(session, watch);
             session.importChoices().clear();
             var offered = watch.await(
                     "the organization of the imports of " + path,
@@ -1272,7 +1277,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         var identifier = new TextDocumentIdentifier(path.toUri().toString());
         JdtlsWatch watch = session.newWatch();
         try {
-            takeInChangesOnDisk(session, watch);
+            prepare(session, watch);
             session.configure(JdtlsSettings.withCleanUps(
                     cleanUps.stream().map(CleanUp::id).toList()));
             Optional<WorkspaceEdit> answer;
@@ -1402,6 +1407,31 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         var taken = diagnostics.open(barrier, () -> session.tell(events));
         watch.await("jdtls to take in the changes on disk of " + untaken.size() + " files", () -> taken);
         untaken.clear();
+    }
+
+    /**
+     * What a request that may write imports starts with: jdtls is given the import settings of the project as its files
+     * say them now ({@link #followTheImportPreferences}), and told of the changes on disk. A request that writes none
+     * ({@code diagnostics}, {@code references}) only takes in the changes.
+     */
+    private void prepare(JdtlsSession session, JdtlsWatch watch) throws InterruptedException {
+        followTheImportPreferences(session);
+        takeInChangesOnDisk(session, watch);
+    }
+
+    /**
+     * Reads the files of the project that say how it writes its imports ({@link ImportPreferences}) and gives jdtls the
+     * three settings when they are not the ones it has: it reads no such file itself, and keeps what it was last given
+     * (see {@link JdtlsSettings#imports}). The files are read at each call, so a change is followed by the next request
+     * with no restart. A jdtls just started has the defaults of its own, which is what {@link ImportSettings#DEFAULTS}
+     * says, so a project whose files leave them is told nothing.
+     */
+    private void followTheImportPreferences(JdtlsSession session) {
+        ImportSettings wanted = ImportPreferences.read(session.projectRoot()).settings();
+        if (!ImportPreferences.sameValues(wanted, importsOfJdtls)) {
+            session.configure(JdtlsSettings.imports(wanted));
+            importsOfJdtls = wanted;
+        }
     }
 
     /** Asks jdtls to shut down, or ends its start when it is not over, and deletes what the session made. */

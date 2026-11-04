@@ -9,7 +9,7 @@ import java.util.Map;
 final class OrganizeImports implements Capability {
 
     static final Command COMMAND = Command.called("organize-imports")
-            .summary("add the missing imports, remove the unused ones and order the rest, never with a star import")
+            .summary("add the missing imports, remove the unused ones and order the rest as the project does")
             .usage("gabier [--json] organize-imports [--dry-run] <file>")
             .example("""
                 $ gabier organize-imports src/main/java/demo/Tidy.java
@@ -43,6 +43,7 @@ final class OrganizeImports implements Capability {
             if (arguments.dryRun()) {
                 invocation.out().println("dry run, nothing written");
             }
+            reply.printWarnings();
             invocation.out().println("nothing to change");
 
             return;

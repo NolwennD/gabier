@@ -203,12 +203,15 @@ final class ChangeRequest {
         return DaemonMethod.Outcome.of(changed(report).toJson());
     }
 
-    /** What organizing the imports of the file does, written unless the request is a dry run. */
-    DaemonMethod.Outcome run(OrganizeImports organize) {
+    /**
+     * What organizing the imports of the file does, written unless the request is a dry run, with the warnings about
+     * the files of the project that say how it writes its imports.
+     */
+    DaemonMethod.Outcome run(OrganizeImports organize, List<String> warnings) {
         Path file = file();
         ChangeReport report = dryRun() ? organize.dryRun(file) : organize.apply(file);
 
-        return DaemonMethod.Outcome.of(changed(report).toJson());
+        return DaemonMethod.Outcome.of(changed(report).withWarnings(warnings).toJson());
     }
 
     /** What applying the clean-ups to the file does, written unless the request is a dry run. */

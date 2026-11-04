@@ -923,9 +923,12 @@ import java.util.ArrayList;
 import java.util.List;
 ```
 
-Limits: it keeps the order of the formatter and never writes a star import. A type that jdtls cannot resolve cannot be
-imported, and a file whose imports it cannot resolve loses them: run `gabier diagnostics <file>` first. To import one
-type that is missing, see "A compiler error that jdtls has a fix for". See `gabier help organize-imports`.
+Limits: it writes the imports as the project writes them: the order and the star threshold come from its
+`.settings/org.eclipse.jdt.ui.prefs` or `.vscode/settings.json` (`gabier status` shows what is followed, and a warning
+says when the two files disagree), and from the defaults of jdtls (groups `java`, `javax`, `org`, `com`, a star import
+from 99 imports) for what they do not set. A type that jdtls cannot resolve cannot be imported, and a file whose
+imports it cannot resolve loses them: run `gabier diagnostics <file>` first. To import one type that is missing, see
+"A compiler error that jdtls has a fix for". See `gabier help organize-imports`.
 
 ### A class in the wrong package
 

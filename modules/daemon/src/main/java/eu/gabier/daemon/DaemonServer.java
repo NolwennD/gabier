@@ -72,7 +72,7 @@ final class DaemonServer implements AutoCloseable {
                 new DiagnosticsMethod(new Diagnose(project)),
                 new RenameMethod(rename),
                 new RenameTokenMethod(rename),
-                new OrganizeImportsMethod(new OrganizeImports(project, new NioFileStore())),
+                new OrganizeImportsMethod(new OrganizeImports(project, new NioFileStore()), project.root()),
                 new CleanUpMethod(new CleanUpFile(project, new NioFileStore())),
                 new ExtractVariableMethod(new ExtractVariable(project, new NioFileStore())),
                 new ExtractMethodMethod(new ExtractMethod(project, new NioFileStore())),
@@ -234,7 +234,8 @@ final class DaemonServer implements AutoCloseable {
                 Duration.ofNanos(nanoClock.getAsLong() - startedAt),
                 project.root(),
                 state,
-                failure);
+                failure,
+                ImportPreferences.read(project.root()).settings());
     }
 
     /** How long the clients are given to end by themselves when the daemon stops; for a test to shorten. */

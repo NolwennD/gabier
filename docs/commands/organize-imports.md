@@ -2,21 +2,50 @@
 
 `gabier organize-imports <file>` fixes the imports of a Java file instead of editing the import lines by hand: it adds the
 missing ones, removes the unused ones and orders the rest, by asking jdtls (the code action `source.organizeImports`) and
-writing its answer. **It keeps the imports as the project keeps them**: no import is ever collapsed into a star
-(`import java.util.*;`), and the order is the one of the formatter and of Checkstyle, the static imports first, a blank
-line, then every other import in one block in ASCII order (`java`, `javax` and `org` are not groups of their own), so
-that organizing a file of this repository whose imports are in order changes nothing. It is jdtls configured, not
-corrected after the fact: the daemon starts it with `java.sources.organizeImports.starThreshold` and
-`staticStarThreshold` at the largest `int` (jdtls collapses 99 imports of one package by default) and
-`java.completion.importOrder` as `["#", ""]` (the static group, then everything else; the default `java`, `javax`,
-`org`, `com` puts a blank line between groups), in `JdtlsSettings.javaPreferences`. `--dry-run` (anywhere after the
+writing its answer. **It writes the imports as the project writes them**: gabier has no convention of its own, it follows
+the files of the project that say how (below), and what they do not say is left to the defaults of jdtls. `--dry-run` (anywhere after the
 command) writes nothing and shows what would change. The answer is that of `rename`, for the one file: the text lists
 `modified <file>` and the unified diff, preceded by `dry run, nothing written` for a dry run, and says `nothing to
 change` for a file whose imports are already in order; with `--json` the result is the same `ChangedFiles` object, empty
-for such a file. A refusal is the problem object, exit code 2, and nothing is written: a server that is not ready, a file
+for such a file, with a `warnings` member when there is a warning to give. A refusal is the problem object, exit code 2, and nothing is written: a server that is not ready, a file
 outside the project (`language-server-file-outside-project`), a path under it with no file
 (`language-server-file-missing`) or a folder (`language-server-not-a-file`), a change set that cannot be applied to the file
 as it is, and the two cases below.
+
+## How the project says it
+
+jdtls reads no file of the project for its imports: it takes three `java.*` settings from the client that talks to it.
+The daemon therefore reads the files of the project and gives jdtls those three settings, **before each request that
+writes imports** (`organize-imports`, `cleanup`, and the refactorings and code actions that add an import), so a change
+of a file is followed by the next request, with no restart. The files are looked for under the root of the project the
+daemon serves (the nearest folder with a `.git`, `GABIER_PROJECT`), not in the sub-folders of a module:
+
+| jdtls setting                                      | `.settings/org.eclipse.jdt.ui.prefs` (Eclipse, Buildship) | `.vscode/settings.json` (VS Code Java)             |
+| -------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------- |
+| `java.completion.importOrder`                      | `org.eclipse.jdt.ui.importorder` (`\#;java;javax;org;`)   | `"java.completion.importOrder": ["#", "java", ""]` |
+| `java.sources.organizeImports.starThreshold`       | `org.eclipse.jdt.ui.ondemandthreshold`                   | `"java.sources.organizeImports.starThreshold": 99` |
+| `java.sources.organizeImports.staticStarThreshold` | `org.eclipse.jdt.ui.staticondemandthreshold`             | `"java.sources.organizeImports.staticStarThreshold": 99` |
+
+- `importOrder` is the list of the groups of imports, in order: a group is a package prefix, `#` the static imports and
+  the empty group every import that no other group takes (Eclipse writes the groups in one line, separated by `;`, `\#`
+  for the static ones, and a trailing `;` for the empty group). jdtls puts a blank line between two groups.
+- A threshold is the number of imports of one package (of one type, for the static ones) from which jdtls writes
+  `import p.*;` instead. To never write a star import, give the largest `int`, 2147483647.
+- `.vscode/settings.json` is JSON with comments (`//`, `/* */`) and trailing commas, as VS Code reads it; its keys are
+  the flat names above.
+- Each setting comes from the file that sets it. A setting that neither file sets is **left to the defaults of jdtls**:
+  the groups `java`, `javax`, `org`, `com` (a blank line between them) and a star import from 99 imports. A project with
+  no such file gets those defaults.
+- When the two files give a different value for the same setting, **`.settings` is followed** and the answer of the
+  command carries a warning (`warning: ...` lines in the text, a `warnings` member in `--json`), also for a file whose
+  imports are already in order. The same warning says that a file was ignored because it cannot be read or is not JSON,
+  or that a setting has the wrong type.
+- `gabier status` shows, for each of the three settings, the value in force and where it comes from (`.settings`,
+  `.vscode` or `default of jdtls`); see [status and stop](status-and-stop.md).
+
+This repository declares its convention (the static imports first, a blank line, then one block in ASCII order, as the
+formatter and Checkstyle want, and no star import) in a versioned `.vscode/settings.json`: organizing a file of it whose
+imports are in order changes nothing.
 
 ```text
 $ gabier organize-imports --dry-run src/main/java/demo/Untidy.java

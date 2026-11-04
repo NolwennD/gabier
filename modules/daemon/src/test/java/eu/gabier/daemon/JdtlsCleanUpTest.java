@@ -172,7 +172,8 @@ class JdtlsCleanUpTest {
 
             for (Object settings : configurations(2)) {
                 assertThat(javaOf(settings).keySet())
-                        .contains("sources", "completion", "templates", "references", "cleanup");
+                        .contains("completion", "templates", "references", "cleanup")
+                        .doesNotContain("sources");
             }
         }
     }

@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -19,9 +20,17 @@ import org.jspecify.annotations.Nullable;
  * @param jdtls where the jdtls of the daemon is: not started, starting, ready or failed
  * @param jdtlsFailure why jdtls is failed, as jdtls or the daemon said it (text from jdtls is hostile input: whoever
  *     prints it goes through {@link TerminalText}); empty when jdtls is not failed or the reason is not known
+ * @param imports the settings of the imports that gabier follows for the project, read from its files when the status
+ *     is asked for
  */
 public record DaemonStatus(
-        String version, long pid, Duration uptime, Path project, JdtlsState jdtls, Optional<String> jdtlsFailure) {
+        String version,
+        long pid,
+        Duration uptime,
+        Path project,
+        JdtlsState jdtls,
+        Optional<String> jdtlsFailure,
+        ImportSettings imports) {
 
     public DaemonStatus {
         Assert.notBlank("version", version);
@@ -31,11 +40,18 @@ public record DaemonStatus(
         Assert.notNull("project", project);
         Assert.notNull("jdtls", jdtls);
         Assert.notNull("jdtlsFailure", jdtlsFailure);
+        Assert.notNull("imports", imports);
     }
 
-    /** A status that says no reason for the state of jdtls. */
+    /** A status that says no reason for the state of jdtls, and whose project follows the defaults of jdtls. */
     public DaemonStatus(String version, long pid, Duration uptime, Path project, JdtlsState jdtls) {
-        this(version, pid, uptime, project, jdtls, Optional.empty());
+        this(version, pid, uptime, project, jdtls, Optional.empty(), ImportSettings.DEFAULTS);
+    }
+
+    /** A status of a project that follows the defaults of jdtls. */
+    public DaemonStatus(
+            String version, long pid, Duration uptime, Path project, JdtlsState jdtls, Optional<String> jdtlsFailure) {
+        this(version, pid, uptime, project, jdtls, jdtlsFailure, ImportSettings.DEFAULTS);
     }
 
     /** The result as JSON, the members in a stable order; the reason is a member only when there is one. */
@@ -44,13 +60,14 @@ public record DaemonStatus(
                 .map(reason -> ",\"jdtlsFailure\":" + Json.quote(reason))
                 .orElse("");
         return """
-            {"version":%s,"pid":%d,"uptimeMillis":%d,"project":%s,"jdtls":%s%s}\
+            {"version":%s,"pid":%d,"uptimeMillis":%d,"project":%s,"jdtls":%s,"imports":%s%s}\
             """.formatted(
                         Json.quote(version),
                         pid,
                         uptime.toMillis(),
                         Json.quote(project.toString()),
                         Json.quote(jdtls.text()),
+                        imports.toJson(),
                         failure);
     }
 
@@ -70,7 +87,18 @@ public record DaemonStatus(
                 Duration.ofMillis(integer(result, "uptimeMillis")),
                 project(result.get("project")),
                 state(result.get("jdtls")),
-                failure(result.get("jdtlsFailure")));
+                failure(result.get("jdtlsFailure")),
+                imports(result.get("imports")));
+    }
+
+    private static ImportSettings imports(@Nullable Object imports) {
+        if (!(imports instanceof Map<?, ?> members)) {
+            throw member("imports");
+        }
+        var settings = new LinkedHashMap<String, @Nullable Object>();
+        members.forEach((name, setting) -> settings.put(String.valueOf(name), setting));
+
+        return ImportSettings.of(settings);
     }
 
     private static Optional<String> failure(@Nullable Object failure) {

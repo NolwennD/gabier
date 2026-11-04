@@ -1,0 +1,8 @@
+{
+  // How this project writes its imports, which `gabier organize-imports` follows (jdtls reads no other file for it).
+  // The convention of the formatter and of Checkstyle: the static imports first, a blank line, then one block of all
+  // the others in ASCII order, and never a star import.
+  "java.completion.importOrder": ["#", ""],
+  "java.sources.organizeImports.starThreshold": 2147483647,
+  "java.sources.organizeImports.staticStarThreshold": 2147483647
+}

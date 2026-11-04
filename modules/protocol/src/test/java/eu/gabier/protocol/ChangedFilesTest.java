@@ -52,6 +52,34 @@ class ChangedFilesTest {
     }
 
     @Test
+    void carriesTheWarningsInAMemberThatIsOnlyThereWhenThereAreSome() {
+        var warned = EVERYTHING.withWarnings(List.of("two files \"disagree\"", "another"));
+
+        assertThat(warned.toJson())
+                .endsWith("\"diff\":\"--- /project/Main.java\\n+++ /project/Main.java\\n@@ -1 +1"
+                        + " @@\\n-\\\"a\\\"\\n+\\\"b\\\"\\n\",\"warnings\":[\"two files"
+                        + " \\\"disagree\\\"\",\"another\"]}");
+        StrictJson.parse(warned.toJson());
+        assertThat(readBack(warned)).isEqualTo(warned);
+        assertThat(readBack(warned).warnings()).containsExactly("two files \"disagree\"", "another");
+        assertThat(EVERYTHING.warnings()).isEmpty();
+        assertThat(EVERYTHING.toJson()).doesNotContain("warnings");
+        assertThat(readBack(EVERYTHING).warnings()).isEmpty();
+    }
+
+    @Test
+    void isRefusedWhenTheWarningsAreNotAListOfText() {
+        var result = new HashMap<String, Object>(Map.of(
+                "created", List.of(), "renamed", List.of(), "deleted", List.of(), "modified", List.of(), "diff", ""));
+        result.put("warnings", "careful");
+        var numbers = new HashMap<>(result);
+        numbers.put("warnings", List.of(1));
+
+        assertThatExceptionOfType(InvalidResponseException.class).isThrownBy(() -> ChangedFiles.of(result));
+        assertThatExceptionOfType(InvalidResponseException.class).isThrownBy(() -> ChangedFiles.of(numbers));
+    }
+
+    @Test
     void isReadFromWhatItWrites() {
         assertThat(readBack(EVERYTHING)).isEqualTo(EVERYTHING);
     }

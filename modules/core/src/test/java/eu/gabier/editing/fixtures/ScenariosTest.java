@@ -154,6 +154,11 @@ class ScenariosTest {
                         "organize-imports-of-a-file",
                         "organize-imports-of-a-file-in-order",
                         "organize-imports-keeps-explicit-imports",
+                        "organize-imports-of-a-project-without-settings",
+                        "organize-imports-following-the-eclipse-preferences",
+                        "organize-imports-keeps-explicit-imports-as-the-eclipse-preferences-say",
+                        "organize-imports-following-the-eclipse-preferences-over-the-settings-of-vscode",
+                        "organize-imports-leaves-the-defaults-of-jdtls-for-what-a-file-does-not-set",
                         "organize-imports-of-a-type-two-packages-declare",
                         "organize-imports-of-a-type-a-jdk-internal-class-also-declares",
                         "organize-imports-removes-an-unused-import-of-a-class-that-does-not-exist",
@@ -690,7 +695,7 @@ class ScenariosTest {
     }
 
     @Test
-    void holdsOnlyRelativeJavaSourcesAndRelativeRequests() {
+    void holdsOnlyRelativeJavaSourcesTheSettingsOfTheImportsAndRelativeRequests() {
         for (Scenario scenario : ALL) {
             assertThat(scenario.files().keySet())
                     .as(scenario.name())
@@ -699,7 +704,8 @@ class ScenariosTest {
                         assertThat(file.isAbsolute()).isFalse();
                         assertThat(file.toString())
                                 .matches("(\\w+/)?src/(main|test)/java/.*\\.java|src/main/resources/.*"
-                                        + "|src/main/other/.*\\.java");
+                                        + "|src/main/other/.*\\.java"
+                                        + "|\\.vscode/settings\\.json|\\.settings/org\\.eclipse\\.jdt\\.ui\\.prefs");
                     });
             assertThat(scenario.request().file().isAbsolute())
                     .as(scenario.name())
@@ -906,10 +912,20 @@ class ScenariosTest {
         return ordered;
     }
 
+    /** The scenarios of a project whose {@code .vscode/settings.json} is the one of this repository. */
+    private static List<Scenario> followingTheConventionOfTheRepository(Class<? extends Answer> answer) {
+        return answeredWith(answer).stream()
+                .filter(scenario -> Scenarios.REPOSITORY_IMPORT_SETTINGS.equals(
+                        scenario.files().get(Path.of(".vscode/settings.json"))))
+                .toList();
+    }
+
     @Test
     void leavesTheImportsOfAnOrganizedFileInTheOrderOfTheProjectWithoutAnyStar(@TempDir Path directory)
             throws IOException {
-        for (Scenario scenario : answeredWith(Answer.Organized.class)) {
+        assertThat(followingTheConventionOfTheRepository(Answer.Organized.class))
+                .isNotEmpty();
+        for (Scenario scenario : followingTheConventionOfTheRepository(Answer.Organized.class)) {
             Path root = Files.createTempDirectory(directory, "project");
             Scenario inside = scenario.inside(root);
             inside.writeProject(root);
@@ -1113,7 +1129,9 @@ class ScenariosTest {
 
     @Test
     void startsTheFilesThatNeedNothingInTheOrderOfTheProjectWithoutAnyStar() {
-        for (Scenario scenario : answeredWith(Answer.AlreadyOrganized.class)) {
+        assertThat(followingTheConventionOfTheRepository(Answer.AlreadyOrganized.class))
+                .isNotEmpty();
+        for (Scenario scenario : followingTheConventionOfTheRepository(Answer.AlreadyOrganized.class)) {
             List<String> block =
                     importBlock(scenario.files().get(scenario.request().file()));
 

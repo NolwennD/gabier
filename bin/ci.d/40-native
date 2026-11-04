@@ -320,13 +320,16 @@ public final class Native {
     private static final class Daemon {
 
         private static final Pattern STATUS =
-                Pattern.compile("gabier-daemon " + VERSION + ", pid (\\d+), up \\d+s, project \\S+, jdtls not-started");
+                Pattern.compile(
+                        "gabier-daemon " + VERSION + ", pid (\\d+), up \\d+s, project \\S+, jdtls not-started\\nimports:\\n.*",
+                        Pattern.DOTALL);
         private static final Pattern STATUS_JSON = Pattern.compile(
-                "\\{\"version\":\"" + VERSION + "\",\"pid\":(\\d+),\"uptimeMillis\":\\d+,\"project\":\"[^\"]+\",\"jdtls\":\"not-started\"\\}");
+                "\\{\"version\":\"" + VERSION + "\",\"pid\":(\\d+),\"uptimeMillis\":\\d+,\"project\":\"[^\"]+\",\"jdtls\":\"not-started\",\"imports\":\\{.*\\}\\}");
 
         /** The status of a daemon the cli started: the project is the folder its script gave. */
         private static final Pattern STARTED_STATUS = Pattern.compile(
-                "gabier-daemon " + VERSION + ", pid (\\d+), up \\d+s, project \\S+-project, jdtls \\w+");
+                "gabier-daemon " + VERSION + ", pid (\\d+), up \\d+s, project \\S+-project, jdtls \\w+\\nimports:\\n.*",
+                Pattern.DOTALL);
 
         private final Path cli;
         private final Path daemon;

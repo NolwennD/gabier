@@ -26,7 +26,15 @@ record ChangedFilesReply(Invocation invocation, ChangedFiles changed) {
         return text().isEmpty();
     }
 
-    /** The result of the daemon as it gave it with {@code --json}; else the dry run said, then the text. */
+    /** Says what the daemon noticed on the way, one {@code warning:} line each: text of the project, neutralised. */
+    void printWarnings() {
+        changed.warnings().forEach(warning -> invocation.out().println(TerminalText.neutralise("warning: " + warning)));
+    }
+
+    /**
+     * The result of the daemon as it gave it with {@code --json}; else the dry run said, the warnings of the daemon,
+     * then the text.
+     */
     void print() {
         var out = invocation.out();
         if (invocation.json()) {
@@ -37,6 +45,7 @@ record ChangedFilesReply(Invocation invocation, ChangedFiles changed) {
         if (invocation.arguments().dryRun()) {
             out.println("dry run, nothing written");
         }
+        printWarnings();
         text().forEach(line -> out.println(TerminalText.neutralise(line)));
     }
 

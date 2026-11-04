@@ -19,9 +19,17 @@ import org.jspecify.annotations.Nullable;
  * @param deleted the files deleted
  * @param modified the files whose text changed, each once
  * @param diff the unified diff of every change, in order (the format of {@code diff -u}); empty when nothing changed
+ * @param warnings what the daemon noticed on the way and the caller should know, such as two files of the project that
+ *     contradict each other (text from the project: whoever prints it goes through {@link TerminalText}); a member of
+ *     the result only when there is one
  */
 public record ChangedFiles(
-        List<Path> created, List<Moved> renamed, List<Path> deleted, List<Path> modified, String diff) {
+        List<Path> created,
+        List<Moved> renamed,
+        List<Path> deleted,
+        List<Path> modified,
+        String diff,
+        List<String> warnings) {
 
     public ChangedFiles {
         Assert.field("created", created).notNull().noNullElement();
@@ -29,11 +37,23 @@ public record ChangedFiles(
         Assert.field("deleted", deleted).notNull().noNullElement();
         Assert.field("modified", modified).notNull().noNullElement();
         Assert.notNull("diff", diff);
+        Assert.field("warnings", warnings).notNull().noNullElement();
 
         created = List.copyOf(created);
         renamed = List.copyOf(renamed);
         deleted = List.copyOf(deleted);
         modified = List.copyOf(modified);
+        warnings = List.copyOf(warnings);
+    }
+
+    /** A result with no warning. */
+    public ChangedFiles(List<Path> created, List<Moved> renamed, List<Path> deleted, List<Path> modified, String diff) {
+        this(created, renamed, deleted, modified, diff, List.of());
+    }
+
+    /** The same result with these warnings. */
+    public ChangedFiles withWarnings(List<String> warnings) {
+        return new ChangedFiles(created, renamed, deleted, modified, diff, warnings);
     }
 
     /**
@@ -56,14 +76,19 @@ public record ChangedFiles(
 
     /** The result as JSON, the members in a stable order. */
     public String toJson() {
+        var warned = warnings.isEmpty()
+                ? ""
+                : ",\"warnings\":" + warnings.stream().map(Json::quote).collect(Collectors.joining(",", "[", "]"));
+
         return """
-            {"created":%s,"renamed":%s,"deleted":%s,"modified":%s,"diff":%s}\
+            {"created":%s,"renamed":%s,"deleted":%s,"modified":%s,"diff":%s%s}\
             """.formatted(
                         paths(created),
                         renamed.stream().map(Moved::toJson).collect(Collectors.joining(",", "[", "]")),
                         paths(deleted),
                         paths(modified),
-                        Json.quote(diff));
+                        Json.quote(diff),
+                        warned);
     }
 
     private static String paths(List<Path> paths) {
@@ -85,7 +110,19 @@ public record ChangedFiles(
                 list(result, "renamed").stream().map(ChangedFiles::moved).toList(),
                 pathsOf(result, "deleted"),
                 pathsOf(result, "modified"),
-                diff);
+                diff,
+                warnings(result.get("warnings")));
+    }
+
+    private static List<String> warnings(@Nullable Object warnings) {
+        if (warnings == null) {
+            return List.of();
+        }
+        if (warnings instanceof List<?> elements && elements.stream().allMatch(String.class::isInstance)) {
+            return elements.stream().map(String.class::cast).toList();
+        }
+
+        throw invalid("The result has no member warnings of the right type");
     }
 
     private static List<?> list(Map<String, @Nullable Object> result, String name) {

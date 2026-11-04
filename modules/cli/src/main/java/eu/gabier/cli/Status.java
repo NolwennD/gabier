@@ -2,6 +2,8 @@ package eu.gabier.cli;
 
 import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.TerminalText;
+import java.util.ArrayList;
+import java.util.stream.Collectors;
 
 /**
  * {@code status}: the daemon, if one runs. It takes no argument and starts no daemon. The version, the project and the
@@ -31,10 +33,16 @@ final class Status implements Capability {
         invocation.out().println(invocation.json() ? status.toJson() : text(status));
     }
 
+    /** The line of the daemon, then the settings of the imports it follows for the project, each with its source. */
     private static String text(DaemonStatus status) {
         var failure = status.jdtlsFailure().map(reason -> " (" + reason + ")").orElse("");
-        return TerminalText.neutralise("gabier-daemon " + status.version() + ", pid " + status.pid() + ", up "
+        var lines = new ArrayList<String>();
+        lines.add("gabier-daemon " + status.version() + ", pid " + status.pid() + ", up "
                 + status.uptime().toSeconds() + "s, project " + status.project() + ", jdtls "
                 + status.jdtls().text() + failure);
+        lines.add("imports:");
+        status.imports().lines().forEach(line -> lines.add("  " + line));
+
+        return lines.stream().map(TerminalText::neutralise).collect(Collectors.joining(System.lineSeparator()));
     }
 }

@@ -58,6 +58,19 @@ final class CliFixtures {
             List.of(Path.of("/project/a\u001b[2Jb.java")),
             "--- /project/a\u001b[2Jb.java\n+forged\u001b[2J\n");
 
+    /** Two warnings, the second with a text from a file of the project that a terminal would obey. */
+    static final List<String> WARNINGS = List.of(
+            "java.completion.importOrder: .settings/org.eclipse.jdt.ui.prefs says [\"#\", \"\"] and"
+                    + " .vscode/settings.json says [\"java\"]: following .settings",
+            "ignored .vscode/settings.json: \u001b[2Jforged");
+
+    /** The settings of the imports of a project with no file for them, as the daemon writes them. */
+    static final String IMPORTS = """
+        {"importOrder":{"value":["java","javax","org","com"],"source":"default"},\
+        "starThreshold":{"value":99,"source":"default"},\
+        "staticStarThreshold":{"value":99,"source":"default"}}\
+        """;
+
     private CliFixtures() {}
 
     /** What a command that changes files can answer: a change, every kind of change, and no change. */

@@ -126,9 +126,11 @@ import java.util.stream.Stream;
  *       for its diagnostics. The replay changes the disk as an agent does and gets the answer for the new text.
  *   <li>the organization of the imports of a file ({@link #ORGANIZE_IMPORTS}): jdtls answers one edit of the file, from
  *       its first import to its last, or none when the imports are already as it is configured to write them ({@link
- *       #ORGANIZE_IMPORTS_IN_ORDER}). What it writes is decided by two preferences it is started with (see {@code
- *       JdtlsSettings.javaPreferences}): with its defaults it would put a blank line between its groups of imports and
- *       collapse a hundred imports of one package into a star ({@link #ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS}). A type
+ *       #ORGANIZE_IMPORTS_IN_ORDER}). What it writes is decided by three settings that the project says in its
+ *       {@code .vscode/settings.json} or its {@code .settings/org.eclipse.jdt.ui.prefs} (jdtls reads neither: the
+ *       adapter sends the settings, see {@code JdtlsSettings.imports}): with its defaults it would put a blank line
+ *       between its groups of imports and collapse a hundred imports of one package into a star ({@link
+ *       #ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS}). A type
  *       that several packages declare and that a file uses without importing it is left out by jdtls, without a word,
  *       unless the client declares that it can choose ({@code advancedOrganizeImportsSupport}): jdtls then sends {@code
  *       java.action.organizeImports.chooseImports} with the candidates, which the adapter keeps and refuses with
@@ -177,6 +179,20 @@ import java.util.stream.Stream;
  */
 public final class Scenarios {
 
+    /**
+     * The settings of VS Code Java that say how this repository writes its imports: the static imports first, a blank
+     * line, then one block of all the others in ASCII order (the order of the formatter), and no star import (the
+     * thresholds are the largest {@code int}). It is the {@code .vscode/settings.json} of the project of most scenarios
+     * about imports, and of this repository.
+     */
+    public static final String REPOSITORY_IMPORT_SETTINGS = """
+        {
+          "java.completion.importOrder": ["#", ""],
+          "java.sources.organizeImports.starThreshold": 2147483647,
+          "java.sources.organizeImports.staticStarThreshold": 2147483647
+        }
+        """;
+
     private static final Path GREETER = Path.of("src/main/java/demo/Greeter.java");
     private static final Path WELCOMER = Path.of("src/main/java/demo/Welcomer.java");
     private static final Path MAIN = Path.of("src/main/java/demo/Main.java");
@@ -212,6 +228,8 @@ public final class Scenarios {
     private static final Path LEDGER = Path.of("src/main/java/demo/Ledger.java");
     private static final Path BANK = Path.of("src/main/java/demo/app/Bank.java");
     private static final Path LEDGER_TEST = Path.of("src/test/java/demo/LedgerTest.java");
+    private static final Path VSCODE_SETTINGS = Path.of(".vscode/settings.json");
+    private static final Path ECLIPSE_PREFERENCES = Path.of(".settings/org.eclipse.jdt.ui.prefs");
 
     /** How many types of one package, and constants of one class, {@code Wide} imports one by one: over the 99 of jdtls. */
     private static final int MANY = 100;
@@ -493,6 +511,21 @@ public final class Scenarios {
         }
         """;
 
+    /** The imports of {@code Untidy} organized in the order of {@link #ECLIPSE_IMPORT_PREFERENCES}: org, statics, rest. */
+    private static final String UNTIDY_IN_THE_ORDER_OF_ECLIPSE = """
+        import org.w3c.dom.Node;
+
+        import static java.util.Map.entry;
+        import static java.util.stream.Collectors.toList;
+
+        import java.io.File;
+        import java.util.ArrayList;
+        import java.util.Collections;
+        import java.util.List;
+        import java.util.Map;
+        import javax.swing.JButton;\
+        """;
+
     /** Imports as the project keeps them: static first, a blank line, then one block in ASCII order. */
     private static final String TIDY_SOURCE = """
         package demo;
@@ -530,11 +563,60 @@ public final class Scenarios {
             LEDGER_TEST,
             LEDGER_TEST_SOURCE);
 
+    /** The Eclipse preferences of a project that writes {@code org} first, then the static imports, then the rest. */
+    private static final String ECLIPSE_IMPORT_PREFERENCES = """
+        eclipse.preferences.version=1
+        org.eclipse.jdt.ui.importorder=org;\\#;
+        org.eclipse.jdt.ui.ondemandthreshold=2147483647
+        org.eclipse.jdt.ui.staticondemandthreshold=2147483647
+        """;
+
+    /** The same order and no threshold: it is the other file that gives them in a project of both files. */
+    private static final String ECLIPSE_IMPORT_ORDER = """
+        eclipse.preferences.version=1
+        org.eclipse.jdt.ui.importorder=org;\\#;
+        """;
+
+    /** Settings of VS Code Java that give the order of the repository and leave the thresholds to jdtls. */
+    private static final String VSCODE_IMPORT_ORDER_ONLY = """
+        {"java.completion.importOrder": ["#", ""]}
+        """;
+
+    /** Settings of VS Code Java that contradict {@link #ECLIPSE_IMPORT_ORDER}: the Eclipse preferences are followed. */
+    private static final String VSCODE_IMPORT_ORDER_AGAINST_ECLIPSE = """
+        {"java.completion.importOrder": ["java", "#", ""]}
+        """;
+
     /**
-     * {@code Untidy}, {@code Tidy} and {@code Wide}, with the types and the constants {@code Wide} imports: the project
-     * of the scenarios about imports.
+     * {@code Untidy}, {@code Tidy} and {@code Wide}, with the types and the constants {@code Wide} imports, and the
+     * settings of the repository in {@code .vscode/settings.json}: the project of the scenarios about imports.
      */
-    private static final Map<Path, String> IMPORTS_PROJECT = importsProject();
+    private static final Map<Path, String> IMPORTS_PROJECT =
+            importsProject(Map.of(VSCODE_SETTINGS, REPOSITORY_IMPORT_SETTINGS));
+
+    /** The same project, with the preferences of Eclipse instead: another order, the same thresholds. */
+    private static final Map<Path, String> IMPORTS_PROJECT_IN_ECLIPSE =
+            importsProject(Map.of(ECLIPSE_PREFERENCES, ECLIPSE_IMPORT_PREFERENCES));
+
+    /**
+     * {@code Wide} and what it imports, in a project whose settings of VS Code give the order and not the thresholds:
+     * without {@code Untidy}, which does not compile until it is organized, so that the project compiles once {@code
+     * Wide} is.
+     */
+    private static final Map<Path, String> IMPORTS_PROJECT_WITH_AN_ORDER_ONLY =
+            withoutTheUntidyOnes(importsProject(Map.of(VSCODE_SETTINGS, VSCODE_IMPORT_ORDER_ONLY)));
+
+    /** {@code Untidy} alone, in a project with no file that says how it writes its imports. */
+    private static final Map<Path, String> IMPORTS_PROJECT_WITHOUT_SETTINGS = Map.of(UNTIDY, UNTIDY_SOURCE);
+
+    /** {@code Untidy} alone, in a project whose two files give the order and do not agree on it. */
+    private static final Map<Path, String> IMPORTS_PROJECT_WITH_TWO_ORDERS = Map.of(
+            UNTIDY,
+            UNTIDY_SOURCE,
+            ECLIPSE_PREFERENCES,
+            ECLIPSE_IMPORT_ORDER,
+            VSCODE_SETTINGS,
+            VSCODE_IMPORT_ORDER_AGAINST_ECLIPSE);
 
     /** {@code Date}, used without an import, is declared by {@code java.util} and by {@code java.sql}. */
     private static final String TWICE_SOURCE = """
@@ -740,7 +822,7 @@ public final class Scenarios {
      * {@code Untidy}: {@code Set} is removed, {@code ArrayList} and {@code Collections} are added, and the imports come
      * out as the project keeps them (the static imports, a blank line, then one block in ASCII order, {@code java} and
      * {@code javax} and {@code org} not apart), none as a star. jdtls answers one edit, from the first import to the
-     * last, which it settles by two preferences (see {@code JdtlsSettings.javaPreferences}).
+     * last, which it settles by the import settings of the project ({@code .vscode/settings.json}).
      */
     public static final Scenario ORGANIZE_IMPORTS = new Scenario(
             "organize-imports-of-a-file",
@@ -777,6 +859,85 @@ public final class Scenarios {
             IMPORTS_PROJECT,
             new Request.OrganizeImports(WIDE),
             new Answer.AlreadyOrganized());
+
+    /**
+     * {@code Untidy} in a project with no file that says how it writes its imports: jdtls does as it does by default,
+     * which is its own convention and not the repository's. The groups {@code java}, {@code javax}, {@code org} and
+     * {@code com} come in that order with a blank line between two of them (the static imports first), and a hundred
+     * imports of one package would be a star ({@link
+     * #ORGANIZE_IMPORTS_LEAVES_THE_DEFAULTS_OF_JDTLS_FOR_WHAT_A_FILE_DOES_NOT_SET}).
+     */
+    public static final Scenario ORGANIZE_IMPORTS_OF_A_PROJECT_WITHOUT_SETTINGS = new Scenario(
+            "organize-imports-of-a-project-without-settings",
+            IMPORTS_PROJECT_WITHOUT_SETTINGS,
+            new Request.OrganizeImports(UNTIDY),
+            new Answer.Organized(new ChangeSet(List.of(edits(UNTIDY, replace(2, 0, 9, 49, """
+                import static java.util.Map.entry;
+                import static java.util.stream.Collectors.toList;
+
+                import java.io.File;
+                import java.util.ArrayList;
+                import java.util.Collections;
+                import java.util.List;
+                import java.util.Map;
+
+                import javax.swing.JButton;
+
+                import org.w3c.dom.Node;\
+                """))))));
+
+    /**
+     * {@code Untidy} in a project whose Eclipse preferences ({@code .settings/org.eclipse.jdt.ui.prefs}) write {@code
+     * org} first, then the static imports, then the rest in one block: jdtls reads that file for nothing, so the
+     * adapter reads it and gives jdtls the order.
+     */
+    public static final Scenario ORGANIZE_IMPORTS_FOLLOWING_THE_ECLIPSE_PREFERENCES = new Scenario(
+            "organize-imports-following-the-eclipse-preferences",
+            IMPORTS_PROJECT_IN_ECLIPSE,
+            new Request.OrganizeImports(UNTIDY),
+            new Answer.Organized(
+                    new ChangeSet(List.of(edits(UNTIDY, replace(2, 0, 9, 49, UNTIDY_IN_THE_ORDER_OF_ECLIPSE))))));
+
+    /**
+     * {@code Wide} in the same project: the thresholds of the Eclipse preferences ({@code ondemandthreshold} and {@code
+     * staticondemandthreshold}) keep its hundred imports of one package, and of one class, as they are.
+     */
+    public static final Scenario ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS_AS_THE_ECLIPSE_PREFERENCES_SAY = new Scenario(
+            "organize-imports-keeps-explicit-imports-as-the-eclipse-preferences-say",
+            IMPORTS_PROJECT_IN_ECLIPSE,
+            new Request.OrganizeImports(WIDE),
+            new Answer.AlreadyOrganized());
+
+    /**
+     * {@code Untidy} in a project whose Eclipse preferences and settings of VS Code give a different order: the Eclipse
+     * preferences are followed (the daemon also warns of the contradiction, which is not the adapter's answer).
+     */
+    public static final Scenario ORGANIZE_IMPORTS_FOLLOWING_THE_ECLIPSE_PREFERENCES_OVER_THE_SETTINGS_OF_VSCODE =
+            new Scenario(
+                    "organize-imports-following-the-eclipse-preferences-over-the-settings-of-vscode",
+                    IMPORTS_PROJECT_WITH_TWO_ORDERS,
+                    new Request.OrganizeImports(UNTIDY),
+                    new Answer.Organized(new ChangeSet(
+                            List.of(edits(UNTIDY, replace(2, 0, 9, 49, UNTIDY_IN_THE_ORDER_OF_ECLIPSE))))));
+
+    /**
+     * {@code Wide} in a project whose settings of VS Code give the order and no threshold: a setting that no file gives
+     * is left to the default of jdtls, 99, so the hundred imports of one package, and the hundred of one class, are
+     * collapsed into a star each. Replayed after {@link #ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS} on the same jdtls
+     * ({@link #ORGANIZE_IMPORTS_AFTER_A_SETTING_IS_REMOVED}), it shows that jdtls goes back to its default for a setting
+     * it was given: it keeps the value it has when a configuration lacks the key.
+     */
+    public static final Scenario ORGANIZE_IMPORTS_LEAVES_THE_DEFAULTS_OF_JDTLS_FOR_WHAT_A_FILE_DOES_NOT_SET =
+            new Scenario(
+                    "organize-imports-leaves-the-defaults-of-jdtls-for-what-a-file-does-not-set",
+                    IMPORTS_PROJECT_WITH_AN_ORDER_ONLY,
+                    new Request.OrganizeImports(WIDE),
+                    new Answer.Organized(new ChangeSet(List.of(
+                            edits(WIDE, replace(2, 0, 2 + 2 * MANY, "import demo.many.T099;".length(), """
+                                import static demo.many.Constants.*;
+
+                                import demo.many.*;\
+                                """))))));
 
     /**
      * {@code Date}, used without an import: two public packages declare it ({@code java.sql}, {@code java.util}; the
@@ -1681,6 +1842,16 @@ public final class Scenarios {
     public static final Sequel DIAGNOSTICS_AFTER_AN_EDIT =
             new Sequel("diagnostics-after-an-edit", FILE_WITH_AN_ERROR, FILE_WITH_ANOTHER_ERROR);
 
+    /**
+     * The settings of VS Code Java of a project with the thresholds of the repository, then without them: the files are
+     * read again by the next request, with no restart of jdtls, and jdtls is given the default of what the file no
+     * longer says.
+     */
+    public static final Sequel ORGANIZE_IMPORTS_AFTER_A_SETTING_IS_REMOVED = new Sequel(
+            "organize-imports-after-a-setting-is-removed",
+            ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS,
+            ORGANIZE_IMPORTS_LEAVES_THE_DEFAULTS_OF_JDTLS_FOR_WHAT_A_FILE_DOES_NOT_SET);
+
     private Scenarios() {}
 
     /**
@@ -1718,6 +1889,11 @@ public final class Scenarios {
                 ORGANIZE_IMPORTS,
                 ORGANIZE_IMPORTS_IN_ORDER,
                 ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS,
+                ORGANIZE_IMPORTS_OF_A_PROJECT_WITHOUT_SETTINGS,
+                ORGANIZE_IMPORTS_FOLLOWING_THE_ECLIPSE_PREFERENCES,
+                ORGANIZE_IMPORTS_KEEPS_EXPLICIT_IMPORTS_AS_THE_ECLIPSE_PREFERENCES_SAY,
+                ORGANIZE_IMPORTS_FOLLOWING_THE_ECLIPSE_PREFERENCES_OVER_THE_SETTINGS_OF_VSCODE,
+                ORGANIZE_IMPORTS_LEAVES_THE_DEFAULTS_OF_JDTLS_FOR_WHAT_A_FILE_DOES_NOT_SET,
                 ORGANIZE_IMPORTS_OF_A_TYPE_TWO_PACKAGES_DECLARE,
                 ORGANIZE_IMPORTS_OF_A_TYPE_A_JDK_INTERNAL_CLASS_ALSO_DECLARES,
                 ORGANIZE_IMPORTS_REMOVES_AN_UNUSED_IMPORT_OF_A_CLASS_THAT_DOES_NOT_EXIST,
@@ -1803,6 +1979,7 @@ public final class Scenarios {
         return List.of(
                 RENAME_AFTER_A_RENAME,
                 DIAGNOSTICS_AFTER_AN_EDIT,
+                ORGANIZE_IMPORTS_AFTER_A_SETTING_IS_REMOVED,
                 PackageRenameScenarios.RENAME_A_PACKAGE_THEN_THE_SAME_PACKAGE_OF_THE_TESTS);
     }
 
@@ -1815,9 +1992,12 @@ public final class Scenarios {
         return files;
     }
 
-    /** The project of the scenarios about imports: {@code Wide}'s types and constants are generated, not typed. */
-    private static Map<Path, String> importsProject() {
-        Map<Path, String> files = new HashMap<>();
+    /**
+     * The project of the scenarios about imports, with the files that say how it writes them: {@code Wide}'s types and
+     * constants are generated, not typed.
+     */
+    private static Map<Path, String> importsProject(Map<Path, String> settings) {
+        Map<Path, String> files = new HashMap<>(settings);
         files.put(UNTIDY, UNTIDY_SOURCE);
         files.put(TIDY, TIDY_SOURCE);
         files.put(WIDE, wideSource());
@@ -1828,6 +2008,14 @@ public final class Scenarios {
                     "package demo.many;\n\npublic class " + type + " {}\n");
         }
         files.put(Path.of("src/main/java/demo/many/Constants.java"), constantsSource());
+
+        return files;
+    }
+
+    private static Map<Path, String> withoutTheUntidyOnes(Map<Path, String> project) {
+        Map<Path, String> files = new HashMap<>(project);
+        files.remove(UNTIDY);
+        files.remove(TIDY);
 
         return files;
     }

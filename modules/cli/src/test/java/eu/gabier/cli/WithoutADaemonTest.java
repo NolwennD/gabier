@@ -21,8 +21,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 class WithoutADaemonTest extends CliTest {
 
     private static final String STATUS = JsonRpc.success("1", """
-        {"version":"0.1","pid":1,"uptimeMillis":0,"project":"/p","jdtls":"not-started"}\
-        """);
+        {"version":"0.1","pid":1,"uptimeMillis":0,"project":"/p","jdtls":"not-started","imports":%s}\
+        """.formatted(CliFixtures.IMPORTS));
 
     /** The run must come back: a client that waits for a daemon that is not there hangs the shell of the user. */
     private int runWithoutHanging(Map<String, String> environment, String... args) throws Exception {

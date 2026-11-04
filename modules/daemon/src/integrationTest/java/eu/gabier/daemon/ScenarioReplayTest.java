@@ -66,12 +66,13 @@ class ScenarioReplayTest {
     private static final Duration TIMEOUT = Duration.ofMinutes(5);
 
     /**
-     * The organizations that remove an import the file still uses by its simple name (here, an import of the package
-     * the class is now in): the adapter asks the diagnostics for them, which costs the wait for jdtls to be quiet, so
-     * the time they take is not the one of a file that loses no code.
+     * The organizations that remove an import the file still uses by its simple name (an import of the package the
+     * class is now in, or the hundred imports that a star replaces): the adapter asks the diagnostics for them, which
+     * costs the wait for jdtls to be quiet, so the time they take is not the one of a file that loses no code.
      */
-    private static final Set<String> WAITING_FOR_THE_DIAGNOSTICS =
-            Set.of(PackageRenameScenarios.ORGANIZE_IMPORTS_AFTER_RENAMING_A_PACKAGE_IN_BOTH_SOURCE_SETS.name());
+    private static final Set<String> WAITING_FOR_THE_DIAGNOSTICS = Set.of(
+            PackageRenameScenarios.ORGANIZE_IMPORTS_AFTER_RENAMING_A_PACKAGE_IN_BOTH_SOURCE_SETS.name(),
+            Scenarios.ORGANIZE_IMPORTS_LEAVES_THE_DEFAULTS_OF_JDTLS_FOR_WHAT_A_FILE_DOES_NOT_SET.name());
 
     private static final Pattern MODULE = Pattern.compile("\\bmodule\\s+([\\w.]+)");
 
@@ -200,9 +201,18 @@ class ScenarioReplayTest {
         }
     }
 
-    /** The sources of the project, or of the projects, by path, as they are on disk. */
+    /**
+     * The sources of the project, or of the projects, and the files that say how it writes its imports, by path, as
+     * they are on disk.
+     */
     private static Map<Path, String> sources(Path root) throws IOException {
         Map<Path, String> found = new TreeMap<>();
+        for (Path settings :
+                List.of(root.resolve(".vscode/settings.json"), root.resolve(".settings/org.eclipse.jdt.ui.prefs"))) {
+            if (Files.isRegularFile(settings)) {
+                found.put(settings, Files.readString(settings));
+            }
+        }
         for (Path folder : Effect.sourceFolders(root)) {
             try (var files = Files.walk(folder)) {
                 for (Path file : files.filter(Files::isRegularFile).toList()) {

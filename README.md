@@ -138,7 +138,7 @@ the usage, an example and the refusals of each one.
 - [`gabier diagnostics <file>`](docs/commands/diagnostics.md): the errors and warnings of a Java file, without a build.
 - [`gabier rename`](docs/commands/rename.md): rename a symbol, and everything that refers to it, in every file.
 - [`gabier organize-imports <file>`](docs/commands/organize-imports.md): add the missing imports, remove the unused
-  ones and order the rest, never with a star import.
+  ones and order the rest as the project does (its `.settings` or `.vscode` preferences).
 - [`gabier cleanup <file> <cleanup>...`](docs/commands/cleanup.md): apply clean-ups of jdtls to a file, such as
   `stringConcatToTextBlock`, which rewrites string concatenations into text blocks.
 - [`gabier extract-variable`](docs/commands/extract-variable.md): turn an expression into a local variable.

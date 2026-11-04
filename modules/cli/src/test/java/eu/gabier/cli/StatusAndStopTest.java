@@ -16,8 +16,15 @@ class StatusAndStopTest extends CliTest {
 
     private static final String STATUS_REQUEST = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"status\"}";
     private static final String STATUS_JSON = """
-        {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"starting"}\
-        """;
+        {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"starting","imports":%s}\
+        """.formatted(CliFixtures.IMPORTS);
+    private static final String IMPORT_LINES = String.join(
+            System.lineSeparator(),
+            "imports:",
+            "  java.completion.importOrder = [\"java\", \"javax\", \"org\", \"com\"] (default of jdtls)",
+            "  java.sources.organizeImports.starThreshold = 99 (default of jdtls)",
+            "  java.sources.organizeImports.staticStarThreshold = 99 (default of jdtls)",
+            "");
 
     @Nested
     class Status {
@@ -29,23 +36,59 @@ class StatusAndStopTest extends CliTest {
 
                 assertThat(out())
                         .isEqualTo("gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls starting"
-                                + System.lineSeparator());
+                                + System.lineSeparator() + IMPORT_LINES);
                 assertThat(err()).isEmpty();
                 assertThat(daemon.requests()).containsExactly(STATUS_REQUEST);
             }
         }
 
         @Test
+        void saysWhichFileEachImportSettingComesFrom() throws IOException {
+            var status = """
+                {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"ready","imports":\
+                {"importOrder":{"value":["#",""],"source":".vscode"},\
+                "starThreshold":{"value":2147483647,"source":".settings"},\
+                "staticStarThreshold":{"value":99,"source":"default"}}}\
+                """;
+            try (var daemon = daemonAnswering(status)) {
+                assertThat(runWithSocket("status")).isZero();
+
+                assertThat(out().lines())
+                        .containsExactly(
+                                "gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls ready",
+                                "imports:",
+                                "  java.completion.importOrder = [\"#\", \"\"] (.vscode)",
+                                "  java.sources.organizeImports.starThreshold = 2147483647 (.settings)",
+                                "  java.sources.organizeImports.staticStarThreshold = 99 (default of jdtls)");
+            }
+        }
+
+        @Test
+        void showsTheImportOrderOfTheProjectWithItsControlCharactersEscaped() throws IOException {
+            var status = """
+                {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"ready","imports":\
+                {"importOrder":{"value":["a\\u001b[2Jb"],"source":".vscode"},\
+                "starThreshold":{"value":99,"source":"default"},\
+                "staticStarThreshold":{"value":99,"source":"default"}}}\
+                """;
+            try (var daemon = daemonAnswering(status)) {
+                assertThat(runWithSocket("status")).isZero();
+
+                assertThat(out()).contains("[\"a\\\\u001b[2Jb\"] (.vscode)").doesNotContain("\u001b");
+            }
+        }
+
+        @Test
         void showsTheProjectWithItsControlCharactersEscaped() throws IOException {
             var status = """
-                {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/\\u001b[2Jdemo","jdtls":"ready"}\
-                """;
+                {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/\\u001b[2Jdemo","jdtls":"ready","imports":%s}\
+                """.formatted(CliFixtures.IMPORTS);
             try (var daemon = daemonAnswering(status)) {
                 assertThat(runWithSocket("status")).isZero();
 
                 assertThat(out())
                         .isEqualTo("gabier-daemon 0.1, pid 4242, up 65s, project /work/\\u001b[2Jdemo, jdtls ready"
-                                + System.lineSeparator());
+                                + System.lineSeparator() + IMPORT_LINES);
             }
         }
 
@@ -53,14 +96,15 @@ class StatusAndStopTest extends CliTest {
         void saysWhyJdtlsFailedWhenTheDaemonKnows() throws IOException {
             var status = """
                 {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"failed",\
-                "jdtlsFailure":"jdtls exited with code 137 after it was ready"}\
-                """;
+                "imports":%s,"jdtlsFailure":"jdtls exited with code 137 after it was ready"}\
+                """.formatted(CliFixtures.IMPORTS);
             try (var daemon = daemonAnswering(status)) {
                 assertThat(runWithSocket("status")).isZero();
 
                 assertThat(out())
                         .isEqualTo("gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls failed"
-                                + " (jdtls exited with code 137 after it was ready)" + System.lineSeparator());
+                                + " (jdtls exited with code 137 after it was ready)" + System.lineSeparator()
+                                + IMPORT_LINES);
             }
         }
 
@@ -68,14 +112,14 @@ class StatusAndStopTest extends CliTest {
         void showsTheReasonOfJdtlsWithItsControlCharactersEscaped() throws IOException {
             var status = """
                 {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"failed",\
-                "jdtlsFailure":"red\\u001b[2Jgone \\\\ back"}\
-                """;
+                "imports":%s,"jdtlsFailure":"red\\u001b[2Jgone \\\\ back"}\
+                """.formatted(CliFixtures.IMPORTS);
             try (var daemon = daemonAnswering(status)) {
                 assertThat(runWithSocket("status")).isZero();
 
                 assertThat(out())
                         .isEqualTo("gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls failed"
-                                + " (red\\u001b[2Jgone \\\\ back)" + System.lineSeparator());
+                                + " (red\\u001b[2Jgone \\\\ back)" + System.lineSeparator() + IMPORT_LINES);
             }
         }
 
@@ -83,8 +127,8 @@ class StatusAndStopTest extends CliTest {
         void givesTheReasonOfJdtlsExactlyAsJsonWithTheJsonOption() throws IOException {
             var status = """
                 {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"failed",\
-                "jdtlsFailure":"red\\u001b[2Jgone \\\\ back"}\
-                """;
+                "imports":%s,"jdtlsFailure":"red\\u001b[2Jgone \\\\ back"}\
+                """.formatted(CliFixtures.IMPORTS);
             try (var daemon = daemonAnswering(status)) {
                 assertThat(runWithSocket("--json", "status")).isZero();
 
@@ -95,14 +139,14 @@ class StatusAndStopTest extends CliTest {
         @Test
         void showsAHostileVersionWithItsControlCharactersEscaped() throws IOException {
             var status = """
-                {"version":"\\u001b[2J\\u3164","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"ready"}\
-                """;
+                {"version":"\\u001b[2J\\u3164","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"ready","imports":%s}\
+                """.formatted(CliFixtures.IMPORTS);
             try (var daemon = daemonAnswering(status)) {
                 assertThat(runWithSocket("status")).isZero();
 
                 assertThat(out())
                         .isEqualTo("gabier-daemon \\u001b[2J\\u3164, pid 4242, up 65s, project /work/demo, jdtls ready"
-                                + System.lineSeparator());
+                                + System.lineSeparator() + IMPORT_LINES);
             }
         }
 

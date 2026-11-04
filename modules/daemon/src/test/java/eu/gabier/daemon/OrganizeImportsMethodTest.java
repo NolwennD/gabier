@@ -36,7 +36,7 @@ class OrganizeImportsMethodTest {
         var organize = new OrganizeImports(new FakeJavaLanguageServer(project).scripted(scenario), new NioFileStore());
         untidySource = project.resolve(UNTIDY);
 
-        return new RequestHandler(List.of(new OrganizeImportsMethod(organize)));
+        return new RequestHandler(List.of(new OrganizeImportsMethod(organize, project)));
     }
 
     private static String line(String params) {
@@ -61,8 +61,8 @@ class OrganizeImportsMethodTest {
 
     @Test
     void isNamedAndTakesTheFileAndTheDryRun() throws IOException {
-        var method =
-                new OrganizeImportsMethod(new OrganizeImports(new FakeJavaLanguageServer(project), new NioFileStore()));
+        var method = new OrganizeImportsMethod(
+                new OrganizeImports(new FakeJavaLanguageServer(project), new NioFileStore()), project);
 
         assertThat(method.name()).isEqualTo("organize-imports");
         assertThat(method.parameters()).containsExactlyInAnyOrder("file", "dryRun");
@@ -108,6 +108,44 @@ class OrganizeImportsMethodTest {
 
         assertThat(answer).isEqualTo(new ChangedFiles(List.of(), List.of(), List.of(), List.of(), ""));
         assertThat(Files.readString(tidy)).isEqualTo(text);
+    }
+
+    @Test
+    void warnsWhenTheFilesOfTheProjectDisagreeOnTheOrderOfTheImportsAndStillOrganizes() throws IOException {
+        var handler = handler(Scenarios.ORGANIZE_IMPORTS);
+        Files.createDirectories(project.resolve(".settings"));
+        Files.createDirectories(project.resolve(".vscode"));
+        Files.writeString(
+                project.resolve(".settings/org.eclipse.jdt.ui.prefs"), "org.eclipse.jdt.ui.importorder=\\#;java\n");
+        Files.writeString(project.resolve(".vscode/settings.json"), "{\"java.completion.importOrder\": [\"java\"]}");
+
+        var answer = changed(handler.handle(organize(untidySource, "false")));
+
+        assertThat(answer.warnings())
+                .containsExactly("java.completion.importOrder is [\"#\", \"java\"] in "
+                        + ".settings/org.eclipse.jdt.ui.prefs and [\"java\"] in .vscode/settings.json:"
+                        + " following .settings/org.eclipse.jdt.ui.prefs");
+        assertThat(answer.modified()).containsExactly(untidySource);
+    }
+
+    @Test
+    void warnsOfAFileOfTheProjectItIgnoredEvenWhenThereIsNothingToChange() throws IOException {
+        var handler = handler(Scenarios.ORGANIZE_IMPORTS_IN_ORDER);
+        Files.createDirectories(project.resolve(".vscode"));
+        Files.writeString(project.resolve(".vscode/settings.json"), "not json");
+
+        var answer = changed(handler.handle(organize(project.resolve(TIDY), "false")));
+
+        assertThat(answer.modified()).isEmpty();
+        assertThat(answer.warnings()).hasSize(1).first().asString().startsWith("ignored .vscode/settings.json: ");
+    }
+
+    @Test
+    void warnsOfNothingWhenTheFilesAgree() throws IOException {
+        var handler = handler(Scenarios.ORGANIZE_IMPORTS);
+
+        assertThat(changed(handler.handle(organize(untidySource, "true"))).warnings())
+                .isEmpty();
     }
 
     @Test

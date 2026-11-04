@@ -19,6 +19,23 @@ class DaemonStatusTest {
     private static final DaemonStatus STATUS =
             new DaemonStatus("0.1", 4242, Duration.ofMillis(65_432), Path.of("/work/demo"), JdtlsState.READY);
 
+    private static final String DEFAULT_IMPORTS_JSON = """
+        {"importOrder":{"value":["java","javax","org","com"],"source":"default"},\
+        "starThreshold":{"value":99,"source":"default"},\
+        "staticStarThreshold":{"value":99,"source":"default"}}\
+        """;
+
+    private static Map<String, Object> setting(Object value) {
+        return Map.of("value", value, "source", "default");
+    }
+
+    private static Map<String, Object> defaultImports() {
+        return Map.of(
+                "importOrder", setting(List.of("java", "javax", "org", "com")),
+                "starThreshold", setting(new BigDecimal("99")),
+                "staticStarThreshold", setting(new BigDecimal("99")));
+    }
+
     private static Map<String, Object> result() {
         var result = new HashMap<String, Object>();
         result.put("version", "0.1");
@@ -26,6 +43,7 @@ class DaemonStatusTest {
         result.put("uptimeMillis", new BigDecimal("65432"));
         result.put("project", "/work/demo");
         result.put("jdtls", "ready");
+        result.put("imports", defaultImports());
 
         return result;
     }
@@ -47,9 +65,39 @@ class DaemonStatusTest {
     @Test
     void isWrittenAsTheResultOfTheStatusMethod() {
         assertThat(STATUS.toJson()).isEqualTo("""
-            {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"ready"}\
-            """);
+            {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"ready",\
+            "imports":%s}\
+            """.formatted(DEFAULT_IMPORTS_JSON));
         StrictJson.parse(STATUS.toJson());
+    }
+
+    @Test
+    void saysWhichImportSettingsTheProjectFollowsAndWhereTheyComeFrom() {
+        var imports = new ImportSettings(
+                new ImportSettings.Setting<>(List.of("#", ""), ImportSettings.Source.VSCODE),
+                new ImportSettings.Setting<>(7, ImportSettings.Source.SETTINGS),
+                ImportSettings.DEFAULTS.staticStarThreshold());
+        var status = new DaemonStatus(
+                "0.1",
+                4242,
+                Duration.ofMillis(65_432),
+                Path.of("/work/demo"),
+                JdtlsState.READY,
+                Optional.empty(),
+                imports);
+        var result = ((RpcResponse.Success) RpcResponse.parse(JsonRpc.success("1", status.toJson()))).result();
+
+        assertThat(status.imports()).isEqualTo(imports);
+        assertThat(STATUS.imports()).isEqualTo(ImportSettings.DEFAULTS);
+        assertThat(status.toJson()).contains("\"imports\":" + imports.toJson());
+        assertThat(DaemonStatus.of(result)).isEqualTo(status);
+    }
+
+    @Test
+    void refusesMissingImportSettings() {
+        assertThatExceptionOfType(MissingMandatoryValueException.class)
+                .isThrownBy(() -> new DaemonStatus(
+                        "0.1", 1, Duration.ZERO, Path.of("/p"), JdtlsState.READY, Optional.empty(), null));
     }
 
     @Test
@@ -88,8 +136,8 @@ class DaemonStatusTest {
 
         assertThat(failed.toJson()).isEqualTo("""
             {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"failed",\
-            "jdtlsFailure":"jdtls exited with code 137"}\
-            """);
+            "imports":%s,"jdtlsFailure":"jdtls exited with code 137"}\
+            """.formatted(DEFAULT_IMPORTS_JSON));
         StrictJson.parse(failed.toJson());
         assertThat(STATUS.jdtlsFailure()).isEmpty();
         assertThat(STATUS.toJson()).doesNotContain("jdtlsFailure");
@@ -137,7 +185,9 @@ class DaemonStatusTest {
                 resultWithout("project"),
                 result("project", 3),
                 resultWithout("jdtls"),
-                result("jdtls", "asleep"));
+                result("jdtls", "asleep"),
+                resultWithout("imports"),
+                result("imports", "none"));
 
         for (var result : results) {
             assertThatExceptionOfType(InvalidResponseException.class).isThrownBy(() -> DaemonStatus.of(result));

@@ -49,6 +49,7 @@ class SequelsTest {
                 .containsExactly(
                         "rename-after-a-rename",
                         "diagnostics-after-an-edit",
+                        "organize-imports-after-a-setting-is-removed",
                         "rename-a-package-then-the-same-package-of-the-tests");
     }
 
@@ -96,6 +97,37 @@ class SequelsTest {
                 assertThat(sequel.second().files()).containsEntry(path, text);
             }
         });
+    }
+
+    @Test
+    void changesOnlyTheSettingsOfVsCodeAndDropsTheFilesTheSecondOrganizationDoesNotNeed() {
+        Sequel sequel = named("organize-imports-after-a-setting-is-removed");
+        Path settings = Path.of(".vscode/settings.json");
+
+        assertThat(sequel.second().request()).isEqualTo(sequel.first().request());
+        assertThat(sequel.first().files().keySet())
+                .containsAll(sequel.second().files().keySet());
+        sequel.second().files().forEach((path, text) -> {
+            if (path.equals(settings)) {
+                assertThat(sequel.first().files().get(path)).isNotEqualTo(text);
+            } else {
+                assertThat(sequel.first().files()).containsEntry(path, text);
+            }
+        });
+    }
+
+    @Test
+    void asksTheSecondOrganizationAfterTheThresholdsLeftTheSettingsOfVsCode() {
+        Sequel sequel = named("organize-imports-after-a-setting-is-removed");
+        Path settings = Path.of(".vscode/settings.json");
+
+        assertThat(sequel.first().files().get(settings))
+                .contains("starThreshold", "staticStarThreshold", "importOrder");
+        assertThat(sequel.second().files().get(settings))
+                .contains("importOrder")
+                .doesNotContain("starThreshold", "staticStarThreshold");
+        assertThat(sequel.first().answer()).isInstanceOf(Answer.AlreadyOrganized.class);
+        assertThat(sequel.second().answer()).isInstanceOf(Answer.Organized.class);
     }
 
     @Test

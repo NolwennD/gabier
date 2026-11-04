@@ -45,34 +45,19 @@ class JdtlsSettingsTest {
 
     @Test
     void holdsThePreferencesJdtlsIsStartedWith() {
-        // The Checkstyle of the project bans star imports; its formatter keeps the static imports first, then one
-        // block of all the others, in ASCII order. "#" is the group of the static imports, "" the one of everything
-        // else. jdtls writes /** Name */ above the type of a file it creates with its default type comment, and an
-        // empty
+        // jdtls writes /** Name */ above the type of a file it creates with its default type comment, and an empty
         // setting means "the default": a type comment of white space only is judged empty when the template is
         // evaluated, so the type has none. (java.templates.fileHeader is empty by default: no header.)
         // A search for references answers the places of the symbol and no more: java.references.includeAccessors is
-        // true
-        // by default, which adds the calls of the getter, the setter and the builder of a field to its references, and
-        // java.references.includeDecompiledSources (true) is about class files, which gabier never receives.
+        // true by default, which adds the calls of the getter, the setter and the builder of a field to its
+        // references, and java.references.includeDecompiledSources (true) is about class files, which gabier never
+        // receives. Nothing about the imports order or thresholds: the project says them (JdtlsSettings.imports).
         assertThat(JdtlsSettings.javaPreferences())
                 .isEqualTo(Map.of(
                         "java",
                         Map.of(
-                                "sources",
-                                Map.of(
-                                        "organizeImports",
-                                        Map.of(
-                                                "starThreshold",
-                                                Integer.MAX_VALUE,
-                                                "staticStarThreshold",
-                                                Integer.MAX_VALUE)),
                                 "completion",
-                                Map.of(
-                                        "importOrder",
-                                        List.of("#", ""),
-                                        "filteredTypes",
-                                        List.of("com.sun.*", "sun.*", "jdk.*")),
+                                Map.of("filteredTypes", List.of("com.sun.*", "sun.*", "jdk.*")),
                                 "templates",
                                 Map.of("typeComment", List.of(" ")),
                                 "references",
@@ -89,9 +74,9 @@ class JdtlsSettingsTest {
         assertThat(JdtlsSettings.withCleanUps(List.of("stringConcatToTextBlock", "addOverride")))
                 .extractingByKey("java", as(InstanceOfAssertFactories.MAP))
                 .containsEntry("cleanup", Map.of("actions", List.of("stringConcatToTextBlock", "addOverride")))
-                .containsKeys("sources", "completion", "templates", "references")
-                .hasSize(5);
-        started.hasSize(4).doesNotContainKey("cleanup");
+                .containsKeys("completion", "templates", "references")
+                .hasSize(4);
+        started.hasSize(3).doesNotContainKey("cleanup");
     }
 
     @Test

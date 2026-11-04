@@ -13,6 +13,7 @@ import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FileDiagnostics.Diagnosis;
 import eu.gabier.protocol.FileDiagnostics.Severity;
+import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.ProtocolVersion;
 import eu.gabier.protocol.RpcResponse;
@@ -342,6 +343,32 @@ class DaemonServerTest {
                                 directory,
                                 JdtlsState.READY));
             }
+        }
+
+        @Test
+        void statusSaysWhichImportSettingsTheProjectFollowsReadFromItsFilesAtTheTimeOfTheCall() throws IOException {
+            serving();
+
+            try (var client = connect(socket())) {
+                assertThat(imports(client)).isEqualTo(ImportSettings.DEFAULTS);
+
+                Files.createDirectories(directory.resolve(".vscode"));
+                Files.writeString(directory.resolve(".vscode/settings.json"), """
+                    {"java.completion.importOrder": ["#", ""], "java.sources.organizeImports.starThreshold": 7}
+                    """);
+
+                assertThat(imports(client))
+                        .isEqualTo(new ImportSettings(
+                                new ImportSettings.Setting<>(List.of("#", ""), ImportSettings.Source.VSCODE),
+                                new ImportSettings.Setting<>(7, ImportSettings.Source.VSCODE),
+                                ImportSettings.DEFAULTS.staticStarThreshold()));
+            }
+        }
+
+        private static ImportSettings imports(Client client) throws IOException {
+            var answer = RpcResponse.parse(client.ask(STATUS_REQUEST));
+
+            return DaemonStatus.of(((RpcResponse.Success) answer).result()).imports();
         }
 
         @Test

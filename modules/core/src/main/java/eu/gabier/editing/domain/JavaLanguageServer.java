@@ -170,8 +170,8 @@ public interface JavaLanguageServer {
 
     /**
      * What organizing the imports of a file changes: the missing imports are added, the unused ones removed, and the
-     * rest ordered as the server is configured to (for gabier, as the project keeps them, with no import collapsed into
-     * a star). Only the file itself is edited.
+     * rest ordered as the server is configured to (for gabier, as the project says it in its import settings, which
+     * the adapter gives the server). Only the file itself is edited.
      *
      * @return the change set to apply, none when the imports are already as they should be
      * @throws LanguageServerException if the server is not ready or the file is not a file of its project (outside it, missing or a folder)

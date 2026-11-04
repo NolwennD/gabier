@@ -1,5 +1,6 @@
 package eu.gabier.daemon;
 
+import eu.gabier.protocol.ImportSettings;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
@@ -43,19 +44,11 @@ record JdtlsSettings(
 
     /**
      * The {@code java.*} preferences jdtls is initialized with ({@code initializationOptions.settings}, in the nested
-     * form of the JSON settings). They are the ones that decide what the organization of the imports writes (Eclipse JDT
-     * LS, {@code Preferences}; the descriptions are those of the {@code vscode-java} settings):
+     * form of the JSON settings). They are the ones that decide what jdtls writes (Eclipse JDT LS, {@code Preferences};
+     * the descriptions are those of the {@code vscode-java} settings). The ones that decide what the organization of
+     * the imports writes are not among them: gabier has none of its own, it follows the project ({@link #imports}).
      *
      * <ul>
-     *   <li>{@code java.sources.organizeImports.starThreshold} and {@code staticStarThreshold}: the number of imports of
-     *       one package (or of one type, for the static ones) from which jdtls writes {@code import p.*;} instead. The
-     *       default is 99, which is not "never"; the project bans star imports (Checkstyle {@code AvoidStarImport}), so
-     *       both are the largest {@code int};
-     *   <li>{@code java.completion.importOrder}: the groups of imports, in order, a group being a package prefix, {@code
-     *       "#"} the static imports and {@code ""} every import that no other group takes. The default ({@code java},
-     *       {@code javax}, {@code org}, {@code com}) puts a blank line between the groups; the project keeps the static
-     *       imports first, a blank line, then one block of all the others in ASCII order (open-java-format), which is
-     *       {@code "#"} then {@code ""};
      *   <li>{@code java.completion.filteredTypes}: the types jdtls never offers, where the organization of the imports
      *       looks for the type a name stands for: a type of a package that matches is not a candidate. The default
      *       (Eclipse JDT LS, {@code Preferences.JAVA_COMPLETION_FILTERED_TYPES_DEFAULT}: {@code com.sun.*}, {@code
@@ -85,13 +78,40 @@ record JdtlsSettings(
         return Map.of("java", javaSection());
     }
 
-    private static Map<String, Object> javaSection() {
-        Map<String, Object> thresholds =
-                Map.of("starThreshold", Integer.MAX_VALUE, "staticStarThreshold", Integer.MAX_VALUE);
-
+    /**
+     * The settings of the imports of the project, as jdtls takes them from its client: {@code
+     * java.completion.importOrder}, {@code java.sources.organizeImports.starThreshold} and {@code staticStarThreshold}
+     * (see {@link ImportPreferences} for where they come from). A configuration that lacks one of them leaves jdtls the
+     * value it has (checked on the real jdtls: {@code Preferences.update} reads a key only when it is there, and an empty
+     * order is no way back to the default), so all three are sent each time, and a setting that no file sets any more is
+     * sent with the default of jdtls.
+     *
+     * <p>jdtls reads neither the preferences of Eclipse of the project nor the settings of VS Code for the imports: it
+     * keeps them in the scopes of its own bundle, from what the client sends, and uses the files {@code
+     * org.eclipse.jdt.ui.prefs} only for the clean-ups of the save actions, which the client does not ask for (see
+     * {@link JdtlsCapabilities#extended}). {@code java.settings.url} feeds the options of the compiler and of the
+     * formatter, not the imports.
+     */
+    static Map<String, Object> imports(ImportSettings settings) {
         return Map.of(
-                "sources", Map.of("organizeImports", thresholds),
-                "completion", Map.of("importOrder", List.of("#", ""), "filteredTypes", FILTERED_TYPES),
+                "java",
+                Map.of(
+                        "completion",
+                                Map.of("importOrder", settings.importOrder().value()),
+                        "sources",
+                                Map.of(
+                                        "organizeImports",
+                                        Map.of(
+                                                "starThreshold",
+                                                        settings.starThreshold().value(),
+                                                "staticStarThreshold",
+                                                        settings.staticStarThreshold()
+                                                                .value()))));
+    }
+
+    private static Map<String, Object> javaSection() {
+        return Map.of(
+                "completion", Map.of("filteredTypes", FILTERED_TYPES),
                 "templates", Map.of("typeComment", List.of(" ")),
                 "references", Map.of("includeAccessors", false, "includeDecompiledSources", false));
     }

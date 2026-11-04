@@ -6,11 +6,21 @@ in parentheses (`jdtls failed (jdtls is not running any more: it exited with cod
 control characters written as escapes like in the text of `gabier diagnostics`, and `--json` has it exactly, as the
 member `jdtlsFailure`, which is absent otherwise. It never starts jdtls.
 
+It also shows **the import settings the project follows** (see [organize-imports](organize-imports.md)): for each of the
+three settings of jdtls that decide what `organize-imports` writes, its value and where it comes from, `.settings`
+(`.settings/org.eclipse.jdt.ui.prefs`), `.vscode` (`.vscode/settings.json`) or `default of jdtls` when no file sets it.
+The files are read when `status` is asked, not when the daemon started, so a file edited a moment ago is already in it;
+with `--json` they are the member `imports`, each setting an object with its `value` and its `source`.
+
 ```text
 $ gabier status
 gabier-daemon 0.1.0, pid 4242, up 65s, project /work/demo, jdtls not-started
+imports:
+  java.completion.importOrder = ["#", ""] (.vscode)
+  java.sources.organizeImports.starThreshold = 2147483647 (.vscode)
+  java.sources.organizeImports.staticStarThreshold = 99 (default of jdtls)
 $ gabier --json status
-{"version":"0.1.0","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"not-started"}
+{"version":"0.1.0","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"not-started","imports":{"importOrder":{"value":["#",""],"source":".vscode"},"starThreshold":{"value":2147483647,"source":".vscode"},"staticStarThreshold":{"value":99,"source":"default"}}}
 $ gabier stop
 gabier-daemon stopped
 $ gabier status
