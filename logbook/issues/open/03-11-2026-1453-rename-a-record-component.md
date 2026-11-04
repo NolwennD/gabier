@@ -24,5 +24,9 @@ Done when:
   call of the accessor is declined by `prepareRename`; with an explicit accessor (`public String label() {...}`) jdtls
   renames the accessor as a getter (`label()` becomes `getCaption()`, seen 04-11-2026) and gabier says nothing of it.
   They point to the upstream issue;
+- the two observations of a record with no compact constructor are put side by side first, on the same jdtls: the worker
+  of `d414620` (pull request 12, closed) saw the uses by simple name left in the body, the worker of
+  `a-guide-says-which-problem-each-improvement-solves` saw a plain record, and one with an extra constructor, renamed
+  fully; the shape that leaves them is found (an explicit canonical constructor and a compact one fail with -32603);
 - the partial rename has no replay (`Effect` compiles the result, which does not compile): the `## Resolution` says so;
 - `bin/ci` passes.
