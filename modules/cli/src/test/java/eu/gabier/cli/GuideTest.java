@@ -13,6 +13,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * The guide is the page {@code docs/improve.md}, copied by the build into the resources of the cli: what it holds is
@@ -54,6 +55,21 @@ class GuideTest {
         assertThat(section.lines().filter(line -> line.startsWith("Limits: ")))
                 .as("the limits of %s", title)
                 .hasSize(1);
+    }
+
+    @ParameterizedTest
+    @MethodSource("sections")
+    void theWordsOfASectionAreOneLineBecauseTheRankingReadsNoOther(String section) {
+        var title = section.lines().findFirst().orElseThrow();
+        var lines = section.lines().toList();
+        var words = lines.stream()
+                .filter(line -> line.startsWith("Words: "))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(lines.get(lines.indexOf(words) + 1))
+                .as("the line after the words of %s", title)
+                .isEmpty();
     }
 
     @ParameterizedTest
@@ -102,6 +118,16 @@ class GuideTest {
                 .contains("### The package of one source set");
         assertThat(text.indexOf("### A concatenation that is not only literals"))
                 .isLessThan(text.indexOf("### A string built from literals with `+` and line breaks"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"rename", "organize-imports", "move", "references", "diagnostics", "create", "actions"})
+    void everyCommandAskedForByItsTaskHasASectionThatAsksForIt(String command) {
+        assertThat(sections())
+                .as("a section whose Ask: line names gabier %s", command)
+                .anySatisfy(section -> assertThat(section.lines())
+                        .anyMatch(line -> line.startsWith("Ask: `gabier " + command + " ")
+                                || line.startsWith("Ask: `gabier " + command + "`")));
     }
 
     @Test

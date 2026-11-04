@@ -167,7 +167,7 @@ level or later; `gabier diagnostics` shows the errors if it is not.
 
 ### A string built from literals with `+` and line breaks
 
-Words: turn a string concatenation into a text block, multi-line string, concatenation of literals, escaped quotes
+Words: string concatenation into a text block, make a text block, use a text block, multi-line string, escaped quotes
 
 Ask: `gabier cleanup --dry-run <file> stringConcatToTextBlock`
 
@@ -854,7 +854,7 @@ Limits: see "What jdtls does not offer".
 
 ### Conditions to join or to split
 
-Words: join conditions, split conditions, merge nested ifs, if and and, if or or, if else chain to switch
+Words: join conditions, combine two ifs, split conditions, merge nested ifs, if and and, if or or, if else to switch
 
 By hand: `if (a) { if (b) { x(); } }` is `if (a && b) { x(); }`, and the reverse; an `if` / `else if` chain on one
 value is a `switch` (`useSwitchForInstanceofPattern` does it for a chain of `instanceof` tests only).
@@ -871,6 +871,159 @@ By hand: remove the `else` and its braces, move the block after the `if`.
 Limits: jdtls has a fix for it, but only as a compiler problem (`unnecessaryElse`), and the compiler preference that
 turns the problem on is off by default, so `gabier diagnostics` does not report it and `gabier actions` does not list a
 fix.
+
+## The commands for a task you can name
+
+These tasks are not an improvement of a piece of code but a command that gabier has. Each entry is named after the task
+and gives the command, observed on a small project, so that an agent edits through jdtls and not through the text.
+
+### A name to change everywhere
+
+Words: rename a symbol, a method, a class, a field or a variable, change a name everywhere, refactor a name
+
+Ask: `gabier rename --dry-run <file> <line>:<column> <new-name>` with the position on the name (1-based), or
+`gabier rename --token <file> <identifier> <new-name>`; then without `--dry-run`, and `gabier diagnostics <file>`.
+
+Before (`Main.java` calls `greeter.greet("world")`):
+
+```java
+String greet(String name) {
+```
+
+After `gabier rename src/main/java/demo/Greeter.java 8:12 welcome`:
+
+```java
+String welcome(String name) {
+```
+
+and the call in `Main.java` is now `greeter.welcome("world")`: the files that refer to the name are rewritten too.
+
+Limits: the position must be on a symbol (`language-server-no-such-symbol` otherwise). Text that is not code (a string
+literal, a build file, `module-info.java`) is not renamed. A record component and a package have their own entries:
+"Rename a component of a record" and "The package of one source set". See `gabier help rename`.
+
+### Imports that are missing, unused or out of order
+
+Words: fix the imports, unused imports, missing import, import order, sort imports, star import, remove imports
+
+Ask: `gabier organize-imports --dry-run <file>`, then without `--dry-run`.
+
+Before:
+
+```java
+import java.util.List;
+import java.util.ArrayList;
+import java.io.File;
+```
+
+After (`File` is not used):
+
+```java
+import java.util.ArrayList;
+import java.util.List;
+```
+
+Limits: it keeps the order of the formatter and never writes a star import. A type that jdtls cannot resolve cannot be
+imported, and a file whose imports it cannot resolve loses them: run `gabier diagnostics <file>` first. To import one
+type that is missing, see "A compiler error that jdtls has a fix for". See `gabier help organize-imports`.
+
+### A class in the wrong package
+
+Words: move a class to another package, put a class in a package, new package for a class, imports follow the move
+
+Ask: `gabier move --dry-run <file>... <package>`, then without `--dry-run`, then `gabier diagnostics` on the files that
+used the class.
+
+Before:
+
+```text
+src/main/java/demo/util/Helper.java     package demo.util;
+```
+
+After `gabier move src/main/java/demo/util/Helper.java demo.shop`:
+
+```text
+src/main/java/demo/shop/Helper.java     package demo.shop;
+```
+
+The `package` line, the imports and the references of the project follow the class.
+
+Limits: the package is created when it does not exist; the default package cannot be the target. The files must be in
+one source folder. A member that was package-private and used from the old package is no longer reachable: run
+`gabier diagnostics`. To rename a whole package instead, see "The package of one source set". See `gabier help move`.
+
+### Where a symbol is used
+
+Words: find usages, find references, who calls this method, callers, where is it used, uses of a symbol
+
+Ask: `gabier references [--include-declaration] <file> <line>:<column>` with the position on the symbol (1-based).
+
+Output, one place per line, the declaration left out unless asked for:
+
+```text
+src/main/java/demo/Main.java:6:36: System.out.println(greeter.greet("world"));
+```
+
+Limits: only a type, a method, a field, a local variable or a parameter of the project, tests included; a symbol of the
+JDK or of a library is refused (`language-server-no-such-symbol`). The accessors of a field are not listed. Nothing is
+written. See `gabier help references`.
+
+### The errors of a file, without a build
+
+Words: see the errors, compile errors, warnings, does this file compile, problems of a file, without a build
+
+Ask: `gabier diagnostics <file>`.
+
+Output, one line per problem, `file:line:column: severity: message`:
+
+```text
+src/main/java/demo/Main.java:7:9: error: Missing cannot be resolved to a type
+src/main/java/demo/Main.java:8:21: error: Type mismatch: cannot convert from String to int
+```
+
+Limits: it reads one file at a time, so run it on every file a change crossed into. A file with problems still gives
+exit code 0. For the fix of an error, see "A compiler error that jdtls has a fix for". See `gabier help diagnostics`.
+
+### A new file for a new type
+
+Words: create a file, new class, new interface, new record, new enum, make a Java file with the right package
+
+Ask: `gabier create --dry-run <file> <class|interface|record|enum>`, then without `--dry-run`.
+
+After `gabier create src/main/java/demo/shop/Shelf.java class`:
+
+```java
+package demo.shop;
+
+public class Shelf {
+
+}
+```
+
+Limits: the name of the type is the name of the file, and the `package` line comes from the folder, which is made with
+it. A file that exists is never overwritten (`editing-file-exists`). The type has no comment and an empty body. See
+`gabier help create`.
+
+### A compiler error that jdtls has a fix for
+
+Words: fix a compilation error, quick fix, cannot be resolved, cannot find symbol, create the missing class or method
+
+Ask: `gabier actions <file> <line>:<column> <line>:<column>` on the error (the position `gabier diagnostics` gave), then
+`gabier apply-action --dry-run <file> <line>:<column> <line>:<column> "<title>"` with the title of the fix.
+
+Output of `gabier actions src/main/java/demo/Main.java 7:9 7:16` on `Missing m = new Missing();`:
+
+```text
+1 quickfix Create class 'Missing'
+2 quickfix Create enum 'Missing'
+3 quickfix Create interface 'Missing'
+4 quickfix Create record 'Missing'
+```
+
+After `gabier apply-action ... "Create class 'Missing'"`, the file `demo/Missing.java` holds `public class Missing {}`.
+
+Limits: the title is the text of jdtls, so read it in `gabier actions`. An error with no fix is listed with none: edit
+the code and run `gabier diagnostics` again. See `gabier help actions` and `gabier help apply-action`.
 
 ## What jdtls does not offer
 

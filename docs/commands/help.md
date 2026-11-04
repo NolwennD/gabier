@@ -27,7 +27,7 @@ hand:` and a confidence from 0 to 1 (two decimals):
 $ gabier help --for="turn this string concatenation into a text block"
 For "turn this string concatenation into a text block":
 
-1. A string built from literals with `+` and line breaks (confidence 0.65)
+1. A string built from literals with `+` and line breaks (confidence 0.53)
    Ask: `gabier cleanup --dry-run <file> stringConcatToTextBlock`
 
 2. A concatenation that is not only literals (confidence 0.41)
@@ -36,18 +36,25 @@ For "turn this string concatenation into a text block":
 
 A task that no section answers is said plainly, with exit code 0 (it is an answer, not a refusal): `Nothing in the guide
 matches "<task>".` With `--json` the answer is one object, `{"question":"...","matches":[{"rank":1,"title":"...",
-"kind":"ask","how":"...","confidence":0.65}]}`, `kind` being `ask` or `by-hand` and `how` the line without its label; the
-`matches` of a task that nothing answers is `[]`. `--for` takes its value after `=` (`--for="<task>"`): `--for <task>` with a space is a usage error. In text the task is
-shown as [any text of a user is](../cli.md#text-in-a-terminal), neutralised on one line, so that a task read from a page
-cannot forge an entry or drive the terminal; with `--json` it is the exact text. An empty task (`--for=`, `--for`) is a
-usage error. The sections are
-ranked by BM25 over the words of their title, their `Words:` line and their text (`ranking` package of the cli, written
-in plain Java): a word is cut at case changes, punctuation, hyphens and digits, so `stringConcatToTextBlock` is "string
-concat to text block"; there is no stemming, so the `Words:` line of an entry holds the forms a person uses. A section
-is part of the answer when its confidence (its score over the highest score the words of the task could get) is at
-least 0.3 and at least 0.6 of the best one's; the best one under 0.3 means that nothing matches. It reads the guide of
-the build, so it needs no clone, no daemon and no network. A wrong answer, or no answer, to a real task is a friction:
-see the rule `dogfooding.md`.
+"kind":"ask","how":"...","confidence":0.53}]}`, `kind` being `ask` or `by-hand` and `how` the line without its label; the
+`matches` of a task that nothing answers is `[]`. `--for` takes its value after `=` (`--for="<task>"`): `--for <task>`
+with a space is a usage error. In text the task is shown as [any text of a user is](../cli.md#text-in-a-terminal),
+neutralised on one line, so that a task read from a page cannot forge an entry or drive the terminal; with `--json` it
+is the exact text. An empty task (`--for=`, `--for`) is a usage error.
+
+The sections are ranked by BM25 over the words of their title, their `Words:` line and their text (`ranking` package of
+the cli, written in plain Java): a word is cut at case changes, punctuation, hyphens and digits, so
+`stringConcatToTextBlock` is "string concat to text block"; there is no stemming, so the `Words:` line of an entry holds
+the forms a person uses (`ifs` and `if` are two words). A section is part of the answer when it holds **at least two
+distinctive words of the task in its title or its `Words:` line**, and its confidence (its score over the highest score
+the words of the task could get) is at least 0.3 and at least 0.6 of the best one's; nothing else matches. A word is
+distinctive when its idf is at least 1, which is a word that about a third of the sections hold at most: "the", "and"
+and "run" are not, "text", "block" and "rename" are. The consequence is that **a task of one word never has an answer**,
+whatever the word (`--for=rename` says `Nothing in the guide matches "rename".`; `--for="rename a method"` answers), and
+that a task with one such word only, the other being in the text of a section, such as "run the build and the tests"
+(`tests` is in the `Words:` line of one section, `build` in the text of others), has none either. It reads the guide of the build, so it needs no
+clone, no daemon and no network. A wrong answer, or no answer, to a real task is a friction: see the rule
+`dogfooding.md`.
 
 `help` is the one command that never talks to the daemon: it starts none, opens no socket and works with no project. It is
 not a daemon method, so it has no row in [the protocol](../protocol.md#methods).

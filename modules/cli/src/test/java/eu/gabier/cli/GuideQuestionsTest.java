@@ -55,7 +55,35 @@ class GuideQuestionsTest {
                 question("rename a record component", "Rename a component of a record"),
                 question("rename the package, the tests keep the old package", "The package of one source set"),
                 // What jdtls does not offer.
-                question("invert this if", "An `if` whose branches must trade places"));
+                question("invert this if", "An `if` whose branches must trade places"),
+                // The same task in other words (the review of 04-11-2026), written before the guide was changed.
+                question("make this a text block", "A string built from literals with `+` and line breaks"),
+                question("use a text block", "A string built from literals with `+` and line breaks"),
+                question(
+                        "convert string concatenation to text block",
+                        "A string built from literals with `+` and line breaks"),
+                question("combine two ifs", "Conditions to join or to split"),
+                // The commands that gabier has, asked by their task (the entries are named after the situation).
+                question("rename this method", "A name to change everywhere"),
+                question("rename a symbol", "A name to change everywhere"),
+                question("fix the imports", "Imports that are missing, unused or out of order"),
+                question("delete this unused import", "Imports that are missing, unused or out of order"),
+                question("move a class to another package", "A class in the wrong package"),
+                question("find where it is used", "Where a symbol is used"),
+                question("see the errors of this file", "The errors of a file, without a build"),
+                question("create a file for a new class", "A new file for a new type"),
+                question("fix this compilation error", "A compiler error that jdtls has a fix for"),
+                // Paraphrases written before the entries of the commands, and kept out of their Words lines: if one of
+                // them needs a word that the entry lacks, that is what the table shows.
+                question("change the name of this field everywhere", "A name to change everywhere"),
+                question("who calls this function", "Where a symbol is used"),
+                question("remove imports I don't use", "Imports that are missing, unused or out of order"),
+                question("does this file compile", "The errors of a file, without a build"),
+                question("put this class in the billing package", "A class in the wrong package"),
+                question("make a new interface file", "A new file for a new type"),
+                question("the compiler says cannot find symbol", "A compiler error that jdtls has a fix for"),
+                question("write this string as a text block", "A string built from literals with `+` and line breaks"),
+                question("join two nested ifs into one", "Conditions to join or to split"));
     }
 
     private static Arguments question(String question, String title) {
@@ -70,7 +98,16 @@ class GuideQuestionsTest {
                 "add a dependency in the gradle build",
                 "open a pull request on github",
                 "",
-                "a 1 -");
+                "a 1 -",
+                // Questions with a word the guide holds and no answer in it (the review of 04-11-2026).
+                "write a unit test for this class",
+                "run the build and the tests",
+                "commit the change to git",
+                "the",
+                "block",
+                // Two distinctive words of the guide ("new", "class") and no answer: under the threshold alone.
+                "bake a new class of bread",
+                "document the new class in the wiki");
     }
 
     @ParameterizedTest(name = "{0}")

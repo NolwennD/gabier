@@ -3,6 +3,7 @@ package eu.gabier.cli.ranking;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -149,42 +150,51 @@ class RankingTest {
     }
 
     /**
-     * Three documents of ten words, N = 3, average length 10, so that the factor is tf * 2.5 / (tf + 1.5). "alpha" is
-     * in documents 0 (nine times) and 1 (once), n = 2. The confidence is the factor over 2.5, whatever the idf: document
-     * 0, 22.5 / 10.5 / 2.5 = 6/7 = 0.857; document 1, 1 / 2.5 = 0.4. The floor of the answer is the larger of 0.3 and
-     * 0.6 of the best confidence, 0.6 * 6/7 = 0.514: document 1 is over the threshold and under the floor, so it is
-     * not part of the answer, and the best one is.
+     * The question "alpha beta" and six documents, N = 6: the keywords "alpha beta" are those of documents 0 (6 words
+     * in all, 3 for each) and 1 (6 and forty "filler" in its body, 46); the four others hold eleven "filler" in their
+     * body. The average length is (6 + 46 + 4 * 11) / 6 = 16. Both words are in two documents: idf = ln(1 + (6 - 2 +
+     * 0.5) / (2 + 0.5)) = ln(2.8) = 1.03, distinctive, and the same for both, so the confidence is the factor over 2.5.
+     * The factor is tf * 2.5 / (tf + 1.5 * (0.25 + 0.75 * dl / 16)) with tf = 3: document 0, 7.5 / (3 + 1.5 * 17/32) =
+     * 160/81, a confidence of 64/81 = 0.79; document 1, 7.5 / (3 + 1.5 * 77/32) = 160/141, a confidence of 64/141 =
+     * 0.454. The floor of the answer is the larger of 0.3 and 0.6 of the best confidence, 0.6 * 64/81 = 0.474:
+     * document 1 is over the threshold and under the floor, so it is not part of the answer, and the best one is.
      */
     @Test
     void anAnswerLeavesOutADocumentThatIsFarBehindTheBestOne() {
-        var filler = "beta gamma delta epsilon zeta eta theta iota kappa";
-        var ranking = Ranking.of(List.of(
-                body("alpha alpha alpha alpha alpha alpha alpha alpha alpha beta"),
-                body("alpha " + filler),
-                body(filler + " lambda")));
+        var documents = new ArrayList<Document>();
+        documents.add(new Document("", "alpha beta", ""));
+        documents.add(new Document("", "alpha beta", "filler ".repeat(40)));
+        for (var other = 0; other < 4; other++) {
+            documents.add(body("filler ".repeat(11)));
+        }
+        var ranking = Ranking.of(documents);
 
-        assertThat(ranking.rank("alpha")).extracting(Match::index).containsExactly(0, 1);
-        assertThat(ranking.rank("alpha").get(0).confidence()).isCloseTo(6.0 / 7, within(EXACT));
-        assertThat(ranking.rank("alpha").get(1).confidence()).isCloseTo(0.4, within(EXACT));
-        assertThat(ranking.answer("alpha")).extracting(Match::index).containsExactly(0);
+        assertThat(ranking.rank("alpha beta")).extracting(Match::index).containsExactly(0, 1);
+        assertThat(ranking.rank("alpha beta").get(0).confidence()).isCloseTo(64.0 / 81, within(EXACT));
+        assertThat(ranking.rank("alpha beta").get(1).confidence()).isCloseTo(64.0 / 141, within(EXACT));
+        assertThat(ranking.answer("alpha beta")).extracting(Match::index).containsExactly(0);
     }
 
     /**
-     * Four identical documents of four words: N = 4, n = 4, tf = 1, dl = avgdl, so the factor is 1 and the confidence
-     * 1 / 2.5 = 0.4, over the threshold of 0.3 and over 0.6 of the best (0.24). All four are found; the answer keeps the
-     * first three.
+     * Twelve documents of six words, N = 12, the average length 6: four hold the keywords "alpha beta" (3 each) and
+     * eight hold six "filler" in their body. The two words are in four documents: idf = ln(1 + (12 - 4 + 0.5) / (4 +
+     * 0.5)) = ln(2.89) = 1.06, distinctive. The factor is 3 * 2.5 / (3 + 1.5) = 5/3 and the confidence 2/3, over the
+     * threshold of 0.3 and over 0.6 of the best (0.4). All four are found; the answer keeps the first three.
      */
     @Test
     void anAnswerHasThreeDocumentsAtMost() {
-        var ranking = Ranking.of(List.of(
-                body("apple banana cherry date"),
-                body("apple banana cherry date"),
-                body("apple banana cherry date"),
-                body("apple banana cherry date")));
+        var documents = new ArrayList<Document>();
+        for (var holder = 0; holder < 4; holder++) {
+            documents.add(new Document("", "alpha beta", ""));
+        }
+        for (var other = 0; other < 8; other++) {
+            documents.add(body("filler ".repeat(6)));
+        }
+        var ranking = Ranking.of(documents);
 
-        assertThat(ranking.rank("banana")).hasSize(4);
-        assertThat(ranking.answer("banana")).extracting(Match::index).containsExactly(0, 1, 2);
-        assertThat(ranking.answer("banana").getFirst().confidence()).isCloseTo(0.4, within(EXACT));
+        assertThat(ranking.rank("alpha beta")).hasSize(4);
+        assertThat(ranking.answer("alpha beta")).extracting(Match::index).containsExactly(0, 1, 2);
+        assertThat(ranking.answer("alpha beta").getFirst().confidence()).isCloseTo(2.0 / 3, within(EXACT));
     }
 
     /**
@@ -199,6 +209,55 @@ class RankingTest {
         assertThat(ranking.rank("apple zebra")).isNotEmpty();
         assertThat(ranking.answer("apple zebra")).isEmpty();
         assertThat(ranking.answer("")).isEmpty();
+    }
+
+    /**
+     * Ten documents, N = 10. A word is distinctive when its idf, ln(1 + (10 - n + 0.5) / (n + 0.5)), is at least 1,
+     * which is n = 3 of the 10 at most (n = 3: ln(1 + 7.5 / 3.5) = 1.14; n = 4: ln(1 + 6.5 / 4.5) = 0.89). "alpha" and
+     * "beta" are in the keywords of document 0 only, "gamma" in its body only, "common" in the keywords of all ten.
+     */
+    private static Ranking corpusOfTen() {
+        var documents = new ArrayList<Document>();
+        documents.add(new Document("", "alpha beta common", "gamma delta"));
+        for (var other = 1; other < 10; other++) {
+            documents.add(new Document("", "common", "filler" + other));
+        }
+
+        return Ranking.of(documents);
+    }
+
+    @Test
+    void anAnswerNeedsTwoDistinctiveWordsOfTheQuestionInTheKeywordsOrTheTitle() {
+        var ranking = corpusOfTen();
+
+        assertThat(ranking.answer("alpha beta")).extracting(Match::index).containsExactly(0);
+    }
+
+    @Test
+    void aQuestionOfOneWordHasNoAnswerWhateverTheWord() {
+        var ranking = corpusOfTen();
+
+        assertThat(ranking.rank("alpha")).extracting(Match::index).containsExactly(0);
+        assertThat(ranking.rank("alpha").getFirst().confidence()).isGreaterThan(Ranking.THRESHOLD);
+        assertThat(ranking.answer("alpha")).isEmpty();
+    }
+
+    @Test
+    void aWordOfTheBodyOnlyIsNoEvidence() {
+        var ranking = corpusOfTen();
+
+        assertThat(ranking.rank("alpha gamma").getFirst().index()).isZero();
+        assertThat(ranking.rank("alpha gamma").getFirst().confidence()).isGreaterThan(Ranking.THRESHOLD);
+        assertThat(ranking.answer("alpha gamma")).isEmpty();
+    }
+
+    @Test
+    void aWordThatTheDocumentsAllHoldIsNoEvidence() {
+        var ranking = corpusOfTen();
+
+        assertThat(ranking.rank("alpha common").getFirst().index()).isZero();
+        assertThat(ranking.rank("alpha common").getFirst().confidence()).isGreaterThan(Ranking.THRESHOLD);
+        assertThat(ranking.answer("alpha common")).isEmpty();
     }
 
     @Test

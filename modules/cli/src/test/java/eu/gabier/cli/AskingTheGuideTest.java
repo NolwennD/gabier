@@ -142,6 +142,27 @@ class AskingTheGuideTest extends CliTest {
     }
 
     @Test
+    void aCommandIsAskedForByItsTaskAndNamedInTheAnswer() {
+        assertThat(run("help", "--for=rename this method")).isZero();
+
+        assertThat(out())
+                .contains("1. A name to change everywhere (confidence 0.")
+                .contains("   Ask: `gabier rename --dry-run <file> <line>:<column> <new-name>`");
+    }
+
+    @Test
+    void aTaskOfOneWordHasNoAnswerWhateverTheWord() {
+        assertThat(run("help", "--for=the")).isZero();
+
+        assertThat(out()).startsWith("Nothing in the guide matches \"the\".");
+        out.reset();
+
+        assertThat(run("--json", "help", "--for=rename")).isZero();
+
+        assertThat(out().trim()).isEqualTo("{\"question\":\"rename\",\"matches\":[]}");
+    }
+
+    @Test
     void aTaskWithNoWordIsAUsageError() {
         assertThat(run("help", "--for=")).isEqualTo(2);
 

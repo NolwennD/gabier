@@ -236,8 +236,9 @@ public final class Native {
     /**
      * 0 when {@code help --for=<task>} answers from the guide in the resources of the image, in an empty directory with
      * an empty environment: the clean-up for the text block task first, with its command and a confidence; the same
-     * answer as JSON; the section to do by hand for a task jdtls does not offer; and, for a task with no relation to
-     * the guide, the plain word that nothing matches, with exit 0.
+     * answer as JSON; the section to do by hand for a task jdtls does not offer; a command asked for by its task
+     * ("rename this method" names {@code gabier rename}); and, for a task with no relation to the guide, the plain
+     * word that nothing matches, with exit 0.
      */
     private static int askTheGuide(Path binary, Path directory) throws IOException, InterruptedException {
         Run text = runBinary(binary, directory, "help", "--for=turn this string concatenation into a text block");
@@ -246,6 +247,8 @@ public final class Native {
         System.out.println("gabier --json help --for=<text block task> -> " + json.out().length() + " characters (exit " + json.exit() + ")");
         Run byHand = runBinary(binary, directory, "help", "--for=invert this if");
         System.out.println("gabier help --for=<invert this if> -> " + byHand.out().lines().count() + " lines (exit " + byHand.exit() + ")");
+        Run command = runBinary(binary, directory, "help", "--for=rename this method");
+        System.out.println("gabier help --for=<rename this method> -> " + command.out().lines().count() + " lines (exit " + command.exit() + ")");
         Run nothing = runBinary(binary, directory, "help", "--for=how do I bake bread");
         System.out.println("gabier help --for=<bake bread> -> \"" + nothing.out().lines().findFirst().orElse("") + "\" (exit " + nothing.exit() + ")");
 
@@ -265,6 +268,13 @@ public final class Native {
                         && byHand.err().isEmpty()
                         && byHand.out().contains("\n1. An `if` whose branches must trade places (confidence ")
                         && byHand.out().contains("   By hand: ")
+                ? 0
+                : 1;
+
+        failures += command.exit() == 0
+                        && command.err().isEmpty()
+                        && command.out().contains("\n1. A name to change everywhere (confidence ")
+                        && command.out().contains("   Ask: `gabier rename ")
                 ? 0
                 : 1;
 
