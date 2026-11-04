@@ -4,7 +4,8 @@
 the problems the range holds (a type that is not imported, a method to create, an exception to declare) and the
 **rewrites** of the code it covers (a concatenation to a text block, an extraction). It is the way to ask jdtls "what can
 you do here?" instead of editing the text. To apply one of them, give its title to
-[`gabier apply-action`](apply-action.md). Nothing is written. The exit code is 0 whenever the daemon answered.
+[`gabier apply-action`](apply-action.md); to apply a rewrite to every place of a whole file instead of one range, use
+[`gabier cleanup`](cleanup.md). Nothing is written. The exit code is 0 whenever the daemon answered.
 
 The range is two positions, each **from 1** as `diagnostics` shows them, the end excluded (as for `extract-variable`); to
 ask about one place, give the same position twice. They are sent to the daemon from 0.

@@ -34,6 +34,9 @@ final class Cleanup implements Capability {
                     Refusal.NOT_READY)
             .withNotes("""
                 Each clean-up rewrites the whole file, in the order given, on the text the one before left.
+                A clean-up applies to the whole file; for one place only, ask gabier actions for the range, then give\
+                 the title of the action to gabier apply-action (for a text block, "Convert String concatenation to\
+                 Text Block").
                 The identifiers are those of jdtls: addDeprecated, addFinalModifier, addOverride,
                 instanceofPatternMatch, invertEquals, lambdaExpression, lambdaExpressionFromAnonymousClass,
                 qualifyMembers, qualifyStaticMembers, redundantComparisonStatement,

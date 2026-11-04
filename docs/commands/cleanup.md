@@ -31,6 +31,11 @@ $ gabier cleanup src/main/java/demo/Plain.java stringConcatToTextBlock
 nothing to change
 ```
 
+**A clean-up applies to the whole file**: every place it can rewrite is rewritten; for one place only, ask
+[`gabier actions`](actions.md) for the range of that place, then give the title of the action to
+[`gabier apply-action`](apply-action.md); for a concatenation that should be a text block, the action is "Convert String
+concatenation to Text Block".
+
 **The identifiers** are those of the clean-ups of jdtls (its `CleanUpRegistry`): `addDeprecated`, `addFinalModifier`,
 `addOverride`, `instanceofPatternMatch`, `invertEquals`, `lambdaExpression`, `lambdaExpressionFromAnonymousClass`,
 `qualifyMembers`, `qualifyStaticMembers`, `redundantComparisonStatement`, `redundantFallingThroughBlockEnd`,

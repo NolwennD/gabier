@@ -132,6 +132,18 @@ class HelpTest extends CliTest {
                 .contains("build files");
     }
 
+    @Test
+    void helpOfCleanupSaysItAppliesToTheWholeFileAndHowToChangeOnePlaceOnly() {
+        assertThat(run("help", "cleanup")).isZero();
+
+        assertThat(out())
+                .contains("applies to the whole file")
+                .contains("for one place only")
+                .contains("gabier actions")
+                .contains("gabier apply-action")
+                .contains("text block");
+    }
+
     static Stream<String> commandNames() {
         return Capabilities.all().stream()
                 .map(capability -> capability.command().commandName());

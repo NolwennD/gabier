@@ -4,7 +4,8 @@
 server offers on a range, chosen by its **title**: the fix of an error (a missing import), or a rewrite of the code (a
 concatenation to a text block). The range is the one [`gabier actions`](actions.md) was asked about, and the title one of
 those it lists, exactly as written (the number of an action changes from one call to the next, the title is the key). The
-positions are **from 1**, the end excluded, sent to the daemon from 0. `--dry-run` (anywhere after the command) writes
+positions are **from 1**, the end excluded, sent to the daemon from 0. It changes the one range; to apply a clean-up to
+the whole file, use [`gabier cleanup`](cleanup.md). `--dry-run` (anywhere after the command) writes
 nothing and shows what would change.
 
 The answer lists the files that changed (`modified <file>`) and then the unified diff, preceded by `dry run, nothing
