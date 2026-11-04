@@ -43,7 +43,7 @@ modified /work/demo/src/main/java/demo/Totals.java
 
 **How the name is applied.** jdtls cannot take the name from the client: it proposes one of its own when it computes the refactoring, and expects the client to rename the new method. gabier does what a
 client does, as `extract-variable` does. It asks `java/getRefactorEdit` with the command `extractMethod` (the refactoring
-behind the code action `refactor.extract.method`; it needs no client capability and no setting of `JdtlsSettings` or
+behind the code action `refactor.extract.function`; it needs no client capability and no setting of `JdtlsSettings` or
 `JdtlsCapabilities`), which answers the edit and the command `java.action.rename` with the place of the new name in the
 edited text. It applies that edit in memory, opens the edited text in jdtls (it is never written to disk), and
 asks where the new method is declared (`textDocument/definition` of the name jdtls introduced) and
