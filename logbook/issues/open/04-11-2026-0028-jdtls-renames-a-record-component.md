@@ -13,7 +13,9 @@ misses the uses by simple name in the body. JDT UI redirects those elements to t
 [566507](https://bugs.eclipse.org/bugs/show_bug.cgi?id=566507), 2020; JDT UI commits:
 [559681](https://eclipse.googlesource.com/jdt/eclipse.jdt.ui/+/refs/tags/Y20200310-0525%5E%21/),
 [566507](https://eclipse.googlesource.com/jdt/eclipse.jdt.ui/+/e2d1c1dcc7573198641437a36ff76b413f603425%5E)); the fork
-never took it. To confirm with a stack trace of the NullPointerException before it is said upstream.
+never took it. With an explicit accessor, the rename also turns `label()` into `getCaption()`: `RenameHandler` passes
+`UPDATE_GETTER_METHOD`, and the accessor of a component is taken for a getter (seen 04-11-2026). To confirm with a stack
+trace of the NullPointerException before it is said upstream.
 
 Done when:
 - the text of the upstream issue is written in English (the record with and without a compact constructor, what jdtls

@@ -21,6 +21,8 @@ Done when:
 - `gabier help rename` and `docs/commands/rename.md` say what jdtls does on a component of a record: with a compact
   constructor it fails (the refusal above); without one it renames the component, its accessor calls and `this.file` and
   leaves the uses by simple name in the body, which no longer compiles (run `gabier diagnostics` after); a position on a
-  call of the accessor is declined by `prepareRename`. They point to the upstream issue;
+  call of the accessor is declined by `prepareRename`; with an explicit accessor (`public String label() {...}`) jdtls
+  renames the accessor as a getter (`label()` becomes `getCaption()`, seen 04-11-2026) and gabier says nothing of it.
+  They point to the upstream issue;
 - the partial rename has no replay (`Effect` compiles the result, which does not compile): the `## Resolution` says so;
 - `bin/ci` passes.
