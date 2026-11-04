@@ -79,6 +79,42 @@ class GuideSectionsTest {
     }
 
     @Test
+    void aHashLineInsideAFenceDoesNotEndTheSection() {
+        var sections = GuideSections.parse("""
+            ### Run it
+
+            Words: shell
+
+            ```sh
+            # a shell comment
+            ```
+
+            Ask: `gabier help`
+            """);
+
+        assertThat(sections).hasSize(1);
+        assertThat(sections.getFirst().how()).isEqualTo("Ask: `gabier help`");
+    }
+
+    @Test
+    void aSectionHeadingInsideAFenceStartsNoSection() {
+        var sections = GuideSections.parse("""
+            ### Real
+
+            Ask: `gabier help`
+
+            ```markdown
+            ### Not a section
+            ```
+
+            Limits: none.
+            """);
+
+        assertThat(sections).extracting(GuideSection::title).containsExactly("Real");
+        assertThat(sections.getFirst().body()).contains("Limits: none.");
+    }
+
+    @Test
     void aPageWithNoSectionHasNone() {
         assertThat(GuideSections.parse("# Only a title\n\nSome text.\n")).isEmpty();
     }

@@ -3,6 +3,7 @@ package eu.gabier.cli;
 import eu.gabier.cli.ranking.Match;
 import eu.gabier.cli.ranking.Ranking;
 import eu.gabier.protocol.Json;
+import eu.gabier.protocol.TerminalText;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
@@ -97,7 +98,7 @@ final class HelpText {
             return """
                 Nothing in the guide matches "%s".
                 `gabier help guide` prints the whole guide, `gabier help` lists the commands.\
-                """.formatted(task);
+                """.formatted(TerminalText.neutralise(task));
         }
         var matches = found.stream()
                 .map(match -> "%d. %s (confidence %s)\n   %s"
@@ -114,7 +115,7 @@ final class HelpText {
             %s
 
             `gabier help guide` prints the whole guide.\
-            """.formatted(task, matches);
+            """.formatted(TerminalText.neutralise(task), matches);
     }
 
     private static String confidence(Match match) {

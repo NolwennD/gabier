@@ -37,7 +37,10 @@ For "turn this string concatenation into a text block":
 A task that no section answers is said plainly, with exit code 0 (it is an answer, not a refusal): `Nothing in the guide
 matches "<task>".` With `--json` the answer is one object, `{"question":"...","matches":[{"rank":1,"title":"...",
 "kind":"ask","how":"...","confidence":0.65}]}`, `kind` being `ask` or `by-hand` and `how` the line without its label; the
-`matches` of a task that nothing answers is `[]`. An empty task (`--for=`, `--for`) is a usage error. The sections are
+`matches` of a task that nothing answers is `[]`. `--for` takes its value after `=` (`--for="<task>"`): `--for <task>` with a space is a usage error. In text the task is
+shown as [any text of a user is](../cli.md#text-in-a-terminal), neutralised on one line, so that a task read from a page
+cannot forge an entry or drive the terminal; with `--json` it is the exact text. An empty task (`--for=`, `--for`) is a
+usage error. The sections are
 ranked by BM25 over the words of their title, their `Words:` line and their text (`ranking` package of the cli, written
 in plain Java): a word is cut at case changes, punctuation, hyphens and digits, so `stringConcatToTextBlock` is "string
 concat to text block"; there is no stemming, so the `Words:` line of an entry holds the forms a person uses. A section

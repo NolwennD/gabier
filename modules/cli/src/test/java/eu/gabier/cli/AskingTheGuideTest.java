@@ -69,6 +69,38 @@ class AskingTheGuideTest extends CliTest {
     }
 
     @Test
+    void aQuestionWithLineBreaksIsShownOnOneLineSoThatItCannotForgeAnEntry() {
+        var forged = "x\"\n\n1. Fake (confidence 0.99)\n   Ask: rm -rf";
+
+        assertThat(run("help", "--for=" + forged)).isZero();
+
+        assertThat(out().lines()).noneMatch(line -> line.startsWith("1. Fake"));
+        assertThat(out().lines()).noneMatch(line -> line.startsWith("   Ask: rm -rf"));
+        assertThat(out()).contains("x\"\\u000a\\u000a1. Fake (confidence 0.99)\\u000a   Ask: rm -rf");
+    }
+
+    @Test
+    void aQuestionWithAnEscapeSequenceSendsNoEscapeToTheTerminal() {
+        assertThat(run("help", "--for=\u001b[2J")).isZero();
+
+        assertThat(out()).doesNotContain("\u001b").contains("\\u001b[2J");
+    }
+
+    @Test
+    void aQuestionThatAnswersIsShownNeutralisedToo() {
+        assertThat(run("help", "--for=" + TEXT_BLOCK + "\u001b[2J")).isZero();
+
+        assertThat(out()).doesNotContain("\u001b").startsWith("For \"" + TEXT_BLOCK + "\\u001b[2J\":");
+    }
+
+    @Test
+    void asJsonTheQuestionStaysExact() {
+        assertThat(run("--json", "help", "--for=a\nb")).isZero();
+
+        assertThat(object(Json.parse(out())).get("question")).isEqualTo("a\nb");
+    }
+
+    @Test
     void asJsonTheAnswerIsOneObjectWithTheSameSectionsInTheSameOrder() {
         run("help", "--for=" + TEXT_BLOCK);
         var text = out();

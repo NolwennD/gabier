@@ -6,8 +6,9 @@ import java.util.StringJoiner;
 
 /**
  * The sections of the guide, read from its text: a {@code ###} heading, the line {@code Words:}, the paragraph {@code
- * Ask:} or {@code By hand:}, and the rest. A section ends at the next heading, of any level. The code between fences is
- * left out: it holds names of the example, not of the situation.
+ * Ask:} or {@code By hand:}, and the rest. A section ends at the next heading, of any level; a line that starts with
+ * {@code #} inside a fence is code (a shell comment), not a heading. The code between fences is left out: it holds
+ * names of the example, not of the situation.
  */
 final class GuideSections {
 
@@ -33,13 +34,17 @@ final class GuideSections {
         var sections = new ArrayList<GuideSection>();
         String title = null;
         var lines = new ArrayList<String>();
+        var fenced = false;
         for (var line : page.lines().toList()) {
-            if (line.startsWith(HEADING) && title != null) {
+            if (line.startsWith(FENCE)) {
+                fenced = !fenced;
+            }
+            if (!fenced && line.startsWith(HEADING) && title != null) {
                 sections.add(section(title, lines));
                 title = null;
                 lines.clear();
             }
-            if (line.startsWith(SECTION)) {
+            if (!fenced && line.startsWith(SECTION)) {
                 title = line.substring(SECTION.length()).strip();
             } else if (title != null) {
                 lines.add(line);
