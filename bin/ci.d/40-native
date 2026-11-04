@@ -205,7 +205,8 @@ public final class Native {
 
     /**
      * 0 when {@code gabier help}, {@code --help} and {@code -h} list the commands on the standard output with exit 0, and
-     * {@code help rename} explains one, in an empty directory with no daemon.
+     * {@code help rename} explains one and {@code help guide} prints the guide of the improvements from the resources of the
+     * image, in an empty directory with no daemon and no clone.
      */
     private static int help(Path binary, Path directory) throws IOException, InterruptedException {
         int failures = 0;
@@ -217,7 +218,17 @@ public final class Native {
         Run one = runBinary(binary, directory, "help", "rename");
         System.out.println("gabier help rename -> " + one.out().lines().count() + " lines (exit " + one.exit() + ")");
 
-        return failures + (one.exit() == 0 && one.err().isEmpty() && one.out().contains("Refusals") ? 0 : 1);
+        failures += one.exit() == 0 && one.err().isEmpty() && one.out().contains("Refusals") ? 0 : 1;
+        Run guide = runBinary(binary, directory, "help", "guide");
+        System.out.println("gabier help guide -> " + guide.out().lines().count() + " lines (exit " + guide.exit() + ")");
+
+        return failures + (guide.exit() == 0
+                        && guide.err().isEmpty()
+                        && guide.out().startsWith("# Improving Java with gabier")
+                        && guide.out().contains("stringConcatToTextBlock")
+                        && guide.out().contains("By hand: ")
+                ? 0
+                : 1);
     }
 
     /**

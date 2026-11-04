@@ -11,6 +11,14 @@ list, `{"name":"...","summary":"...","usage":"...","example":"...","refusals":["
 command that does not exist (`gabier help frobnicate`) is a usage error, exit code 2, that lists the known ones; so is
 anything else after `help <command>`, and `--help` followed by another argument.
 
+`gabier help guide` prints [the guide of the improvements](../improve.md): one section per situation (a string built with
+calls and quotes, a cast after an `instanceof`, a condition to turn round), with the words a person uses for it, the
+command or the action that solves it, a before and an after, and the limits, among them what jdtls does not offer. It is
+the page `docs/improve.md`, which the build copies into the resources of the cli and the native image keeps, so that it
+is printed with no clone of the repository. `guide` is a topic of `help`, not a command (it has no row in the list of
+commands and no `gabier guide`); `gabier help` points to it on its last lines. With `--json` it is one object,
+`{"name":"guide","summary":"...","text":"..."}`, the text being the page. To add an entry, see the skill `extend-guide`.
+
 `help` is the one command that never talks to the daemon: it starts none, opens no socket and works with no project. It is
 not a daemon method, so it has no row in [the protocol](../protocol.md#methods).
 
@@ -30,6 +38,9 @@ Usage:
 ...
 $ gabier stop --help
 Stop the daemon.
+...
+$ gabier help guide
+# Improving Java with gabier: the problem each move solves
 ...
 $ gabier help frobnicate
 Usage error: Unknown command; the commands are diagnostics, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move, inline, create, references, actions, apply-action, status, stop, help (usage-error; command=frobnicate)

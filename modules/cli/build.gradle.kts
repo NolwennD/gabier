@@ -16,6 +16,18 @@ tasks.test {
   systemProperty("gabier.docs.commands", commandPages.asFile.path)
 }
 
+// The guide of the improvements, `gabier help guide`: `docs/improve.md` is the one source (read on GitHub), copied into the
+// resources of the cli, and kept by the native image (`META-INF/native-image/eu.gabier/cli/resource-config.json`), so
+// that it is printed with no clone of the repository.
+val guide = tasks.register<Copy>("copyGuide") {
+  from(rootProject.layout.projectDirectory.file("docs/improve.md")) { into("eu/gabier/cli") }
+  into(layout.buildDirectory.dir("generated/guide"))
+}
+
+sourceSets.main {
+  resources.srcDir(guide)
+}
+
 graalvmNative {
   binaries {
     named("main") {

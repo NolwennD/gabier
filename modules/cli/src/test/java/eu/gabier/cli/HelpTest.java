@@ -228,6 +228,44 @@ class HelpTest extends CliTest {
     }
 
     @Test
+    void helpGuidePrintsTheGuideOnTheStandardOutputWithExitZero() {
+        assertThat(run("help", "guide")).isZero();
+
+        assertThat(err()).isEmpty();
+        assertThat(out())
+                .startsWith("# Improving Java with gabier")
+                .contains("stringConcatToTextBlock")
+                .contains("By hand: ")
+                .endsWith(System.lineSeparator());
+    }
+
+    @Test
+    void helpGuideAsJsonIsAnObjectWithTheTextOfTheGuide() {
+        assertThat(run("--json", "help", "guide")).isZero();
+
+        assertThat(out().lines()).hasSize(1);
+        var guide = object(Json.parse(out()));
+        assertThat(guide).containsOnlyKeys("name", "summary", "text");
+        assertThat(guide.get("name")).isEqualTo("guide");
+        assertThat((String) guide.get("summary")).contains("problem");
+        assertThat((String) guide.get("text")).isEqualTo(Guide.text());
+    }
+
+    @Test
+    void theListPointsToTheGuide() {
+        run("help");
+
+        assertThat(out()).contains("gabier help guide").contains("which problem each improvement of the code solves");
+    }
+
+    @Test
+    void helpOfTwoWordsAfterGuideIsAUsageError() {
+        assertThat(run("help", "guide", "rename")).isEqualTo(2);
+
+        assertThat(err()).isEqualTo(usageText("help guide rename"));
+    }
+
+    @Test
     void helpNeverStartsADaemonNorOpensTheSocket() throws IOException {
         var marker = directory.resolve("started");
         var bin = directory.resolve("bin");

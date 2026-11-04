@@ -45,8 +45,19 @@ final class HelpText {
             %s
 
             gabier help <command> gives the usage, an example and the refusals of a command.
+            gabier help %s says %s (text blocks, a switch expression, an if to turn round...).
             gabier --version prints the version. With --json, the answer and a refusal are JSON.\
-            """.formatted(lines);
+            """.formatted(lines, Guide.TOPIC, Guide.SUMMARY);
+    }
+
+    /** The guide of the improvements, as it is written: the text of {@code docs/improve.md}, or a JSON object. */
+    static String guide(boolean json) {
+        if (json) {
+            return "{\"name\":" + Json.quote(Guide.TOPIC) + ",\"summary\":" + Json.quote(Guide.SUMMARY) + ",\"text\":"
+                    + Json.quote(Guide.text()) + "}";
+        }
+
+        return Guide.text().stripTrailing();
     }
 
     /** The usage, an example and the refusals of one command. */

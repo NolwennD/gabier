@@ -158,6 +158,9 @@ the usage, an example and the refusals of each one.
   text block) the language server offers on a range of a file.
 - [`gabier apply-action`](docs/commands/apply-action.md): apply one of them, chosen by its title.
 - [`gabier help [<command>]`](docs/commands/help.md): list the commands, or explain one (usage, example, refusals).
+- [`gabier help guide`](docs/improve.md): which problem each improvement of the code solves (a text block, a switch
+  expression, a condition to turn round...), what jdtls offers for it and what it leaves to you. The page is inside the
+  installed cli: no clone needed.
 - [`gabier status` and `gabier stop`](docs/commands/status-and-stop.md): see what the daemon serves, and stop it.
 
 ## Reference
