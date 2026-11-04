@@ -7,10 +7,12 @@ import java.util.stream.IntStream;
 
 /**
  * {@code actions <file> <line>:<column> <line>:<column>}: what the language server offers on a range, one line per
- * action, {@code <number> <kind> <title>}, in the order the server gives. Each position is from 1 and goes to the daemon
+ * action, {@code <number> <kind> <title>}, in the order the server gives, followed by {@code -> gabier <command>} when
+ * the daemon names the command of gabier that does the same (an extraction, an inlining). Each position is from 1 and goes to the daemon
  * from 0, the end excluded; a point is the same position twice. An action the server gives no kind is listed with {@code
  * -} in its place. A range with nothing offered says {@code no actions} and exits with 0. With {@code --json}, the result
- * as the daemon gave it ({@code {"actions":[{"kind":...,"title":...}]}}); the number is the place in that list, from 1.
+ * as the daemon gave it ({@code {"actions":[{"kind":...,"title":...,"command":...}]}}, the member {@code command} only on an
+ * action that has one); the number is the place in that list, from 1.
  * The kinds and the titles are the server's text, hostile as any: in text, every line is neutralised as the text of a
  * problem is ({@link TerminalText}). {@code --dry-run} is not an option of this command, it is a usage error.
  */
@@ -22,7 +24,7 @@ final class Actions implements Capability {
             .example("""
                 $ gabier actions src/main/java/demo/Offers.java 4:5 4:9
                 1 quickfix Import 'List' (java.util)
-                2 quickfix Create class 'List<T>'
+                2 refactor.extract.variable Extract to local variable -> gabier extract-variable
                 ...\
                 """)
             .asksTheDaemon(
@@ -41,7 +43,12 @@ final class Actions implements Capability {
                 Each line is the number of the action in the list, its kind (quickfix, refactor.extract.variable,\
                  quickassist, ...) and its title. The kind and the title are the language server's own text, which\
                  gabier does not interpret. A range with nothing offered prints "no actions" and exits with 0.
-                To apply one, give its title to gabier apply-action with the same range.\
+                An action that a command of gabier also does is followed by "-> gabier <command>", read from its kind, never\
+                 from its title: extract-variable, extract-field, extract-method and extract-constant (the same file and\
+                 range, then the name to give), and inline (the file and one position, on the name). Prefer the command\
+                 when the name matters: apply-action takes the name jdtls guesses. With --json the action has a member\
+                 "command", only when there is one.
+                To apply one as the server proposes it, give its title to gabier apply-action with the same range.\
                 """);
 
     @Override
@@ -80,7 +87,9 @@ final class Actions implements Capability {
     }
 
     private static String line(int number, CodeActions.Action action) {
+        var reference = action.command().isEmpty() ? "" : " -> gabier " + action.command();
+
         return TerminalText.neutralise(
-                number + " " + (action.kind().isEmpty() ? "-" : action.kind()) + " " + action.title());
+                number + " " + (action.kind().isEmpty() ? "-" : action.kind()) + " " + action.title() + reference);
     }
 }

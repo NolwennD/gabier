@@ -54,7 +54,20 @@ class ListCodeActionsTest {
 
         assertThat(list.list(banner, new Range(new Position(4, 15), new Position(6, 26)))
                         .actions())
-                .containsExactly(new OfferedAction("quickassist", "Convert String concatenation to Text Block"));
+                .containsExactly(
+                        new OfferedAction("refactor.extract.variable", "Extract to local variable"),
+                        new OfferedAction("quickassist", "Convert String concatenation to Text Block"));
+    }
+
+    @Test
+    void namesTheCommandOfGabierForTheExtractionAndNoneForTheRewriteOrTheFix() throws IOException {
+        project(CodeActionScenarios.CODE_ACTIONS_ON_A_CONCATENATION);
+        Path banner = root.resolve("src/main/java/demo/Banner.java");
+
+        assertThat(list.list(banner, new Range(new Position(4, 15), new Position(6, 26)))
+                        .actions())
+                .extracting(action -> action.command().orElse("-"))
+                .containsExactly("extract-variable", "-");
     }
 
     @Test

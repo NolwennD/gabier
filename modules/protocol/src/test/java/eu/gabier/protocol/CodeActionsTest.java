@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Test;
 class CodeActionsTest {
 
     private static final Action FIX = new Action("quickfix", "Import 'List' (java.util)");
+    private static final Action EXTRACTION =
+            new Action("refactor.extract.variable", "Extract to local variable", "extract-variable");
     private static final Action HOSTILE = new Action("", "Fix \"it\" \u001b[31m");
 
     private static CodeActions readBack(CodeActions actions) {
@@ -40,8 +42,30 @@ class CodeActionsTest {
     }
 
     @Test
+    void namesTheCommandOnlyOfTheActionsThatHaveOne() {
+        var json = new CodeActions(List.of(FIX, EXTRACTION)).toJson();
+
+        assertThat(json).isEqualTo("""
+            {"actions":[\
+            {"kind":"quickfix","title":"Import 'List' (java.util)"},\
+            {"kind":"refactor.extract.variable","title":"Extract to local variable","command":"extract-variable"}]}\
+            """);
+        StrictJson.parse(json);
+    }
+
+    @Test
+    void readsAnActionWithNoCommandMemberAsOneWithNoCommand() {
+        var result = Map.<String, Object>of(
+                "actions", List.of(Map.of("kind", "quickfix", "title", "Import 'List' (java.util)")));
+
+        assertThat(CodeActions.of(result).actions()).containsExactly(FIX);
+        assertThat(FIX.command()).isEmpty();
+        assertThat(EXTRACTION.command()).isEqualTo("extract-variable");
+    }
+
+    @Test
     void isReadFromWhatItWrites() {
-        var actions = new CodeActions(List.of(HOSTILE, FIX));
+        var actions = new CodeActions(List.of(HOSTILE, FIX, EXTRACTION));
 
         assertThat(readBack(actions)).isEqualTo(actions);
     }
@@ -62,7 +86,8 @@ class CodeActionsTest {
                 Map.<String, Object>of("title", "t"),
                 Map.<String, Object>of("kind", "k"),
                 Map.<String, Object>of("kind", 1, "title", "t"),
-                Map.<String, Object>of("kind", "k", "title", 1))) {
+                Map.<String, Object>of("kind", "k", "title", 1),
+                Map.<String, Object>of("kind", "k", "title", "t", "command", 1))) {
             assertThatExceptionOfType(InvalidResponseException.class)
                     .as(element.toString())
                     .isThrownBy(() -> CodeActions.of(Map.of("actions", List.of(element))));
@@ -73,6 +98,7 @@ class CodeActionsTest {
     void isRefusedWithoutAKindATitleOrActions() {
         assertThatExceptionOfType(MissingMandatoryValueException.class).isThrownBy(() -> new Action(null, "t"));
         assertThatExceptionOfType(MissingMandatoryValueException.class).isThrownBy(() -> new Action("k", null));
+        assertThatExceptionOfType(MissingMandatoryValueException.class).isThrownBy(() -> new Action("k", "t", null));
         assertThatExceptionOfType(MissingMandatoryValueException.class).isThrownBy(() -> new CodeActions(null));
         assertThatExceptionOfType(NullElementInCollectionException.class)
                 .isThrownBy(() -> new CodeActions(Arrays.asList(FIX, null)));

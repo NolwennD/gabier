@@ -69,6 +69,21 @@ class CodeActionsMethodTest {
     }
 
     @Test
+    void answersTheCommandOfGabierOfTheActionsThatHaveOneAndNoneForTheOthers() {
+        var handler = handler(CodeActionScenarios.CODE_ACTIONS_ON_A_CONCATENATION);
+        var banner = project.resolve("src/main/java/demo/Banner.java");
+
+        var reply = handler.handle(request(banner, "4", "15", "6", "26"));
+
+        assertThat(offered(reply).actions())
+                .containsExactly(
+                        new CodeActions.Action(
+                                "refactor.extract.variable", "Extract to local variable", "extract-variable"),
+                        new CodeActions.Action("quickassist", "Convert String concatenation to Text Block"));
+        assertThat(reply.line()).contains("\"command\":\"extract-variable\"").containsOnlyOnce("\"command\"");
+    }
+
+    @Test
     void answersAnEmptyListWhereNothingIsOffered() {
         var handler = handler(CodeActionScenarios.CODE_ACTIONS_WHERE_NOTHING_IS_OFFERED);
 

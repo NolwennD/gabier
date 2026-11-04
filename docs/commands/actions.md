@@ -13,15 +13,32 @@ ask about one place, give the same position twice. They are sent to the daemon f
 ```text
 $ gabier actions src/main/java/demo/Offers.java 4:5 4:9
 1 quickfix Import 'List' (java.util)
-2 quickfix Create class 'List<T>'
+2 refactor.extract.variable Extract to local variable -> gabier extract-variable
 ...
 ```
 
-One line per action: its **number** in the list (from 1, in the order of the server), its **kind**, its **title**. The kind
+One line per action: its **number** in the list (from 1, in the order of the server), its **kind**, its **title**, and
+for some a **command of gabier** (below). The kind
 is `quickfix` for a fix, `refactor` or `refactor.*` (`refactor.extract.variable`, ...) for a refactoring, `quickassist` for
 a rewrite of the code (jdtls's own kind); an action the server gave no kind is listed with `-`. The kind and the title are
 the **language server's text**: gabier does not interpret them. The number changes from one call to the next (it follows
 what the range offers), so `apply-action` takes the title.
+
+**The command of gabier.** An action whose kind a command of gabier covers is followed by `-> gabier <command>`. The
+link is made from the **kind**, never from the title (the title is the server's text, and several actions can share a
+command: jdtls offers "Extract to local variable" and "Extract to local variable (replace all occurrences)"):
+
+| Kind of the action | Command | How to call it |
+| --- | --- | --- |
+| `refactor.extract.variable` | [`extract-variable`](extract-variable.md) | the same file and range, then the name of the variable |
+| `refactor.extract.field` | [`extract-field`](extract-field.md) | the same file and range, then the name of the field |
+| `refactor.extract.function` | [`extract-method`](extract-method.md) | the same file and range, then the name of the method |
+| `refactor.extract.constant` | [`extract-constant`](extract-constant.md) | the same file and range, then the name of the constant |
+| `refactor.inline` | [`inline`](inline.md) | the file and one position, on the name to inline |
+
+Prefer the command when the name matters: `apply-action` applies the action as the server proposes it, with the name jdtls
+guesses (`String string = ...`), where the command takes the name you ask for. An action with no such command (a fix, a
+rewrite such as the text block, "Introduce Parameter...") is listed as before, and applied by its title.
 
 **A range with nothing offered** prints `no actions` and exits with 0; with `--json`, an empty list.
 
@@ -30,8 +47,11 @@ the list, from 1):
 
 ```text
 $ gabier --json actions src/main/java/demo/Offers.java 4:5 4:9
-{"actions":[{"kind":"quickfix","title":"Import 'List' (java.util)"},{"kind":"quickfix","title":"Create class 'List<T>'"}]}
+{"actions":[{"kind":"quickfix","title":"Import 'List' (java.util)"},{"kind":"refactor.extract.variable","title":"Extract to local variable","command":"extract-variable"}]}
 ```
+
+The member `command` (the name of the command, `extract-variable`) is present only on an action that has one; the other
+members are those they were.
 
 In text, every line is neutralised for the terminal, as a title is hostile text: see
 [Text in a terminal](../cli.md#text-in-a-terminal). The cli sends the absolute path of the file to the daemon, which alone

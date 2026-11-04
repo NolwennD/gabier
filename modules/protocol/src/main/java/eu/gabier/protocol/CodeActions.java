@@ -27,18 +27,32 @@ public record CodeActions(List<Action> actions) {
      * @param kind the kind the server gives ({@code quickfix}, {@code refactor.extract.variable}, ...), empty when it
      *     gives none
      * @param title the title the server gives, which is how the action is asked for
+     * @param command the command of gabier that does what the action does ({@code extract-variable}, ...), which is
+     *     gabier's own text and not the server's; empty when the action has none
      */
-    public record Action(String kind, String title) {
+    public record Action(String kind, String title, String command) {
 
         public Action {
             Assert.notNull("kind", kind);
             Assert.notNull("title", title);
+            Assert.notNull("command", command);
+        }
+
+        /** An action that has no command of gabier. */
+        public Action(String kind, String title) {
+            this(kind, title, "");
         }
 
         private String toJson() {
+            if (command.isEmpty()) {
+                return """
+                    {"kind":%s,"title":%s}\
+                    """.formatted(Json.quote(kind), Json.quote(title));
+            }
+
             return """
-                {"kind":%s,"title":%s}\
-                """.formatted(Json.quote(kind), Json.quote(title));
+                {"kind":%s,"title":%s,"command":%s}\
+                """.formatted(Json.quote(kind), Json.quote(title), Json.quote(command));
         }
     }
 
@@ -65,7 +79,10 @@ public record CodeActions(List<Action> actions) {
             throw invalid("A code action is not an object");
         }
 
-        return new Action(text(members, "kind"), text(members, "title"));
+        return new Action(
+                text(members, "kind"),
+                text(members, "title"),
+                members.containsKey("command") ? text(members, "command") : "");
     }
 
     private static String text(Map<?, ?> members, String name) {

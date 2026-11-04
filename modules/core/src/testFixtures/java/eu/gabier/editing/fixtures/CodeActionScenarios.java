@@ -63,6 +63,8 @@ public final class CodeActionScenarios {
     private static final OfferedAction IMPORT_LIST = new OfferedAction("quickfix", "Import 'List' (java.util)");
     private static final OfferedAction TEXT_BLOCK =
             new OfferedAction("quickassist", "Convert String concatenation to Text Block");
+    private static final OfferedAction EXTRACT_VARIABLE =
+            new OfferedAction("refactor.extract.variable", "Extract to local variable");
     private static final OfferedAction CHANGE_SIGNATURE =
             new OfferedAction("refactor.change.signature", "Change signature for 'names'");
 
@@ -90,13 +92,14 @@ public final class CodeActionScenarios {
 
     /**
      * A concatenation of three literals, selected from the first to the end of the last: jdtls offers to write it as a
-     * text block (a quick assist, the kind {@code quickassist}).
+     * text block (a quick assist, the kind {@code quickassist}) and to extract it to a local variable (the kind {@code
+     * refactor.extract.variable}, which {@code gabier extract-variable} does).
      */
     public static final Scenario CODE_ACTIONS_ON_A_CONCATENATION = new Scenario(
             "code-actions-on-a-concatenation",
             CleanUpScenarios.PROJECT,
             new Request.CodeActions(CleanUpScenarios.BANNER, THE_CONCATENATION),
-            new Answer.Offered(new OfferedActions(List.of(TEXT_BLOCK))));
+            new Answer.Offered(new OfferedActions(List.of(EXTRACT_VARIABLE, TEXT_BLOCK))));
 
     /**
      * The name of a method: jdtls offers to change its signature, with a command for the editor to run and no edit

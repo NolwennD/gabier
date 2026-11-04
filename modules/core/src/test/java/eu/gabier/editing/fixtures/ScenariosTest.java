@@ -356,7 +356,7 @@ class ScenariosTest {
                                 .offered()
                                 .actions()
                                 .size()))
-                .containsExactly(1, 1, 1, 0);
+                .containsExactly(1, 2, 1, 0);
     }
 
     @Test

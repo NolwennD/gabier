@@ -15,6 +15,10 @@ class ListingActionsTest extends CliTest {
     private static final Action CREATE = new Action("quickfix", "Create class 'List<T>'");
     private static final Action TEXT_BLOCK = new Action("quickassist", "Convert String concatenation to Text Block");
 
+    private static final Action EXTRACTION =
+            new Action("refactor.extract.variable", "Extract to local variable", "extract-variable");
+    private static final Action INLINE = new Action("refactor.inline", "Inline constant 'LIMIT'", "inline");
+
     private static String offered(Action... actions) {
         return new CodeActions(List.of(actions)).toJson();
     }
@@ -48,6 +52,37 @@ class ListingActionsTest extends CliTest {
                             "2 quickfix Create class 'List<T>'",
                             "3 quickassist Convert String concatenation to Text Block");
             assertThat(err()).isEmpty();
+            assertThat(daemon.requests()).hasSize(1);
+        }
+    }
+
+    @Test
+    void showsTheCommandOfGabierNextToTheTitleOfTheActionsThatHaveOneAndNothingForTheOthers() throws IOException {
+        try (var daemon = daemonAnswering(offered(IMPORT, EXTRACTION, TEXT_BLOCK, INLINE))) {
+            assertThat(runWithSocket("actions", "/project/Offers.java", "4:5", "4:9"))
+                    .isZero();
+
+            assertThat(out().lines())
+                    .containsExactly(
+                            "1 quickfix Import 'List' (java.util)",
+                            "2 refactor.extract.variable Extract to local variable -> gabier extract-variable",
+                            "3 quickassist Convert String concatenation to Text Block",
+                            "4 refactor.inline Inline constant 'LIMIT' -> gabier inline");
+            assertThat(daemon.requests()).hasSize(1);
+        }
+    }
+
+    @Test
+    void givesTheCommandAsAMemberOfTheActionWithTheJsonOptionAndChangesNothingElse() throws IOException {
+        try (var daemon = daemonAnswering(offered(IMPORT, EXTRACTION))) {
+            assertThat(runWithSocket("--json", "actions", "/project/Offers.java", "4:5", "4:9"))
+                    .isZero();
+
+            assertThat(out()).isEqualTo("""
+                {"actions":[\
+                {"kind":"quickfix","title":"Import 'List' (java.util)"},\
+                {"kind":"refactor.extract.variable","title":"Extract to local variable","command":"extract-variable"}]}\
+                """ + System.lineSeparator());
             assertThat(daemon.requests()).hasSize(1);
         }
     }
