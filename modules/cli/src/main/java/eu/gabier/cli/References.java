@@ -28,7 +28,8 @@ final class References implements Capability {
                 /work/demo/src/test/java/demo/LedgerTest.java:6:16: ledger.deposit(20);\
                 """)
             .asksTheDaemon(
-                    "language-server-no-such-symbol: no symbol of the project at the position",
+                    "language-server-no-such-symbol: no symbol of the project at the position (a blank, a comment,"
+                            + " a name that does not resolve)",
                     "editing-file-missing: a file that holds a reference is gone since the language server answered",
                     "editing-stale-edit: a file that holds a reference changed since the language server answered",
                     Refusal.FILE_OUTSIDE_PROJECT,
@@ -44,7 +45,9 @@ final class References implements Capability {
                 The accessors of a field are not references of the field: a getter is found by asking for the getter.
                 A symbol nothing uses prints "no references" and exits with 0; with --json, two empty lists.
                 Only the symbols of the project have references: a type of the JDK or of a library is refused as\
-                 language-server-no-such-symbol, and no place in a library is ever listed.\
+                 language-server-no-such-symbol, and no place in a library is ever listed.
+                A name that does not resolve (its import names a package the project does not see) is refused the same\
+                 way, not answered with the references of the type that holds it: gabier diagnostics tells why.\
                 """);
 
     @Override

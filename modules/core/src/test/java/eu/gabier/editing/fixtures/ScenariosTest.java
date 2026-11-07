@@ -235,6 +235,7 @@ class ScenariosTest {
                         "references-of-a-symbol-nothing-uses",
                         "references-where-there-is-no-symbol",
                         "references-from-a-comment",
+                        "references-of-a-type-that-does-not-resolve",
                         "references-while-the-server-imports",
                         "references-of-a-file-outside-the-project",
                         "move-a-class-to-an-existing-package",
@@ -694,6 +695,7 @@ class ScenariosTest {
                         .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
                 .containsExactlyInAnyOrder(
                         LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
+                        LanguageServerErrorKey.NO_SUCH_SYMBOL,
                         LanguageServerErrorKey.NO_SUCH_SYMBOL,
                         LanguageServerErrorKey.NO_SUCH_SYMBOL,
                         LanguageServerErrorKey.NOT_READY);
@@ -1273,6 +1275,17 @@ class ScenariosTest {
                 .isLessThan(((Request.References) Scenarios.REFERENCES_FROM_A_COMMENT.request())
                         .position()
                         .column());
+    }
+
+    @Test
+    void startsTheReferencesOfATypeThatDoesNotResolveOnItsNameWhichNoFileOfTheProjectDeclares() {
+        Scenario scenario = Scenarios.REFERENCES_OF_A_TYPE_THAT_DOES_NOT_RESOLVE;
+
+        assertThat(identifierAt(
+                        scenario, scenario.request().file(), ((Request.References) scenario.request()).position()))
+                .isEqualTo("Gone");
+        assertThat(scenario.files().values())
+                .noneMatch(source -> source.matches("(?s).*\\b(class|interface|enum|record) Gone\\b.*"));
     }
 
     @Test

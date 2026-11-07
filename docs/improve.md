@@ -973,8 +973,9 @@ src/main/java/demo/Main.java:6:36: System.out.println(greeter.greet("world"));
 ```
 
 Limits: only a type, a method, a field, a local variable or a parameter of the project, tests included; a symbol of the
-JDK or of a library is refused (`language-server-no-such-symbol`). The accessors of a field are not listed. Nothing is
-written. See `gabier help references`.
+JDK or of a library is refused (`language-server-no-such-symbol`), and so is a name that does not resolve: run
+`gabier diagnostics` on the file. The accessors of a field are not listed. Nothing is written. See `gabier help
+references`.
 
 ### The errors of a file, without a build
 

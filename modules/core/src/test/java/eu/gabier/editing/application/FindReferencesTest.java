@@ -129,6 +129,15 @@ class FindReferencesTest {
     }
 
     @Test
+    void refusesATypeThatDoesNotResolveAsTheServerDoes() throws IOException {
+        project(Scenarios.REFERENCES_OF_A_TYPE_THAT_DOES_NOT_RESOLVE);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> find.find(path("src/main/java/demo/Unresolved.java"), new Position(4, 35), false))
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+    }
+
+    @Test
     void refusesAFileOutsideTheProject() throws IOException {
         project(Scenarios.REFERENCES_OF_A_FILE_OUTSIDE_THE_PROJECT);
 

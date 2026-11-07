@@ -198,6 +198,7 @@ public final class Scenarios {
     private static final Path MAIN = Path.of("src/main/java/demo/Main.java");
     private static final Path BROKEN = Path.of("src/main/java/demo/Broken.java");
     private static final Path SLOPPY = Path.of("src/main/java/demo/Sloppy.java");
+    private static final Path UNRESOLVED = Path.of("src/main/java/demo/Unresolved.java");
     private static final Path MISSING = Path.of("src/main/java/demo/Missing.java");
     private static final Path FOLDER = Path.of("src/main/java/demo");
     private static final Path ELSEWHERE = Path.of("../outside/Elsewhere.java");
@@ -470,6 +471,18 @@ public final class Scenarios {
         public class Broken {
             public int answer() {
                 return "forty-two";
+            }
+        }
+        """;
+
+    private static final String UNRESOLVED_SOURCE = """
+        package demo;
+
+        import demo.missing.Gone;
+
+        public class Unresolved implements Gone {
+            Unresolved self() {
+                return this;
             }
         }
         """;
@@ -1784,6 +1797,19 @@ public final class Scenarios {
             new Request.References(LEDGER, new Position(10, 40), false),
             new Answer.Refused(LanguageServerErrorKey.NO_SUCH_SYMBOL));
 
+    /**
+     * The name {@code Gone} after {@code implements}, a type that does not resolve (its import names a package that is
+     * not there). Without the check of {@code prepareRename}, jdtls would answer the references of the type that
+     * encloses the position, {@code Unresolved} (its mention in {@code self}), as for a blank: the adapter takes what
+     * jdtls declines for no symbol.
+     * The project is the one of the diagnostics, which is the one that holds files with errors.
+     */
+    public static final Scenario REFERENCES_OF_A_TYPE_THAT_DOES_NOT_RESOLVE = new Scenario(
+            "references-of-a-type-that-does-not-resolve",
+            withProblems(),
+            new Request.References(UNRESOLVED, new Position(4, 35), false),
+            new Answer.Refused(LanguageServerErrorKey.NO_SUCH_SYMBOL));
+
     /** The project is still being imported: the server cannot say where a symbol is used. */
     public static final Scenario REFERENCES_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "references-while-the-server-imports",
@@ -1970,6 +1996,7 @@ public final class Scenarios {
                 REFERENCES_OF_A_SYMBOL_NOTHING_USES,
                 REFERENCES_WHERE_THERE_IS_NO_SYMBOL,
                 REFERENCES_FROM_A_COMMENT,
+                REFERENCES_OF_A_TYPE_THAT_DOES_NOT_RESOLVE,
                 REFERENCES_WHILE_THE_SERVER_IMPORTS,
                 REFERENCES_OF_A_FILE_OUTSIDE_THE_PROJECT);
     }
@@ -1988,6 +2015,7 @@ public final class Scenarios {
         Map<Path, String> files = new HashMap<>(PROJECT);
         files.put(BROKEN, BROKEN_SOURCE);
         files.put(SLOPPY, SLOPPY_SOURCE);
+        files.put(UNRESOLVED, UNRESOLVED_SOURCE);
 
         return files;
     }

@@ -56,6 +56,13 @@ cleans it.
 - **The test sources are searched** (`java.search.scope` is left at its default, `all`). A source folder is a test source
   when the project marks it so (`test=true` in the `.classpath` of an Eclipse project; the test source set of a Gradle
   or Maven project).
+- **A name that does not resolve is refused**, as a position on nothing is: the type of an `implements`, a field or a
+  parameter whose import names a package the project does not see (a module that is not required, a package that is not
+  exported, a package that does not exist) has no symbol to find the uses of. jdtls declines it as it declines
+  a blank, so the key is the same, `language-server-no-such-symbol`; fix what `gabier diagnostics` reports on the file
+  (`cannot be resolved to a type`, `is not accessible`) and ask again. A fully qualified name that does not resolve
+  (`foo.bar.Third` in `foo.bar.Third third;`) is not refused by jdtls: it is answered as a symbol nothing uses, `no
+  references`.
 - **A position on nothing** (a blank, a comment, a keyword) is refused. Without the check, jdtls would answer the references
   of the member that encloses the position, which is a wrong answer.
 
@@ -74,7 +81,8 @@ replays the contract scenarios `references-*` against the real jdtls.
 A refusal is the problem object on the standard error, exit code 2, and nothing is written. These are the keys the
 command can answer, and the help of the command (`gabier help references`) lists them:
 
-- `language-server-no-such-symbol`: no symbol of the project at the position.
+- `language-server-no-such-symbol`: no symbol of the project at the position: a blank, a comment, a keyword, a package,
+  a type of the JDK or of a library, or a name that does not resolve.
 - `editing-file-missing`: a file that holds a reference is gone since the language server answered.
 - `editing-stale-edit`: a file that holds a reference changed since the language server answered.
 - `language-server-file-outside-project`: the file is not in the project the daemon serves.
