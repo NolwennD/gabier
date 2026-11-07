@@ -167,7 +167,7 @@ level or later; `gabier diagnostics` shows the errors if it is not.
 
 ### A string built from literals with `+` and line breaks
 
-Words: string concatenation into a text block, make a text block, use a text block, multi-line string, escaped quotes
+Words: string concatenation into a text block, text blocks, make a text block, use a text block, multi-line string
 
 Ask: `gabier cleanup --dry-run <file> stringConcatToTextBlock`
 
@@ -904,7 +904,7 @@ literal, a build file, `module-info.java`) is not renamed. A record component an
 
 ### Imports that are missing, unused or out of order
 
-Words: fix the imports, unused imports, missing import, import order, sort imports, star import, remove imports
+Words: organize or fix imports, unused imports, missing import, import order, sort imports, star import, remove imports
 
 Ask: `gabier organize-imports --dry-run <file>`, then without `--dry-run`.
 
@@ -957,7 +957,7 @@ one source folder. A member that was package-private and used from the old packa
 
 ### Where a symbol is used
 
-Words: find usages, find references, who calls this method, callers, where is it used, uses of a symbol
+Words: find usages, find references, list references, who calls this method, callers, where is it used, uses of a symbol
 
 Ask: `gabier references [--include-declaration] <file> <line>:<column>` with the position on the symbol (1-based).
 
@@ -973,7 +973,7 @@ written. See `gabier help references`.
 
 ### The errors of a file, without a build
 
-Words: see the errors, compile errors, warnings, does this file compile, problems of a file, without a build
+Words: see or show the errors, compile errors, warnings, does this file compile, problems of a file, without a build
 
 Ask: `gabier diagnostics <file>`.
 

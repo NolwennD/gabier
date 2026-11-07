@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * The documents that answer a question, best first: BM25 over the words of the documents ({@link Words}), with the
@@ -20,9 +21,10 @@ import java.util.Set;
  * body once. The question is a set of words: a word asked twice counts once.
  *
  * <p>The score ranks, it does not say that a document answers: a document answers when it also holds {@value
- * #MINIMUM_TOPIC_WORDS} distinctive words of the question in its title or its keywords. A word every other document
- * holds ("the", "and") proves nothing, and neither does a word of the body only, or a lone word: a question of one word
- * has no answer.
+ * #MINIMUM_TOPIC_WORDS} distinctive words of the question in its title or its keywords. A word that many documents
+ * hold in their title or keywords ("the") proves nothing, and neither does a word of the body only, or a lone word: a
+ * question of one word has no answer. A demonstrative of the question ("this", {@link #DEMONSTRATIVES}) points at the
+ * code in front of the person and is not a word of the task: it is left out of the question.
  */
 public final class Ranking {
 
@@ -43,7 +45,7 @@ public final class Ranking {
      * questions of {@code questionsWithNoAnswer} (the table of questions, {@code GuideQuestionsTest}) that hold two
      * distinctive words of a section, and so are not cut by {@link #MINIMUM_TOPIC_WORDS} (at most 0.242: "document the
      * new class in the wiki"; 0.236: "bake a new class of bread"), and the confidence of the best section for the real
-     * questions of the table (at least 0.352: "remove imports I don't use"). The other questions of that list are cut
+     * questions of the table (at least 0.338: "remove imports I don't use"). The other questions of that list are cut
      * by the minimum, whatever their confidence ("run the build and the tests" is at 0.451, "the" at 0.914).
      */
     static final double THRESHOLD = 0.3;
@@ -56,8 +58,10 @@ public final class Ranking {
 
     /**
      * The idf from which a word tells documents apart: {@code ln(1 + (N - n + 0.5) / (n + 0.5)) >= 1}, that is a word
-     * that about a third of the documents hold at most (n = 15 of the 43 sections of the guide, n = 3 of 10). A word of
-     * a question that more documents hold ("the", "and", "run") says nothing about the task.
+     * that about a third of the documents hold at most (n = 15 of the 43 sections of the guide, n = 3 of 10), n being
+     * the documents that hold it in their title or their keywords, not anywhere: "file" is in the text of 34 sections
+     * and in the title or the keywords of 3, and a person who asks for a "new file" names a task. A word of a question
+     * that more documents hold in their topic ("the", in 21 of 43) says nothing about the task.
      */
     static final double DISTINCTIVE_IDF = 1.0;
 
@@ -67,6 +71,12 @@ public final class Ranking {
      * of one word has none, whatever the word ("block" held by nine sections of 43, "the" by forty).
      */
     static final int MINIMUM_TOPIC_WORDS = 2;
+
+    /**
+     * The words of a question that point at the code in front of the person ("rename this method") and say nothing of
+     * the task. They are the only words left out of a question, and only of the question: a document may hold them.
+     */
+    static final Set<String> DEMONSTRATIVES = Set.of("this", "that", "these", "those");
 
     private static final double K1 = 1.5;
 
@@ -80,17 +90,21 @@ public final class Ranking {
 
     private final Map<String, Integer> documentsWithTheWord;
 
+    private final Map<String, Integer> documentsWithTheTopicWord;
+
     private final double averageLength;
 
     private Ranking(
             List<Map<String, Integer>> frequencies,
             List<Integer> lengths,
             List<Set<String>> topics,
-            Map<String, Integer> documentsWithTheWord) {
+            Map<String, Integer> documentsWithTheWord,
+            Map<String, Integer> documentsWithTheTopicWord) {
         this.frequencies = frequencies;
         this.lengths = lengths;
         this.topics = topics;
         this.documentsWithTheWord = documentsWithTheWord;
+        this.documentsWithTheTopicWord = documentsWithTheTopicWord;
         averageLength = lengths.stream().mapToInt(Integer::intValue).average().orElse(0);
     }
 
@@ -100,6 +114,7 @@ public final class Ranking {
         var lengths = new ArrayList<Integer>();
         var topics = new ArrayList<Set<String>>();
         var documentsWithTheWord = new HashMap<String, Integer>();
+        var documentsWithTheTopicWord = new HashMap<String, Integer>();
         for (var document : documents) {
             var counts = new HashMap<String, Integer>();
             count(counts, document.title(), TITLE_WEIGHT);
@@ -111,10 +126,15 @@ public final class Ranking {
             topic.addAll(Words.split(document.keywords()));
             topics.add(Set.copyOf(topic));
             counts.keySet().forEach(word -> documentsWithTheWord.merge(word, 1, Integer::sum));
+            topic.forEach(word -> documentsWithTheTopicWord.merge(word, 1, Integer::sum));
         }
 
         return new Ranking(
-                List.copyOf(frequencies), List.copyOf(lengths), List.copyOf(topics), Map.copyOf(documentsWithTheWord));
+                List.copyOf(frequencies),
+                List.copyOf(lengths),
+                List.copyOf(topics),
+                Map.copyOf(documentsWithTheWord),
+                Map.copyOf(documentsWithTheTopicWord));
     }
 
     private static void count(Map<String, Integer> counts, String text, int weight) {
@@ -164,13 +184,15 @@ public final class Ranking {
     }
 
     private static Set<String> wordsOf(String question) {
-        return new LinkedHashSet<>(Words.split(question));
+        return Words.split(question).stream()
+                .filter(word -> !DEMONSTRATIVES.contains(word))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private long topicWordsHeldBy(int index, Collection<String> words) {
         return words.stream()
                 .filter(topics.get(index)::contains)
-                .filter(word -> idf(word) >= DISTINCTIVE_IDF)
+                .filter(word -> idf(word, documentsWithTheTopicWord) >= DISTINCTIVE_IDF)
                 .count();
     }
 
@@ -188,7 +210,11 @@ public final class Ranking {
     }
 
     private double idf(String word) {
-        var holding = documentsWithTheWord.getOrDefault(word, 0);
+        return idf(word, documentsWithTheWord);
+    }
+
+    private double idf(String word, Map<String, Integer> documentsWithWord) {
+        var holding = documentsWithWord.getOrDefault(word, 0);
 
         return Math.log(1 + (frequencies.size() - holding + 0.5) / (holding + 0.5));
     }

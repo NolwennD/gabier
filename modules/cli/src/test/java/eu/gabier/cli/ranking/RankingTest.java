@@ -260,6 +260,58 @@ class RankingTest {
         assertThat(ranking.answer("alpha common")).isEmpty();
     }
 
+    /**
+     * A word is distinctive by the documents that hold it in their title or their keywords, not by the documents that
+     * hold it anywhere: "alpha" and "beta" are in the keywords of document 0 and in the body of the nine others, as
+     * "file" is in the text of most sections of the guide and in the title of one.
+     */
+    @Test
+    void aWordIsDistinctiveByTheDocumentsThatHoldItInTheirKeywordsNotInTheirBody() {
+        var documents = new ArrayList<Document>();
+        documents.add(new Document("", "alpha beta", ""));
+        for (var other = 1; other < 10; other++) {
+            documents.add(new Document("", "", "alpha beta filler"));
+        }
+        var ranking = Ranking.of(documents);
+
+        assertThat(ranking.answer("alpha beta")).extracting(Match::index).containsExactly(0);
+    }
+
+    @Test
+    void aWordHeldByHalfOfTheDocumentsInTheirKeywordsIsNoEvidence() {
+        var documents = new ArrayList<Document>();
+        for (var holder = 0; holder < 5; holder++) {
+            documents.add(new Document("", "alpha beta", ""));
+        }
+        for (var other = 5; other < 10; other++) {
+            documents.add(body("filler"));
+        }
+        var ranking = Ranking.of(documents);
+
+        assertThat(ranking.rank("alpha beta")).isNotEmpty();
+        assertThat(ranking.answer("alpha beta")).isEmpty();
+    }
+
+    /**
+     * "this" points at the code in front of the person, it does not name the task: the question "this alpha" is the
+     * question "alpha", of one word, even when a document holds "this" in its keywords.
+     */
+    @Test
+    void aDemonstrativeOfTheQuestionIsNotAWordOfTheTask() {
+        var documents = new ArrayList<Document>();
+        documents.add(new Document("", "alpha this", ""));
+        for (var other = 1; other < 10; other++) {
+            documents.add(new Document("", "common", "filler" + other));
+        }
+        var ranking = Ranking.of(documents);
+
+        assertThat(ranking.rank("those alpha")).isEqualTo(ranking.rank("alpha"));
+        assertThat(ranking.rank("that alpha")).isEqualTo(ranking.rank("alpha"));
+        assertThat(ranking.rank("these alpha")).isEqualTo(ranking.rank("alpha"));
+        assertThat(ranking.answer("this alpha")).isEmpty();
+        assertThat(ranking.answer("alpha this")).isEmpty();
+    }
+
     @Test
     void aQuestionWithNoWordOfTheDocumentsFindsNothing() {
         var ranking = Ranking.of(List.of(body("apple banana"), body("cherry date")));

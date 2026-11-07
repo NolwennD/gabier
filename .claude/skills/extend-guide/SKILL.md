@@ -34,8 +34,9 @@ situation: its title is the situation, never the name of a tool. A situation met
      their text, with no stemming: write the forms a person types ("concatenation", not only "concat") and a phrase for the move the
      entry is the answer to ("turn a string concatenation into a text block"). The line is one line of 120 columns at
      most (the next line is read as text, at the weight of the body). A section answers only when the question has
-     **two distinctive words** (held by about a third of the sections at most) in its title or this line, so the words
-     of the situation go there, not in the text;
+     **two distinctive words** (held in the title or the `Words:` line of about a third of the sections at most; "this",
+     "that", "these" and "those" are left out of the question) in its title or this line, so the words of the situation
+     go there, not in the text, and the name of the task as an agent types it ("organize imports", "show errors") is there too;
    - `Ask:` the command or the action, or `By hand:` when gabier has none (exactly one of the two);
    - `Before:` and `After:` with a fenced `java` block each, when there is code;
    - `Limits:` one paragraph: the Java release it needs when there is one, then when it does not work and

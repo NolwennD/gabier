@@ -48,12 +48,16 @@ the cli, written in plain Java): a word is cut at case changes, punctuation, hyp
 the forms a person uses (`ifs` and `if` are two words). A section is part of the answer when it holds **at least two
 distinctive words of the task in its title or its `Words:` line**, and its confidence (its score over the highest score
 the words of the task could get) is at least 0.3 and at least 0.6 of the best one's; nothing else matches. A word is
-distinctive when its idf is at least 1, which is a word that about a third of the sections hold at most: "the", "and"
-and "run" are not, "text", "block" and "rename" are. The consequence is that **a task of one word never has an answer**,
+distinctive when its idf is at least 1, which is a word that about a third of the sections hold at most **in their
+title or their `Words:` line** (not anywhere in their text: "file" is in the text of 34 of the 43 sections and in the
+title or the `Words:` line of 3, so `--for="new file"` answers): "the" and "run" are not, "text", "block" and "rename"
+are. A demonstrative of the task ("this", "that", "these", "those") points at the code in front of the person and is not
+a word of the task: `--for="rename this method"` is `--for="rename method"`, and `--for="this used"` has one word left,
+so no answer. The consequence is that **a task of one word never has an answer**,
 whatever the word (`--for=rename` says `Nothing in the guide matches "rename".`; `--for="rename a method"` answers), and
-that a task with one such word only, the other being in the text of a section, such as "run the build and the tests"
-(`tests` is in the `Words:` line of one section, `build` in the text of others), has none either. It reads the guide of the build, so it needs no
-clone, no daemon and no network. A wrong answer, or no answer, to a real task is a friction: see the rule
+that a task whose distinctive words are spread over several sections, none holding two of them, such as "run the build
+and the tests" (`tests` is in the `Words:` line of one section, `build` in the title of another), has none either. It
+reads the guide of the build, so it needs no clone, no daemon and no network. A wrong answer, or no answer, to a real task is a friction: see the rule
 `dogfooding.md`.
 
 `help` is the one command that never talks to the daemon: it starts none, opens no socket and works with no project. It is

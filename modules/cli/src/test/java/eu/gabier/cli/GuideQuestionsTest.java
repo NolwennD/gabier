@@ -25,6 +25,8 @@ class GuideQuestionsTest {
     private static final Ranking RANKING = Ranking.of(
             GuideSections.ofTheGuide().stream().map(GuideSection::document).toList());
 
+    private static final String FIELDS_WITHOUT_THIS = "Fields used without `this.`";
+
     private static final List<GuideSection> SECTIONS = GuideSections.ofTheGuide();
 
     static Stream<Arguments> questions() {
@@ -83,7 +85,15 @@ class GuideQuestionsTest {
                 question("make a new interface file", "A new file for a new type"),
                 question("the compiler says cannot find symbol", "A compiler error that jdtls has a fix for"),
                 question("write this string as a text block", "A string built from literals with `+` and line breaks"),
-                question("join two nested ifs into one", "Conditions to join or to split"));
+                question("join two nested ifs into one", "Conditions to join or to split"),
+                // The name of the task as an agent knows it, in two words (the review of 04-11-2026).
+                question("organize imports", "Imports that are missing, unused or out of order"),
+                question("show errors", "The errors of a file, without a build"),
+                question("list references", "Where a symbol is used"),
+                question("new file", "A new file for a new type"),
+                question("text blocks", "A string built from literals with `+` and line breaks"),
+                question("extract variable", "An expression used twice, or too long to read"),
+                question("inline variable", "A call that hides what it does"));
     }
 
     private static Arguments question(String question, String title) {
@@ -123,6 +133,20 @@ class GuideQuestionsTest {
     @MethodSource("questionsWithNoAnswer")
     void aQuestionWithNoRelationToTheGuideGetsNoAnswer(String question) {
         assertThat(RANKING.answer(question)).isEmpty();
+    }
+
+    @Test
+    void thisIsNotAWordOfTheTaskSoThisUsedDoesNotAnswerTheSectionOfThisDot() {
+        assertThat(RANKING.answer("this used"))
+                .extracting(match -> titleOf(match))
+                .doesNotContain(FIELDS_WITHOUT_THIS);
+    }
+
+    @Test
+    void renameThisMethodAnswersTheRenameSectionAlone() {
+        var answer = RANKING.answer("rename this method");
+
+        assertThat(answer).extracting(match -> titleOf(match)).containsExactly("A name to change everywhere");
     }
 
     @Test
