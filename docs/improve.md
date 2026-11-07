@@ -761,8 +761,9 @@ int count = names.size();
 if (count > limit && names.size() < max) {
 ```
 
-Limits: the selection must be an expression; `gabier help extract-variable` lists the refusals. The action `Extract to
-local variable (replace all occurrences)` of `gabier actions` links to this command too.
+Limits: the selection must be an expression; `gabier help extract-variable` lists the refusals. The command replaces the
+selected expression only: the action `Extract to local variable (replace all occurrences)` of `gabier actions` is linked
+to it, and to replace every occurrence it is applied with `gabier apply-action`.
 
 ### Statements that deserve a name
 
@@ -779,8 +780,8 @@ Words: inline method, inline variable, remove a wrapper, replace by its body, on
 Ask: `gabier inline [--dry-run] <file> <line>:<column>`
 
 Limits: on the declaration of a method or a constant every use is inlined; on one use, that use only. See `gabier help
-inline`. `gabier actions` also lists `Make Static` with the command `inline`: that is the kind jdtls gives it, and `Make
-Static` is not an inline; apply it with `gabier apply-action`.
+inline`. `gabier actions` lists `Make Static` with no command: jdtls gives it the kind of the inlining, and it is not an
+inline; apply it with `gabier apply-action`.
 
 ### A condition to turn round
 

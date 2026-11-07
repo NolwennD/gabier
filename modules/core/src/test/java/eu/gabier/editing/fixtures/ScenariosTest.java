@@ -268,6 +268,8 @@ class ScenariosTest {
                         "code-actions-on-a-type-that-is-not-imported",
                         "code-actions-on-a-concatenation",
                         "code-actions-on-the-name-of-a-method",
+                        "code-actions-on-the-use-of-a-constant",
+                        "code-actions-on-a-method-that-can-be-made-static",
                         "code-actions-where-nothing-is-offered",
                         "code-actions-while-the-server-imports",
                         "code-actions-of-a-file-outside-the-project",
@@ -361,7 +363,7 @@ class ScenariosTest {
                                 .offered()
                                 .actions()
                                 .size()))
-                .containsExactly(1, 2, 1, 0);
+                .containsExactly(1, 2, 1, 5, 2, 0);
     }
 
     @Test

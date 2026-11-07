@@ -43,6 +43,7 @@ import java.util.Map;
 public final class CodeActionScenarios {
 
     private static final Path OFFERS = Path.of("src/main/java/demo/Offers.java");
+    private static final Path SUMS = Path.of("src/main/java/demo/Sums.java");
     private static final Path ELSEWHERE = Path.of("../outside/Elsewhere.java");
 
     /** A method whose return type {@code List} is not imported, a blank line, and a method with nothing to offer. */
@@ -60,11 +61,42 @@ public final class CodeActionScenarios {
         }
         """);
 
+    /**
+     * A constant, a method that uses no member of its class, and an expression that uses the constant: the places
+     * where jdtls offers the refactorings that a command of gabier also does.
+     */
+    private static final Map<Path, String> SUMS_PROJECT = Map.of(SUMS, """
+        package demo;
+
+        public class Sums {
+
+            static final int LIMIT = 10;
+
+            int twice(int x) {
+                return x * 2;
+            }
+
+            int sums() {
+                int total = (1 + 2) * (1 + 2);
+                int more = twice(total) + LIMIT;
+                return more;
+            }
+        }
+        """);
+
     private static final OfferedAction IMPORT_LIST = new OfferedAction("quickfix", "Import 'List' (java.util)");
     private static final OfferedAction TEXT_BLOCK =
             new OfferedAction("quickassist", "Convert String concatenation to Text Block");
     private static final OfferedAction EXTRACT_VARIABLE =
             new OfferedAction("refactor.extract.variable", "Extract to local variable");
+    private static final OfferedAction EXTRACT_FIELD = new OfferedAction("refactor.extract.field", "Extract to field");
+    private static final OfferedAction EXTRACT_CONSTANT =
+            new OfferedAction("refactor.extract.constant", "Extract to constant");
+    private static final OfferedAction EXTRACT_METHOD =
+            new OfferedAction("refactor.extract.function", "Extract to method");
+    private static final OfferedAction INLINE_CONSTANT = new OfferedAction("refactor.inline", "Inline Constant");
+    private static final OfferedAction INLINE_METHOD = new OfferedAction("refactor.inline", "Inline Method");
+    private static final OfferedAction MAKE_STATIC = new OfferedAction("refactor.inline", "Make Static");
     private static final OfferedAction CHANGE_SIGNATURE =
             new OfferedAction("refactor.change.signature", "Change signature for 'names'");
 
@@ -76,6 +108,12 @@ public final class CodeActionScenarios {
 
     /** The three literals of the concatenation of {@code Banner}, from the first character to the end of the last. */
     private static final Range THE_CONCATENATION = range(4, 15, 6, 26);
+
+    /** The use of {@code LIMIT} in {@code sums}. */
+    private static final Range THE_CONSTANT = range(12, 34, 12, 39);
+
+    /** The name {@code twice}. */
+    private static final Range THE_METHOD_NAME = range(6, 8, 6, 13);
 
     /** The blank line between the two methods of {@code Offers}. */
     private static final Range A_BLANK_LINE = range(6, 0, 6, 0);
@@ -110,6 +148,28 @@ public final class CodeActionScenarios {
             PROJECT,
             new Request.CodeActions(OFFERS, THE_NAME),
             new Answer.Offered(new OfferedActions(List.of(CHANGE_SIGNATURE))));
+
+    /**
+     * The use of a constant: jdtls offers the five refactorings that a command of gabier does, one kind each: the
+     * extraction to a local variable, to a field, to a constant and to a method, and the inlining of the constant (the
+     * kinds are what {@code gabier actions} makes the link from, {@code OfferedAction#command}).
+     */
+    public static final Scenario CODE_ACTIONS_ON_THE_USE_OF_A_CONSTANT = new Scenario(
+            "code-actions-on-the-use-of-a-constant",
+            SUMS_PROJECT,
+            new Request.CodeActions(SUMS, THE_CONSTANT),
+            new Answer.Offered(new OfferedActions(
+                    List.of(EXTRACT_VARIABLE, EXTRACT_FIELD, INLINE_CONSTANT, EXTRACT_CONSTANT, EXTRACT_METHOD))));
+
+    /**
+     * The name of a method that uses no member of its class: jdtls gives the kind {@code refactor.inline} to "Make
+     * Static" as to "Inline Method", and the link to {@code gabier inline} is made for the second only.
+     */
+    public static final Scenario CODE_ACTIONS_ON_A_METHOD_THAT_CAN_BE_MADE_STATIC = new Scenario(
+            "code-actions-on-a-method-that-can-be-made-static",
+            SUMS_PROJECT,
+            new Request.CodeActions(SUMS, THE_METHOD_NAME),
+            new Answer.Offered(new OfferedActions(List.of(MAKE_STATIC, INLINE_METHOD))));
 
     /** A blank line holds no problem and no code: jdtls offers nothing there (once the actions of a file are left out). */
     public static final Scenario CODE_ACTIONS_WHERE_NOTHING_IS_OFFERED = new Scenario(
@@ -179,6 +239,8 @@ public final class CodeActionScenarios {
                 CODE_ACTIONS_ON_A_TYPE_THAT_IS_NOT_IMPORTED,
                 CODE_ACTIONS_ON_A_CONCATENATION,
                 CODE_ACTIONS_ON_THE_NAME_OF_A_METHOD,
+                CODE_ACTIONS_ON_THE_USE_OF_A_CONSTANT,
+                CODE_ACTIONS_ON_A_METHOD_THAT_CAN_BE_MADE_STATIC,
                 CODE_ACTIONS_WHERE_NOTHING_IS_OFFERED,
                 CODE_ACTIONS_WHILE_THE_SERVER_IMPORTS,
                 CODE_ACTIONS_OUTSIDE_THE_PROJECT,

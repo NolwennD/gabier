@@ -25,8 +25,10 @@ the **language server's text**: gabier does not interpret them. The number chang
 what the range offers), so `apply-action` takes the title.
 
 **The command of gabier.** An action whose kind a command of gabier covers is followed by `-> gabier <command>`. The
-link is made from the **kind**, never from the title (the title is the server's text, and several actions can share a
-command: jdtls offers "Extract to local variable" and "Extract to local variable (replace all occurrences)"):
+link is made from the **kind**, not from the title (the title is the server's text, and several actions can share a
+kind), with one exception, the kind `refactor.inline`: jdtls gives it to "Make Static" as well as to "Inline Method",
+"Inline Constant" and "Inline local variable", and only the last three are what `inline` does, so an action of that kind
+is linked when its title starts with `Inline`.
 
 | Kind of the action | Command | How to call it |
 | --- | --- | --- |
@@ -34,7 +36,13 @@ command: jdtls offers "Extract to local variable" and "Extract to local variable
 | `refactor.extract.field` | [`extract-field`](extract-field.md) | the same file and range, then the name of the field |
 | `refactor.extract.function` | [`extract-method`](extract-method.md) | the same file and range, then the name of the method |
 | `refactor.extract.constant` | [`extract-constant`](extract-constant.md) | the same file and range, then the name of the constant |
-| `refactor.inline` | [`inline`](inline.md) | the file and one position, on the name to inline |
+| `refactor.inline`, titled `Inline ...` | [`inline`](inline.md) | the file and one position, on the name to inline |
+
+**The command is not always what the action does.** jdtls offers two extractions to a local variable, with the same kind:
+"Extract to local variable" and "Extract to local variable (replace all occurrences)". Both are linked to
+`extract-variable`, which replaces the **selected expression only** ([`extract-variable`](extract-variable.md)). To replace
+every occurrence, apply the second one by its title with `apply-action` (it takes the name jdtls guesses). "Make Static"
+is not linked: it makes the method static and inlines nothing.
 
 Prefer the command when the name matters: `apply-action` applies the action as the server proposes it, with the name jdtls
 guesses (`String string = ...`), where the command takes the name you ask for. An action with no such command (a fix, a
@@ -89,7 +97,11 @@ jdtls's answer:
 - **`codeAction.resolveSupport` for `edit`**: jdtls computes the edit of an action when it is chosen, not in the list.
 
 No `java.*` setting is involved. `ScenarioReplayTest` replays the contract scenarios `code-actions-*` against the real
-jdtls: what it must offer (it may offer more), and that a blank line offers nothing.
+jdtls: what it must offer (it may offer more), and that a blank line offers nothing. Each kind of the table above is
+replayed: `code-actions-on-a-concatenation` (`refactor.extract.variable`), `code-actions-on-the-use-of-a-constant`
+(`refactor.extract.field`, `refactor.extract.constant`, `refactor.extract.function` and `refactor.inline`, with "Inline
+Constant") and `code-actions-on-a-method-that-can-be-made-static` ("Make Static" and "Inline Method", both of the kind
+`refactor.inline`).
 
 ## Refusals
 

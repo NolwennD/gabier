@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
 class JdtlsCouplingTest {
 
     /** The scenarios whose replay compares the exact answer of the server: the titles of the offered actions. */
-    private static final int MOST_EXACT_COMPARISONS = 4;
+    private static final int MOST_EXACT_COMPARISONS = 6;
 
     /** The messages of diagnostics the fixtures hold, written as the Eclipse compiler words them (not compared). */
     private static final int MOST_COMPILER_MESSAGES = 5;
@@ -32,9 +32,13 @@ class JdtlsCouplingTest {
     /**
      * The titles of actions the fixtures hold, written as jdtls words them (compared exactly). Four since {@code gabier
      * actions} names the command of an action by its kind: the scenario of a concatenation holds the extraction jdtls
-     * offers there, whose kind is what the link is made of.
+     * offers there, whose kind is what the link is made of. Eleven since each kind of the table of {@code
+     * OfferedAction} is replayed on the real jdtls (the extractions to a field, a constant and a method, and the
+     * inlining, with "Make Static", which has the kind of the inlining): a kind is what a scenario must see offered,
+     * and a title is the only way the fixtures name an action, so the scenarios of the kinds hold seven titles and
+     * two comparisons more.
      */
-    private static final int MOST_ACTION_TITLES = 4;
+    private static final int MOST_ACTION_TITLES = 11;
 
     /** The edits that write a new line with an indentation: the text the server's formatter decided. */
     private static final int MOST_INDENTED_EDITS = 26;

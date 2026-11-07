@@ -22,6 +22,9 @@ class ListCodeActionsTest {
 
     private static final String OFFERS = "src/main/java/demo/Offers.java";
     private static final Range THE_TYPE = new Range(new Position(3, 4), new Position(3, 8));
+    private static final String SUMS = "src/main/java/demo/Sums.java";
+    private static final Range THE_CONSTANT = new Range(new Position(12, 34), new Position(12, 39));
+    private static final Range THE_METHOD_NAME = new Range(new Position(6, 8), new Position(6, 13));
     private static final Range A_BLANK_LINE = new Range(new Position(6, 0), new Position(6, 0));
 
     @TempDir
@@ -68,6 +71,29 @@ class ListCodeActionsTest {
                         .actions())
                 .extracting(action -> action.command().orElse("-"))
                 .containsExactly("extract-variable", "-");
+    }
+
+    @Test
+    void namesTheCommandOfEachKindOfRefactoringOfferedOnTheUseOfAConstant() throws IOException {
+        project(CodeActionScenarios.CODE_ACTIONS_ON_THE_USE_OF_A_CONSTANT);
+
+        assertThat(list.list(root.resolve(SUMS), THE_CONSTANT).actions())
+                .extracting(action -> action.kind() + " -> " + action.command().orElse("-"))
+                .containsExactly(
+                        "refactor.extract.variable -> extract-variable",
+                        "refactor.extract.field -> extract-field",
+                        "refactor.inline -> inline",
+                        "refactor.extract.constant -> extract-constant",
+                        "refactor.extract.function -> extract-method");
+    }
+
+    @Test
+    void doesNotNameInlineForMakeStaticWhichJdtlsOffersWithTheKindOfTheInlining() throws IOException {
+        project(CodeActionScenarios.CODE_ACTIONS_ON_A_METHOD_THAT_CAN_BE_MADE_STATIC);
+
+        assertThat(list.list(root.resolve(SUMS), THE_METHOD_NAME).actions())
+                .extracting(action -> action.title() + " -> " + action.command().orElse("-"))
+                .containsExactly("Make Static -> -", "Inline Method -> inline");
     }
 
     @Test
