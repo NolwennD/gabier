@@ -45,7 +45,10 @@ final class Move implements Capability {
                 The package is created, with its folder, when it does not exist; a dry run creates nothing.
                 The default package cannot be the target.
                 The files must be Java sources of one source folder of the project.
-                The references and the imports of the project follow the moved classes.
+                The references and the imports of the project follow the moved classes, the fully qualified names
+                too, and a nested type keeps its outer type (Invoice.Line). A name in a string literal or a comment
+                is not rewritten.
+                jdtls does not sort the imports it writes: run gabier organize-imports on the modified files.
                 A member that was package-private in the old package, used from there, is no longer reachable.
                 Run gabier diagnostics on the files that use it after the move.\
                 """);

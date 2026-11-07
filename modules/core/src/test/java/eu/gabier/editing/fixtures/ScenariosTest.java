@@ -244,6 +244,7 @@ class ScenariosTest {
                         "move-the-last-class-of-a-package",
                         "move-the-last-class-of-a-package-that-has-a-package-info",
                         "move-a-class-that-another-module-uses",
+                        "move-a-class-with-nested-types-that-another-module-uses",
                         "move-a-class-to-the-package-it-is-in",
                         "move-a-class-to-a-package-that-has-a-file-of-its-name",
                         "move-a-file-that-is-not-a-java-source",
@@ -591,7 +592,7 @@ class ScenariosTest {
     void movesEachFileToTheFolderOfThePackageUnderItsSourceFolderAndRewritesItsPackageLine(@TempDir Path directory)
             throws IOException {
         List<Scenario> moves = answeredWith(Answer.MovedToPackage.class);
-        assertThat(moves).hasSize(7);
+        assertThat(moves).hasSize(8);
         for (Scenario scenario : moves) {
             Path root = Files.createTempDirectory(directory, "project");
             Scenario inside = scenario.inside(root);

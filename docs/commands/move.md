@@ -43,6 +43,21 @@ links from the build: a Gradle build whose plugin `org.gradlex.extra-java-module
 projects (its default) gives jdtls no link between the modules, and the move then rewrites the module of the class only.
 Such a build sets `skipLocalJars = true` in its `extraJavaModuleInfo` block, as gabier's own does.
 
+**What is rewritten.** The references to a moved class in Java code: the `import` lines, the static imports, and every
+fully qualified name (`new demo.Invoice()` becomes `new demo.billing.Invoice()`), in the other packages and in the other
+modules of the build. A nested type used through its outer type (`Invoice.Line`) keeps the outer name: only the import
+and the package of a qualified name change. The names in a string literal (`"demo.Invoice"`) and in a comment are text,
+not references: they are **not** rewritten, and neither is a name in a file that is not Java (a resource, a build file).
+Search for the old name in them after the move.
+
+**The order of the imports.** jdtls rewrites the imports of a file without sorting the whole block: the import of a moved
+class can land out of the order of the project (observed: `import demo.aaa.Thing;` written between `import
+demo.Outer.Success;` and `import demo.Sibling;`, where the order of the project puts it after both). The import
+preferences of the project are given to jdtls before the move (as `gabier organize-imports` does, `java.completion.importOrder`
+and the thresholds), and no setting of jdtls that gabier knows makes the refactoring sort the block, so the answer is
+relayed as jdtls gives it. Run `gabier organize-imports` on the files the move modified to put the imports in the order
+of the project (run `gabier diagnostics` on them first: a file whose imports jdtls cannot resolve loses them).
+
 **After the move.** gabier does not compile the project. A member that was package-private (no `public`) in the old
 package and that the moved class uses, or that uses the moved class, is no longer reachable from the other package: jdtls
 moves the class all the same, and says nothing about it. Run `gabier diagnostics` on the files that use the moved

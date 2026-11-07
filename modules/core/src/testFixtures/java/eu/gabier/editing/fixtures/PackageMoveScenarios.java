@@ -51,6 +51,11 @@ import java.util.Map;
  *       them: a Gradle build whose plugin {@code org.gradlex.extra-java-module-info} transforms the jars of its own
  *       projects (its default, {@code skipLocalJars} false) gives none, and jdtls then rewrites the module of the class
  *       only.
+ *   <li>A nested type is used through its outer type ({@code Reply.Ok}), as a type, in a {@code new} and in an {@code
+ *       instanceof}, or through a qualified name ({@code demo.shared.Reply.Failed}): the move rewrites the import and
+ *       the package of the qualified name, and the outer type stays in front of the nested one ({@link
+ *       #MOVE_A_CLASS_WITH_NESTED_TYPES_THAT_ANOTHER_MODULE_USES}). The names in a string literal or in a comment are
+ *       not touched either (the comment and the string of {@code Desk} stay as they are).
  *   <li>jdtls does not check what the move breaks: a member with the default access that a class left behind uses is
  *       not reported, and the move is answered all the same. That case has no scenario, as a replay compiles the
  *       project once the answer is applied; {@code gabier diagnostics} shows it afterwards.
@@ -181,6 +186,10 @@ public final class PackageMoveScenarios {
     private static final Path TILL = Path.of("app/src/main/java/demo/app/Till.java");
     private static final Path PURSE = Path.of("app/src/main/java/demo/app/Purse.java");
 
+    private static final Path REPLY = Path.of("shared/src/main/java/demo/shared/Reply.java");
+    private static final Path MOVED_REPLY = Path.of("shared/src/main/java/demo/shared/money/Reply.java");
+    private static final Path DESK = Path.of("app/src/main/java/demo/app/Desk.java");
+
     private static final PackageName MONEY_PACKAGE = PackageName.of("demo.shared.money");
 
     /**
@@ -236,6 +245,33 @@ public final class PackageMoveScenarios {
 
                 public class Purse {
                     private final demo.shared.Money money = new demo.shared.Money(1);
+                }
+                """),
+            Map.entry(REPLY, """
+                package demo.shared;
+
+                public sealed interface Reply {
+                    record Ok(long cents) implements Reply {}
+
+                    record Failed(String reason) implements Reply {}
+                }
+                """),
+            Map.entry(DESK, """
+                package demo.app;
+
+                import demo.shared.Reply;
+
+                public class Desk {
+                    private Reply.Ok last = new Reply.Ok(1);
+
+                    boolean done(Reply reply) {
+                        return reply instanceof Reply.Ok;
+                    }
+
+                    private demo.shared.Reply.Failed failed = new demo.shared.Reply.Failed("none");
+
+                    // demo.shared.Reply is the type of the answers
+                    private String type = "demo.shared.Reply";
                 }
                 """));
 
@@ -384,6 +420,25 @@ public final class PackageMoveScenarios {
                     edits(MONEY, replace(0, 8, 0, 19, "demo.shared.money")),
                     new RenameFile(MONEY, MOVED_MONEY)))));
 
+    /**
+     * {@code Reply} of the module {@code demo.shared}, a sealed interface that holds the records {@code Ok} and {@code
+     * Failed}, to {@code demo.shared.money}: the module {@code demo.app} names them through their outer type ({@code
+     * Reply.Ok} as a type, in a {@code new} and an {@code instanceof}) and through the qualified name ({@code
+     * demo.shared.Reply.Failed}). jdtls rewrites the import and the package of the qualified name, and leaves {@code
+     * Reply.Ok} as it is: the outer name is kept, the nested type is never named alone. The name in a comment and the one
+     * in a string literal of {@code Desk} are not rewritten.
+     */
+    public static final Scenario MOVE_A_CLASS_WITH_NESTED_TYPES_THAT_ANOTHER_MODULE_USES = new Scenario(
+            "move-a-class-with-nested-types-that-another-module-uses",
+            MODULES,
+            new Request.MoveToPackage(List.of(REPLY), MONEY_PACKAGE),
+            new Answer.MovedToPackage(new ChangeSet(List.of(
+                    edits(DESK, replace(11, 50, 11, 67, "demo.shared.money.Reply")),
+                    edits(DESK, replace(11, 12, 11, 29, "demo.shared.money.Reply")),
+                    edits(DESK, replace(2, 7, 2, 24, "demo.shared.money.Reply")),
+                    edits(REPLY, replace(0, 8, 0, 19, "demo.shared.money")),
+                    new RenameFile(REPLY, MOVED_REPLY)))));
+
     /** The project is still being imported: the server cannot say what a move changes. */
     public static final Scenario MOVE_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "move-while-the-server-imports",
@@ -403,6 +458,7 @@ public final class PackageMoveScenarios {
                 MOVE_THE_LAST_CLASS_OF_A_PACKAGE,
                 MOVE_THE_LAST_CLASS_OF_A_PACKAGE_THAT_HAS_A_PACKAGE_INFO,
                 MOVE_A_CLASS_THAT_ANOTHER_MODULE_USES,
+                MOVE_A_CLASS_WITH_NESTED_TYPES_THAT_ANOTHER_MODULE_USES,
                 MOVE_A_CLASS_TO_THE_PACKAGE_IT_IS_IN,
                 MOVE_A_CLASS_TO_A_PACKAGE_THAT_HAS_A_FILE_OF_ITS_NAME,
                 MOVE_A_FILE_THAT_IS_NOT_A_JAVA_SOURCE,

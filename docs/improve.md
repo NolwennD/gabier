@@ -950,11 +950,14 @@ After `gabier move src/main/java/demo/util/Helper.java demo.shop`:
 src/main/java/demo/shop/Helper.java     package demo.shop;
 ```
 
-The `package` line, the imports and the references of the project follow the class.
+The `package` line, the imports and the references of the project follow the class, the fully qualified names and the
+uses of a nested type through its outer type (`Helper.Option`) too.
 
 Limits: the package is created when it does not exist; the default package cannot be the target. The files must be in
-one source folder. A member that was package-private and used from the old package is no longer reachable: run
-`gabier diagnostics`. To rename a whole package instead, see "The package of one source set". See `gabier help move`.
+one source folder. A name in a string literal or a comment is not rewritten. jdtls does not sort the imports it writes:
+run `gabier organize-imports` on the files the move modified. A member that was package-private and used from the old
+package is no longer reachable: run `gabier diagnostics`. To rename a whole package instead, see "The package of one
+source set". See `gabier help move`.
 
 ### Where a symbol is used
 
