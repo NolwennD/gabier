@@ -198,7 +198,7 @@ class MainTest {
                 throws Exception {
             socket = expectedSocket;
             var daemon = CompletableFuture.supplyAsync(run::getAsInt);
-            for (var attempt = 0; attempt < 500 && !Files.exists(socket) && !daemon.isDone(); attempt++) {
+            for (var attempt = 0; attempt < 500 && !daemon.isDone() && !listening(socket); attempt++) {
                 TimeUnit.MILLISECONDS.sleep(20);
             }
             assertThat(socket).exists();
@@ -208,6 +208,21 @@ class MainTest {
 
         private CompletableFuture<Integer> start() throws Exception {
             return start(Map.of("GABIER_SOCKET", socketPath().toString()), socketPath());
+        }
+
+        /**
+         * Whether the daemon accepts a connection on the socket, which is what "listening" means. The file of the
+         * socket exists from the {@code bind} of the daemon, before its {@code listen}: a client that connects as soon
+         * as the file is there is refused now and then (the way {@code DaemonLauncher} waits is the same).
+         */
+        private static boolean listening(Path socket) {
+            try (var channel = SocketChannel.open(StandardProtocolFamily.UNIX)) {
+                channel.connect(UnixDomainSocketAddress.of(socket));
+
+                return true;
+            } catch (IOException notYet) {
+                return false;
+            }
         }
 
         private Client connect() throws IOException {
