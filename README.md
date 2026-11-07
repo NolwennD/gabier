@@ -5,6 +5,45 @@ a Java language server instead: it drives jdtls, which works on the syntax tree,
 their diff, or a structured refusal. It is a command-line tool, `gabier`, backed by a daemon that keeps jdtls running
 for the project; both are written in Java.
 
+An agent renames a method and every call to it in one command. This is the output of the installed `gabier` on a
+two-file project (the paths are shortened to `/work/demo`):
+
+```text
+$ gabier rename --dry-run --token src/main/java/demo/Greeter.java greet welcome
+dry run, nothing written
+modified /work/demo/src/main/java/demo/Greeter.java
+modified /work/demo/src/main/java/demo/Main.java
+
+--- /work/demo/src/main/java/demo/Greeter.java
++++ /work/demo/src/main/java/demo/Greeter.java
+@@ -2,7 +2,7 @@
+ 
+ public class Greeter {
+ 
+-    public String greet(String name) {
++    public String welcome(String name) {
+         return "Hello, " + name;
+     }
+ }
+--- /work/demo/src/main/java/demo/Main.java
++++ /work/demo/src/main/java/demo/Main.java
+@@ -3,6 +3,6 @@
+ public class Main {
+ 
+     public static void main(String[] args) {
+-        System.out.println(new Greeter().greet("world"));
++        System.out.println(new Greeter().welcome("world"));
+     }
+ }
+```
+
+Without `--dry-run`, the same command writes that diff to the two files, the declaration and the call, in one step. The
+other refactorings work the same way (see [Capabilities](#capabilities)).
+
+**What is released so far.** Linux on x86-64 only (no macOS, no Windows). It needs a JDK 25 or later, which runs the
+daemon (`JAVA_HOME`, else the `java` of the `PATH`), and Python 3, which runs the launcher of jdtls. The project it works
+on must be built with Gradle, Maven or Eclipse.
+
 There are two ways to get it:
 
 - **[Use gabier on your project](#use-gabier-on-your-project)**: use a release, pinned with mise or installed by a
@@ -16,11 +55,7 @@ Both end with `gabier` on the `PATH`, and both are used the same way, as [Using 
 
 ## Use gabier on your project
 
-You need:
-
-- Linux on x86-64 (the only platform released so far);
-- a JDK 25 or later, which runs the daemon (`JAVA_HOME`, else the `java` of the `PATH`);
-- Python 3, which runs the launcher of jdtls.
+You need Linux on x86-64, a JDK 25 or later and Python 3, as said at the top of this page.
 
 ### With mise
 
@@ -40,8 +75,9 @@ java = "temurin-25"
 
 `mise install` in each clone gives the same `gabier`: the cli, the daemon it starts and the jdtls the daemon starts all
 come from one archive of the release, so they are of one version, and changing the version in `mise.toml` and running
-`mise install` changes the three together. Nothing else is set: no variable and no `postinstall`. Python 3 must be
-installed, for the launcher of jdtls. `~/.local/share/jdtls` and `~/.local/bin` are not used.
+`mise install` changes the three together. Nothing else is set: no variable and no `postinstall`.
+`~/.local/share/jdtls` and `~/.local/bin` are not used. mise prints nothing more: the [first steps](#first-steps) below
+are the ones `install.sh` prints.
 
 ### With the files of the release
 
@@ -71,13 +107,27 @@ the `PATH`.
 [`mise run install`](#build-gabier-from-its-sources). `JDTLS_HOME` changes the folder of jdtls; then name its launcher
 for the daemon with `GABIER_JDTLS=<JDTLS_HOME>/bin/jdtls`, since the daemon looks only in `~/.local/share/jdtls`.
 
-`GABIER_JDTLS` can name another launcher instead.
+`GABIER_JDTLS` can name another launcher instead. When it is done, `install.sh` prints the folders it installed and the
+[first steps](#first-steps) below.
+
+### First steps
+
+Whichever way you installed it:
+
+1. `gabier --version` prints the version (if it is not found, `~/.local/bin` or the folder of mise is not in the `PATH`).
+2. In a Java project, run a first command, such as `gabier diagnostics <a .java file>` (the first answer waits for jdtls
+   to import the project; see [Using it](#using-it)).
+3. Give a coding agent this line, in its instructions (`AGENTS.md`, `CLAUDE.md`):
+
+   ```text
+   Change Java with `gabier` rather than by editing text: `gabier help` lists the commands, `gabier help --for="<the task>"` tells which one does a task.
+   ```
 
 ## Build gabier from its sources
 
 You need:
 
-- a JDK 25 or later and Python 3, as above;
+- a JDK 25 or later and Python 3, as said at the top of this page;
 - GraalVM 25, which compiles the native cli;
 - [mise](https://mise.jdx.dev), which installs the pinned tools and jdtls;
 - optionally [SDKMAN!](https://sdkman.io), which selects the JDK pinned in `.sdkmanrc` when you enter the folder
@@ -130,8 +180,9 @@ gabier rename --dry-run --token src/main/java/com/example/App.java App Applicati
   `PATH`. Without one, the first request says where it looked.
 - **A project jdtls cannot import** (no Gradle, Maven or Eclipse build) is refused with `no-build-to-import`.
 
-For a coding agent, point its instructions to `gabier help`. It lists the commands, and `gabier help <command>` gives
-the usage, an example and the refusals of each one.
+For a coding agent, point its instructions to `gabier help` (the line to give it is in the
+[first steps](#first-steps)). It lists the commands, and `gabier help <command>` gives the usage, an example and the
+refusals of each one. `gabier help --for="<the task>"` tells which command does a task.
 
 ## Capabilities
 

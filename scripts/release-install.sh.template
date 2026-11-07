@@ -180,4 +180,24 @@ command -v python3 >/dev/null 2>&1 || echo "install: python3 was not found: jdtl
 if [ ! -x "${JAVA_HOME:-/nonexistent}/bin/java" ] && ! command -v java >/dev/null 2>&1; then
   echo "install: no java was found (JAVA_HOME, else the PATH): the daemon needs a JDK 25 or later" >&2
 fi
-echo "gabier $version is installed"
+
+# The message the install ends with (README, "First steps"): what was installed and where, the first commands, and the
+# line for the instructions of an agent. The commands name the link when its folder is not on the PATH.
+gabier=gabier
+case ":$PATH:" in
+  *":$folder:"*) ;;
+  *) gabier=$folder/gabier ;;
+esac
+cat <<EOF
+gabier $version is installed.
+  copy:   $target
+  links:  $folder/gabier, $folder/gabier-daemon
+  jdtls:  $jdtls_home
+
+Next:
+  $gabier --version
+  cd <your Java project> && $gabier diagnostics <a .java file>
+
+For a coding agent, put this line in its instructions (AGENTS.md, CLAUDE.md):
+  Change Java with \`gabier\` rather than by editing text: \`gabier help\` lists the commands, \`gabier help --for="<the task>"\` tells which one does a task.
+EOF

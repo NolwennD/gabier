@@ -1,0 +1,170 @@
+#!/usr/bin/env -S java --source 25
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.security.MessageDigest;
+import java.util.Arrays;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Stage {@code release-install} of the local CI (see {@code bin/ci}): the {@code install.sh} of a release, written from
+ * {@code scripts/release-install.sh.template} the way {@code scripts/package-release.sh} does, run on fake files of a
+ * release in a temporary home, with a jdtls already in place so that nothing is downloaded. It checks what the script
+ * installed and the message it ends with (the folders, the first commands, the line for the instructions of an agent),
+ * once with the folder of the links on the {@code PATH} and once without. Runs in the current directory, the checkout
+ * under verification.
+ */
+public final class ReleaseInstall {
+
+    private static final String VERSION = "9.9.9";
+    private static final String JDTLS_VERSION = "1.2.3";
+
+    /** The last lines of the output, for a given way to call {@code gabier}: {@code %1$s} is that way. */
+    private static final String MESSAGE = """
+            gabier %2$s is installed.
+              copy:   %3$s
+              links:  %4$s/gabier, %4$s/gabier-daemon
+              jdtls:  %5$s
+
+            Next:
+              %1$s --version
+              cd <your Java project> && %1$s diagnostics <a .java file>
+
+            For a coding agent, put this line in its instructions (AGENTS.md, CLAUDE.md):
+              Change Java with `gabier` rather than by editing text: `gabier help` lists the commands, `gabier help --for="<the task>"` tells which one does a task.
+            """;
+
+    public static void main(String[] args) throws Exception {
+        String skip = !Files.isRegularFile(Path.of("scripts/release-install.sh.template"))
+                ? "no scripts/release-install.sh.template"
+                : !(System.getProperty("os.name").equals("Linux") && System.getProperty("os.arch").equals("amd64"))
+                        ? "install.sh is for Linux on x86-64"
+                        : !reachedBy("scripts/release-install.sh.template", "bin/ci.d/35-release-install")
+                                ? "no changed file reaches install.sh (bin/ci --all forces it)"
+                                : null;
+        if (args.length > 0 && args[0].equals("--describe")) {
+            System.out.println("install.sh of a release, run on fake files: what it installs and the message it ends with");
+            if (skip != null) {
+                System.out.println("skip: " + skip);
+            }
+            return;
+        }
+        if (skip != null) {
+            System.out.println("skip: " + skip);
+            System.exit(77);
+        }
+        boolean ok = true;
+        for (boolean onPath : new boolean[] {true, false}) {
+            ok &= run(onPath);
+        }
+        System.exit(ok ? 0 : 1);
+    }
+
+    /** True when a changed file starts with one of the prefixes, or when the changed files are unknown. */
+    private static boolean reachedBy(String... prefixes) {
+        String changed = System.getenv("GABIER_CI_CHANGED");
+        if (changed == null) {
+            return true;
+        }
+        return changed.lines().anyMatch(path -> Arrays.stream(prefixes).anyMatch(path::startsWith));
+    }
+
+    /** Installs the fake release with the folder of the links on the {@code PATH} or not, and checks the output. */
+    private static boolean run(boolean onPath) throws Exception {
+        String title = onPath ? "the links folder is on the PATH" : "the links folder is not on the PATH";
+        Path root = Files.createTempDirectory("gabier-release-install").toRealPath();
+        try {
+            Path release = Files.createDirectory(root.resolve("release"));
+            Path home = Files.createDirectory(root.resolve("home"));
+            Path bin = Files.createDirectory(root.resolve("bin"));
+            Path copies = root.resolve("share");
+            Path jdtls = home.resolve(".local/share/jdtls/" + JDTLS_VERSION);
+            writeRelease(release);
+            writeExecutable(jdtls.resolve("bin/jdtls"), "#!/bin/sh\nexit 0\n");
+
+            // Nothing of the environment of the caller (mise exports JDTLS_HOME and GABIER_JDTLS) reaches the script.
+            ProcessBuilder install = new ProcessBuilder("sh", release.resolve("install.sh").toString())
+                    .directory(release.toFile())
+                    .redirectError(root.resolve("stderr").toFile());
+            Map<String, String> env = install.environment();
+            env.clear();
+            String path = System.getenv("PATH");
+            env.put("PATH", onPath ? bin + ":" + path : path);
+            env.put("HOME", home.toString());
+            env.put("GABIER_BIN_DIR", bin.toString());
+            env.put("GABIER_INSTALL_DIR", copies.toString());
+            env.put("JDTLS_DOWNLOAD_BASE", "file:///nonexistent");
+            Process process = install.start();
+            String out = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            int status = process.waitFor();
+
+            String gabier = onPath ? "gabier" : bin + "/gabier";
+            String expected = MESSAGE.formatted(gabier, VERSION, copies.resolve(VERSION), bin, jdtls);
+            List<String> problems = new java.util.ArrayList<>();
+            if (status != 0) {
+                problems.add("install.sh exited with " + status);
+            }
+            if (!out.endsWith(expected)) {
+                problems.add("the output does not end with the message:\n" + expected);
+            }
+            if (!Files.isSymbolicLink(bin.resolve("gabier"))
+                    || !Files.isExecutable(copies.resolve(VERSION).resolve("daemon/bin/gabier-daemon"))) {
+                problems.add("the cli is not linked, or the daemon is not copied");
+            }
+            if (problems.isEmpty()) {
+                System.out.println("ok: " + title);
+                return true;
+            }
+            System.out.println("FAILED: " + title);
+            problems.forEach(System.out::println);
+            System.out.println("-- stdout --\n" + out + "-- stderr --\n" + Files.readString(root.resolve("stderr")));
+            return false;
+        } finally {
+            deleteTree(root);
+        }
+    }
+
+    /** The files of a release, as {@code package-release.sh} makes them, with fake programs. */
+    private static void writeRelease(Path release) throws Exception {
+        writeExecutable(release.resolve("gabier-linux-x86_64"), "#!/bin/sh\necho gabier " + VERSION + "\n");
+        Path daemon = Files.createDirectories(release.resolve("daemon-tree/gabier-daemon/bin"));
+        writeExecutable(daemon.resolve("gabier-daemon"), "#!/bin/sh\necho gabier-daemon " + VERSION + "\n");
+        String archive = "gabier-daemon-" + VERSION + ".tar.gz";
+        Process tar = new ProcessBuilder("tar", "-C", release.resolve("daemon-tree").toString(), "-czf",
+                release.resolve(archive).toString(), "gabier-daemon").inheritIO().start();
+        if (tar.waitFor() != 0) {
+            throw new IOException("tar failed");
+        }
+        deleteTree(release.resolve("daemon-tree"));
+        String sums = "";
+        for (String name : List.of("gabier-linux-x86_64", archive)) {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(release.resolve(name)));
+            sums += HexFormat.of().formatHex(digest) + "  " + name + "\n";
+        }
+        Files.writeString(release.resolve("SHA256SUMS"), sums);
+        String script = Files.readString(Path.of("scripts/release-install.sh.template"))
+                .replace("@VERSION@", VERSION)
+                .replace("@JDTLS_VERSION@", JDTLS_VERSION)
+                .replace("@JDTLS_SHA256@", "0".repeat(64));
+        Files.writeString(release.resolve("install.sh"), script);
+    }
+
+    private static void writeExecutable(Path file, String text) throws IOException {
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, text);
+        Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rwxr-xr-x"));
+    }
+
+    private static void deleteTree(Path root) throws IOException {
+        try (var files = Files.walk(root)) {
+            for (Path file : files.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                Files.delete(file);
+            }
+        }
+    }
+}

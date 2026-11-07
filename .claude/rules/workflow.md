@@ -87,7 +87,7 @@ user, 02-11-2026):
 - The targeted test of the touched code is green **and** its output has been read (no `-q`).
 - The subagent that does the ticket runs `bin/ci` on its worktree when it thinks the work is ready, and fixes what it
   shows (skill `verify`). Slow checks stay off the working path: while working, only targeted tests and, at most,
-  `bin/ci --fast` (format, build, test); the full `bin/ci` (native image, real jdtls) is run **once**, at the end. Its
+  `bin/ci --fast` (format, build, test, the install script); the full `bin/ci` (native image, real jdtls) is run **once**, at the end. Its
   `native` and `jdtls` stages skip themselves, with the reason in the summary, when no changed file can reach them
   (`--all` forces them); a failed stage is run again alone with `--stage <name>`, never the whole run. The gates it runs (coverage at 100%, architecture tests) and the formatting are described in
   `.claude/rules/quality.md`. The supervisor does not run these checks again: the `bin/ci` summary in the subagent's
