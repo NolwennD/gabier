@@ -58,6 +58,15 @@ and the thresholds), and no setting of jdtls that gabier knows makes the refacto
 relayed as jdtls gives it. Run `gabier organize-imports` on the files the move modified to put the imports in the order
 of the project (run `gabier diagnostics` on them first: a file whose imports jdtls cannot resolve loses them).
 
+**The module descriptor.** When the move takes the last Java class out of a package (no `.java` file is left in its folder,
+a `package-info.java` that stays counts as one), the `exports` and `opens` of that package in the `module-info.java` at the root of
+the source folder follow it: they name the new package, with their `to` clause. When the descriptor already has that
+directive for the new package, the old one is dropped (a package is exported once). A move that leaves a class in the
+package changes nothing in the descriptor, and neither does a package that is not exported or opened. jdtls moves the
+files and rewrites what uses them but leaves `module-info.java` as it is (observed on the real server, with no setting
+that changes it known), so the daemon makes this edit itself, after jdtls has answered. The directives that name a type (`uses`, `provides`) are not part of this edit. The new package
+is not exported or opened by the move: a package that was not, is not.
+
 **After the move.** gabier does not compile the project. A member that was package-private (no `public`) in the old
 package and that the moved class uses, or that uses the moved class, is no longer reachable from the other package: jdtls
 moves the class all the same, and says nothing about it. Run `gabier diagnostics` on the files that use the moved

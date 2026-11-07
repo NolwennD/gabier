@@ -56,6 +56,13 @@ import java.util.Map;
  *       the package of the qualified name, and the outer type stays in front of the nested one ({@link
  *       #MOVE_A_CLASS_WITH_NESTED_TYPES_THAT_ANOTHER_MODULE_USES}). The names in a string literal or in a comment are
  *       not touched either (the comment and the string of {@code Desk} stay as they are).
+ *   <li>jdtls moves the files and rewrites what uses them, and does not touch {@code module-info.java}: an {@code
+ *       exports} or {@code opens} of a package whose last classes move names a package that is gone. The adapter edits
+ *       the descriptor of the source folder of the files, when no Java file is left in the old package ({@code
+ *       package-info.java} included): the directive names the new package, its {@code to} clause kept ({@link
+ *       #MOVE_THE_LAST_CLASS_OF_AN_EXPORTED_AND_OPENED_PACKAGE}), or is dropped when the module already has that
+ *       directive for the new package ({@link #MOVE_EVERY_CLASS_OF_AN_EXPORTED_PACKAGE_TO_AN_EXPORTED_PACKAGE}). A move
+ *       that leaves classes in the package changes nothing there ({@link #MOVE_A_CLASS_THAT_ANOTHER_MODULE_USES}).
  *   <li>jdtls does not check what the move breaks: a member with the default access that a class left behind uses is
  *       not reported, and the move is answered all the same. That case has no scenario, as a replay compiles the
  *       project once the answer is applied; {@code gabier diagnostics} shows it afterwards.
@@ -189,6 +196,14 @@ public final class PackageMoveScenarios {
     private static final Path REPLY = Path.of("shared/src/main/java/demo/shared/Reply.java");
     private static final Path MOVED_REPLY = Path.of("shared/src/main/java/demo/shared/money/Reply.java");
     private static final Path DESK = Path.of("app/src/main/java/demo/app/Desk.java");
+    private static final Path CURRENCY = Path.of("shared/src/main/java/demo/shared/Currency.java");
+    private static final Path MOVED_CURRENCY = Path.of("shared/src/main/java/demo/shared/money/Currency.java");
+    private static final Path SHARED_DESCRIPTOR = Path.of("shared/src/main/java/module-info.java");
+
+    private static final Path COIN = Path.of("coins/src/main/java/demo/coins/Coin.java");
+    private static final Path MOVED_COIN = Path.of("coins/src/main/java/demo/coins/metal/Coin.java");
+    private static final Path COINS_DESCRIPTOR = Path.of("coins/src/main/java/module-info.java");
+    private static final Path WALLET = Path.of("wallet/src/main/java/demo/wallet/Wallet.java");
 
     private static final PackageName MONEY_PACKAGE = PackageName.of("demo.shared.money");
 
@@ -199,7 +214,7 @@ public final class PackageMoveScenarios {
      * already, so that both exports still name a package once it is moved.
      */
     private static final Map<Path, String> MODULES = Map.ofEntries(
-            Map.entry(Path.of("shared/src/main/java/module-info.java"), """
+            Map.entry(SHARED_DESCRIPTOR, """
                 module demo.shared {
                     exports demo.shared;
                     exports demo.shared.money;
@@ -211,7 +226,7 @@ public final class PackageMoveScenarios {
                 public record Money(long cents) {
                 }
                 """),
-            Map.entry(Path.of("shared/src/main/java/demo/shared/Currency.java"), """
+            Map.entry(CURRENCY, """
                 package demo.shared;
 
                 public enum Currency {
@@ -272,6 +287,40 @@ public final class PackageMoveScenarios {
 
                     // demo.shared.Reply is the type of the answers
                     private String type = "demo.shared.Reply";
+                }
+                """));
+
+    private static final PackageName COINS_METAL = PackageName.of("demo.coins.metal");
+
+    /**
+     * Two projects: {@code coins} ({@code demo.coins}, which exports and opens its one package to {@code demo.wallet}
+     * and nothing else) and {@code wallet} ({@code demo.wallet}, which requires it and imports its {@code Coin}).
+     */
+    private static final Map<Path, String> EXPORTS = Map.ofEntries(
+            Map.entry(COINS_DESCRIPTOR, """
+                module demo.coins {
+                    exports demo.coins to demo.wallet;
+                    opens demo.coins;
+                }
+                """),
+            Map.entry(COIN, """
+                package demo.coins;
+
+                public record Coin(int value) {
+                }
+                """),
+            Map.entry(Path.of("wallet/src/main/java/module-info.java"), """
+                module demo.wallet {
+                    requires demo.coins;
+                }
+                """),
+            Map.entry(WALLET, """
+                package demo.wallet;
+
+                import demo.coins.Coin;
+
+                public class Wallet {
+                    private final Coin coin = new Coin(1);
                 }
                 """));
 
@@ -439,6 +488,49 @@ public final class PackageMoveScenarios {
                     edits(REPLY, replace(0, 8, 0, 19, "demo.shared.money")),
                     new RenameFile(REPLY, MOVED_REPLY)))));
 
+    /**
+     * Every class of {@code demo.shared} ({@code Money}, {@code Currency} and {@code Reply}) to {@code
+     * demo.shared.money}, which the module exports already: the package that is emptied is no longer exported, and the
+     * directive is dropped, not renamed, as the module would export {@code demo.shared.money} twice.
+     */
+    public static final Scenario MOVE_EVERY_CLASS_OF_AN_EXPORTED_PACKAGE_TO_AN_EXPORTED_PACKAGE = new Scenario(
+            "move-every-class-of-an-exported-package-to-an-exported-package",
+            MODULES,
+            new Request.MoveToPackage(List.of(MONEY, CURRENCY, REPLY), MONEY_PACKAGE),
+            new Answer.MovedToPackage(new ChangeSet(List.of(
+                    edits(DESK, replace(11, 50, 11, 67, "demo.shared.money.Reply")),
+                    edits(DESK, replace(11, 12, 11, 29, "demo.shared.money.Reply")),
+                    edits(DESK, replace(2, 7, 2, 24, "demo.shared.money.Reply")),
+                    edits(PURSE, replace(3, 48, 3, 65, "demo.shared.money.Money")),
+                    edits(PURSE, replace(3, 18, 3, 35, "demo.shared.money.Money")),
+                    edits(TILL, replace(2, 0, 2, 25, "import demo.shared.money.Money;")),
+                    edits(CURRENCY, replace(0, 8, 0, 19, "demo.shared.money")),
+                    edits(MONEY, replace(0, 8, 0, 19, "demo.shared.money")),
+                    edits(REPLY, replace(0, 8, 0, 19, "demo.shared.money")),
+                    edits(SHARED_DESCRIPTOR, replace(1, 0, 2, 0, "")),
+                    new RenameFile(CURRENCY, MOVED_CURRENCY),
+                    new RenameFile(MONEY, MOVED_MONEY),
+                    new RenameFile(REPLY, MOVED_REPLY)))));
+
+    /**
+     * {@code Coin}, the one class of {@code demo.coins}, to {@code demo.coins.metal}: the module {@code demo.coins}
+     * exports the package it empties to {@code demo.wallet} and opens it, and both directives name the new package.
+     * jdtls moves the file and rewrites its users but not {@code module-info.java}, so the adapter edits it, keeping
+     * the {@code to} clause.
+     */
+    public static final Scenario MOVE_THE_LAST_CLASS_OF_AN_EXPORTED_AND_OPENED_PACKAGE = new Scenario(
+            "move-the-last-class-of-an-exported-and-opened-package",
+            EXPORTS,
+            new Request.MoveToPackage(List.of(COIN), COINS_METAL),
+            new Answer.MovedToPackage(new ChangeSet(List.of(
+                    edits(COIN, replace(0, 8, 0, 18, "demo.coins.metal")),
+                    edits(
+                            COINS_DESCRIPTOR,
+                            replace(1, 12, 1, 22, "demo.coins.metal"),
+                            replace(2, 10, 2, 20, "demo.coins.metal")),
+                    edits(WALLET, replace(2, 0, 2, 23, "import demo.coins.metal.Coin;")),
+                    new RenameFile(COIN, MOVED_COIN)))));
+
     /** The project is still being imported: the server cannot say what a move changes. */
     public static final Scenario MOVE_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "move-while-the-server-imports",
@@ -459,6 +551,8 @@ public final class PackageMoveScenarios {
                 MOVE_THE_LAST_CLASS_OF_A_PACKAGE_THAT_HAS_A_PACKAGE_INFO,
                 MOVE_A_CLASS_THAT_ANOTHER_MODULE_USES,
                 MOVE_A_CLASS_WITH_NESTED_TYPES_THAT_ANOTHER_MODULE_USES,
+                MOVE_EVERY_CLASS_OF_AN_EXPORTED_PACKAGE_TO_AN_EXPORTED_PACKAGE,
+                MOVE_THE_LAST_CLASS_OF_AN_EXPORTED_AND_OPENED_PACKAGE,
                 MOVE_A_CLASS_TO_THE_PACKAGE_IT_IS_IN,
                 MOVE_A_CLASS_TO_A_PACKAGE_THAT_HAS_A_FILE_OF_ITS_NAME,
                 MOVE_A_FILE_THAT_IS_NOT_A_JAVA_SOURCE,

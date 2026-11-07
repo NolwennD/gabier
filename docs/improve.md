@@ -955,7 +955,8 @@ uses of a nested type through its outer type (`Helper.Option`) too.
 
 Limits: the package is created when it does not exist; the default package cannot be the target. The files must be in
 one source folder. A name in a string literal or a comment is not rewritten. jdtls does not sort the imports it writes:
-run `gabier organize-imports` on the files the move modified. A member that was package-private and used from the old
+run `gabier organize-imports` on the files the move modified. When the move empties a package, its `exports` and
+`opens` in `module-info.java` follow it. A member that was package-private and used from the old
 package is no longer reachable: run `gabier diagnostics`. To rename a whole package instead, see "The package of one
 source set". See `gabier help move`.
 

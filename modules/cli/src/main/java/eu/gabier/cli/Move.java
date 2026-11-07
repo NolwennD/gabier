@@ -49,6 +49,7 @@ final class Move implements Capability {
                 too, and a nested type keeps its outer type (Invoice.Line). A name in a string literal or a comment
                 is not rewritten.
                 jdtls does not sort the imports it writes: run gabier organize-imports on the modified files.
+                When no Java file is left in the old package, its exports and opens in module-info.java follow it.
                 A member that was package-private in the old package, used from there, is no longer reachable.
                 Run gabier diagnostics on the files that use it after the move.\
                 """);

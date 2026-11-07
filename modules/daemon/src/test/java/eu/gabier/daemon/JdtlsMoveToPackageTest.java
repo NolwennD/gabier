@@ -11,9 +11,11 @@ import eu.gabier.editing.domain.LanguageServerException;
 import eu.gabier.editing.domain.PackageName;
 import eu.gabier.editing.fixtures.FakeOnly;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -52,6 +54,14 @@ class JdtlsMoveToPackageTest {
     private static final Duration QUIET = Duration.ofMillis(300);
     private static final PackageName BILLING = PackageName.of("demo.billing");
     private static final PackageName ARCHIVE = PackageName.of("demo.archive");
+
+    private static final String DESCRIPTOR = """
+        module demo {
+            exports demo;
+            opens demo;
+            exports demo.billing;
+        }
+        """;
 
     @TempDir
     Path root;
@@ -285,6 +295,127 @@ class JdtlsMoveToPackageTest {
                     .contains("Created " + billing.resolve("deep"), "Deleted " + billing.resolve("deep"))
                     .doesNotContain("Created " + deeper, "Created " + billing);
         }
+    }
+
+    @Test
+    void makesTheExportsAndTheOpensFollowAPackageWhoseLastClassesMove() throws Exception {
+        Path archive = main.resolve("demo/archive");
+        Path ledger = main.resolve("demo/Ledger.java");
+        Path descriptor = write("src/main/java/module-info.java", DESCRIPTOR);
+        fake.moveAnswers(moves(archive, invoice, payment, ledger));
+
+        try (var server = started()) {
+            ChangeSet changes = server.moveToPackage(List.of(invoice, payment, ledger), ARCHIVE);
+
+            assertThat(changes.changes())
+                    .contains(new FileChange.EditFile(
+                            descriptor,
+                            List.of(textEdit(1, 12, 1, 16, "demo.archive"), textEdit(2, 10, 2, 14, "demo.archive"))));
+            assertThat(descriptor).hasContent(DESCRIPTOR);
+        }
+    }
+
+    @Test
+    void answersTheEditOfTheDescriptorAmongTheEditsByPath() throws Exception {
+        Path archive = main.resolve("demo/archive");
+        Path ledger = main.resolve("demo/Ledger.java");
+        write("src/main/java/module-info.java", DESCRIPTOR);
+        fake.moveAnswers(moves(archive, invoice, payment, ledger));
+
+        try (var server = started()) {
+            List<Path> edited = server.moveToPackage(List.of(invoice, payment, ledger), ARCHIVE).changes().stream()
+                    .filter(FileChange.EditFile.class::isInstance)
+                    .map(change -> ((FileChange.EditFile) change).file())
+                    .toList();
+
+            assertThat(edited).isSorted().contains(main.resolve("module-info.java"));
+        }
+    }
+
+    @Test
+    void leavesTheDescriptorAloneWhileAClassStaysInThePackage() throws Exception {
+        write("src/main/java/module-info.java", DESCRIPTOR);
+        fake.moveAnswers(moves(main.resolve("demo/archive"), invoice));
+
+        try (var server = started()) {
+            ChangeSet changes = server.moveToPackage(List.of(invoice), ARCHIVE);
+
+            assertThat(changes.changes()).hasSize(2);
+        }
+    }
+
+    @Test
+    void countsAPackageInfoLeftBehindAsAClassOfThePackage() throws Exception {
+        Path ledger = main.resolve("demo/Ledger.java");
+        write("src/main/java/module-info.java", DESCRIPTOR);
+        write("src/main/java/demo/package-info.java", "package demo;\n");
+        fake.moveAnswers(moves(main.resolve("demo/archive"), invoice, payment, ledger));
+
+        try (var server = started()) {
+            ChangeSet changes = server.moveToPackage(List.of(invoice, payment, ledger), ARCHIVE);
+
+            assertThat(changes.changes()).hasSize(6);
+        }
+    }
+
+    @Test
+    void leavesTheDescriptorOfAnotherSourceFolderAlone() throws Exception {
+        Path ledger = main.resolve("demo/Ledger.java");
+        write("src/test/java/module-info.java", DESCRIPTOR);
+        fake.moveAnswers(moves(main.resolve("demo/archive"), invoice, payment, ledger));
+
+        try (var server = started()) {
+            ChangeSet changes = server.moveToPackage(List.of(invoice, payment, ledger), ARCHIVE);
+
+            assertThat(changes.changes()).hasSize(6);
+        }
+    }
+
+    @Test
+    void leavesTheDescriptorAloneForAFileOfTheDefaultPackage() throws Exception {
+        Path rooted = write("src/main/java/Rooted.java", "public class Rooted {}\n");
+        write("src/main/java/module-info.java", DESCRIPTOR);
+        fake.moveAnswers(moves(main.resolve("demo/archive"), rooted));
+
+        try (var server = started()) {
+            ChangeSet changes = server.moveToPackage(List.of(rooted), ARCHIVE);
+
+            assertThat(changes.changes()).hasSize(2);
+        }
+    }
+
+    @Test
+    void failsWhenTheDescriptorCannotBeRead() throws Exception {
+        Files.createDirectory(main.resolve("module-info.java"));
+        fake.moveAnswers(moves(main.resolve("demo/archive"), invoice));
+
+        try (var server = started()) {
+            assertThatThrownBy(() -> server.moveToPackage(List.of(invoice), ARCHIVE))
+                    .isInstanceOf(UncheckedIOException.class);
+        }
+    }
+
+    @Test
+    void failsWhenTheFolderOfAMovedFileCannotBeListed() throws Exception {
+        Path demo = main.resolve("demo");
+        write("src/main/java/module-info.java", DESCRIPTOR);
+        fake.moveAnswers(moves(main.resolve("other/archive"), invoice));
+        Files.setPosixFilePermissions(demo, PosixFilePermissions.fromString("--x------"));
+
+        try (var server = started()) {
+            assertThatThrownBy(() -> server.moveToPackage(List.of(invoice), PackageName.of("other.archive")))
+                    .isInstanceOf(UncheckedIOException.class);
+        } finally {
+            Files.setPosixFilePermissions(demo, PosixFilePermissions.fromString("rwx------"));
+        }
+    }
+
+    private static eu.gabier.editing.domain.TextEdit textEdit(int line, int from, int toLine, int to, String text) {
+        return new eu.gabier.editing.domain.TextEdit(
+                new eu.gabier.editing.domain.Range(
+                        new eu.gabier.editing.domain.Position(line, from),
+                        new eu.gabier.editing.domain.Position(toLine, to)),
+                text);
     }
 
     @Test

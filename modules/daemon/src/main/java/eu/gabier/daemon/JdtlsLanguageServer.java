@@ -31,6 +31,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -46,6 +47,7 @@ import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionContext;
 import org.eclipse.lsp4j.CodeActionKind;
@@ -112,6 +114,9 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * see {@link #takeInChangesOnDisk}.
      */
     private static final String BARRIER = ".gabier-changes-taken-";
+
+    /** The module descriptor, at the root of a source folder. */
+    private static final String MODULE_DESCRIPTOR = "module-info.java";
 
     /** The kinds of the symbols that jdtls lists for a class, an interface or an enum (a record is a class). */
     private static final Set<SymbolKind> TYPES = Set.of(SymbolKind.Class, SymbolKind.Interface, SymbolKind.Enum);
@@ -705,7 +710,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         JdtlsWatch watch = session.newWatch();
         try {
             prepare(session, watch);
-            Path folder = folderOfThePackage(paths, target, sourceFolders(session, watch));
+            Destination destination = destinationOf(paths, target, sourceFolders(session, watch));
+            Path folder = destination.folder();
             List<Path> made = makeFolders(paths, folder, target);
             try {
                 if (!made.isEmpty()) {
@@ -713,7 +719,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                     takeInChangesOnDisk(session, watch);
                 }
 
-                return askToMove(session, watch, paths, folder, target, move);
+                return askToMove(session, watch, paths, destination, target, move);
             } finally {
                 removeFolders(made, target);
                 if (!made.isEmpty()) {
@@ -728,11 +734,16 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     }
 
     private ChangeSet askToMove(
-            JdtlsSession session, JdtlsWatch watch, List<Path> paths, Path folder, PackageName target, String move)
+            JdtlsSession session,
+            JdtlsWatch watch,
+            List<Path> paths,
+            Destination destination,
+            PackageName target,
+            String move)
             throws InterruptedException {
         var request = JdtlsServer.MoveParams.resources(
                 paths.stream().map(path -> path.toUri().toString()).toList(),
-                folder.toUri().toString());
+                destination.folder().toUri().toString());
         var proposal = watch.await(
                 move, () -> JdtlsRequests.unlessDeclined(session.server().move(request)));
         var refactor = proposal.orElseThrow(() -> nothingToMove(paths, target));
@@ -744,13 +755,48 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         if (edit == null) {
             throw nothingToMove(paths, target);
         }
-        List<FileChange> changes =
-                WorkspaceEdits.inOrderOfAMove(WorkspaceEdits.of(edit, JdtlsLanguageServer::textOnDisk));
+        List<FileChange> changes = new ArrayList<>(WorkspaceEdits.of(edit, JdtlsLanguageServer::textOnDisk));
         if (changes.isEmpty()) {
             throw nothingToMove(paths, target);
         }
+        followInTheModuleDescriptor(paths, destination.sourceFolder(), target).ifPresent(changes::add);
 
-        return new ChangeSet(changes);
+        return new ChangeSet(WorkspaceEdits.inOrderOfAMove(changes));
+    }
+
+    /**
+     * The edit of {@code module-info.java}, at the root of the source folder of the files, that makes the {@code
+     * exports} and {@code opens} of a package follow its classes when the move takes the last of them (no Java file is
+     * left in its folder, a {@code package-info.java} counting as one). jdtls rewrites what uses the moved classes but
+     * leaves the descriptor as it is (observed on the real server; no setting known changes it), so the adapter edits it (see
+     * {@link ModuleExports}).
+     */
+    private static Optional<FileChange> followInTheModuleDescriptor(
+            List<Path> paths, Path sourceFolder, PackageName target) {
+        Path descriptor = sourceFolder.resolve(MODULE_DESCRIPTOR);
+        Optional<String> text = textOnDisk(descriptor);
+        if (text.isEmpty()) {
+            return Optional.empty();
+        }
+        Map<String, String> emptied = new HashMap<>();
+        for (Path folder : paths.stream().map(Path::getParent).distinct().toList()) {
+            if (!folder.equals(sourceFolder) && noJavaFileLeft(folder, paths)) {
+                List<String> names = new ArrayList<>();
+                sourceFolder.relativize(folder).forEach(name -> names.add(name.toString()));
+                emptied.put(String.join(".", names), target.value());
+            }
+        }
+        List<eu.gabier.editing.domain.TextEdit> edits = ModuleExports.following(text.get(), emptied);
+
+        return edits.isEmpty() ? Optional.empty() : Optional.of(new FileChange.EditFile(descriptor, edits));
+    }
+
+    private static boolean noJavaFileLeft(Path folder, List<Path> moved) {
+        try (Stream<Path> files = Files.list(folder)) {
+            return files.noneMatch(file -> file.getFileName().toString().endsWith(".java") && !moved.contains(file));
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        }
     }
 
     private static LanguageServerException nothingToMove(List<Path> paths, PackageName target) {
@@ -758,13 +804,14 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     }
 
     /**
-     * The folder of the package under the source folder of the files, once each file is known to be movable there.
+     * The source folder of the files and the folder of the package under it, once each file is known to be movable
+     * there.
      *
      * @throws LanguageServerException for the first file that is not a Java source, is under no source folder, is in the
      *     package or has the name of a file of the package or of an earlier file, and for files of several source
      *     folders
      */
-    private static Path folderOfThePackage(List<Path> paths, PackageName target, List<Path> sourceFolders) {
+    private static Destination destinationOf(List<Path> paths, PackageName target, List<Path> sourceFolders) {
         Set<Path> roots = new LinkedHashSet<>();
         for (Path path : paths) {
             if (!path.getFileName().toString().endsWith(".java")) {
@@ -780,7 +827,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         if (roots.size() > 1) {
             throw LanguageServerException.notMovableToPackage(paths, target, NotMovableReason.SEVERAL_SOURCE_FOLDERS);
         }
-        Path folder = roots.iterator().next().resolve(target.folder());
+        Path sourceFolder = roots.iterator().next();
+        Path folder = sourceFolder.resolve(target.folder());
         Set<Path> names = new HashSet<>();
         for (Path path : paths) {
             if (folder.equals(path.getParent())) {
@@ -792,8 +840,11 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             }
         }
 
-        return folder;
+        return new Destination(sourceFolder, folder);
     }
+
+    /** Where a move puts the files: the source folder they are in and the folder of the package under it. */
+    private record Destination(Path sourceFolder, Path folder) {}
 
     /**
      * Makes the folders of the package that are not there, from the highest down.
