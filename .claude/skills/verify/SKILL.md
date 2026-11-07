@@ -179,7 +179,8 @@ While mise does not trust the repository, a plain `java` fails (the shim of mise
 it prints goes in your report.
 
 The stages are the executable files of `bin/ci.d/`, named `NN-name` and run in that order: `10-format`, `20-build`,
-`30-test`, `35-release-install` (the `install.sh` of a release on fake files), `40-native`, `50-jdtls`. Each one is its own JEP 330 program, like the dev scripts of the sibling projects.
+`30-test`, `35-release-install` (the `install.sh` of a release on fake files), `40-native`, `50-jdtls`. Each one is its
+own JEP 330 program, like the dev scripts of the sibling projects.
 Adding a stage is adding a file; the contract (run in the current directory, exit 77 and a `skip: <reason>` line to say
 it does not apply yet, `--describe` for its description) is in the header of `bin/ci`.
 
