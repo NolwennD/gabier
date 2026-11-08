@@ -120,7 +120,7 @@ Whichever way you installed it:
    waits for jdtls to import the project; see [Using it](#using-it)).
 3. Give a coding agent its instructions: `gabier help agents` prints a short Markdown section (start `gabier start` at the
    beginning of a session, ask `gabier help --for="<the task>"` before editing Java by hand, the commands that replace a
-   text edit, `--dry-run` first). Paste it as it is in `AGENTS.md` or `CLAUDE.md`, for instance:
+   text edit, `--dry-run` first). Paste it as it is in `AGENTS.md` or `CLAUDE.md`, once (a second run adds a second copy), for instance:
 
    ```sh
    gabier help agents >> AGENTS.md

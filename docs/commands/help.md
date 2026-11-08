@@ -29,8 +29,8 @@ hand, which commands replace a text edit, to try a change with `--dry-run` first
 `AgentInstructions` holds it, so that a later command that writes it into a project calls the same `text()`. A test
 (`AgentInstructionsTest`) reads the commands the text cites in backticks (`` `gabier <command>` ``) and fails when one is
 not a command in the list of `gabier help` (or a topic of `help`): change the text and the commands together.
-`gabier help` ends with a line that points to it, and so do the end message of the install and the first steps of the
-README.
+`gabier help` lists it among its pointers (a line near its end), and so do the end message of the install and the first
+steps of the README.
 
 `gabier help --for="<task>"` asks the guide a question: the task in English ("turn this string concatenation into a text
 block"), and the answer is one to three sections of the guide, best first, each with its title, its line `Ask:` or `By
