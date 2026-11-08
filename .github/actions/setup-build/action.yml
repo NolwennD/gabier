@@ -3,6 +3,11 @@
 #
 # No version is written here: the JDK is the one of `.sdkmanrc`, the GraalVM has the major version of the Java toolchain
 # of the build (build-logic), and mise installs the tools and jdtls (with its checksum) of `mise.toml`.
+#
+# What the steps download is kept (actions/cache, mise-action), each cache keyed on the line of the file that pins it, so a
+# version that does not change is fetched once and not at every check: the release assets of github.com answered 504 by
+# moments (08-11-2026), and each failure was a check lost before any test. A miss installs as before. A cache saved on a
+# pull request is seen by that request only: `main` saves them (warm-cache.yml), and every request restores from there.
 name: Set up the build
 description: GraalVM, the JDK of .sdkmanrc, mise, the pinned tools and jdtls
 
@@ -14,19 +19,38 @@ inputs:
 runs:
   using: composite
   steps:
-    # The GraalVM of the release the build uses: the Java toolchain of the modules, and the native-image of the cli.
-    - name: Read the Java release of the build
-      id: java
+    # The pins the caches are keyed on: the Java release of the build (GraalVM), the JDK of `.sdkmanrc`, and the jdtls of
+    # `mise.toml` (its version and its checksum). A bump of a pin changes the key; nothing here is a second copy of a version.
+    - name: Read the pins of the build
+      id: pins
       shell: bash
       run: |
         release=$(grep -ohE 'JavaLanguageVersion\.of\([0-9]+\)' build-logic/src/main/kotlin/gabier.java-module-conventions.gradle.kts | grep -oE '[0-9]+' | head -n 1)
         test -n "$release"
-        echo "release=$release" >> "$GITHUB_OUTPUT"
+        jdk=$(sed -n 's/^java=//p' .sdkmanrc)
+        test -n "$jdk"
+        jdtls=$(sed -n 's/^jdtls_\(version\|sha256\) *= *"\(.*\)"/\2/p' mise.toml | paste -sd- -)
+        test -n "$jdtls"
+        {
+          echo "release=$release"
+          echo "jdk=$jdk"
+          echo "jdtls=$jdtls"
+        } >> "$GITHUB_OUTPUT"
+
+    # The tool cache of the runner holds the GraalVM and the JDK that the two setup actions look for before they download.
+    - name: Restore the GraalVM, the JDK and jdtls
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+      with:
+        path: |
+          ${{ runner.tool_cache }}/graalvm-*
+          ${{ runner.tool_cache }}/Java_Temurin-Hotspot_jdk
+          ~/.local/share/jdtls
+        key: tools-${{ runner.os }}-graalvm${{ steps.pins.outputs.release }}-jdk${{ steps.pins.outputs.jdk }}-jdtls${{ steps.pins.outputs.jdtls }}
 
     - name: Install GraalVM
       uses: graalvm/setup-graalvm@f70bc8032f90a104502824a54bcb94b6f01715bc # v1.6.8
       with:
-        java-version: ${{ steps.java.outputs.release }}
+        java-version: ${{ steps.pins.outputs.release }}
         distribution: graalvm
         github-token: ${{ inputs.github-token }}
         set-java-home: "false"
@@ -55,11 +79,14 @@ runs:
         "$JAVA_HOME/bin/java" -version 2>&1 | head -n 1
         "$JAVA_HOME/bin/java" -version 2>&1 | head -n 1 | grep -q "\"$pinned[.\"]"
 
+    # The version of mise is written here because the cache of mise-action (the binary and the tools of `mise.toml`) is keyed
+    # on it; a newer one is a change of this line. The cache is saved in the post step, after the next step installed the tools.
     - name: Install mise
       uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
       with:
+        version: 2026.11.4
         install: false
-        cache: false
+        cache_save_post: true
 
     - name: Install the tools and jdtls
       shell: bash

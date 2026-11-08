@@ -1,0 +1,38 @@
+# Fills the caches of the build environment (.github/actions/setup-build) from `main`. A cache saved by a pull request is
+# seen by that request only, so the requests would each start cold: this run, on the default branch, saves what they
+# restore. It runs when a pin changes, every week (a cache nobody reads for seven days is evicted) and by hand; it
+# installs the environment and builds nothing.
+name: Warm the caches
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .sdkmanrc
+      - mise.toml
+      - scripts/jdtls-install.sh
+      - build-logic/src/main/kotlin/gabier.java-module-conventions.gradle.kts
+      - .github/actions/setup-build/**
+      - .github/workflows/warm-cache.yml
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  warm:
+    name: warm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up the build
+        uses: ./.github/actions/setup-build
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
