@@ -11,6 +11,7 @@ import eu.gabier.editing.domain.Position;
 import eu.gabier.editing.domain.Range;
 import eu.gabier.editing.domain.ReferenceLocations;
 import eu.gabier.editing.domain.TypeKind;
+import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import java.nio.file.Path;
 import java.util.List;
@@ -40,6 +41,7 @@ final class ScriptedProject implements ServedProject {
     private final CountDownLatch released = new CountDownLatch(1);
     private volatile JdtlsState state = JdtlsState.READY;
     private volatile Optional<String> failure = Optional.empty();
+    private volatile Optional<JdtlsProgress> progress = Optional.empty();
     private volatile Requests requests = Requests.ARE_ANSWERED;
     private volatile boolean interrupted;
 
@@ -50,6 +52,13 @@ final class ScriptedProject implements ServedProject {
 
     ScriptedProject in(JdtlsState state) {
         this.state = state;
+
+        return this;
+    }
+
+    /** What jdtls is doing, as the project says it. */
+    ScriptedProject doing(JdtlsProgress progress) {
+        this.progress = Optional.of(progress);
 
         return this;
     }
@@ -105,6 +114,11 @@ final class ScriptedProject implements ServedProject {
     @Override
     public JdtlsState state() {
         return state;
+    }
+
+    @Override
+    public Optional<JdtlsProgress> jdtlsProgress() {
+        return progress;
     }
 
     @Override

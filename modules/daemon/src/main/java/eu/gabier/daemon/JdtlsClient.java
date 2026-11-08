@@ -2,7 +2,9 @@ package eu.gabier.daemon;
 
 import com.google.gson.Gson;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import org.eclipse.lsp4j.ExecuteCommandParams;
 import org.eclipse.lsp4j.MessageActionItem;
@@ -46,6 +48,7 @@ final class JdtlsClient implements LanguageClient {
     private final CompletableFuture<String> error = new CompletableFuture<>();
 
     private final Consumer<String> log;
+    private final BiConsumer<String, String> statuses;
     private final Consumer<PublishDiagnosticsParams> diagnostics;
     private final Consumer<Registration> registrations;
     private final Consumer<Unregistration> unregistrations;
@@ -55,6 +58,7 @@ final class JdtlsClient implements LanguageClient {
      * Listens to what jdtls tells the client.
      *
      * @param log receives a line for each status of jdtls worth telling
+     * @param statuses receives the type and the message of every status of jdtls, the progress of the start included
      * @param diagnostics receives every publication of diagnostics, from the first message of jdtls on
      * @param registrations receives each capability jdtls registers
      * @param unregistrations receives each capability jdtls unregisters
@@ -62,15 +66,27 @@ final class JdtlsClient implements LanguageClient {
      */
     JdtlsClient(
             Consumer<String> log,
+            BiConsumer<String, String> statuses,
             Consumer<PublishDiagnosticsParams> diagnostics,
             Consumer<Registration> registrations,
             Consumer<Unregistration> unregistrations,
             ImportChoices choices) {
         this.log = log;
+        this.statuses = statuses;
         this.diagnostics = diagnostics;
         this.registrations = registrations;
         this.unregistrations = unregistrations;
         this.choices = choices;
+    }
+
+    /** A client that does not follow the progress of the start. */
+    JdtlsClient(
+            Consumer<String> log,
+            Consumer<PublishDiagnosticsParams> diagnostics,
+            Consumer<Registration> registrations,
+            Consumer<Unregistration> unregistrations,
+            ImportChoices choices) {
+        this(log, (type, message) -> {}, diagnostics, registrations, unregistrations, choices);
     }
 
     CompletableFuture<Void> serviceReady() {
@@ -83,6 +99,7 @@ final class JdtlsClient implements LanguageClient {
 
     @JsonNotification("language/status")
     public void status(Status status) {
+        statuses.accept(status.type(), Objects.requireNonNullElse(status.message(), ""));
         // The progress of the start is a hundred lines of Starting: the other statuses tell where it got to.
         if (!"Starting".equals(status.type())) {
             log.accept("jdtls status " + status.type() + ": " + status.message());

@@ -3,6 +3,8 @@ package eu.gabier.cli;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import eu.gabier.protocol.DaemonStatus;
+import eu.gabier.protocol.ImportSettings;
+import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -148,6 +150,45 @@ class WaitNoticeTest {
         }
 
         assertThat(written()).isEmpty();
+    }
+
+    @Test
+    void theLineSaysWhatJdtlsIsDoingWhenTheDaemonKnows() {
+        var progress =
+                new JdtlsProgress(JdtlsProgress.Phase.IMPORTING, "Configure project :core", Duration.ofSeconds(47));
+        var status = new DaemonStatus(
+                "0.1",
+                4242,
+                Duration.ofSeconds(5),
+                Path.of("/work/demo"),
+                JdtlsState.STARTING,
+                Optional.empty(),
+                ImportSettings.DEFAULTS,
+                Optional.of(progress));
+
+        assertThat(WaitNotice.line(status, Duration.ofSeconds(52)))
+                .isEqualTo("gabier: waiting for jdtls (starting, 52s so far; importing the project for 47s:"
+                        + " Configure project :core); the first command of a session waits for it to start and"
+                        + " import the project, the next ones are quick");
+    }
+
+    @Test
+    void theLineShowsTheMessageOfJdtlsWithItsEscapesWrittenOut() {
+        var progress = new JdtlsProgress(JdtlsProgress.Phase.IMPORTING, "a\u001b[2J\nforged", Duration.ofSeconds(1));
+        var status = new DaemonStatus(
+                "0.1",
+                4242,
+                Duration.ofSeconds(5),
+                Path.of("/work/demo"),
+                JdtlsState.STARTING,
+                Optional.empty(),
+                ImportSettings.DEFAULTS,
+                Optional.of(progress));
+
+        assertThat(WaitNotice.line(status, Duration.ofSeconds(52)))
+                .contains("importing the project for 1s: a\\u001b[2J\\u000aforged)")
+                .doesNotContain("\n")
+                .doesNotContain("\u001b");
     }
 
     @Test

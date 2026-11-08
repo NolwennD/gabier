@@ -1,6 +1,7 @@
 package eu.gabier.daemon;
 
 import eu.gabier.editing.domain.JavaLanguageServer;
+import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.util.Optional;
@@ -10,6 +11,9 @@ interface StartedLanguageServer extends JavaLanguageServer, AutoCloseable {
 
     /** Where the start is: {@code STARTING}, then {@code READY} or {@code FAILED}. */
     JdtlsState state();
+
+    /** What the server is doing while it is {@code STARTING}; empty in any other state. */
+    Optional<JdtlsProgress> progress();
 
     /** Why the server is {@code FAILED} (the failure of its start, or its death); empty when it is not failed. */
     Optional<String> failure();

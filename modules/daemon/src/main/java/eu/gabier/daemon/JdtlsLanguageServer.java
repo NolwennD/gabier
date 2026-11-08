@@ -19,6 +19,7 @@ import eu.gabier.editing.domain.SourceText;
 import eu.gabier.editing.domain.TextEdit;
 import eu.gabier.editing.domain.TypeKind;
 import eu.gabier.protocol.ImportSettings;
+import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -127,6 +128,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     private final Diagnostics diagnostics;
     private final Duration quiet;
     private final CompletableFuture<JdtlsSession> starting;
+    private final StartProgress progress;
     private final Thread starter;
 
     /** The changes on disk jdtls has not acknowledged yet: they are told again by the next request. */
@@ -138,10 +140,15 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     private ImportSettings importsOfJdtls = ImportSettings.DEFAULTS;
 
     private JdtlsLanguageServer(
-            Diagnostics diagnostics, Duration quiet, CompletableFuture<JdtlsSession> starting, Thread starter) {
+            Diagnostics diagnostics,
+            Duration quiet,
+            CompletableFuture<JdtlsSession> starting,
+            StartProgress progress,
+            Thread starter) {
         this.diagnostics = diagnostics;
         this.quiet = quiet;
         this.starting = starting;
+        this.progress = progress;
         this.starter = starter;
     }
 
@@ -155,9 +162,10 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     static JdtlsLanguageServer start(JdtlsStarter jdtls, JdtlsSettings settings, Duration quiet, Consumer<String> log) {
         var diagnostics = new Diagnostics();
         var starting = new CompletableFuture<JdtlsSession>();
+        var progress = new StartProgress();
         Thread starter = Thread.ofPlatform().name("gabier-jdtls-start").daemon().unstarted(() -> {
             try {
-                starting.complete(JdtlsSession.start(jdtls, settings, log, diagnostics::publish));
+                starting.complete(JdtlsSession.start(jdtls, settings, log, progress, diagnostics::publish));
             } catch (InterruptedException stopped) {
                 // Only close() interrupts the start, and the requests that wait for it are told why it ended.
                 starting.completeExceptionally(new JdtlsException("the daemon is stopping", stopped));
@@ -166,7 +174,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             }
         });
         starter.start();
-        return new JdtlsLanguageServer(diagnostics, quiet, starting, starter);
+        return new JdtlsLanguageServer(diagnostics, quiet, starting, progress, starter);
     }
 
     @Override
@@ -177,6 +185,11 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             case SUCCESS -> starting.resultNow().isAlive() ? JdtlsState.READY : JdtlsState.FAILED;
             default -> JdtlsState.FAILED;
         };
+    }
+
+    @Override
+    public Optional<JdtlsProgress> progress() {
+        return state() == JdtlsState.STARTING ? Optional.of(progress.current()) : Optional.empty();
     }
 
     @Override

@@ -20,6 +20,7 @@ import eu.gabier.editing.domain.Position;
 import eu.gabier.editing.domain.SourceText;
 import eu.gabier.editing.domain.TypeKind;
 import eu.gabier.editing.fixtures.FakeOnly;
+import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -32,6 +33,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -645,6 +647,55 @@ class JdtlsLanguageServerTest {
                 assertThat(server.state()).isEqualTo(JdtlsState.STARTING);
                 assertThat(server.failure()).isEmpty();
             }
+        }
+
+        @Test
+        void saysWhatJdtlsReportsWhileItStartsAndNothingOnceItIsReady() throws Exception {
+            fake.sendsStatus("")
+                    .reportsWhileStarting(
+                            "Init...",
+                            "45% Starting Java Language Server",
+                            "70% Starting Java Language Server - Configure project :core");
+
+            try (var server = start()) {
+                awaitProgress(server, JdtlsProgress.Phase.IMPORTING);
+
+                assertThat(server.progress())
+                        .hasValueSatisfying(
+                                progress -> assertThat(progress.message()).isEqualTo("Configure project :core"));
+            }
+        }
+
+        @Test
+        void saysItIsLaunchingBeforeJdtlsHasReportedAnything() throws Exception {
+            fake.neverAnswersInitialize();
+
+            try (var server = start()) {
+                assertThat(server.progress())
+                        .hasValueSatisfying(
+                                progress -> assertThat(progress.phase()).isEqualTo(JdtlsProgress.Phase.LAUNCHING));
+            }
+        }
+
+        @Test
+        void saysNothingOfItsProgressOnceJdtlsIsReady() throws Exception {
+            fake.reportsWhileStarting("70% Starting Java Language Server - Build");
+
+            try (var server = start()) {
+                server.awaitReady();
+
+                assertThat(server.progress()).isEmpty();
+            }
+        }
+
+        private void awaitProgress(JdtlsLanguageServer server, JdtlsProgress.Phase phase) throws InterruptedException {
+            for (var attempt = 0;
+                    attempt < 1500
+                            && !server.progress().map(JdtlsProgress::phase).equals(Optional.of(phase));
+                    attempt++) {
+                Thread.sleep(10);
+            }
+            assertThat(server.progress().map(JdtlsProgress::phase)).contains(phase);
         }
 
         @Test

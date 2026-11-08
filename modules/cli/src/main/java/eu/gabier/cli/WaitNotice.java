@@ -3,6 +3,7 @@ package eu.gabier.cli;
 import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.RpcResponse;
+import eu.gabier.protocol.TerminalText;
 import java.io.PrintStream;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -83,11 +84,18 @@ final class WaitNotice implements AutoCloseable {
         return Optional.empty();
     }
 
-    /** The line for a daemon whose jdtls is starting, after the request has waited this long. */
+    /**
+     * The line for a daemon whose jdtls is starting, after the request has waited this long. It says what jdtls is
+     * doing when the daemon knows; the text comes from jdtls, so the line is neutralised ({@link TerminalText}).
+     */
     static String line(DaemonStatus status, Duration waited) {
-        return "gabier: waiting for jdtls (" + status.jdtls().text() + ", " + waited.toSeconds()
-                + "s so far); the first command of a session waits for it to start and import the project,"
-                + " the next ones are quick";
+        var doing =
+                status.jdtlsProgress().map(progress -> "; " + progress.text()).orElse("");
+
+        return TerminalText.neutralise(
+                "gabier: waiting for jdtls (" + status.jdtls().text() + ", " + waited.toSeconds()
+                        + "s so far" + doing + "); the first command of a session waits for it to start and import the"
+                        + " project, the next ones are quick");
     }
 
     private void write(PrintStream err, String line) {

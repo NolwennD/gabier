@@ -59,6 +59,7 @@ final class JdtlsSession implements AutoCloseable {
             JdtlsWorkspace.Opened workspace,
             JdtlsConnection connection,
             Consumer<String> log,
+            StartProgress progress,
             Consumer<PublishDiagnosticsParams> diagnostics,
             WatchedFiles watched) {
         this.settings = settings;
@@ -66,7 +67,8 @@ final class JdtlsSession implements AutoCloseable {
         this.process = connection.process();
         this.workspace = workspace;
         this.log = log;
-        this.client = new JdtlsClient(log, diagnostics, watched::register, watched::unregister, choices);
+        this.client =
+                new JdtlsClient(log, progress::status, diagnostics, watched::register, watched::unregister, choices);
         var launcher = new LSPLauncher.Builder<JdtlsServer>()
                 .setLocalService(client)
                 .setRemoteInterface(JdtlsServer.class)
@@ -100,6 +102,20 @@ final class JdtlsSession implements AutoCloseable {
             Consumer<String> log,
             Consumer<PublishDiagnosticsParams> diagnostics)
             throws IOException, InterruptedException {
+        return start(starter, settings, log, new StartProgress(), diagnostics);
+    }
+
+    /**
+     * As {@link #start(JdtlsStarter, JdtlsSettings, Consumer, Consumer)}, keeping in {@code progress} where the start
+     * is, from what jdtls says.
+     */
+    static JdtlsSession start(
+            JdtlsStarter starter,
+            JdtlsSettings settings,
+            Consumer<String> log,
+            StartProgress progress,
+            Consumer<PublishDiagnosticsParams> diagnostics)
+            throws IOException, InterruptedException {
         // The state of the disk that jdtls starts from, before it reads anything.
         WatchedFiles watched = WatchedFiles.of(settings.projectRoot());
         JdtlsWorkspace.Opened opened = settings.workspace().open(settings.timeout(), log);
@@ -110,7 +126,7 @@ final class JdtlsSession implements AutoCloseable {
             settings.workspace().release(opened);
             throw failure;
         }
-        var session = new JdtlsSession(settings, opened, connection, log, diagnostics, watched);
+        var session = new JdtlsSession(settings, opened, connection, log, progress, diagnostics, watched);
         log.accept("jdtls started, pid " + session.pid() + ", data " + opened.data());
         session.recordTheTree();
         try {

@@ -11,6 +11,7 @@ import eu.gabier.editing.domain.Position;
 import eu.gabier.editing.domain.Range;
 import eu.gabier.editing.domain.ReferenceLocations;
 import eu.gabier.editing.domain.TypeKind;
+import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -101,6 +102,13 @@ final class ProjectServer implements ServedProject {
         var server = current;
 
         return server == null ? JdtlsState.NOT_STARTED : server.state();
+    }
+
+    @Override
+    public Optional<JdtlsProgress> jdtlsProgress() {
+        var server = current;
+
+        return server == null ? Optional.empty() : server.progress();
     }
 
     @Override

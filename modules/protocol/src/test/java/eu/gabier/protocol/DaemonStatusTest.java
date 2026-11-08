@@ -200,6 +200,77 @@ class DaemonStatusTest {
                 .isThrownBy(() -> DaemonStatus.of(result("project", "a\u0000b")));
     }
 
+    private static DaemonStatus starting(JdtlsProgress progress) {
+        return new DaemonStatus(
+                "0.1",
+                4242,
+                Duration.ofMillis(65_432),
+                Path.of("/work/demo"),
+                JdtlsState.STARTING,
+                Optional.empty(),
+                ImportSettings.DEFAULTS,
+                Optional.of(progress));
+    }
+
+    @Test
+    void saysWhatJdtlsDoesWhileItStartsInAMemberThatIsOnlyThereThen() {
+        var importing = starting(
+                new JdtlsProgress(JdtlsProgress.Phase.IMPORTING, "Configure project :core", Duration.ofMillis(47_250)));
+
+        assertThat(importing.toJson()).isEqualTo("""
+            {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"starting",\
+            "imports":%s,"jdtlsProgress":{"phase":"importing","message":"Configure project :core","spentMillis":47250}}\
+            """.formatted(DEFAULT_IMPORTS_JSON));
+        StrictJson.parse(importing.toJson());
+        assertThat(STATUS.jdtlsProgress()).isEmpty();
+        assertThat(STATUS.toJson()).doesNotContain("jdtlsProgress");
+    }
+
+    @Test
+    void readsTheProgressItWrites() {
+        for (var phase : JdtlsProgress.Phase.values()) {
+            var status = starting(new JdtlsProgress(phase, "said \"no\"\n\u001b[2J", Duration.ofSeconds(3)));
+            var result = ((RpcResponse.Success) RpcResponse.parse(JsonRpc.success("1", status.toJson()))).result();
+
+            assertThat(DaemonStatus.of(result)).isEqualTo(status);
+        }
+        assertThat(JdtlsProgress.Phase.values())
+                .extracting(JdtlsProgress.Phase::text)
+                .containsExactly("launching", "importing");
+    }
+
+    @Test
+    void isRefusedWhenTheProgressIsNotWhatItIsWritten() {
+        var members = List.of(
+                Map.of("message", "m", "spentMillis", new BigDecimal("1")),
+                Map.of("phase", "asleep", "message", "m", "spentMillis", new BigDecimal("1")),
+                Map.of("phase", "importing", "spentMillis", new BigDecimal("1")),
+                Map.of("phase", "importing", "message", 3, "spentMillis", new BigDecimal("1")),
+                Map.of("phase", "importing", "message", "m"),
+                Map.of("phase", "importing", "message", "m", "spentMillis", "soon"));
+
+        for (var progress : members) {
+            assertThatExceptionOfType(InvalidResponseException.class)
+                    .isThrownBy(() -> DaemonStatus.of(result("jdtlsProgress", progress)));
+        }
+        assertThatExceptionOfType(InvalidResponseException.class)
+                .isThrownBy(() -> DaemonStatus.of(result("jdtlsProgress", "importing")));
+    }
+
+    @Test
+    void refusesAMissingProgressHolder() {
+        assertThatExceptionOfType(MissingMandatoryValueException.class)
+                .isThrownBy(() -> new DaemonStatus(
+                        "0.1",
+                        1,
+                        Duration.ZERO,
+                        Path.of("/p"),
+                        JdtlsState.STARTING,
+                        Optional.empty(),
+                        ImportSettings.DEFAULTS,
+                        null));
+    }
+
     @Test
     void refusesABlankVersion() {
         assertThatExceptionOfType(MissingMandatoryValueException.class)

@@ -17,6 +17,7 @@ import eu.gabier.editing.fixtures.PackageMoveScenarios;
 import eu.gabier.editing.fixtures.PackageRenameScenarios;
 import eu.gabier.editing.fixtures.Scenario;
 import eu.gabier.editing.fixtures.Scenarios;
+import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -149,6 +150,11 @@ public final class FakeServedMain {
         @Override
         public JdtlsState state() {
             return JdtlsState.READY;
+        }
+
+        @Override
+        public Optional<JdtlsProgress> jdtlsProgress() {
+            return Optional.empty();
         }
 
         @Override

@@ -14,6 +14,7 @@ import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FileDiagnostics.Diagnosis;
 import eu.gabier.protocol.FileDiagnostics.Severity;
 import eu.gabier.protocol.ImportSettings;
+import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.ProtocolVersion;
 import eu.gabier.protocol.RpcResponse;
@@ -430,6 +431,26 @@ class DaemonServerTest {
 
             try (var client = connect(socket())) {
                 assertThat(statusOf(client).jdtlsFailure()).isEmpty();
+            }
+        }
+
+        @Test
+        void statusSaysWhatJdtlsIsDoingWhileItStartsAndOnlyThen() throws IOException {
+            var doing =
+                    new JdtlsProgress(JdtlsProgress.Phase.IMPORTING, "Configure project :core", Duration.ofSeconds(47));
+            project.doing(doing);
+            serving();
+
+            try (var client = connect(socket())) {
+                project.in(JdtlsState.STARTING);
+                assertThat(statusOf(client).jdtlsProgress()).contains(doing);
+
+                for (var state : List.of(JdtlsState.NOT_STARTED, JdtlsState.READY, JdtlsState.FAILED)) {
+                    project.in(state);
+                    assertThat(statusOf(client).jdtlsProgress())
+                            .as(state.text())
+                            .isEmpty();
+                }
             }
         }
 

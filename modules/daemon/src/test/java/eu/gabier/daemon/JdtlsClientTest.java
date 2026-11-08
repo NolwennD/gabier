@@ -25,8 +25,14 @@ class JdtlsClientTest {
     private final List<Registration> registered = new ArrayList<>();
     private final List<Unregistration> unregistered = new ArrayList<>();
     private final ImportChoices choices = new ImportChoices();
-    private final JdtlsClient client =
-            new JdtlsClient(log::add, published::add, registered::add, unregistered::add, choices);
+    private final List<String> statuses = new ArrayList<>();
+    private final JdtlsClient client = new JdtlsClient(
+            log::add,
+            (type, message) -> statuses.add(type + ": " + message),
+            published::add,
+            registered::add,
+            unregistered::add,
+            choices);
 
     @Test
     void handsEachRegistrationOfJdtlsOverAndAnswersIt() {
@@ -81,6 +87,22 @@ class JdtlsClientTest {
         client.status(new JdtlsClient.Status("Error", "boom"));
 
         assertThat(log).containsExactly("jdtls status Started: Ready", "jdtls status Error: boom");
+    }
+
+    @Test
+    void everyStatusIsHandedOverWithItsTypeAndItsMessageTheProgressOfTheStartIncluded() {
+        client.status(new JdtlsClient.Status("Starting", "70% Starting Java Language Server - Build"));
+        client.status(new JdtlsClient.Status("ServiceReady", "ServiceReady"));
+
+        assertThat(statuses)
+                .containsExactly("Starting: 70% Starting Java Language Server - Build", "ServiceReady: ServiceReady");
+    }
+
+    @Test
+    void aStatusWithNoMessageIsHandedOverWithAnEmptyOne() {
+        client.status(new JdtlsClient.Status("Starting", null));
+
+        assertThat(statuses).containsExactly("Starting: ");
     }
 
     @Test

@@ -71,8 +71,9 @@ that is still running from an earlier import shortens the import a great deal: a
 one warm answered the first `diagnostics` in 32 s.
 
 **The notice.** A request command that has waited **3 seconds** while jdtls is starting writes one line on the
-**standard error** (`gabier: waiting for jdtls (starting, 3s so far); the first command of a session waits for it to start
-and import the project, the next ones are quick`), and again every 15 seconds for as long as jdtls is starting, so an
+**standard error** (`gabier: waiting for jdtls (starting, 41s so far; importing the project for 38s: Configure project :core); the first
+command of a session waits for it to start and import the project, the next ones are quick`; what jdtls is doing is the
+one `gabier status` gives, see [status and stop](commands/status-and-stop.md)), and again every 15 seconds for as long as jdtls is starting, so an
 agent can tell a wait from a hang. It asks the daemon for its `status` on a connection of its own while the request
 waits, and writes nothing when the answer comes within 3 seconds, when jdtls is already ready (a slow request to a ready
 jdtls, such as a `references` that waits for the indexes, gets no line), when the daemon does not answer the question,

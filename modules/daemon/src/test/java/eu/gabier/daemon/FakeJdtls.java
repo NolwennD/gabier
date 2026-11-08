@@ -164,6 +164,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private volatile Future<Void> serving;
     private final List<AutoCloseable> channels = new ArrayList<>();
     private volatile StatusClient client;
+    private volatile List<String> startingStatuses = List.of();
     private volatile @Nullable JsonElement chooseImportsSelections;
     private final List<Object> commandAnswers = new CopyOnWriteArrayList<>();
 
@@ -190,6 +191,15 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
 
     FakeJdtls neverAnswersInitialize() {
         this.answersInitialize = false;
+        return this;
+    }
+
+    /**
+     * The {@code Starting} statuses jdtls sends while it starts, in order, before the final one (what jdtls really
+     * does: observed on the real jdtls, see {@code StartProgressReplayTest}).
+     */
+    FakeJdtls reportsWhileStarting(String... messages) {
+        this.startingStatuses = List.of(messages);
         return this;
     }
 
@@ -694,6 +704,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         }
 
         private void sendStatus() {
+            startingStatuses.forEach(message -> client.status(new JdtlsClient.Status("Starting", message)));
             if (!status.isEmpty()) {
                 client.status(new JdtlsClient.Status(status, status));
             }

@@ -6,8 +6,9 @@ import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 /**
- * {@code status}: the daemon, if one runs. It takes no argument and starts no daemon. The version, the project and the
- * reason jdtls failed come from the daemon, which has them from jdtls: the line is neutralised ({@link TerminalText}).
+ * {@code status}: the daemon, if one runs. It takes no argument and starts no daemon. The version, the project, the
+ * reason jdtls failed and what it is doing while it starts come from the daemon, which has them from jdtls: the line is
+ * neutralised ({@link TerminalText}).
  */
 final class Status implements Capability {
 
@@ -18,7 +19,15 @@ final class Status implements Capability {
                 $ gabier status
                 gabier-daemon 0.1.0, pid 4242, up 65s, project /work/demo, jdtls not-started\
                 """)
-            .asksARunningDaemon();
+            .asksARunningDaemon()
+            .withNotes("""
+                jdtls is in one of four states: not-started (no request has needed it yet), starting, ready, or
+                failed (the reason follows in parentheses when it is known). While it is starting, the line also says
+                what it is doing and for how long it has been doing it: launching jdtls (its process and its runtime
+                come up), then importing the project (for a Gradle project, jdtls runs the build), with the last task
+                it reported. With --json, the same is the member jdtlsProgress (phase, message, spentMillis), present
+                only while jdtls is starting. A request made while jdtls is starting waits for it.\
+                """);
 
     @Override
     public Command command() {
@@ -36,10 +45,12 @@ final class Status implements Capability {
     /** The line of the daemon, then the settings of the imports it follows for the project, each with its source. */
     private static String text(DaemonStatus status) {
         var failure = status.jdtlsFailure().map(reason -> " (" + reason + ")").orElse("");
+        var progress =
+                status.jdtlsProgress().map(doing -> " (" + doing.text() + ")").orElse("");
         var lines = new ArrayList<String>();
         lines.add("gabier-daemon " + status.version() + ", pid " + status.pid() + ", up "
                 + status.uptime().toSeconds() + "s, project " + status.project() + ", jdtls "
-                + status.jdtls().text() + failure);
+                + status.jdtls().text() + failure + progress);
         lines.add("imports:");
         status.imports().lines().forEach(line -> lines.add("  " + line));
 

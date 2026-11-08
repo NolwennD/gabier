@@ -235,7 +235,10 @@ final class DaemonServer implements AutoCloseable {
                 project.root(),
                 state,
                 failure,
-                ImportPreferences.read(project.root()).settings());
+                ImportPreferences.read(project.root()).settings(),
+                // Only a jdtls that is starting is doing anything to tell, whatever the project knows of an earlier
+                // start.
+                state == JdtlsState.STARTING ? project.jdtlsProgress() : Optional.empty());
     }
 
     /** How long the clients are given to end by themselves when the daemon stops; for a test to shorten. */

@@ -43,6 +43,39 @@ class StatusAndStopTest extends CliTest {
         }
 
         @Test
+        void saysWhatJdtlsIsDoingAndForHowLongWhileItStarts() throws IOException {
+            var status = """
+                {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"starting","imports":%s,\
+                "jdtlsProgress":{"phase":"importing","message":"Configure project :core","spentMillis":47250}}\
+                """.formatted(CliFixtures.IMPORTS);
+            try (var daemon = daemonAnswering(status)) {
+                assertThat(runWithSocket("status")).isZero();
+
+                assertThat(out())
+                        .isEqualTo("gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls starting"
+                                + " (importing the project for 47s: Configure project :core)" + System.lineSeparator()
+                                + IMPORT_LINES);
+                assertThat(runWithSocket("--json", "status")).isZero();
+                assertThat(out()).endsWith(status + System.lineSeparator());
+            }
+        }
+
+        @Test
+        void writesOutTheEscapesOfWhatJdtlsSaysItIsDoing() throws IOException {
+            var status = """
+                {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"starting","imports":%s,\
+                "jdtlsProgress":{"phase":"launching","message":"x\\u001b[2J\\nforged","spentMillis":1000}}\
+                """.formatted(CliFixtures.IMPORTS);
+            try (var daemon = daemonAnswering(status)) {
+                assertThat(runWithSocket("status")).isZero();
+
+                assertThat(out().lines().findFirst())
+                        .hasValueSatisfying(line ->
+                                assertThat(line).endsWith("(launching jdtls for 1s: x\\u001b[2J\\u000aforged)"));
+            }
+        }
+
+        @Test
         void saysWhichFileEachImportSettingComesFrom() throws IOException {
             var status = """
                 {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"ready","imports":\

@@ -17,6 +17,7 @@ import eu.gabier.editing.domain.Position;
 import eu.gabier.editing.domain.Range;
 import eu.gabier.editing.domain.ReferenceLocations;
 import eu.gabier.editing.domain.TypeKind;
+import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import java.io.IOException;
@@ -94,6 +95,7 @@ class ProjectServerTest {
         private final AtomicInteger closes = new AtomicInteger();
         private volatile JdtlsState state = JdtlsState.STARTING;
         private volatile String failure;
+        private volatile JdtlsProgress progress;
         private volatile Exception closeFailure;
         private final boolean held;
 
@@ -119,6 +121,11 @@ class ProjectServerTest {
             return server;
         }
 
+        /** What the server says it is doing. */
+        void doing(JdtlsProgress progress) {
+            this.progress = progress;
+        }
+
         /** The start is over: ready, or failed with this reason. */
         void finish(String reason) {
             failure = reason;
@@ -129,6 +136,11 @@ class ProjectServerTest {
         @Override
         public JdtlsState state() {
             return state;
+        }
+
+        @Override
+        public Optional<JdtlsProgress> progress() {
+            return Optional.ofNullable(progress);
         }
 
         @Override
@@ -261,6 +273,7 @@ class ProjectServerTest {
             assertThat(project.root()).isEqualTo(ROOT);
             assertThat(project.state()).isEqualTo(JdtlsState.NOT_STARTED);
             assertThat(project.jdtlsFailure()).isEmpty();
+            assertThat(project.jdtlsProgress()).isEmpty();
             assertThat(starter.starts).hasValue(0);
         }
 
@@ -409,6 +422,19 @@ class ProjectServerTest {
             project.references(FILE, new Position(0, 0), false);
 
             assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
+        void saysWhatTheServerThatIsStartingIsDoing() throws Exception {
+            var held = starter.willStart(ScriptedServer.held());
+            var doing = new JdtlsProgress(JdtlsProgress.Phase.IMPORTING, "Build", Duration.ofSeconds(4));
+            held.doing(doing);
+            var request = CompletableFuture.supplyAsync(() -> project.diagnostics(FILE), REQUESTS);
+            awaitUntil(() -> held.waiting.get() == 1, "the request to wait for the start");
+
+            assertThat(project.jdtlsProgress()).contains(doing);
+            held.finish(null);
+            request.orTimeout(30, TimeUnit.SECONDS).join();
         }
 
         @Test

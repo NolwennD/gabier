@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -22,6 +23,7 @@ import org.jspecify.annotations.Nullable;
  *     prints it goes through {@link TerminalText}); empty when jdtls is not failed or the reason is not known
  * @param imports the settings of the imports that gabier follows for the project, read from its files when the status
  *     is asked for
+ * @param jdtlsProgress what jdtls is doing, while it is starting; empty in any other state
  */
 public record DaemonStatus(
         String version,
@@ -30,7 +32,8 @@ public record DaemonStatus(
         Path project,
         JdtlsState jdtls,
         Optional<String> jdtlsFailure,
-        ImportSettings imports) {
+        ImportSettings imports,
+        Optional<JdtlsProgress> jdtlsProgress) {
 
     public DaemonStatus {
         Assert.notBlank("version", version);
@@ -41,6 +44,19 @@ public record DaemonStatus(
         Assert.notNull("jdtls", jdtls);
         Assert.notNull("jdtlsFailure", jdtlsFailure);
         Assert.notNull("imports", imports);
+        Assert.notNull("jdtlsProgress", jdtlsProgress);
+    }
+
+    /** A status that says nothing of what jdtls is doing. */
+    public DaemonStatus(
+            String version,
+            long pid,
+            Duration uptime,
+            Path project,
+            JdtlsState jdtls,
+            Optional<String> jdtlsFailure,
+            ImportSettings imports) {
+        this(version, pid, uptime, project, jdtls, jdtlsFailure, imports, Optional.empty());
     }
 
     /** A status that says no reason for the state of jdtls, and whose project follows the defaults of jdtls. */
@@ -59,8 +75,11 @@ public record DaemonStatus(
         var failure = jdtlsFailure
                 .map(reason -> ",\"jdtlsFailure\":" + Json.quote(reason))
                 .orElse("");
+        var progress = jdtlsProgress
+                .map(doing -> ",\"jdtlsProgress\":" + doing.toJson())
+                .orElse("");
         return """
-            {"version":%s,"pid":%d,"uptimeMillis":%d,"project":%s,"jdtls":%s,"imports":%s%s}\
+            {"version":%s,"pid":%d,"uptimeMillis":%d,"project":%s,"jdtls":%s,"imports":%s%s%s}\
             """.formatted(
                         Json.quote(version),
                         pid,
@@ -68,7 +87,8 @@ public record DaemonStatus(
                         Json.quote(project.toString()),
                         Json.quote(jdtls.text()),
                         imports.toJson(),
-                        failure);
+                        failure,
+                        progress);
     }
 
     /**
@@ -88,7 +108,28 @@ public record DaemonStatus(
                 project(result.get("project")),
                 state(result.get("jdtls")),
                 failure(result.get("jdtlsFailure")),
-                imports(result.get("imports")));
+                imports(result.get("imports")),
+                progress(result.get("jdtlsProgress")));
+    }
+
+    private static Optional<JdtlsProgress> progress(@Nullable Object progress) {
+        if (progress == null) {
+            return Optional.empty();
+        }
+        if (!(progress instanceof Map<?, ?> members)) {
+            throw member("jdtlsProgress");
+        }
+        var phase = Stream.of(JdtlsProgress.Phase.values())
+                .filter(candidate -> candidate.text().equals(members.get("phase")))
+                .findFirst()
+                .orElseThrow(() -> member("jdtlsProgress"));
+        if (!(members.get("message") instanceof String message)) {
+            throw member("jdtlsProgress");
+        }
+        var spent = new LinkedHashMap<String, @Nullable Object>();
+        spent.put("spentMillis", members.get("spentMillis"));
+
+        return Optional.of(new JdtlsProgress(phase, message, Duration.ofMillis(integer(spent, "spentMillis"))));
     }
 
     private static ImportSettings imports(@Nullable Object imports) {
