@@ -39,7 +39,7 @@ README, the end message of the install and `.claude/rules/dogfooding.md` (an age
 - Proofs: `StartingJdtlsTest` (not running, running, ready, wait returns, timeout, stderr only, `--json`, refusals),
   `ProjectServerTest.WarmingUp`, `DaemonServerTest`, `DaemonAnswersTest`, `CommandRefusalsTest`, and the check `startWithTheFakeServer`
   of the native stage. Not covered by a unit test: `--wait` on a daemon this very call started (the native check covers it).
-- Review (neutral, once): nothing blocking. Six suggestions in `08-11-2026-1217-gabier-start-review-suggestions.md` (on hold):
+- Review (neutral, once): nothing blocking. Six suggestions in `08-11-2026-1409-gabier-start-review-suggestions.md` (on hold):
   two `start` at once both say "started", a silent daemon makes `--timeout` hang, an interruption reported as
   `daemon-connection-failed`, two `status` calls per round, a stacked Javadoc in `bin/ci.d/40-native` (fixed by the
   supervisor in a small pull request), no cli test of start after a failed jdtls.
