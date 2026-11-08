@@ -36,6 +36,8 @@ final class InitAgent implements Capability {
                     "init-agent-file-exists: the file exists and gabier did not write it (it holds no gabier block);"
                             + " --force overwrites it",
                     "init-agent-block-unfinished: the file has the start of a gabier block and no end after it",
+                    "init-agent-block-repeated: the file has more than one start of a gabier block",
+                    "init-agent-fence-unclosed: a snippet cannot be appended to a file that ends inside a code fence",
                     "init-agent-unknown-command: a name of --only is no command of gabier",
                     "init-agent-no-such-folder: the target is not a folder",
                     "init-agent-outside-folder: the file, or a folder of its path, is a link that leads out of the"
@@ -47,10 +49,17 @@ final class InitAgent implements Capability {
                   rule     .claude/rules/gabier.md
                   snippet  a block of AGENTS.md, appended to the file when it has none, else replaced in place
                 The block is marked <!-- gabier:start --> ... <!-- gabier:end --> and says the version of gabier that
-                wrote it. A second run replaces the block in place and keeps what is around it. A skill or a rule that
-                exists with no such block is not overwritten without --force; --force has no other effect.
+                wrote it. A second run replaces the block in place and keeps what is around it, its line endings (a file
+                with Windows ones gets them, taken from the start line of the block) and its mode. A marker is a
+                line of its own, outside a code fence (CommonMark: three or more backticks or tildes, closed by
+                the same character); a file with more than one start is refused, and so is a snippet for a file
+                that ends inside a fence that is never closed. A skill that holds a block and lost its frontmatter gets
+                it back. A skill or a rule that exists with no such block is not overwritten without --force; --force
+                has no other effect.
                 --only=<command>,... keeps the lines that cite no command and the bullets that cite one of these
                 commands (help included); a name that is no command is refused.
+                --only cuts per bullet: a bullet that cites several commands is kept whole when one is named, so
+                --only=rename keeps the other commands that the same bullet cites.
                 --target=<folder> is the project folder, the current folder by default. The files are written in a
                 temporary file, then moved, and never outside that folder: a link that leads out of it is refused.
                 A dry run writes nothing, makes no folder, and prints what it would write.\

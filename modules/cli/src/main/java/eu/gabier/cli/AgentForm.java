@@ -68,6 +68,16 @@ enum AgentForm {
                 + instructions.stripTrailing().replaceFirst("^## ", heading) + "\n" + END;
     }
 
+    /** The frontmatter the form needs and the text of the file lacks: none when the text opens with one. */
+    String missingFrontmatter(String text) {
+        var opens = text.lines()
+                .findFirst()
+                .filter(first -> first.strip().equals("---"))
+                .isPresent();
+
+        return opens ? "" : frontmatter;
+    }
+
     /** The whole text of a new file of this form: its frontmatter, if it has one, and the block. */
     String newFile(String block) {
         return frontmatter + block + "\n";

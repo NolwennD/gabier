@@ -19,10 +19,33 @@ final class InitAgentException extends GeneratorException {
                 .addParameter("file", file.toString()));
     }
 
+    /** The file ends inside a code fence: a block appended to it would be part of the fence, and not found again. */
+    static InitAgentException fenceUnclosed(Path file) {
+        return new InitAgentException(GeneratorException.badRequest(CliErrorKey.INIT_AGENT_FENCE_UNCLOSED)
+                .message("The file ends inside a code fence that is never closed; close the fence, "
+                        + "or put the block in the file by hand")
+                .addParameter("file", file.toString()));
+    }
+
+    /** The file did not exist when gabier looked and does now: someone made it since, and gabier does not take it. */
+    static InitAgentException fileAppeared(Path file) {
+        return new InitAgentException(GeneratorException.badRequest(CliErrorKey.INIT_AGENT_FILE_EXISTS)
+                .message("The file was created while gabier was writing it; nothing was written, "
+                        + "run the command again")
+                .addParameter("file", file.toString()));
+    }
+
     /** The file has the start of the block and no end after it: gabier does not guess what to cut. */
     static InitAgentException blockUnfinished(Path file) {
         return new InitAgentException(GeneratorException.badRequest(CliErrorKey.INIT_AGENT_BLOCK_UNFINISHED)
                 .message("The file has the start of a gabier block and no end after it; mend or remove the block")
+                .addParameter("file", file.toString()));
+    }
+
+    /** The file has more than one start of the block: gabier does not guess which one is its own. */
+    static InitAgentException blockRepeated(Path file) {
+        return new InitAgentException(GeneratorException.badRequest(CliErrorKey.INIT_AGENT_BLOCK_REPEATED)
+                .message("The file has more than one gabier block; keep one and remove the others")
                 .addParameter("file", file.toString()));
     }
 

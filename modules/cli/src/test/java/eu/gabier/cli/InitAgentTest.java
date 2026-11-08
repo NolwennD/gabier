@@ -1,18 +1,22 @@
 package eu.gabier.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import eu.gabier.protocol.Json;
 import eu.gabier.protocol.ProtocolVersion;
 import java.io.IOException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * {@code gabier init-agent} writes the instructions for a coding agent into the project, in the form the maintainers
@@ -138,13 +142,13 @@ class InitAgentTest extends CliTest {
         init(form);
         var first = read(fileOf(form));
         var stale = first.replace("\n" + END, "\nA stale line.\n" + END);
-        Files.writeString(fileOf(form), "Before.\n" + stale + "After.\n");
+        Files.writeString(fileOf(form), stale.replace(START, "Before.\n" + START) + "After.\n");
         out.reset();
 
         assertThat(init(form)).isZero();
 
         assertThat(out()).isEqualTo("replaced the gabier block of " + fileOf(form) + System.lineSeparator());
-        assertThat(read(fileOf(form))).isEqualTo("Before.\n" + first + "After.\n");
+        assertThat(read(fileOf(form))).isEqualTo(first.replace(START, "Before.\n" + START) + "After.\n");
     }
 
     @Test
@@ -158,6 +162,21 @@ class InitAgentTest extends CliTest {
         assertThat(read(fileOf("skill"))).isEqualTo(edited);
     }
 
+    @Test
+    void aSkillWithABlockAndNoFrontmatterGetsTheFrontmatterBack() throws IOException {
+        init("skill");
+        var complete = read(fileOf("skill"));
+        var frontmatterEnd = complete.indexOf(START);
+        Files.writeString(fileOf("skill"), "Notes.\n" + complete.substring(frontmatterEnd));
+        out.reset();
+
+        assertThat(init("skill")).isZero();
+
+        assertThat(out()).startsWith("replaced the gabier block of ");
+        assertThat(read(fileOf("skill")))
+                .isEqualTo(complete.substring(0, frontmatterEnd) + "Notes.\n" + complete.substring(frontmatterEnd));
+    }
+
     @ParameterizedTest
     @MethodSource("forms")
     void aWriteLeavesNoTemporaryFileBehind(String form) throws IOException {
@@ -169,12 +188,20 @@ class InitAgentTest extends CliTest {
         }
     }
 
+    @Test
+    void aWriteKeepsTheModeOfTheFileItReplacesTheBlockOf() throws IOException {
+        Files.writeString(fileOf("snippet"), "Build with make.\n");
+        var ownerOnly = PosixFilePermissions.fromString("rwxr-x---");
+        Files.setPosixFilePermissions(fileOf("snippet"), ownerOnly);
+
+        assertThat(init("snippet")).isZero();
+
+        assertThat(Files.getPosixFilePermissions(fileOf("snippet"))).isEqualTo(ownerOnly);
+    }
+
     @ParameterizedTest
-    @MethodSource("forms")
+    @ValueSource(strings = {"skill", "rule"})
     void aFileThatGabierDidNotWriteIsRefusedForTheSkillAndTheRule(String form) throws IOException {
-        if (form.equals("snippet")) {
-            return;
-        }
         Files.createDirectories(fileOf(form).getParent());
         Files.writeString(fileOf(form), "My own text.\n");
 
@@ -190,17 +217,25 @@ class InitAgentTest extends CliTest {
     }
 
     @ParameterizedTest
-    @MethodSource("forms")
-    void forceOverwritesAFileThatGabierDidNotWrite(String form) throws IOException {
+    @ValueSource(strings = {"skill", "rule"})
+    void forceOverwritesASkillOrARuleThatGabierDidNotWrite(String form) throws IOException {
         Files.createDirectories(fileOf(form).getParent());
         Files.writeString(fileOf(form), "My own text.\n");
 
         assertThat(init("--force", form)).isZero();
 
-        var expected = form.equals("snippet") ? "appended the gabier block to " : "overwrote ";
-        assertThat(out()).isEqualTo(expected + fileOf(form) + System.lineSeparator());
-        assertThat(read(fileOf(form))).contains(START);
-        assertThat(read(fileOf(form)).contains("My own text.")).isEqualTo(form.equals("snippet"));
+        assertThat(out()).isEqualTo("overwrote " + fileOf(form) + System.lineSeparator());
+        assertThat(read(fileOf(form))).contains(START).doesNotContain("My own text.");
+    }
+
+    @Test
+    void forceChangesNothingForASnippetWhichIsAppendedAnyway() throws IOException {
+        Files.writeString(fileOf("snippet"), "My own text.\n");
+
+        assertThat(init("--force", "snippet")).isZero();
+
+        assertThat(out()).isEqualTo("appended the gabier block to " + fileOf("snippet") + System.lineSeparator());
+        assertThat(read(fileOf("snippet"))).startsWith("My own text.\n\n" + START + "\n");
     }
 
     @ParameterizedTest
@@ -215,6 +250,207 @@ class InitAgentTest extends CliTest {
         assertThat(out()).isEmpty();
         assertThat(err()).contains("init-agent-block-unfinished").endsWith(POINTER + System.lineSeparator());
         assertThat(read(fileOf(form))).isEqualTo(broken);
+    }
+
+    @ParameterizedTest
+    @MethodSource("forms")
+    void aFileWithTwoBlocksIsRefusedAndTheFileIsLeftAlone(String form) throws IOException {
+        Files.createDirectories(fileOf(form).getParent());
+        var twice = START + "\nfirst\n" + END + "\nBetween.\n" + START + "\nsecond\n" + END + "\n";
+        Files.writeString(fileOf(form), twice);
+
+        assertThat(init("--force", form)).isEqualTo(2);
+
+        assertThat(out()).isEmpty();
+        assertThat(err()).contains("init-agent-block-repeated").endsWith(POINTER + System.lineSeparator());
+        assertThat(read(fileOf(form))).isEqualTo(twice);
+    }
+
+    @Test
+    void aMarkerQuotedInACodeFenceIsNotABlock() throws IOException {
+        var documented = "The block looks like:\n\n```\n" + START + "\nsome text\n" + END + "\n```\n";
+        Files.writeString(fileOf("snippet"), documented);
+
+        assertThat(init("snippet")).isZero();
+
+        assertThat(out()).startsWith("appended the gabier block to ");
+        assertThat(read(fileOf("snippet"))).startsWith(documented + "\n" + START + "\n");
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                " ```\n%1$s\n%2$s\n ```\n",
+                "   ~~~~\n%1$s\n%2$s\n   ~~~~\n",
+                "````\n```\n%1$s\n%2$s\n```\n````\n",
+                "```\n~~~\n%1$s\n```java\n%2$s\n````\n",
+                "~~~text\n%1$s\n```\n%2$s\n~~~\n",
+                "```\n    ```\n%1$s\n%2$s\n```\n"
+            })
+    void aMarkerInsideAFenceIsNotABlockWhateverTheFence(String fenced) throws IOException {
+        var documented = "Documented:\n\n" + fenced.formatted(START, END);
+        Files.writeString(fileOf("snippet"), documented);
+
+        assertThat(init("snippet")).isZero();
+
+        assertThat(out()).startsWith("appended the gabier block to ");
+        assertThat(read(fileOf("snippet"))).startsWith(documented + "\n" + START + "\n");
+    }
+
+    @Test
+    void aFileThatEndsInsideAFenceIsRefusedForASnippetAndLeftAlone() throws IOException {
+        var unclosed = "Example:\n\n```\nsome code\n";
+        Files.writeString(fileOf("snippet"), unclosed);
+
+        assertThat(init("snippet")).isEqualTo(2);
+
+        assertThat(out()).isEmpty();
+        assertThat(err()).contains("init-agent-fence-unclosed").endsWith(POINTER + System.lineSeparator());
+        assertThat(read(fileOf("snippet"))).isEqualTo(unclosed);
+    }
+
+    @Test
+    void aBlockBeforeAFenceThatIsNeverClosedIsStillReplaced() throws IOException {
+        init("snippet");
+        var block = read(fileOf("snippet"));
+        var unclosed = "\n```\n" + START + "\nquoted\n";
+        Files.writeString(fileOf("snippet"), block.replace("\n" + END, "\nStale.\n" + END) + unclosed);
+
+        assertThat(init("snippet")).isZero();
+
+        assertThat(read(fileOf("snippet"))).isEqualTo(block + unclosed);
+    }
+
+    @Test
+    void aFileThatEndsInsideAFenceIsNotCheckedForTheFormsThatOverwrite() throws IOException {
+        Files.createDirectories(fileOf("rule").getParent());
+        Files.writeString(fileOf("rule"), "```\nsome code\n");
+
+        assertThat(init("--force", "rule")).isZero();
+
+        assertThat(out()).startsWith("overwrote ");
+    }
+
+    @Test
+    void aLineWithBackticksAfterTheOpeningRunIsNotAFence() throws IOException {
+        init("snippet");
+        var block = read(fileOf("snippet"));
+        var line = "```not a fence``` but a line of text\n";
+        Files.writeString(fileOf("snippet"), line + block.replace("\n" + END, "\nStale.\n" + END));
+
+        assertThat(init("snippet")).isZero();
+
+        assertThat(read(fileOf("snippet"))).isEqualTo(line + block);
+    }
+
+    @Test
+    void aLineIndentedByFourSpacesDoesNotOpenAFence() throws IOException {
+        init("snippet");
+        var block = read(fileOf("snippet"));
+        Files.writeString(fileOf("snippet"), "    ```\n" + block.replace("\n" + END, "\nStale.\n" + END));
+
+        assertThat(init("snippet")).isZero();
+
+        assertThat(read(fileOf("snippet"))).isEqualTo("    ```\n" + block);
+    }
+
+    @Test
+    void aBlockAfterAQuotedMarkerIsTheOneThatIsReplaced() throws IOException {
+        init("snippet");
+        var block = read(fileOf("snippet"));
+        var documented = "Quoted:\n\n~~~\n" + START + "\n" + END + "\n~~~\n\n";
+        Files.writeString(fileOf("snippet"), documented + block.replace("\n" + END, "\nStale.\n" + END));
+
+        assertThat(init("snippet")).isZero();
+
+        assertThat(read(fileOf("snippet"))).isEqualTo(documented + block);
+    }
+
+    @Test
+    void replacingTheBlockOfAFileWithWindowsLineEndingsKeepsThem() throws IOException {
+        init("snippet");
+        var block = read(fileOf("snippet"));
+        var stale = block.replace("\n" + END, "\nStale.\n" + END);
+        Files.writeString(fileOf("snippet"), ("Before.\n" + stale + "After.\n").replace("\n", "\r\n"));
+
+        assertThat(init("snippet")).isZero();
+
+        assertThat(read(fileOf("snippet"))).isEqualTo(("Before.\n" + block + "After.\n").replace("\n", "\r\n"));
+    }
+
+    @Test
+    void appendingToAFileWithWindowsLineEndingsKeepsThem() throws IOException {
+        Files.writeString(fileOf("snippet"), "Build with make.\r\nThen test.\r\n");
+
+        assertThat(init("snippet")).isZero();
+
+        var written = read(fileOf("snippet"));
+        assertThat(written).startsWith("Build with make.\r\nThen test.\r\n\r\n" + START + "\r\n");
+        assertThat(written.replace("\r\n", "")).doesNotContain("\n");
+    }
+
+    @Test
+    void theBlockTakesTheLineEndingsOfItsOwnStartLine() throws IOException {
+        init("snippet");
+        var block = read(fileOf("snippet"));
+        var stale = block.replace("\n" + END, "\nStale.\n" + END);
+        Files.writeString(fileOf("snippet"), "Before.\r\n" + stale + "After.\r\n");
+
+        init("snippet");
+
+        assertThat(read(fileOf("snippet"))).isEqualTo("Before.\r\n" + block + "After.\r\n");
+    }
+
+    @Test
+    void aWindowsBlockInAFileOfUnixLinesStaysWindows() throws IOException {
+        init("snippet");
+        var block = read(fileOf("snippet"));
+        var windows = block.replace("\n" + END, "\nStale.\n" + END).replace("\n", "\r\n");
+        Files.writeString(fileOf("snippet"), "Before.\n" + windows + "After.\n");
+
+        init("snippet");
+
+        assertThat(read(fileOf("snippet"))).isEqualTo("Before.\n" + block.replace("\n", "\r\n") + "After.\n");
+    }
+
+    @Test
+    void aFileThatStartsWithWindowsLinesGetsTheBlockWithWindowsLines() throws IOException {
+        Files.writeString(fileOf("snippet"), "Build.\r\nThen test.\n");
+
+        init("snippet");
+
+        assertThat(read(fileOf("snippet"))).startsWith("Build.\r\nThen test.\n\r\n" + START + "\r\n");
+    }
+
+    @Test
+    void aSkillThatOpensWithAByteOrderMarkBeforeItsFrontmatterKeepsIt() throws IOException {
+        init("skill");
+        var withMark = "\uFEFF" + read(fileOf("skill"));
+        Files.writeString(fileOf("skill"), withMark);
+
+        init("skill");
+
+        assertThat(read(fileOf("skill"))).isEqualTo(withMark);
+    }
+
+    @Test
+    void aSkillThatOpensWithAByteOrderMarkAndNoFrontmatterGetsItAfterTheMark() throws IOException {
+        init("skill");
+        var complete = read(fileOf("skill"));
+        var start = complete.indexOf(START);
+        Files.writeString(fileOf("skill"), "\uFEFFNotes.\n" + complete.substring(start));
+
+        init("skill");
+
+        assertThat(read(fileOf("skill")))
+                .isEqualTo("\uFEFF" + complete.substring(0, start) + "Notes.\n" + complete.substring(start));
+    }
+
+    @Test
+    void aNewFileHasUnixLineEndings() throws IOException {
+        init("snippet");
+
+        assertThat(read(fileOf("snippet"))).doesNotContain("\r");
     }
 
     @Test
@@ -531,6 +767,115 @@ class InitAgentTest extends CliTest {
     }
 
     @Test
+    void aFileThatIsADanglingLinkIsReplacedByARegularFileAndNothingIsWrittenThroughIt() throws IOException {
+        Files.createSymbolicLink(fileOf("snippet"), Path.of("missing.md"));
+
+        assertThat(init("snippet")).isZero();
+
+        assertThat(out()).isEqualTo("created " + fileOf("snippet") + System.lineSeparator());
+        assertThat(Files.isSymbolicLink(fileOf("snippet"))).isFalse();
+        assertThat(read(fileOf("snippet"))).startsWith(START + "\n");
+        assertThat(directory.resolve("missing.md")).doesNotExist();
+    }
+
+    @Test
+    void aTargetThatIsALinkToAFolderIsTheProject() throws IOException {
+        var project = Files.createDirectory(directory.resolve("project"));
+        var link = Files.createSymbolicLink(directory.resolve("link"), project);
+
+        assertThat(run("init-agent", "--target=" + link, "snippet")).isZero();
+
+        assertThat(out()).isEqualTo("created " + link.resolve("AGENTS.md") + System.lineSeparator());
+        assertThat(read(project.resolve("AGENTS.md"))).startsWith(START + "\n");
+    }
+
+    @Test
+    void aDryRunRefusesALinkThatLeadsOutOfTheTargetAndWritesNothing() throws IOException {
+        var outside = Files.writeString(Files.createTempFile("outside", ".md"), "Not yours.\n");
+        try {
+            var project = Files.createDirectory(directory.resolve("project"));
+            Files.createSymbolicLink(project.resolve("AGENTS.md"), outside);
+
+            assertThat(run("init-agent", "--dry-run", "--target=" + project, "snippet"))
+                    .isEqualTo(2);
+
+            assertThat(out()).isEmpty();
+            assertThat(err()).contains("init-agent-outside-folder");
+            assertThat(read(outside)).isEqualTo("Not yours.\n");
+        } finally {
+            Files.deleteIfExists(outside);
+        }
+    }
+
+    @Test
+    void aFileThatAppearsBetweenThePlanAndTheWriteIsNotClobbered() throws IOException {
+        var plan = AgentFile.plan(AgentForm.SNIPPET, directory, "block", false);
+        Files.writeString(fileOf("snippet"), "Written by someone else.\n");
+
+        assertThatThrownBy(() -> AgentFile.write(plan)).isInstanceOfSatisfying(InitAgentException.class, e -> {
+            assertThat(e.key().get()).isEqualTo("init-agent-file-exists");
+            assertThat(e.getMessage())
+                    .contains("created while gabier was writing")
+                    .contains("run the command again")
+                    .doesNotContain("--force")
+                    .doesNotContain("did not write");
+        });
+
+        assertThat(read(fileOf("snippet"))).isEqualTo("Written by someone else.\n");
+        assertThat(filesIn(directory)).containsExactly(fileOf("snippet"));
+    }
+
+    private static void noHardLinks(Path link, Path existing) throws IOException {
+        throw new FileSystemException(link.toString(), existing.toString(), "Operation not permitted");
+    }
+
+    @Test
+    void aNewFileIsCreatedOnAFileSystemWithNoHardLinks() throws IOException {
+        var plan = AgentFile.plan(AgentForm.SNIPPET, directory, "block", false);
+
+        AgentFile.write(plan, InitAgentTest::noHardLinks);
+
+        assertThat(read(fileOf("snippet"))).isEqualTo(plan.content());
+        assertThat(filesIn(directory)).containsExactly(fileOf("snippet"));
+    }
+
+    @Test
+    void aFileThatAppearsOnAFileSystemWithNoHardLinksIsNotClobberedEither() throws IOException {
+        var plan = AgentFile.plan(AgentForm.SNIPPET, directory, "block", false);
+        Files.writeString(fileOf("snippet"), "Written by someone else.\n");
+
+        assertThatThrownBy(() -> AgentFile.write(plan, InitAgentTest::noHardLinks))
+                .isInstanceOfSatisfying(
+                        InitAgentException.class, e -> assertThat(e.key().get()).isEqualTo("init-agent-file-exists"));
+
+        assertThat(read(fileOf("snippet"))).isEqualTo("Written by someone else.\n");
+        assertThat(filesIn(directory)).containsExactly(fileOf("snippet"));
+    }
+
+    @Test
+    void aMoveThatFailsLeavesNoTemporaryFileBehind() throws IOException {
+        Files.writeString(fileOf("snippet"), "Build with make.\n");
+        var plan = AgentFile.plan(AgentForm.SNIPPET, directory, "block", false);
+        Files.delete(fileOf("snippet"));
+        Files.createDirectories(fileOf("snippet").resolve("not-empty"));
+
+        assertThatThrownBy(() -> AgentFile.write(plan))
+                .isInstanceOfSatisfying(
+                        InitAgentException.class, e -> assertThat(e.key().get()).isEqualTo("init-agent-write-failed"));
+
+        assertThat(filesIn(directory)).isEmpty();
+        try (var entries = Files.list(directory)) {
+            assertThat(entries).containsExactly(fileOf("snippet"));
+        }
+    }
+
+    private static List<Path> filesIn(Path folder) throws IOException {
+        try (var files = Files.walk(folder)) {
+            return files.filter(Files::isRegularFile).toList();
+        }
+    }
+
+    @Test
     void helpOfTheCommandListsItsUsageAndItsRefusals() {
         assertThat(run("help", "init-agent")).isZero();
 
@@ -538,6 +883,9 @@ class InitAgentTest extends CliTest {
                 .contains("gabier [--json] init-agent [--dry-run] [--force]")
                 .contains("<skill|rule|snippet>")
                 .contains("init-agent-file-exists:")
+                .contains("init-agent-block-repeated:")
+                .contains("init-agent-fence-unclosed:")
+                .contains("cuts per bullet: a bullet that cites several commands is kept whole")
                 .contains("init-agent-unknown-command:");
     }
 
