@@ -52,10 +52,22 @@ final class HelpText {
             gabier help <command> gives the usage, an example and the refusals of a command.
             gabier help %s says %s (text blocks, a switch expression, an if to turn round...).
             gabier help %s=<task> gives the sections of that guide that answer a task, in English, with the command.
+            gabier help %s prints %s.
             A command whose operation is declined ends its refusal with the line that points to gabier help <command>,
             an unknown command with gabier help --for="<task>".
             gabier --version prints the version. With --json, the answer and a refusal are JSON.\
-            """.formatted(lines, Guide.TOPIC, Guide.SUMMARY, Guide.FOR);
+            """.formatted(
+                lines, Guide.TOPIC, Guide.SUMMARY, Guide.FOR, AgentInstructions.TOPIC, AgentInstructions.SUMMARY);
+    }
+
+    /** The instructions for a coding agent, as they are written: the text of {@code agents.md}, or a JSON object. */
+    static String agents(boolean json) {
+        if (json) {
+            return "{\"name\":" + Json.quote(AgentInstructions.TOPIC) + ",\"summary\":"
+                    + Json.quote(AgentInstructions.SUMMARY) + ",\"text\":" + Json.quote(AgentInstructions.text()) + "}";
+        }
+
+        return AgentInstructions.text().stripTrailing();
     }
 
     /** The guide of the improvements, as it is written: the text of {@code docs/improve.md}, or a JSON object. */

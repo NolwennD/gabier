@@ -118,10 +118,12 @@ Whichever way you installed it:
 2. In a Java project, run `gabier start` (it starts the daemon and jdtls and answers at once; add `--wait` to wait until
    jdtls is ready), then a first command, such as `gabier diagnostics <a .java file>` (without `start`, the first answer
    waits for jdtls to import the project; see [Using it](#using-it)).
-3. Give a coding agent this line, in its instructions (`AGENTS.md`, `CLAUDE.md`):
+3. Give a coding agent its instructions: `gabier help agents` prints a short Markdown section (start `gabier start` at the
+   beginning of a session, ask `gabier help --for="<the task>"` before editing Java by hand, the commands that replace a
+   text edit, `--dry-run` first). Paste it as it is in `AGENTS.md` or `CLAUDE.md`, for instance:
 
-   ```text
-   Change Java with `gabier` rather than by editing text: `gabier help` lists the commands, `gabier help --for="<the task>"` tells which one does a task.
+   ```sh
+   gabier help agents >> AGENTS.md
    ```
 
 ## Build gabier from its sources
@@ -219,6 +221,8 @@ refusals of each one. `gabier help --for="<the task>"` tells which command does 
 - [`gabier help --for="<task>"`](docs/commands/help.md): ask the guide a question in English ("turn this string
   concatenation into a text block") and get the one to three sections that answer, with the command to run and a
   confidence, or the plain word that nothing matches. No daemon, no network.
+- [`gabier help agents`](docs/commands/help.md): the lines to paste in the instructions of a coding agent (`AGENTS.md`,
+  `CLAUDE.md`): `gabier start`, `gabier help --for=...` before editing by hand, the commands that replace a text edit.
 - [`gabier start`](docs/commands/start.md): start the daemon and jdtls ahead of the first command; `--wait` returns when
   jdtls is ready.
 - [`gabier status` and `gabier stop`](docs/commands/status-and-stop.md): see what the daemon serves, and stop it.

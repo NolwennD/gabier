@@ -11,6 +11,7 @@ final class Help implements Capability {
             .usage("""
                 gabier [--json] help [<command>]
                 gabier [--json] help guide
+                gabier [--json] help agents
                 gabier [--json] help --for=<task>
                 gabier [--json] --help
                 gabier [--json] -h\
@@ -48,6 +49,11 @@ final class Help implements Capability {
         }
         if (name.equals(Guide.TOPIC)) {
             invocation.out().println(HelpText.guide(invocation.json()));
+
+            return;
+        }
+        if (name.equals(AgentInstructions.TOPIC)) {
+            invocation.out().println(HelpText.agents(invocation.json()));
 
             return;
         }

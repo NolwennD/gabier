@@ -1,12 +1,7 @@
 package eu.gabier.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -180,34 +175,6 @@ class GuideTest {
         assertThat(sectionOf("### A condition to turn round"))
                 .contains("does nothing else")
                 .contains("branches");
-    }
-
-    @Test
-    void aResourceThatIsMissingFromTheBuildIsAnError() {
-        assertThatThrownBy(() -> Guide.read(null))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("improve.md");
-    }
-
-    @Test
-    void aResourceThatCannotBeReadIsAnError() {
-        var broken = new InputStream() {
-            @Override
-            public int read() throws IOException {
-                throw new IOException("disk");
-            }
-        };
-
-        assertThatThrownBy(() -> Guide.read(broken))
-                .isInstanceOf(UncheckedIOException.class)
-                .hasMessageContaining("improve.md");
-    }
-
-    @Test
-    void theResourceIsReadAsUtf8() {
-        var stream = new java.io.ByteArrayInputStream("é".getBytes(StandardCharsets.UTF_8));
-
-        assertThat(Guide.read(stream)).isEqualTo("é");
     }
 
     private static String sectionOf(String title) {

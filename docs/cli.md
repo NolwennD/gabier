@@ -23,7 +23,7 @@ language server declined (`language-server-not-extractable`, `language-server-no
 gets `Usage and other ways: gabier help <command>`, with the command that was run.
 
 `gabier help` lists the commands and `gabier help <command>` explains one, as does `gabier <command> --help` (or `-h`):
-see [help](commands/help.md).
+`gabier help agents` prints the lines to paste in the instructions of a coding agent; see [help](commands/help.md).
 
 The JSON object follows the data model of [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) (problem details)
 without its HTTP side: `type` (a URI that is not meant to be resolved, `urn:gabier:error:<key>`), `title`, `detail`,

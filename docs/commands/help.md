@@ -19,6 +19,19 @@ is printed with no clone of the repository. `guide` is a topic of `help`, not a 
 commands and no `gabier guide`); `gabier help` points to it on its last lines. With `--json` it is one object,
 `{"name":"guide","summary":"...","text":"..."}`, the text being the page. To add an entry, see the skill `extend-guide`.
 
+`gabier help agents` prints the instructions to give a coding agent: a short section of plain Markdown (about fifteen
+lines), written to be pasted as it is in `AGENTS.md` or `CLAUDE.md` (`gabier help agents >> AGENTS.md`). It says to start
+the session with [`gabier start`](start.md), to ask `gabier help --for="<the task, in English>"` before editing Java by
+hand, which commands replace a text edit, to try a change with `--dry-run` first, and to read the refusal of a command with
+`gabier help <command>`. Like the guide it is a topic of `help`, not a command, and with `--json` it is one object,
+`{"name":"agents","summary":"...","text":"..."}`. The text is the resource `agents.md` of the cli
+(`modules/cli/src/main/resources/eu/gabier/cli/`, kept by the native image like the guide), the only copy; the class
+`AgentInstructions` holds it, so that a later command that writes it into a project calls the same `text()`. A test
+(`AgentInstructionsTest`) reads the commands the text cites in backticks (`` `gabier <command>` ``) and fails when one is
+not a command in the list of `gabier help` (or a topic of `help`): change the text and the commands together.
+`gabier help` ends with a line that points to it, and so do the end message of the install and the first steps of the
+README.
+
 `gabier help --for="<task>"` asks the guide a question: the task in English ("turn this string concatenation into a text
 block"), and the answer is one to three sections of the guide, best first, each with its title, its line `Ask:` or `By
 hand:` and a confidence from 0 to 1 (two decimals):
@@ -82,6 +95,9 @@ Stop the daemon.
 ...
 $ gabier help guide
 # Improving Java with gabier: the problem each move solves
+...
+$ gabier help agents
+## Java with gabier
 ...
 $ gabier help frobnicate
 Usage error: Unknown command; the commands are diagnostics, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move, inline, create, references, actions, apply-action, start, status, stop, help (usage-error; command=frobnicate)

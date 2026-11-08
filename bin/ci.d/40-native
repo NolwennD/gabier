@@ -14,7 +14,7 @@ import java.util.stream.Stream;
 /**
  * Stage {@code native} of the local CI (see {@code bin/ci}): builds the native cli and runs the binary alone, in an
  * empty directory with an empty environment, so that it cannot lean on anything of the checkout: {@code --version},
- * {@code help}, {@code help guide} and {@code help --for=<task>} (the guide is a resource of the image), a usage error reported as a problem object (text, then JSON with {@code --json}) with its exit code, the two output
+ * {@code help}, {@code help guide}, {@code help agents} and {@code help --for=<task>} (the guide and the instructions for an agent are resources of the image), a usage error reported as a problem object (text, then JSON with {@code --json}) with its exit code, the two output
  * streams kept apart, and then the cli against a real daemon: the installed {@code gabier-daemon} is started on a socket
  * in a temporary directory ({@code GABIER_SOCKET}, never the default path of the user), and {@code status} and {@code
  * stop} are run against it, with no daemon, with a stale socket and with a second daemon; {@code diagnostics} is run
@@ -234,6 +234,15 @@ public final class Native {
                         && guide.out().startsWith("# Improving Java with gabier")
                         && guide.out().contains("stringConcatToTextBlock")
                         && guide.out().contains("By hand: ")
+                ? 0
+                : 1;
+        Run agents = runBinary(binary, directory, "help", "agents");
+        System.out.println("gabier help agents -> " + agents.out().lines().count() + " lines (exit " + agents.exit() + ")");
+
+        failures += agents.exit() == 0
+                        && agents.err().isEmpty()
+                        && agents.out().startsWith("## Java with gabier")
+                        && agents.out().contains("`gabier start`")
                 ? 0
                 : 1;
 
