@@ -15,6 +15,10 @@ import org.junit.jupiter.api.io.TempDir;
  */
 abstract class CliTest {
 
+    static final String FOR_A_TASK = "Not sure which command? Ask for the task: gabier help --for=\"<task>\"";
+    static final String FOR_A_TASK_AS_JSON =
+            "Not sure which command? Ask for the task: gabier help --for=\\\"<task>\\\"";
+
     private static final String USAGE_DETAIL = "Unsupported arguments; run gabier help for the commands, "
             + "and gabier help <command> for the usage of one";
 
@@ -31,6 +35,19 @@ abstract class CliTest {
     static String usageJson(String arguments) {
         return "{\"type\":\"urn:gabier:error:usage-error\",\"title\":\"Usage error\",\"detail\":\"" + USAGE_DETAIL
                 + "\",\"key\":\"usage-error\",\"parameters\":{\"arguments\":\"" + arguments + "\"}}"
+                + System.lineSeparator();
+    }
+
+    /** The usage error of a first word that names no command: the problem, then the line that points to the guide. */
+    static String unknownCommandText(String arguments) {
+        return "Usage error: " + USAGE_DETAIL + " (usage-error; arguments=" + arguments + ")" + System.lineSeparator()
+                + FOR_A_TASK + System.lineSeparator();
+    }
+
+    static String unknownCommandJson(String arguments) {
+        var problem = usageJson(arguments).stripTrailing();
+
+        return problem.substring(0, problem.length() - 1) + ",\"help\":\"" + FOR_A_TASK_AS_JSON + "\"}"
                 + System.lineSeparator();
     }
 

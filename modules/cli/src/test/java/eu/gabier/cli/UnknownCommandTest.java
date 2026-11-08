@@ -17,6 +17,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class UnknownCommandTest {
 
+    private static final String FOR_A_TASK = CliTest.FOR_A_TASK;
     private static final String HOW_TO_HELP =
             "Run gabier help for the commands, and gabier help <command> for the usage of one";
 
@@ -57,7 +58,7 @@ class UnknownCommandTest {
         assertThat(err())
                 .isEqualTo("Usage error: Unsupported arguments; did you mean " + meant + "? " + HOW_TO_HELP
                         + " (usage-error; arguments=" + typed + " x.java, suggestion=" + meant + ")"
-                        + System.lineSeparator());
+                        + System.lineSeparator() + FOR_A_TASK + System.lineSeparator());
     }
 
     @ParameterizedTest
@@ -71,6 +72,7 @@ class UnknownCommandTest {
                 .isEqualTo("Unsupported arguments; did you mean " + meant + "? " + HOW_TO_HELP);
         assertThat((Map<?, ?>) problem.get("parameters"))
                 .isEqualTo(Map.of("arguments", typed + " x.java", "suggestion", meant));
+        assertThat(problem.get("help")).isEqualTo(FOR_A_TASK);
     }
 
     @ParameterizedTest
@@ -81,7 +83,7 @@ class UnknownCommandTest {
         assertThat(err())
                 .isEqualTo("Usage error: Unsupported arguments; run gabier help for the commands, "
                         + "and gabier help <command> for the usage of one (usage-error; arguments=" + typed + ")"
-                        + System.lineSeparator());
+                        + System.lineSeparator() + FOR_A_TASK + System.lineSeparator());
     }
 
     @Test
@@ -90,6 +92,7 @@ class UnknownCommandTest {
 
         var problem = (Map<?, ?>) Json.parse(err());
         assertThat((Map<?, ?>) problem.get("parameters")).isEqualTo(Map.of("arguments", "frobnicate"));
+        assertThat(problem.get("help")).isEqualTo(FOR_A_TASK);
     }
 
     @Test

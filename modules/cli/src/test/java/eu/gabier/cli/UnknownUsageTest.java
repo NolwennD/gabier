@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -12,7 +13,7 @@ class UnknownUsageTest extends CliTest {
 
     static Stream<List<String>> commandLines() {
         return Stream.of(
-                        wordsThatAreNoCommand(),
+                        wordsOfACommandThatDoNotMatchItsUsage(),
                         diagnosticsWithoutExactlyOneFile(),
                         renamesThatNameNeitherAPositionNorAnIdentifierCompletely(),
                         organizeImportsWithoutExactlyOneFile(),
@@ -31,15 +32,17 @@ class UnknownUsageTest extends CliTest {
                 .flatMap(List::stream);
     }
 
-    private static List<List<String>> wordsThatAreNoCommand() {
-        return List.of(
+    static Stream<List<String>> wordsThatAreNoCommand() {
+        return Stream.of(
                 List.of(),
                 List.of("--bogus"),
                 List.of("--version", "--bogus"),
                 List.of("--bogus", "--version"),
-                List.of("status", "stop"),
-                List.of("A.java", "diagnostics"),
-                List.of("diagnostics", "--dry-run", "A.java"));
+                List.of("A.java", "diagnostics"));
+    }
+
+    private static List<List<String>> wordsOfACommandThatDoNotMatchItsUsage() {
+        return List.of(List.of("status", "stop"), List.of("diagnostics", "--dry-run", "A.java"));
     }
 
     private static List<List<String>> diagnosticsWithoutExactlyOneFile() {
@@ -157,5 +160,31 @@ class UnknownUsageTest extends CliTest {
 
         assertThat(out()).isEmpty();
         assertThat(err()).isEqualTo(usageText(String.join(" ", arguments)));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("wordsThatAreNoCommand")
+    void aFirstWordThatNamesNoCommandPointsToTheGuideOnTheStandardError(List<String> arguments) {
+        assertThat(run(arguments.toArray(String[]::new))).isEqualTo(2);
+
+        assertThat(out()).isEmpty();
+        assertThat(err()).isEqualTo(unknownCommandText(String.join(" ", arguments)));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("wordsThatAreNoCommand")
+    void aFirstWordThatNamesNoCommandPointsToTheGuideInAFieldOfTheJsonAnswer(List<String> arguments) {
+        var withJson = Stream.concat(Stream.of("--json"), arguments.stream()).toArray(String[]::new);
+
+        assertThat(run(withJson)).isEqualTo(2);
+
+        assertThat(err()).isEqualTo(unknownCommandJson(String.join(" ", arguments)));
+    }
+
+    @Test
+    void aCommandWithTheWrongArgumentsDoesNotPointToTheGuide() {
+        run("diagnostics");
+
+        assertThat(err()).doesNotContain("--for");
     }
 }

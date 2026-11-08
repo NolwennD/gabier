@@ -25,18 +25,15 @@ public final class Gabier {
     static int run(String[] args, Map<String, String> environment, PrintStream out, PrintStream err) {
         var arguments = List.of(args);
         var json = arguments.contains(JSON_OPTION);
+        var words = arguments.stream()
+                .filter(argument -> !argument.equals(JSON_OPTION))
+                .toList();
         try {
-            execute(
-                    arguments.stream()
-                            .filter(argument -> !argument.equals(JSON_OPTION))
-                            .toList(),
-                    environment,
-                    json,
-                    out);
+            execute(words, environment, json, out);
 
             return ExitCode.SUCCESS.value();
         } catch (DaemonRefusal refusal) {
-            return report(refusal.problem(), json, err);
+            return report(refusal.problem(), HelpPointer.after(refusal.problem(), words.getFirst()), json, err);
         } catch (RuntimeException e) {
             return fail(e, json, err);
         }
@@ -62,11 +59,16 @@ public final class Gabier {
 
     /** Reports the failure as a problem object on the standard error, as JSON or as text, and gives the exit code. */
     static int fail(RuntimeException failure, boolean json, PrintStream err) {
-        return report(ProblemMapper.toProblem(failure), json, err);
+        return report(ProblemMapper.toProblem(failure), HelpPointer.after(failure), json, err);
     }
 
-    private static int report(Problem problem, boolean json, PrintStream err) {
-        err.println(json ? problem.toJson() : problem.toText());
+    private static int report(Problem problem, Optional<String> pointer, boolean json, PrintStream err) {
+        if (json) {
+            err.println(pointer.map(problem::toJson).orElseGet(problem::toJson));
+        } else {
+            err.println(problem.toText());
+            pointer.ifPresent(err::println);
+        }
 
         return ExitCode.of(problem).value();
     }

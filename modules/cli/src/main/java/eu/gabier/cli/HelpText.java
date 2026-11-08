@@ -52,6 +52,8 @@ final class HelpText {
             gabier help <command> gives the usage, an example and the refusals of a command.
             gabier help %s says %s (text blocks, a switch expression, an if to turn round...).
             gabier help %s=<task> gives the sections of that guide that answer a task, in English, with the command.
+            A command whose operation is declined ends its refusal with the line that points to gabier help <command>,
+            an unknown command with gabier help --for="<task>".
             gabier --version prints the version. With --json, the answer and a refusal are JSON.\
             """.formatted(lines, Guide.TOPIC, Guide.SUMMARY, Guide.FOR);
     }

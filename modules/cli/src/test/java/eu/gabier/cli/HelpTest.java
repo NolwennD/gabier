@@ -71,6 +71,16 @@ class HelpTest extends CliTest {
     }
 
     @Test
+    void theListSaysWhereARefusalPointsTo() {
+        run("help");
+
+        assertThat(out())
+                .contains("A command whose operation is declined ends its refusal with the line that points to"
+                        + " gabier help <command>,")
+                .contains("an unknown command with gabier help --for=\"<task>\".");
+    }
+
+    @Test
     void theListAsJsonIsAnObjectWithEveryCommand() {
         assertThat(run("--json", "help")).isZero();
 
@@ -201,7 +211,7 @@ class HelpTest extends CliTest {
              move-type-to-file, move, inline, create, references, actions, apply-action, status, stop,\
              help\
              (usage-error; command=frobnicate)\
-            """);
+            """ + System.lineSeparator() + FOR_A_TASK + System.lineSeparator());
     }
 
     @Test
@@ -210,7 +220,8 @@ class HelpTest extends CliTest {
 
         assertThat(err())
                 .startsWith("{\"type\":\"urn:gabier:error:usage-error\"")
-                .contains("\"parameters\":{\"command\":\"frobnicate\"}");
+                .contains("\"parameters\":{\"command\":\"frobnicate\"}")
+                .endsWith(",\"help\":\"" + CliTest.FOR_A_TASK_AS_JSON + "\"}" + System.lineSeparator());
     }
 
     @Test
@@ -224,7 +235,7 @@ class HelpTest extends CliTest {
     void dashDashHelpFollowedByAnotherArgumentIsAUsageError() {
         assertThat(run("--help", "rename")).isEqualTo(2);
 
-        assertThat(err()).isEqualTo(usageText("--help rename"));
+        assertThat(err()).isEqualTo(unknownCommandText("--help rename"));
     }
 
     @Test

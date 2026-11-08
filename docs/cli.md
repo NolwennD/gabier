@@ -8,12 +8,19 @@ can come anywhere on the command line).
 ```text
 $ gabier --bogus
 Usage error: Unsupported arguments; run gabier help for the commands, and gabier help <command> for the usage of one (usage-error; arguments=--bogus)
+Not sure which command? Ask for the task: gabier help --for="<task>"
 $ gabier --json --bogus
-{"type":"urn:gabier:error:usage-error","title":"Usage error","detail":"Unsupported arguments; run gabier help for the commands, and gabier help <command> for the usage of one","key":"usage-error","parameters":{"arguments":"--bogus"}}
+{"type":"urn:gabier:error:usage-error","title":"Usage error","detail":"Unsupported arguments; run gabier help for the commands, and gabier help <command> for the usage of one","key":"usage-error","parameters":{"arguments":"--bogus"},"help":"Not sure which command? Ask for the task: gabier help --for=\\"<task>\\""}
 ```
 
 A first word one typo away from a command (`gabier organise-imports x.java`) is refused with the command it meant, in the
 detail (`did you mean organize-imports?`) and in the `suggestion` parameter; see [help](commands/help.md).
+
+A refusal can end with a **pointer to the help**: after the problem on the standard error, one more line, and with `--json` a
+last member `help` of the problem object (`"help":"..."`; the other members and the exit code are the same). A first word that
+names no command gets `Not sure which command? Ask for the task: gabier help --for="<task>"`. A command whose operation the
+language server declined (`language-server-not-extractable`, `language-server-not-movable`, `editing-no-such-code-action`...)
+gets `Usage and other ways: gabier help <command>`, with the command that was run.
 
 `gabier help` lists the commands and `gabier help <command>` explains one, as does `gabier <command> --help` (or `-h`):
 see [help](commands/help.md).

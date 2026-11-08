@@ -41,6 +41,15 @@ public record Problem(
 
     /** The problem as one line of JSON, the members in a stable order. */
     public String toJson() {
+        return members().append('}').toString();
+    }
+
+    /** The problem as one line of JSON, with a last member {@code help}: the line that points to where to read more. */
+    public String toJson(String help) {
+        return member(members().append(','), "help", help).append('}').toString();
+    }
+
+    private StringBuilder members() {
         var json = new StringBuilder("{");
         member(json, "type", type).append(',');
         member(json, "title", title).append(',');
@@ -51,7 +60,7 @@ public record Problem(
                 .map(parameter -> Json.quote(parameter.getKey()) + ":" + Json.quote(parameter.getValue()))
                 .collect(Collectors.joining(",")));
 
-        return json.append("}}").toString();
+        return json.append('}');
     }
 
     /**

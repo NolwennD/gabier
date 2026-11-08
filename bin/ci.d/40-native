@@ -48,8 +48,12 @@ public final class Native {
             """
             {"type":"urn:gabier:error:usage-error","title":"Usage error",\
             "detail":"Unsupported arguments; run gabier help for the commands, and gabier help <command> for the usage of one",\
-            "key":"usage-error","parameters":{"arguments":"--bogus"}}\
+            "key":"usage-error","parameters":{"arguments":"--bogus"},\
+            "help":"Not sure which command? Ask for the task: gabier help --for=\\"<task>\\""}\
             """;
+
+    /** The line after the problem of {@code gabier --bogus}: where to ask for the command of a task. */
+    private static final String USAGE_ERROR_POINTER = "Not sure which command? Ask for the task: gabier help --for=\"<task>\"";
 
     public static void main(String[] args) throws Exception {
         String skip = appliesGraalvm(Path.of("modules/cli/build.gradle.kts")) ? null : "no native build yet";
@@ -189,8 +193,9 @@ public final class Native {
     }
 
     /**
-     * 0 when an unknown argument is refused as a problem object on the standard error (one line of text, or a JSON
-     * object with {@code --json}) with exit code 2 and nothing on the standard output.
+     * 0 when an unknown argument is refused as a problem object on the standard error (one line of text and the line
+     * that points to the guide, or a JSON object with {@code --json}) with exit code 2 and nothing on the standard
+     * output.
      */
     private static int usageError(Path binary, Path directory, boolean json) throws IOException, InterruptedException {
         Run run = json ? runBinary(binary, directory, "--json", "--bogus") : runBinary(binary, directory, "--bogus");
@@ -198,9 +203,11 @@ public final class Native {
                 + run.err() + "\" (exit " + run.exit() + ")");
         boolean problem = json
                 ? run.err().equals(USAGE_ERROR_JSON)
-                : run.err().startsWith("Usage error: ") && run.err().endsWith(")");
+                : run.err().startsWith("Usage error: ")
+                        && run.err().lines().skip(1).toList().equals(List.of(USAGE_ERROR_POINTER));
+        long lines = json ? 1 : 2;
 
-        return run.exit() == 2 && run.out().isEmpty() && problem && run.err().lines().count() == 1 ? 0 : 1;
+        return run.exit() == 2 && run.out().isEmpty() && problem && run.err().lines().count() == lines ? 0 : 1;
     }
 
     /**

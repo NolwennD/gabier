@@ -66,7 +66,9 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      (its own refusals, `<key>: <meaning>`, in the order `gabier help` lists them; `usage-error`, `daemon-start-failed`
      and `daemon-connection-failed` are added), `.asksARunningDaemon()` for one that never starts it (`status`, `stop`),
      or `.standalone(refusals...)` for one that never talks to it (`help`). A refusal that more than one command
-     answers is a constant of `Refusal` (the file, the language server and the stale edit ones), not a copy. The
+     answers is a constant of `Refusal` (the file, the language server and the stale edit ones), not a copy. A key
+     of the method that says the language server declined the operation (`language-server-not-...`) goes into
+     `DECLINED_OPERATIONS` of `HelpPointer`, so that its refusal ends with the pointer to `gabier help <name>`. The
      invariants (non-blank parts, the usage names the command, the example starts with `$ gabier `) are `Assert`s of the
      compact constructor of `Command`. A warning to read before the call goes in the optional **notes**, `.withNotes(...)`
      on the built command (`move-type-to-file` and `inline` are the models), printed by `help` between the example and

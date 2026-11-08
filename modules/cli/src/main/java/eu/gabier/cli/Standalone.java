@@ -36,6 +36,6 @@ final class Standalone {
             throw UsageException.unknownCommandTypo(arguments, meant.get().command());
         }
 
-        throw UsageException.unsupportedArguments(arguments);
+        throw UsageException.noCommand(arguments);
     }
 }

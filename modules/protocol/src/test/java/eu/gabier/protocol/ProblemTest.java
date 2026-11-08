@@ -125,6 +125,20 @@ class ProblemTest {
         }
 
         @Test
+        void aPointerToHelpIsAMemberAfterTheParameters() {
+            var json = problem("It broke", Map.of("file", "A.java")).toJson("Usage and other ways: gabier help rename");
+
+            assertThat(json).isEqualTo("""
+                {"type":"urn:gabier:error:some-key","title":"Some key",\
+                "detail":"It broke","key":"some-key",\
+                "parameters":{"file":"A.java"},\
+                "help":"Usage and other ways: gabier help rename"}\
+                """);
+            assertThat(StrictJson.parse(json).getAsJsonObject().keySet())
+                    .containsExactly("type", "title", "detail", "key", "parameters", "help");
+        }
+
+        @Test
         void hasNoStatusMember() {
             assertThat(StrictJson.parse(problem("d", Map.of()).toJson())
                             .getAsJsonObject()

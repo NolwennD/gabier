@@ -102,6 +102,16 @@ also names it: `gabier organise-imports x.java` answers `did you mean organize-i
 parameter (`"suggestion":"organize-imports"` with `--json`). A word further than that gets no suggestion, and a typo
 starts no daemon. The candidates are the names of `Command`.
 
+**The pointer line.** A first word that names no command (a near one, a far one, none, and `gabier help frobnicate`) adds
+a line to the usage error, after the problem on the standard error: `Not sure which command? Ask for the task: gabier help
+--for="<task>"`; with `--json` it is the member `help` of the problem object, last, after `parameters`. A refusal where
+the language server or the edit declined what was asked (the keys `language-server-not-extractable`, `-not-movable`,
+`-not-inlinable`, `-not-creatable`, `-no-such-symbol`, `-not-applicable`..., `editing-no-such-code-action`,
+`editing-unknown-clean-up`: `HelpPointer`) adds `Usage and other ways: gabier help <command>`, with the name of the command
+that was run, in the same two places. The key, the other members and the exit code do not change; a refusal that is a state
+(`language-server-not-ready`, a daemon that does not start, a stale edit) and a usage error of a known command have no such
+line, as they do not leave other ways to take. One class, `HelpPointer`, decides and builds the line.
+
 ## Refusals
 
 A refusal is the problem object on the standard error, exit code 2. The key the command can answer, listed by `gabier

@@ -40,7 +40,7 @@ class GabierTest extends CliTest {
         void aUsageErrorIsTheProblemObjectOnTheStandardError() {
             assertThat(run("--json", "--bogus")).isEqualTo(2);
 
-            assertThat(err()).isEqualTo(usageJson("--bogus"));
+            assertThat(err()).isEqualTo(unknownCommandJson("--bogus"));
         }
 
         @Test
@@ -54,14 +54,14 @@ class GabierTest extends CliTest {
         void canComeAfterTheOtherArguments() {
             assertThat(run("--bogus", "--json")).isEqualTo(2);
 
-            assertThat(err()).isEqualTo(usageJson("--bogus"));
+            assertThat(err()).isEqualTo(unknownCommandJson("--bogus"));
         }
 
         @Test
         void aloneIsAUsageErrorWithNoArgument() {
             assertThat(run("--json")).isEqualTo(2);
 
-            assertThat(err()).isEqualTo(usageJson(""));
+            assertThat(err()).isEqualTo(unknownCommandJson(""));
         }
 
         @Test
