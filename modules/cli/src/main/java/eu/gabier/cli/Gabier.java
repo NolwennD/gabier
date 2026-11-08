@@ -5,6 +5,7 @@ import eu.gabier.protocol.Problem;
 import eu.gabier.protocol.ProblemMapper;
 import eu.gabier.shared.generation.ExcludeFromGeneratedCodeCoverage;
 import java.io.PrintStream;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,13 +24,19 @@ public final class Gabier {
     }
 
     static int run(String[] args, Map<String, String> environment, PrintStream out, PrintStream err) {
+        return run(args, environment, out, err, WaitNotice.DELAY);
+    }
+
+    /** As {@link #run(String[], Map, PrintStream, PrintStream)}, with the time a request waits before its notice. */
+    static int run(
+            String[] args, Map<String, String> environment, PrintStream out, PrintStream err, Duration noticeDelay) {
         var arguments = List.of(args);
         var json = arguments.contains(JSON_OPTION);
         var words = arguments.stream()
                 .filter(argument -> !argument.equals(JSON_OPTION))
                 .toList();
         try {
-            execute(words, environment, json, out);
+            execute(words, environment, json, out, err, noticeDelay);
 
             return ExitCode.SUCCESS.value();
         } catch (DaemonRefusal refusal) {
@@ -41,7 +48,12 @@ public final class Gabier {
 
     /** Runs the capability of the command the first word names; without one, only {@link Standalone} applies. */
     private static void execute(
-            List<String> arguments, Map<String, String> environment, boolean json, PrintStream out) {
+            List<String> arguments,
+            Map<String, String> environment,
+            boolean json,
+            PrintStream out,
+            PrintStream err,
+            Duration noticeDelay) {
         var capability = arguments.isEmpty() ? Optional.<Capability>empty() : Capabilities.named(arguments.getFirst());
         if (capability.isEmpty()) {
             Standalone.run(arguments, json, out);
@@ -54,7 +66,7 @@ public final class Gabier {
 
             return;
         }
-        capability.get().run(new Invocation(words, json, out, environment));
+        capability.get().run(new Invocation(words, json, out, err, environment, noticeDelay));
     }
 
     /** Reports the failure as a problem object on the standard error, as JSON or as text, and gives the exit code. */

@@ -171,8 +171,8 @@ gabier rename --dry-run --token src/main/java/com/example/App.java App Applicati
 - **The project.** It is the nearest folder above the working directory that holds a `.git`, else the working
   directory. `GABIER_PROJECT` names another one.
 - **The daemon.** The first command starts a daemon for that project, which starts jdtls. The first answer waits until
-  jdtls has imported the project, which takes seconds for a small project and a minute or more for a large one. The
-  following commands are fast.
+  jdtls has imported the project, which takes seconds for a small project and a minute or more for a large one; after
+  three seconds of waiting, `gabier` writes a line on the standard error that says so. The following commands are fast.
 - **One per project.** Each project has a daemon of its own. `gabier status` says what the daemon serves, and
   `gabier stop` stops it.
 - **jdtls.** The daemon starts the jdtls that `GABIER_JDTLS` names, else the one shipped with it (the `jdtls/` folder of

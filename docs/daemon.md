@@ -41,7 +41,7 @@ root of the directory it is started in, the nearest folder from it up that holds
 to that directory; one that is not a folder is a usage error).
 Starting the daemon starts nothing else. jdtls is started by the
 first request that needs it, on that folder, and the request waits until it has imported the project: the first
-`diagnostics` takes seconds for a small project and about a minute and a half for this checkout. Requests that arrive
+`diagnostics` takes seconds for a small project and about a minute for this checkout (see "What the first call costs" below). Requests that arrive
 meanwhile wait for the same start, never for another. jdtls then stays up for the next requests, and is ended, with every
 process it started, by `gabier stop`, by SIGTERM, and when the daemon is stopped while jdtls is still starting. A jdtls
 that does not start within **5 minutes** (the time of the whole start, then of each request to it), whose launcher is
@@ -51,6 +51,34 @@ request that waits while the daemon stops is told that the daemon is stopping: i
 connection ends (the daemon gives the clients 5 seconds to end, then cuts them). What jdtls says of itself goes to the
 standard error of the daemon, prefixed with `jdtls:`, with control characters written as escapes like in the text of
 `gabier diagnostics`.
+
+**What the first call costs.** The request that finds jdtls not started waits for all of this, in this order (measured
+on this checkout, a Gradle build of five modules plus its `build-logic`, on 08-11-2026 on a machine shared with
+another job; a first run under a heavier load took 105 s to be ready, and `04-11-2026-0122` measured 3 min 23 s on a repository of nested projects):
+
+| Part | What happens | Time |
+| --- | --- | --- |
+| launch | the daemon opens the data folder and starts the jdtls process; jdtls starts its JVM and its OSGi runtime, up to its first `language/status` (`Init...`) | about 6 s |
+| import | jdtls imports the project: for a Gradle project it starts a Gradle daemon and runs the build (compile of `build-logic`, evaluation of the settings, configuration of every module, the model of each); this is nearly all of the wait, and its `language/status` messages (`70% Starting Java Language Server - Configure project :core`) name the task | about 54 s |
+| ready | `ServiceReady`, then the list of the projects jdtls imported | about 0.1 s |
+| diagnostics | `diagnostics` only: the file is opened, jdtls publishes, and the daemon waits for jdtls to be quiet for 5 seconds | 7 to 9 s |
+
+so the first `gabier diagnostics` of a session answers after about a minute (69 s in the measure, 112 s in the heavier run), the same call warm
+after 6 to 9 s (the 5 seconds of quiet are in it), and a command that does not wait for the diagnostics (`rename`,
+`organize-imports`, `references`, ...) after the import alone. Only the import depends on the project; a project with no
+build file jdtls can read is refused at once, and a small Eclipse or Maven project imports in seconds. A Gradle daemon
+that is still running from an earlier import shortens the import a great deal: a cold start of the daemon and of jdtls with
+one warm answered the first `diagnostics` in 32 s.
+
+**The notice.** A request command that has waited **3 seconds** while jdtls is starting writes one line on the
+**standard error** (`gabier: waiting for jdtls (starting, 3s so far); the first command of a session waits for it to start
+and import the project, the next ones are quick`), and again every 15 seconds for as long as jdtls is starting, so an
+agent can tell a wait from a hang. It asks the daemon for its `status` on a connection of its own while the request
+waits, and writes nothing when the answer comes within 3 seconds, when jdtls is already ready (a slow request to a ready
+jdtls, such as a `references` that waits for the indexes, gets no line), when the daemon does not answer the question,
+and after the answer is written. The standard output is the answer alone, with or without `--json`; the line is on the
+standard error in both, ahead of the problem object if the command fails (a program that parses the standard error of a
+failed `--json` command reads its last line).
 
 **Where the daemon finds jdtls.** At each start of jdtls, in this order: the launcher that `GABIER_JDTLS` names (used as it
 is, even when nothing is there, so that the failure names it), else the jdtls shipped with the daemon, `jdtls/bin/jdtls`

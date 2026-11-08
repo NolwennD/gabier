@@ -5,6 +5,7 @@ import eu.gabier.protocol.SocketLocation;
 import eu.gabier.protocol.UserId;
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -14,19 +15,30 @@ import java.util.function.Supplier;
  * @param arguments the words of the command line, the command first
  * @param json whether {@code --json} was given
  * @param out where the result is printed
+ * @param err where what is not a result is printed: the notice of a request that waits for jdtls
  * @param environment the environment of the cli, where the socket of the daemon is resolved
+ * @param noticeDelay how long a request waits before the notice that jdtls is starting ({@link WaitNotice})
  */
-record Invocation(Arguments arguments, boolean json, PrintStream out, Map<String, String> environment) {
+record Invocation(
+        Arguments arguments,
+        boolean json,
+        PrintStream out,
+        PrintStream err,
+        Map<String, String> environment,
+        Duration noticeDelay) {
 
     /**
      * The result of a request command: the daemon answers, or it is started (the cli never leaves a request unanswered
-     * for want of a daemon). A refusal of the daemon is thrown.
+     * for want of a daemon). A refusal of the daemon is thrown. While the request waits for a jdtls that is still starting,
+     * a line on the standard error says so ({@link WaitNotice}).
      */
     RpcResponse.Success ask(String method, Map<String, String> params) {
         var launcher = DaemonLauncher.of(environment);
         var socket = socket();
 
-        return call(() -> launcher.connect(socket), method, params, false);
+        try (var notice = WaitNotice.during(socket, noticeDelay, err)) {
+            return call(() -> launcher.connect(socket), method, params, false);
+        }
     }
 
     /**
