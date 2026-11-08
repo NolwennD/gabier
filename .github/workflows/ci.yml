@@ -35,3 +35,52 @@ jobs:
 
       - name: Run bin/ci
         run: mise exec -- bin/ci --all
+
+  # macOS and Windows (0.5.0): what builds and passes there is not known yet, so these jobs are informative: they are not
+  # required by the protection of `main` (only `bin-ci` is), they run every stage that can run on the system, one step
+  # each and every one even after a failure, so that a single run lists everything that breaks (the resolution of the issue
+  # the-ci-runs-the-build-and-tests-on-macos-and-windows holds the list). Without mise, hk and jdtls: the stages `format`,
+  # `release-install` and `jdtls` need them and the shell tools of Linux.
+  #
+  # They do not run when the release calls this workflow (a tag is a `push`): a red informative job must not stop a release.
+  bin-ci-other:
+    name: bin-ci-${{ matrix.label }}
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macos
+          - os: windows-latest
+            label: windows
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up the build
+        uses: ./.github/actions/setup-build
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tools: "false"
+
+      - name: Stage build
+        id: build
+        shell: bash
+        run: java --source 25 bin/ci --stage build
+
+      - name: Stage test
+        id: test
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: java --source 25 bin/ci --stage test
+
+      - name: Stage native
+        id: native
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: java --source 25 bin/ci --stage native

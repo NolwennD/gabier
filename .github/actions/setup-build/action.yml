@@ -15,6 +15,12 @@ inputs:
   github-token:
     description: The token the GraalVM setup uses to download its release without a rate limit
     required: true
+  tools:
+    description: >-
+      "true" installs mise, its tools (hk, ripwire, open-java-format) and jdtls; "false" leaves them out, for the systems
+      where only the build and the tests run (macOS and Windows, see ci.yml)
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -87,6 +93,7 @@ runs:
     # (`install: true`, the post step saves it once the job is done), so it installs them, the jdtls of `mise.toml`
     # included (its `postinstall`), and trusts the checkout for that.
     - name: Install mise and the tools
+      if: inputs.tools == 'true'
       uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
       env:
         MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
