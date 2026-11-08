@@ -73,9 +73,18 @@ jobs:
         shell: bash
         run: java --source 25 bin/ci --stage build
 
+      # One test class with the full output, to read why the cli tests fail on macOS (the stage below only counts them).
+      - name: Cli tests, one class, full output (macOS)
+        if: ${{ !cancelled() && runner.os == 'macOS' }}
+        timeout-minutes: 10
+        continue-on-error: true
+        shell: bash
+        run: ./gradlew :cli:test --tests '*DaemonAnswersTest' --console=plain -i
+
       - name: Stage test
         id: test
         if: ${{ !cancelled() }}
+        timeout-minutes: 20
         shell: bash
         run: java --source 25 bin/ci --stage test
 

@@ -66,7 +66,9 @@ runs:
       shell: bash
       run: |
         mkdir -p "$HOME/.gradle"
-        echo "org.gradle.java.installations.paths=$GRAALVM_HOME" >> "$HOME/.gradle/gradle.properties"
+        # A .properties file reads a backslash as an escape: on Windows the path is written with forward slashes.
+        home=$(cygpath -m "$GRAALVM_HOME" 2>/dev/null || echo "$GRAALVM_HOME")
+        echo "org.gradle.java.installations.paths=$home" >> "$HOME/.gradle/gradle.properties"
 
     # The JDK of the project, `.sdkmanrc`, that runs Gradle, bin/ci and the launcher of jdtls. setup-java reads the version
     # and the distribution (Temurin) from that file, so the runner does not depend on the SDKMAN! service (an outage of
