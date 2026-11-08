@@ -27,3 +27,14 @@ Done when:
       ...) is said in the release notes of that pre-release.
 
 Depends on: the-ci-runs-the-build-and-tests-on-macos-and-windows (what the runners show decides what a release can carry).
+
+## Resolution
+
+Abandoned, not done (decision of the user, 08-11-2026): it depended on `the-ci-runs-the-build-and-tests-on-macos-and-windows`,
+whose runs showed that the port to macOS and Windows is more work than expected; it is left to an external contribution.
+Nothing was written. The release keeps publishing the Linux x86-64 assets only.
+
+Tokens:
+- worker: none
+- reviewer: none
+- supervisor: nothing spent on this issue itself.
