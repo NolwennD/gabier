@@ -84,3 +84,22 @@ jobs:
         if: ${{ !cancelled() }}
         shell: bash
         run: java --source 25 bin/ci --stage native
+
+      # The stages above launch `./gradlew`, which Windows cannot run as a program (CreateProcess error 193): that is the first
+      # thing they show there. To see what else breaks, Gradle is run directly on Windows, from bash.
+      - name: Gradle assemble (Windows)
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        shell: bash
+        run: ./gradlew assemble --console=plain
+
+      - name: Gradle check (Windows)
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        shell: bash
+        run: ./gradlew check --console=plain
+
+      - name: Gradle native cli and daemon (Windows)
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        shell: bash
+        run: |
+          ./gradlew :cli:nativeCompile :daemon:installDist --console=plain
+          modules/cli/build/native/nativeCompile/gabier.exe --version

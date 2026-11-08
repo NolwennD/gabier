@@ -35,7 +35,7 @@ runs:
         test -n "$release"
         jdk=$(sed -n 's/^java=//p' .sdkmanrc)
         test -n "$jdk"
-        jdtls=$(sed -n 's/^jdtls_\(version\|sha256\) *= *"\(.*\)"/\2/p' mise.toml | paste -sd- -)
+        jdtls=$(sed -nE 's/^jdtls_(version|sha256) *= *"(.*)"/\2/p' mise.toml | paste -sd- -)
         test -n "$jdtls"
         {
           echo "release=$release"
