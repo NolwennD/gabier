@@ -76,7 +76,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, help, the guide and a question to it, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move and inline included, the daemon started on demand)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move and inline included, the daemon started on demand, start and start --wait)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -366,6 +366,7 @@ public final class Native {
                 secondDaemonAndStaleSocket();
                 diagnosticsWithNoJdtls();
                 startsTheDaemonOnDemand();
+                startWithTheFakeServer();
                 diagnosticsWithTheFakeServer();
                 renameWithTheFakeServer();
                 organizeImportsWithTheFakeServer();
@@ -1503,6 +1504,47 @@ public final class Native {
          * is not found or does not start is a problem object. The daemon is the one served by the fake language server
          * (the script gives it its project folder), and what the cli started is ended with {@code gabier stop}.
          */
+        /** {@code gabier start} starts the daemon of the project and answers; the fake-served jdtls is always ready. */
+        private void startWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("start-project");
+            String system = "/usr/bin:/bin";
+            Path onPath = directory.resolve("start-on-path");
+            installDaemonScript(onPath, "exec '" + fakeDaemon + "' '" + project + "'");
+            List<String> withPath = List.of("PATH", onPath + ":" + system, "JAVA_HOME", System.getProperty("java.home"));
+            Path log = directory.resolve("gabier.sock.log");
+            Long pid = null;
+            try {
+                Run first = gabierWith(cli, withPath, "start", "--wait");
+                expect(
+                        first.exit() == 0
+                                && first.err().isEmpty()
+                                && first.out().startsWith("gabier-daemon started, pid ")
+                                && first.out().contains(", jdtls ready; socket " + socket + ", log " + log),
+                        "gabier start --wait with no daemon starts it and answers once jdtls is ready, naming the socket and the log");
+                var status = STARTED_STATUS.matcher(gabierWith(cli, withPath, "status").out());
+                if (status.matches()) {
+                    pid = Long.parseLong(status.group(1));
+                }
+                Run again = gabierWith(cli, withPath, "--json", "start");
+                expect(
+                        again.exit() == 0
+                                && again.out().startsWith("{\"daemon\":\"running\",")
+                                && again.out().contains("\"jdtls\":\"ready\"")
+                                && !again.out().contains("\"log\""),
+                        "gabier start with a daemon that runs starts none and answers ready as JSON");
+                expect(gabierWith(cli, withPath, "stop").exit() == 0, "gabier stop ends the daemon that start started");
+                expect(
+                        pid == null || ProcessHandle.of(pid).map(Daemon::awaitExit).orElse(true),
+                        "no process of the daemon is left after start");
+                pid = null;
+            } finally {
+                if (pid != null) {
+                    ProcessHandle.of(pid).ifPresent(ProcessHandle::destroyForcibly);
+                }
+                Files.deleteIfExists(log);
+            }
+        }
+
         private void startsTheDaemonOnDemand() throws IOException, InterruptedException {
             Path project = directory.resolve("started-project");
             String broken = "started-project/src/main/java/demo/Broken.java";

@@ -286,6 +286,59 @@ class ProjectServerTest {
     }
 
     @Nested
+    class WarmingUp {
+
+        @Test
+        void startsJdtlsWithoutWaitingForItAndWithoutARequest() {
+            var held = starter.willStart(ScriptedServer.held());
+
+            project.warmUp();
+
+            assertThat(starter.starts).hasValue(1);
+            assertThat(project.state()).isEqualTo(JdtlsState.STARTING);
+            assertThat(held.waiting).hasValue(0);
+        }
+
+        @Test
+        void startsNothingWhileJdtlsIsStartingNorOnceItIsReady() {
+            var held = starter.willStart(ScriptedServer.held());
+            project.warmUp();
+            project.warmUp();
+
+            held.finish(null);
+            project.warmUp();
+            project.diagnostics(FILE);
+
+            assertThat(starter.starts).hasValue(1);
+            assertThat(project.state()).isEqualTo(JdtlsState.READY);
+        }
+
+        @Test
+        void startsJdtlsAgainWhenTheLastStartFailed() {
+            var first = starter.willStart(ScriptedServer.failing("no launcher"));
+
+            project.warmUp();
+            assertThat(project.state()).isEqualTo(JdtlsState.FAILED);
+            project.warmUp();
+
+            assertThat(starter.starts).hasValue(2);
+            assertThat(first.closes).hasValue(1);
+            assertThat(project.state()).isEqualTo(JdtlsState.READY);
+        }
+
+        @Test
+        void isRefusedOnceTheProjectIsClosed() throws Exception {
+            project.close();
+
+            assertThatThrownBy(project::warmUp)
+                    .isInstanceOfSatisfying(
+                            LanguageServerException.class,
+                            refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+            assertThat(starter.starts).hasValue(0);
+        }
+    }
+
+    @Nested
     class Starting {
 
         @Test

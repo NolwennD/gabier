@@ -17,6 +17,8 @@ class DaemonAnswersTest extends CliTest {
     static Stream<List<String>> commandsWithAResult() {
         return Stream.of(
                 List.of("status"),
+                List.of("start"),
+                List.of("start", "--wait"),
                 List.of("diagnostics", "/project/Main.java"),
                 List.of("rename", "/project/Greeter.java", "6:18", "welcome"),
                 List.of("organize-imports", "/project/Untidy.java"),

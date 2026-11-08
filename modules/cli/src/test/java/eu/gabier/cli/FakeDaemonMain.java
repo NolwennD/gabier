@@ -15,7 +15,7 @@ import java.nio.file.Path;
 
 /**
  * The program behind the {@code gabier-daemon} script of the tests: a daemon of its own process, listening on {@code
- * GABIER_SOCKET} and answering a request with an empty list of diagnostics, and a rename with nothing changed. It says on its standard output (the
+ * GABIER_SOCKET} and answering a request with an empty list of diagnostics, a rename with nothing changed, and a start with the status of a daemon whose jdtls is starting. It says on its standard output (the
  * log the cli keeps) where it runs, which project it was told of and its pid, then serves for a minute at most, so that
  * a test that forgets to end it leaves nothing behind.
  */
@@ -25,6 +25,10 @@ public final class FakeDaemonMain {
     private static final String NO_DIAGNOSTICS = "{\"diagnostics\":[]}";
     private static final String NOTHING_CHANGED =
             "{\"created\":[],\"renamed\":[],\"deleted\":[],\"modified\":[],\"diff\":\"\"}";
+
+    private static final String STARTING = """
+        {"version":"0.1","pid":4242,"uptimeMillis":15,"project":"/work/demo","jdtls":"starting","imports":%s}\
+        """.formatted(CliFixtures.IMPORTS);
 
     private FakeDaemonMain() {}
 
@@ -57,7 +61,9 @@ public final class FakeDaemonMain {
                     new BufferedReader(new InputStreamReader(Channels.newInputStream(client), StandardCharsets.UTF_8));
             var line = reader.readLine();
             if (line != null) {
-                var result = line.contains("\"method\":\"rename") ? NOTHING_CHANGED : NO_DIAGNOSTICS;
+                var result = line.contains("\"method\":\"start")
+                        ? STARTING
+                        : line.contains("\"method\":\"rename") ? NOTHING_CHANGED : NO_DIAGNOSTICS;
                 var answer = JsonRpc.success("1", result) + "\n";
                 client.write(ByteBuffer.wrap(answer.getBytes(StandardCharsets.UTF_8)));
             }

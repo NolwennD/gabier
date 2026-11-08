@@ -163,6 +163,11 @@ public final class FakeServedMain {
         }
 
         @Override
+        public void warmUp() {
+            // Always ready: there is nothing to start.
+        }
+
+        @Override
         public List<Diagnostic> diagnostics(Path file) {
             return server.diagnostics(file);
         }

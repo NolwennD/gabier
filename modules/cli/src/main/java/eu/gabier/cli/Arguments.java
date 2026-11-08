@@ -2,6 +2,7 @@ package eu.gabier.cli;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * The words of a command line, the command included ({@code --json} left out), and the rules to read them: the words
@@ -88,6 +89,35 @@ record Arguments(List<String> all, List<String> operands) {
     Arguments without(String option) {
         return new Arguments(
                 all, operands.stream().filter(word -> !word.equals(option)).toList());
+    }
+
+    /**
+     * The value of an option written {@code name=value} anywhere after the command, the first one when it is given
+     * twice; nothing when it is not there.
+     *
+     * @param name the option with its equal sign, such as {@code --timeout=}
+     */
+    Optional<String> valueOf(String name) {
+        return all.subList(1, all.size()).stream()
+                .filter(word -> word.startsWith(name))
+                .map(word -> word.substring(name.length()))
+                .findFirst();
+    }
+
+    /**
+     * These words with the options taken out of the operands, and nothing else: {@code --dry-run} stays an operand, so
+     * that a command with no dry run refuses it. A name that ends with an equal sign stands for every word that starts
+     * with it, such as {@code --timeout=30}.
+     */
+    Arguments withoutOptions(String... names) {
+        var taken = List.of(names);
+
+        return new Arguments(
+                all,
+                operands.stream()
+                        .filter(word -> taken.stream()
+                                .noneMatch(name -> name.endsWith("=") ? word.startsWith(name) : word.equals(name)))
+                        .toList());
     }
 
     /** The operand at this index. */

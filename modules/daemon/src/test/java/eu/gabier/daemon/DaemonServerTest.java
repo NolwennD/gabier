@@ -50,6 +50,7 @@ import org.junit.jupiter.api.io.TempDir;
 class DaemonServerTest {
 
     private static final long PID = 4242;
+    private static final String START_REQUEST = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"start\"}\n";
     private static final String STATUS_REQUEST = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"status\"}\n";
     private static final String STOP_REQUEST = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"stop\"}\n";
 
@@ -451,6 +452,36 @@ class DaemonServerTest {
                             .as(state.text())
                             .isEmpty();
                 }
+            }
+        }
+
+        @Test
+        void startWarmsTheProjectUpAndAnswersTheStatusItIsInThen() throws IOException {
+            project.in(JdtlsState.NOT_STARTED);
+            serving();
+
+            try (var client = connect(socket())) {
+                var answer = RpcResponse.parse(client.ask(START_REQUEST));
+
+                assertThat(DaemonStatus.of(((RpcResponse.Success) answer).result()))
+                        .isEqualTo(new DaemonStatus(
+                                ProtocolVersion.CURRENT.toString(),
+                                PID,
+                                Duration.ZERO,
+                                directory,
+                                JdtlsState.STARTING));
+                assertThat(project.warmUps()).isEqualTo(1);
+            }
+        }
+
+        @Test
+        void statusNeverWarmsTheProjectUp() throws IOException {
+            serving();
+
+            try (var client = connect(socket())) {
+                client.ask(STATUS_REQUEST);
+
+                assertThat(project.warmUps()).isZero();
             }
         }
 

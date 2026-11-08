@@ -31,6 +31,11 @@ and the extensions `key` and `parameters` (the machine-readable cause, as string
 no `application/problem+json` media type. `title` and `detail` are English text. An error that gabier does not
 know is reported as the generic `internal-server-error`, without its message, its cause or a stack trace.
 
+**Starting ahead of the first command.** `gabier start` starts the daemon of the project and jdtls and answers at once;
+`gabier start --wait [--timeout=<seconds>]` answers when jdtls is ready, writing where jdtls is on the standard error while
+it waits (never on the standard output). Its refusals, `jdtls-start-failed` and `jdtls-start-timeout`, are problem
+objects like the others, with exit code 1. See [start](commands/start.md).
+
 ## Text in a terminal
 
 In text, the file and the message are shown with the characters a terminal obeys or does not show written as `\uXXXX`

@@ -119,6 +119,11 @@ final class ProjectServer implements ServedProject {
     }
 
     @Override
+    public void warmUp() {
+        started();
+    }
+
+    @Override
     public List<Diagnostic> diagnostics(Path file) {
         return ready().diagnostics(file);
     }

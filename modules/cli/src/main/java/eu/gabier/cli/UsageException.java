@@ -48,6 +48,17 @@ final class UsageException extends GeneratorException {
                 false);
     }
 
+    /** The value of {@code --timeout=} is not a whole number of seconds from 1: the problem names it and the form. */
+    static UsageException invalidTimeout(List<String> arguments, String timeout) {
+        return new UsageException(
+                GeneratorException.badRequest(CliErrorKey.USAGE)
+                        .message("Invalid timeout \"" + timeout
+                                + "\"; expected a whole number of seconds from 1, as in --timeout=120")
+                        .addParameter("arguments", String.join(" ", arguments))
+                        .addParameter("timeout", timeout),
+                false);
+    }
+
     /** The first of the arguments is a command with a typo: the problem names the command it was meant for. */
     static UsageException unknownCommandTypo(List<String> arguments, Command meant) {
         return new UsageException(

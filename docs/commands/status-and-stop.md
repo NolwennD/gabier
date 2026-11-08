@@ -22,7 +22,7 @@ stage is in the line a command writes on the standard error while it waits for t
 daemon](../daemon.md). When jdtls is `failed` and the reason is known, the text adds it
 in parentheses (`jdtls failed (jdtls is not running any more: it exited with code 137 after it was ready)`), with
 control characters written as escapes like in the text of `gabier diagnostics`, and `--json` has it exactly, as the
-member `jdtlsFailure`, which is absent otherwise. It never starts jdtls.
+member `jdtlsFailure`, which is absent otherwise. It never starts jdtls (`gabier start` does, see [start](start.md)).
 
 It also shows **the import settings the project follows** (see [organize-imports](organize-imports.md)): for each of the
 three settings of jdtls that decide what `organize-imports` writes, its value and where it comes from, `.settings`

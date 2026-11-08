@@ -115,8 +115,9 @@ for the daemon with `GABIER_JDTLS=<JDTLS_HOME>/bin/jdtls`, since the daemon look
 Whichever way you installed it:
 
 1. `gabier --version` prints the version (if it is not found, `~/.local/bin` or the folder of mise is not in the `PATH`).
-2. In a Java project, run a first command, such as `gabier diagnostics <a .java file>` (the first answer waits for jdtls
-   to import the project; see [Using it](#using-it)).
+2. In a Java project, run `gabier start` (it starts the daemon and jdtls and answers at once; add `--wait` to wait until
+   jdtls is ready), then a first command, such as `gabier diagnostics <a .java file>` (without `start`, the first answer
+   waits for jdtls to import the project; see [Using it](#using-it)).
 3. Give a coding agent this line, in its instructions (`AGENTS.md`, `CLAUDE.md`):
 
    ```text
@@ -173,6 +174,9 @@ gabier rename --dry-run --token src/main/java/com/example/App.java App Applicati
 - **The daemon.** The first command starts a daemon for that project, which starts jdtls. The first answer waits until
   jdtls has imported the project, which takes seconds for a small project and a minute or more for a large one; after
   three seconds of waiting, `gabier` writes a line on the standard error that says so. The following commands are fast.
+  `gabier start` does that wait ahead of time: it starts the daemon and jdtls and answers at once, so that an agent
+  begins its session with it, works on something else, and finds jdtls ready at its first command (`gabier start --wait`
+  returns when jdtls is ready).
 - **One per project.** Each project has a daemon of its own. `gabier status` says what the daemon serves (and what jdtls is doing while it starts), and
   `gabier stop` stops it.
 - **jdtls.** The daemon starts the jdtls that `GABIER_JDTLS` names, else the one shipped with it (the `jdtls/` folder of
@@ -215,6 +219,8 @@ refusals of each one. `gabier help --for="<the task>"` tells which command does 
 - [`gabier help --for="<task>"`](docs/commands/help.md): ask the guide a question in English ("turn this string
   concatenation into a text block") and get the one to three sections that answer, with the command to run and a
   confidence, or the plain word that nothing matches. No daemon, no network.
+- [`gabier start`](docs/commands/start.md): start the daemon and jdtls ahead of the first command; `--wait` returns when
+  jdtls is ready.
 - [`gabier status` and `gabier stop`](docs/commands/status-and-stop.md): see what the daemon serves, and stop it.
 
 ## Reference

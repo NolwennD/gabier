@@ -38,6 +38,7 @@ daemon ([help](commands/help.md)).
 | Method             | Parameters                                                                  | Command                                                    |
 | ------------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `status`           | none                                                                        | [status](commands/status-and-stop.md)                      |
+| `start`            | none (starts jdtls in the background, answers the result of `status`)      | [start](commands/start.md)                                 |
 | `stop`             | none                                                                        | [stop](commands/status-and-stop.md)                        |
 | `diagnostics`      | `file`                                                                      | [diagnostics](commands/diagnostics.md)                     |
 | `rename`           | `file`, `line`, `column`, `newName`, `dryRun`                               | [rename](commands/rename.md)                               |

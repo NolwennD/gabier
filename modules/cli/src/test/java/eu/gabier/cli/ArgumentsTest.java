@@ -32,6 +32,24 @@ class ArgumentsTest {
     }
 
     @Test
+    void anOptionWithAValueIsReadAnywhereAfterTheCommandTheFirstOneCounting() {
+        var arguments = Arguments.of(List.of("start", "--wait", "--timeout=30", "--timeout=5"));
+
+        assertThat(arguments.valueOf("--timeout=")).contains("30");
+        assertThat(arguments.valueOf("--for=")).isEmpty();
+        assertThat(Arguments.of(List.of("--timeout=3")).valueOf("--timeout=")).isEmpty();
+    }
+
+    @Test
+    void theOptionsTakenOutOfTheOperandsAreThoseNamedAndTheValuedOnesWhateverTheValue() {
+        var arguments = Arguments.of(List.of("start", "--wait", "--timeout=30", "--dry-run", "x"));
+
+        assertThat(arguments.withoutOptions("--wait", "--timeout=").operands()).containsExactly("--dry-run", "x");
+        assertThat(arguments.withoutOptions("--timeout").operands())
+                .containsExactly("--wait", "--timeout=30", "--dry-run", "x");
+    }
+
+    @Test
     void theDryRunOptionMayStandInTheMiddle() {
         var arguments = Arguments.of(List.of("rename", "A.java", "--dry-run", "3", "4", "x"));
 

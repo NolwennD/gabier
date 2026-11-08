@@ -69,9 +69,14 @@ final class DaemonLauncher {
         return DaemonClient.tryConnect(socket).orElseGet(() -> start(socket));
     }
 
+    /** Where the output of the daemon that the cli starts for this socket goes. */
+    static Path logOf(Path socket) {
+        return socket.resolveSibling(socket.getFileName() + ".log");
+    }
+
     private DaemonClient start(Path socket) {
         var executable = locate(socket);
-        var log = socket.resolveSibling(socket.getFileName() + ".log");
+        var log = logOf(socket);
         var process = launch(executable, socket, log);
         try {
             return awaitSocket(process, socket, log);

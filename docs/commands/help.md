@@ -84,7 +84,7 @@ $ gabier help guide
 # Improving Java with gabier: the problem each move solves
 ...
 $ gabier help frobnicate
-Usage error: Unknown command; the commands are diagnostics, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move, inline, create, references, actions, apply-action, status, stop, help (usage-error; command=frobnicate)
+Usage error: Unknown command; the commands are diagnostics, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move, inline, create, references, actions, apply-action, start, status, stop, help (usage-error; command=frobnicate)
 ```
 
 **Where the text lives.** The help text of every command is written once, in the class of its capability in the cli

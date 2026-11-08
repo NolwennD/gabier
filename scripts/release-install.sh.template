@@ -196,7 +196,8 @@ gabier $version is installed.
 
 Next:
   $gabier --version
-  cd <your Java project> && $gabier diagnostics <a .java file>
+  cd <your Java project> && $gabier start    (starts the daemon and jdtls; add --wait to wait until jdtls is ready)
+  $gabier diagnostics <a .java file>
 
 For a coding agent, put this line in its instructions (AGENTS.md, CLAUDE.md):
   Change Java with \`gabier\` rather than by editing text: \`gabier help\` lists the commands, \`gabier help --for="<the task>"\` tells which one does a task.

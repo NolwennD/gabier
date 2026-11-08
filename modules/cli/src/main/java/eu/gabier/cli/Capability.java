@@ -21,6 +21,7 @@ sealed interface Capability
                 References,
                 Actions,
                 ApplyAction,
+                Start,
                 Status,
                 Stop,
                 Help {

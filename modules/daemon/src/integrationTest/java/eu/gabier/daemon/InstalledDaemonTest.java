@@ -216,6 +216,38 @@ class InstalledDaemonTest {
         }
     }
 
+    @Test
+    void startStartsJdtlsAtOnceWithoutARequestThatNeedsItAndTheFirstRequestFindsItStartedOrReady() throws Exception {
+        var project = project();
+        try (var daemon = new Daemon(project)) {
+            var started = RpcResponse.parse(daemon.ask("start", "{}"));
+            daemon.remember();
+            assertThat(started).as("the answer: %s", started).isInstanceOf(RpcResponse.Success.class);
+            var status = DaemonStatus.of(((RpcResponse.Success) started).result());
+            assertThat(status.jdtls())
+                    .as("start answers at once, jdtls is not ready yet")
+                    .isEqualTo(JdtlsState.STARTING);
+
+            daemon.awaitJava();
+            var ready = false;
+            for (var attempt = 0; attempt < 3000 && !ready; attempt++) {
+                ready = daemon.status().jdtls() == JdtlsState.READY;
+                TimeUnit.MILLISECONDS.sleep(100);
+            }
+            assertThat(ready)
+                    .as("jdtls became ready without any other request: %s", daemon.log())
+                    .isTrue();
+
+            var again = DaemonStatus.of(((RpcResponse.Success) RpcResponse.parse(daemon.ask("start", "{}"))).result());
+            assertThat(again.jdtls()).as("a second start starts nothing").isEqualTo(JdtlsState.READY);
+            assertThat(RpcResponse.parse(daemon.ask("diagnostics", diagnosticsOf(project))))
+                    .isInstanceOf(RpcResponse.Success.class);
+
+            daemon.stop();
+            daemon.assertNothingIsLeft();
+        }
+    }
+
     private static String renameByPosition(Path file, String newName, boolean dryRun) {
         return """
             {"file":"%s","line":"5","column":"18","newName":"%s","dryRun":"%s"}\

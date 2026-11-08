@@ -4,6 +4,8 @@ gabier exists so that an agent writes Java through a language server. Since 31-1
 repository does it with `gabier` (installed on the PATH by `mise run install`, which copies it out of the checkout, so a
 clean or another branch does not break it; the cli starts the daemon of its own copy by itself):
 
+- `gabier start` first thing in a session (it answers at once, `gabier start --wait` when jdtls is ready), so that jdtls
+  imports the project while you read the ticket and the first real command is quick;
 - `gabier diagnostics <file>` to see the errors of a Java file instead of waiting for a build;
 - `gabier rename <file> <line>:<column> <new-name>` (1-based position, or `--token`; `--dry-run` first on a rename that
   crosses files) instead of editing every occurrence by hand; on the name in a `package` line it renames the package,

@@ -36,6 +36,7 @@ final class ScriptedProject implements ServedProject {
     private final Path root;
     private final JavaLanguageServer server;
     private final AtomicInteger closes = new AtomicInteger();
+    private final AtomicInteger warmUps = new AtomicInteger();
     private final CountDownLatch waiting = new CountDownLatch(1);
     private final CountDownLatch closed = new CountDownLatch(1);
     private final CountDownLatch released = new CountDownLatch(1);
@@ -124,6 +125,19 @@ final class ScriptedProject implements ServedProject {
     @Override
     public Optional<String> jdtlsFailure() {
         return failure;
+    }
+
+    @Override
+    public void warmUp() {
+        warmUps.incrementAndGet();
+        if (state == JdtlsState.NOT_STARTED) {
+            state = JdtlsState.STARTING;
+        }
+    }
+
+    /** How many times the daemon asked the project to warm up; a project that was not started is then starting. */
+    int warmUps() {
+        return warmUps.get();
     }
 
     @Override

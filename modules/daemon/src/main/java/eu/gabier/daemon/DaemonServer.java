@@ -68,6 +68,7 @@ final class DaemonServer implements AutoCloseable {
         // The method table: to add a method, add it here (.claude/skills/add-daemon-method/SKILL.md).
         handler = new RequestHandler(List.of(
                 new StatusMethod(() -> status(nanoClock, startedAt, pid)),
+                new StartMethod(project::warmUp, () -> status(nanoClock, startedAt, pid)),
                 new StopMethod(this::requestStop),
                 new DiagnosticsMethod(new Diagnose(project)),
                 new RenameMethod(rename),

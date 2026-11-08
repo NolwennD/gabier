@@ -7,6 +7,7 @@ import java.io.PrintStream;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 /**
@@ -51,7 +52,38 @@ record Invocation(
         return call(() -> DaemonClient.connect(socket), method, Map.of(), awaitEnd);
     }
 
-    private Path socket() {
+    /**
+     * As {@link #ask}, and says whether this call had to start the daemon. No notice: the answer is at once, whatever
+     * the state of jdtls.
+     */
+    Started askStarting(String method) {
+        var launcher = DaemonLauncher.of(environment);
+        var socket = socket();
+        var daemonStarted = new AtomicBoolean();
+
+        var result = call(
+                () -> DaemonClient.tryConnect(socket).orElseGet(() -> {
+                    daemonStarted.set(true);
+
+                    return launcher.connect(socket);
+                }),
+                method,
+                Map.of(),
+                false);
+
+        return new Started(result, daemonStarted.get());
+    }
+
+    /**
+     * The result of a request that may have started the daemon.
+     *
+     * @param result what the daemon answered
+     * @param daemonStarted whether the daemon was not running and this call started it
+     */
+    record Started(RpcResponse.Success result, boolean daemonStarted) {}
+
+    /** The socket of the daemon of the project this run is in. */
+    Path socket() {
         return SocketLocation.resolve(environment, UserId.current(), Path.of("").toAbsolutePath());
     }
 

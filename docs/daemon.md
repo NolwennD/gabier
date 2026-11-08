@@ -1,10 +1,10 @@
 # The daemon
 
-One daemon runs per project. `gabier diagnostics`, `gabier rename`, `gabier organize-imports`, `gabier cleanup`, `gabier extract-variable`, `gabier extract-method`, `gabier extract-constant`, `gabier extract-field`, `gabier move-type-to-file`, `gabier move`, `gabier inline`, `gabier create`, `gabier references`, `gabier actions` and `gabier apply-action` **start it when nothing answers on the socket**, so an
+One daemon runs per project. `gabier diagnostics`, `gabier rename`, `gabier organize-imports`, `gabier cleanup`, `gabier extract-variable`, `gabier extract-method`, `gabier extract-constant`, `gabier extract-field`, `gabier move-type-to-file`, `gabier move`, `gabier inline`, `gabier create`, `gabier references`, `gabier actions`, `gabier apply-action` and `gabier start` **start it when nothing answers on the socket**, so an
 agent runs them in a project folder and gets the answer; `gabier status` and `gabier stop` never start one (see [status and stop](commands/status-and-stop.md)).
 It can also be started by hand, with `gabier-daemon` from the installed distribution (`./gradlew :daemon:installDist`,
 then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until `gabier stop` or a SIGTERM; it
-answers `status`, `stop`, `diagnostics`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions` and `apply-action`, and nothing else yet.
+answers `status`, `start`, `stop`, `diagnostics`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions` and `apply-action`, and nothing else yet.
 
 **Installing both by name.** `mise run install` builds the native cli and the daemon of the checkout it is run in,
 **copies** them into `~/.local/share/gabier/<version>` (`<version>` is the one `gabier --version` prints; the folder is
@@ -40,7 +40,8 @@ It serves **one project**: `gabier-daemon [<project folder>]`, else the folder n
 root of the directory it is started in, the nearest folder from it up that holds a `.git` (a relative folder is relative
 to that directory; one that is not a folder is a usage error).
 Starting the daemon starts nothing else. jdtls is started by the
-first request that needs it, on that folder, and the request waits until it has imported the project: the first
+first request that needs it, or by `gabier start` (the daemon method `start`, which starts jdtls in the background and
+answers at once, see [start](commands/start.md)), on that folder, and the request waits until it has imported the project: the first
 `diagnostics` takes seconds for a small project and about a minute for this checkout (see "What the first call costs" below). Requests that arrive
 meanwhile wait for the same start, never for another. jdtls then stays up for the next requests, and is ended, with every
 process it started, by `gabier stop`, by SIGTERM, and when the daemon is stopped while jdtls is still starting. A jdtls
@@ -69,6 +70,13 @@ after 6 to 9 s (the 5 seconds of quiet are in it), and a command that does not w
 build file jdtls can read is refused at once, and a small Eclipse or Maven project imports in seconds. A Gradle daemon
 that is still running from an earlier import shortens the import a great deal: a cold start of the daemon and of jdtls with
 one warm answered the first `diagnostics` in 32 s.
+
+**Ahead of time.** `gabier start` pays this wait before the first command: it starts the daemon if none runs, asks it to
+start jdtls (nothing happens when jdtls is already starting or ready; a failed jdtls is started again), and answers at
+once. `gabier start --wait [--timeout=<seconds>]` returns once jdtls is ready by asking `status` every quarter of a second
+on connections of its own, and writes on the standard error the same line as the notice below while it waits; it refuses
+with `jdtls-start-failed` (jdtls failed) or `jdtls-start-timeout` (300 seconds by default, the last state of jdtls in the
+problem), both with exit code 1, and jdtls goes on starting in the daemon after a timeout.
 
 **The notice.** A request command that has waited **3 seconds** while jdtls is starting writes one line on the
 **standard error** (`gabier: waiting for jdtls (starting, 41s so far; importing the project for 38s: Configure project :core); the first

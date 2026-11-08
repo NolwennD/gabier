@@ -24,6 +24,7 @@ final class Capabilities {
             new References(),
             new Actions(),
             new ApplyAction(),
+            new Start(),
             new Status(),
             new Stop(),
             new Help());

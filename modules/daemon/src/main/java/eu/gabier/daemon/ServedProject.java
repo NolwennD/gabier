@@ -28,6 +28,13 @@ interface ServedProject extends JavaLanguageServer, AutoCloseable {
      */
     Optional<String> jdtlsFailure();
 
+    /**
+     * Starts the language server in the background, so that the first request finds it started, and returns at once:
+     * nothing is started while it is starting or ready, and a failed start is ended and another begun, as a request
+     * does.
+     */
+    void warmUp();
+
     /** Ends the language server, whether it is still starting or ready. Closing it again does nothing. */
     @Override
     void close() throws IOException, InterruptedException;
