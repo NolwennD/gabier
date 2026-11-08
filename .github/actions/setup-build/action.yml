@@ -38,22 +38,22 @@ runs:
         mkdir -p "$HOME/.gradle"
         echo "org.gradle.java.installations.paths=$GRAALVM_HOME" >> "$HOME/.gradle/gradle.properties"
 
-    # The JDK of the project, `.sdkmanrc`, that runs Gradle, bin/ci and the launcher of jdtls.
+    # The JDK of the project, `.sdkmanrc`, that runs Gradle, bin/ci and the launcher of jdtls. setup-java reads the version
+    # and the distribution (Temurin) from that file, so the runner does not depend on the SDKMAN! service (an outage of
+    # it, a 504, blocked every check and every release); developers keep SDKMAN!. It sets JAVA_HOME and the PATH.
     - name: Install the JDK of .sdkmanrc
+      uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+      with:
+        java-version-file: .sdkmanrc
+
+    # The step above must have given the release that `.sdkmanrc` pins, not another one.
+    - name: Check the JDK of .sdkmanrc
       shell: bash
       run: |
-        export SDKMAN_DIR="$HOME/.sdkman"
-        curl -fsSL "https://get.sdkman.io?rcupdate=false" | bash
-        echo "sdkman_auto_answer=true" >> "$SDKMAN_DIR/etc/config"
-        # SDKMAN! is not written for `set -e` and `set -u`: the check that follows is what fails the step.
-        set +eu
-        . "$SDKMAN_DIR/bin/sdkman-init.sh"
-        sdk env install
-        set -e
-        jdk="$SDKMAN_DIR/candidates/java/$(sed -n 's/^java=//p' .sdkmanrc)"
-        test -x "$jdk/bin/java"
-        echo "JAVA_HOME=$jdk" >> "$GITHUB_ENV"
-        echo "$jdk/bin" >> "$GITHUB_PATH"
+        pinned=$(sed -n 's/^java=//p' .sdkmanrc | grep -oE '^[0-9]+')
+        test -x "$JAVA_HOME/bin/java"
+        "$JAVA_HOME/bin/java" -version 2>&1 | head -n 1
+        "$JAVA_HOME/bin/java" -version 2>&1 | head -n 1 | grep -q "\"$pinned[.\"]"
 
     - name: Install mise
       uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
