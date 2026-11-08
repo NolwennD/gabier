@@ -79,7 +79,16 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
         shell: bash
-        run: ./gradlew :cli:test --tests '*DaemonAnswersTest' --console=plain -i
+        run: |
+          # Throwaway: the assertion at line 72 shows the stderr of the cli with its exit code.
+          python3 - <<'PY'
+          p = "modules/cli/src/test/java/eu/gabier/cli/DaemonAnswersTest.java"
+          s = open(p).read()
+          s = s.replace("assertThat(runWithSocket(withJson.toArray(String[]::new))).isEqualTo(2);",
+                        "int code = runWithSocket(withJson.toArray(String[]::new)); assertThat(code).as(\"STDERR[\" + err() + \"] OUT[\" + out() + \"]\").isEqualTo(2);")
+          open(p, "w").write(s)
+          PY
+          ./gradlew :cli:test --tests '*DaemonAnswersTest' --console=plain -i
 
       - name: Stage test
         id: test
@@ -97,16 +106,19 @@ jobs:
       # The stages above launch `./gradlew`, which Windows cannot run as a program (CreateProcess error 193): that is the first
       # thing they show there. To see what else breaks, Gradle is run directly on Windows, from bash.
       - name: Gradle assemble (Windows)
+        timeout-minutes: 20
         if: ${{ !cancelled() && runner.os == 'Windows' }}
         shell: bash
         run: ./gradlew assemble --console=plain
 
       - name: Gradle check (Windows)
+        timeout-minutes: 20
         if: ${{ !cancelled() && runner.os == 'Windows' }}
         shell: bash
         run: ./gradlew check --console=plain
 
       - name: Gradle native cli and daemon (Windows)
+        timeout-minutes: 20
         if: ${{ !cancelled() && runner.os == 'Windows' }}
         shell: bash
         run: |
