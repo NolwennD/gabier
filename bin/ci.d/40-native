@@ -1498,12 +1498,6 @@ public final class Native {
             }
         }
 
-        /**
-         * A request command with no daemon running starts {@code gabier-daemon}, found on the {@code PATH} or next to
-         * the binary of the cli, waits for its socket and answers; the next one uses the daemon that runs; a daemon that
-         * is not found or does not start is a problem object. The daemon is the one served by the fake language server
-         * (the script gives it its project folder), and what the cli started is ended with {@code gabier stop}.
-         */
         /** {@code gabier start} starts the daemon of the project and answers; the fake-served jdtls is always ready. */
         private void startWithTheFakeServer() throws IOException, InterruptedException {
             Path project = directory.resolve("start-project");
@@ -1545,6 +1539,12 @@ public final class Native {
             }
         }
 
+        /**
+         * A request command with no daemon running starts {@code gabier-daemon}, found on the {@code PATH} or next to
+         * the binary of the cli, waits for its socket and answers; the next one uses the daemon that runs; a daemon that
+         * is not found or does not start is a problem object. The daemon is the one served by the fake language server
+         * (the script gives it its project folder), and what the cli started is ended with {@code gabier stop}.
+         */
         private void startsTheDaemonOnDemand() throws IOException, InterruptedException {
             Path project = directory.resolve("started-project");
             String broken = "started-project/src/main/java/demo/Broken.java";
