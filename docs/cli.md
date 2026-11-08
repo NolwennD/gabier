@@ -24,6 +24,9 @@ gets `Usage and other ways: gabier help <command>`, with the command that was ru
 
 `gabier help` lists the commands and `gabier help <command>` explains one, as does `gabier <command> --help` (or `-h`):
 `gabier help agents` prints the lines to paste in the instructions of a coding agent; see [help](commands/help.md).
+`gabier init-agent <skill|rule|snippet>` writes them into the project as a skill, a rule or a block of `AGENTS.md`, with no
+daemon; see [init-agent](commands/init-agent.md). Its refusals (`init-agent-file-exists`, `init-agent-unknown-command`...) end
+with the same pointer line, `Usage and other ways: gabier help init-agent`.
 
 The JSON object follows the data model of [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) (problem details)
 without its HTTP side: `type` (a URI that is not meant to be resolved, `urn:gabier:error:<key>`), `title`, `detail`,

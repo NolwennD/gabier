@@ -126,6 +126,12 @@ Whichever way you installed it:
    gabier help agents >> AGENTS.md
    ```
 
+   Or let gabier write it where your project keeps the instructions of its agents, and keep it up to date with a new run
+   after an upgrade: `gabier init-agent skill` (`.claude/skills/gabier/SKILL.md`), `gabier init-agent rule`
+   (`.claude/rules/gabier.md`) or `gabier init-agent snippet` (a marked block of `AGENTS.md`, replaced in place by a second
+   run). `--only=rename,diagnostics` keeps the commands you want taught, `--dry-run` shows the text first; see
+   [`init-agent`](docs/commands/init-agent.md).
+
 ## Build gabier from its sources
 
 You need:
@@ -223,6 +229,9 @@ refusals of each one. `gabier help --for="<the task>"` tells which command does 
   confidence, or the plain word that nothing matches. No daemon, no network.
 - [`gabier help agents`](docs/commands/help.md): the lines to paste in the instructions of a coding agent (`AGENTS.md`,
   `CLAUDE.md`): `gabier start`, `gabier help --for=...` before editing by hand, the commands that replace a text edit.
+- [`gabier init-agent <skill|rule|snippet>`](docs/commands/init-agent.md): write those instructions into the project as a
+  skill, a rule or a marked block of `AGENTS.md`, with the commands you choose (`--only`) and the version of gabier that
+  wrote them; a second run replaces the block. No daemon.
 - [`gabier start`](docs/commands/start.md): start the daemon and jdtls ahead of the first command; `--wait` returns when
   jdtls is ready.
 - [`gabier status` and `gabier stop`](docs/commands/status-and-stop.md): see what the daemon serves, and stop it.

@@ -26,7 +26,7 @@ hand, which commands replace a text edit, to try a change with `--dry-run` first
 `gabier help <command>`. Like the guide it is a topic of `help`, not a command, and with `--json` it is one object,
 `{"name":"agents","summary":"...","text":"..."}`. The text is the resource `agents.md` of the cli
 (`modules/cli/src/main/resources/eu/gabier/cli/`, kept by the native image like the guide), the only copy; the class
-`AgentInstructions` holds it, so that a later command that writes it into a project calls the same `text()`. A test
+`AgentInstructions` holds it, and [`gabier init-agent`](init-agent.md), which writes it into a project as a skill, a rule or a block of `AGENTS.md`, calls the same `text()`. A test
 (`AgentInstructionsTest`) reads the commands the text cites in backticks (`` `gabier <command>` ``) and fails when one is
 not a command in the list of `gabier help` (or a topic of `help`): change the text and the commands together.
 `gabier help` lists it among its pointers (a line near its end), and so do the end message of the install and the first
@@ -73,7 +73,7 @@ and the tests" (`tests` is in the `Words:` line of one section, `build` in the t
 reads the guide of the build, so it needs no clone, no daemon and no network. A wrong answer, or no answer, to a real task is a friction: see the rule
 `dogfooding.md`.
 
-`help` is the one command that never talks to the daemon: it starts none, opens no socket and works with no project. It is
+`help` never talks to the daemon (nor does [`init-agent`](init-agent.md)): it starts none, opens no socket and works with no project. It is
 not a daemon method, so it has no row in [the protocol](../protocol.md#methods).
 
 ```text
@@ -100,7 +100,7 @@ $ gabier help agents
 ## Java with gabier
 ...
 $ gabier help frobnicate
-Usage error: Unknown command; the commands are diagnostics, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move, inline, create, references, actions, apply-action, start, status, stop, help (usage-error; command=frobnicate)
+Usage error: Unknown command; the commands are diagnostics, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move, inline, create, references, actions, apply-action, start, status, stop, init-agent, help (usage-error; command=frobnicate)
 ```
 
 **Where the text lives.** The help text of every command is written once, in the class of its capability in the cli
@@ -123,7 +123,7 @@ a line to the usage error, after the problem on the standard error: `Not sure wh
 --for="<task>"`; with `--json` it is the member `help` of the problem object, last, after `parameters`. A refusal where
 the language server or the edit declined what was asked (the keys `language-server-not-extractable`, `-not-movable`,
 `-not-inlinable`, `-not-creatable`, `-no-such-symbol`, `-not-applicable`..., `editing-no-such-code-action`,
-`editing-unknown-clean-up`: `HelpPointer`) adds `Usage and other ways: gabier help <command>`, with the name of the command
+`editing-unknown-clean-up`, and the refusals of [`init-agent`](init-agent.md) other than a failure of the file system: `HelpPointer`) adds `Usage and other ways: gabier help <command>`, with the name of the command
 that was run, in the same two places. The key, the other members and the exit code do not change; a refusal that is a state
 (`language-server-not-ready`, a daemon that does not start, a stale edit) and a usage error of a known command have no such
 line, as they do not leave other ways to take. One class, `HelpPointer`, decides and builds the line.

@@ -24,6 +24,7 @@ sealed interface Capability
                 Start,
                 Status,
                 Stop,
+                InitAgent,
                 Help {
 
     /** The command this capability runs: its name and its help text, which the class holds in {@code COMMAND}. */

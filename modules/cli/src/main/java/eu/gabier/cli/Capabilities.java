@@ -27,6 +27,7 @@ final class Capabilities {
             new Start(),
             new Status(),
             new Stop(),
+            new InitAgent(),
             new Help());
 
     private Capabilities() {}

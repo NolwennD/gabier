@@ -34,6 +34,7 @@ class HelpTest extends CliTest {
             "start",
             "status",
             "stop",
+            "init-agent",
             "help");
 
     private static Map<String, Object> object(Object json) {
@@ -209,7 +210,7 @@ class HelpTest extends CliTest {
         assertThat(err()).startsWith("""
             Usage error: Unknown command; the commands are diagnostics, rename, organize-imports,\
              cleanup, extract-variable, extract-method, extract-constant, extract-field,\
-             move-type-to-file, move, inline, create, references, actions, apply-action, start, status, stop,\
+             move-type-to-file, move, inline, create, references, actions, apply-action, start, status, stop, init-agent,\
              help\
              (usage-error; command=frobnicate)\
             """ + System.lineSeparator() + FOR_A_TASK + System.lineSeparator());
