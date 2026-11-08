@@ -1,7 +1,7 @@
 # gabier init-agent keeps the mode, the line endings and the other blocks of the file it writes into (review suggestions)
 
 Opened: 08-11-2026 15:40
-On hold: findings of the review of `gabier-generates-a-skill-or-a-rule`; none breaks a `Done when` point; they matter when a maintainer's `AGENTS.md` is not plain (a mode, CRLF, a documented marker) or when two processes write at once.
+Lifted on 08-11-2026 by the user ("corrige le problème init-agent").
 
 - `AgentFile.java:109`: `ATOMIC_MOVE` of a fresh temp file gives the destination the umask mode: `chmod 600 AGENTS.md` then `init-agent snippet` loses the mode (a hard link is broken too). The docs say so; no test covers it. Copy the POSIX permissions of the existing file onto the temp file.
 - `AgentFile.java:75`: only the first `START` is handled: a file with two blocks has the first replaced and the second left stale; a marker quoted in a code fence (an `AGENTS.md` that documents the markers) is replaced as if it were the block. Refuse when `START` occurs more than once, or skip fenced markers.
