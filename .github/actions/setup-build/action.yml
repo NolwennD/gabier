@@ -83,17 +83,13 @@ runs:
         "$JAVA_HOME/bin/java" -version 2>&1 | head -n 1 | grep -q "\"$pinned[.\"]"
 
     # The version of mise is written here because the cache of mise-action (the binary and the tools of `mise.toml`) is keyed
-    # on it; a newer one is a change of this line. The cache is saved in the post step, after the next step installed the tools.
-    - name: Install mise
+    # on it; a newer one is a change of this line. mise-action saves that cache only when it installs the tools itself
+    # (`install: true`, the post step saves it once the job is done), so it installs them, the jdtls of `mise.toml`
+    # included (its `postinstall`), and trusts the checkout for that.
+    - name: Install mise and the tools
       uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+      env:
+        MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
       with:
         version: 2026.11.4
-        install: false
         cache_save_post: true
-
-    - name: Install the tools and jdtls
-      shell: bash
-      run: |
-        mise trust
-        mise install
-        mise run jdtls:install
