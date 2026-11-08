@@ -9,10 +9,10 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /** The refusal and the answers that the tests of the commands share, so that each says only what is its own. */
-final class CliFixtures {
+public final class CliFixtures {
 
     /** A refusal of the daemon, as any command can get one. */
-    static final Problem REFUSAL = new Problem(
+    public static final Problem REFUSAL = new Problem(
             "urn:gabier:error:some-key",
             "Some key",
             "It went wrong",

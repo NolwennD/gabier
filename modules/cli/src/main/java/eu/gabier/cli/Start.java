@@ -3,7 +3,6 @@ package eu.gabier.cli;
 import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.Json;
-import eu.gabier.protocol.RpcResponse;
 import eu.gabier.protocol.TerminalText;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -61,13 +60,13 @@ final class Start implements Capability {
         var timeout = timeout(arguments, waiting);
         arguments.withoutOptions(WAIT, TIMEOUT).exactly(0);
 
-        var started = invocation.askStarting(command().commandName());
+        var started = invocation.daemon().askStarting(command().commandName());
         var status = DaemonStatus.of(started.result().result());
         if (waiting) {
             status = untilReady(invocation, status, timeout);
         }
-        var socket = invocation.socket();
-        var log = started.daemonStarted() ? Optional.of(DaemonLauncher.logOf(socket)) : Optional.<Path>empty();
+        var socket = invocation.daemon().socket();
+        var log = started.daemonStarted() ? Optional.of(started.log()) : Optional.<Path>empty();
         invocation
                 .out()
                 .println(
@@ -104,7 +103,7 @@ final class Start implements Capability {
     private static DaemonStatus untilReady(Invocation invocation, DaemonStatus first, Duration timeout) {
         var begun = System.nanoTime();
         var status = first;
-        try (var notice = WaitNotice.during(invocation.socket(), invocation.noticeDelay(), invocation.err())) {
+        try (var notice = invocation.daemon().noticeWhileWaiting()) {
             while (status.jdtls() != JdtlsState.READY) {
                 if (status.jdtls() == JdtlsState.FAILED) {
                     throw JdtlsWaitException.failed(status);
@@ -112,37 +111,11 @@ final class Start implements Capability {
                 if (System.nanoTime() - begun >= timeout.toNanos()) {
                     throw JdtlsWaitException.timedOut(status, timeout);
                 }
-                pause();
-                status = statusOf(invocation.socket());
+                status = DaemonStatus.of(invocation.daemon().statusAfter(POLL).result());
             }
         }
 
         return status;
-    }
-
-    private static void pause() {
-        try {
-            Thread.sleep(POLL);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-
-            throw DaemonException.connectionFailed("the wait for jdtls was interrupted", interrupted);
-        }
-    }
-
-    /** The status of the daemon, asked on a connection of its own. */
-    private static DaemonStatus statusOf(Path socket) {
-        var connected = DaemonClient.tryConnect(socket)
-                .orElseThrow(() -> DaemonException.connectionFailed(
-                        "the daemon stopped answering while jdtls was starting", null));
-        try (var client = connected) {
-            var response = client.call("status");
-            if (response instanceof RpcResponse.Failure failure) {
-                throw new DaemonRefusal(failure.problem());
-            }
-
-            return DaemonStatus.of(((RpcResponse.Success) response).result());
-        }
     }
 
     private static String text(DaemonStatus status, Path socket, Optional<Path> log, boolean daemonStarted) {

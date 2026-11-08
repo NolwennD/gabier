@@ -1,4 +1,4 @@
-package eu.gabier.cli;
+package eu.gabier.cli.infrastructure.secondary;
 
 import java.io.File;
 import java.io.IOException;

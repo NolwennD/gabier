@@ -1,5 +1,7 @@
 package eu.gabier.architecture;
 
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.name;
 import static com.tngtech.archunit.lang.SimpleConditionEvent.violated;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.codeUnits;
@@ -76,6 +78,16 @@ class HexagonalArchTest {
             Map.of(DAEMON_PACKAGE, List.of(ROOT_PACKAGE + ".editing"));
 
     private static final String LSP4J_PACKAGE = "org.eclipse.lsp4j";
+
+    /** The secondary adapters of the cli: the way to the daemon, which the commands only know as a port. */
+    private static final String CLI_ADAPTERS_PACKAGE = ROOT_PACKAGE + ".cli.infrastructure.secondary";
+
+    /**
+     * The class of the cli that builds the adapter of the daemon and hands it to the commands: the composition root. The
+     * layered rule forbids every layer to reach a secondary adapter, so the one place that names it is outside the
+     * layers, in the root package of the context, and it is the entry point that wires what it runs.
+     */
+    private static final String CLI_COMPOSITION_ROOT = ROOT_PACKAGE + ".cli.Gabier";
 
     /** The JSpecify annotation that makes NullAway check a package; by name, as the module only needs it to compile. */
     private static final String NULL_MARKED = "org.jspecify.annotations.NullMarked";
@@ -205,6 +217,9 @@ class HexagonalArchTest {
                     .mayNotBeAccessedByAnyLayer()
                     .whereLayer("secondary adapters")
                     .mayNotBeAccessedByAnyLayer()
+                    // The layers are optional, but a class outside them that reaches a secondary adapter still
+                    // counts as a layer access: the composition root of the cli is that class, see CliAdapters.
+                    .ignoreDependency(name(CLI_COMPOSITION_ROOT), resideInAPackage(CLI_ADAPTERS_PACKAGE + ".."))
                     .because("Each bounded context should implement a hexagonal architecture")
                     .check(CLASSES));
         }
@@ -289,6 +304,42 @@ class HexagonalArchTest {
                     .because("Secondary should not loop to its own context's primary")
                     .allowEmptyShould(true)
                     .check(CLASSES));
+        }
+    }
+
+    @Nested
+    class CliAdapters {
+
+        /** Nothing of the cli depends on its adapters but the adapters themselves and the given composition root. */
+        private static ArchRule onlyReachedBy(String compositionRoot) {
+            return noClasses()
+                    .that()
+                    .resideInAPackage(ROOT_PACKAGE + ".cli..")
+                    .and()
+                    .resideOutsideOfPackage(CLI_ADAPTERS_PACKAGE + "..")
+                    .and()
+                    .doNotHaveFullyQualifiedName(compositionRoot)
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAPackage(CLI_ADAPTERS_PACKAGE + "..")
+                    .because("The commands reach the daemon through its port; only the composition root, which builds"
+                            + " the adapter, names it")
+                    .allowEmptyShould(true);
+        }
+
+        @Test
+        void shouldOnlyBeReachedByTheCompositionRoot() {
+            onlyReachedBy(CLI_COMPOSITION_ROOT).check(CLASSES);
+        }
+
+        @Test
+        void shouldFindTheCompositionRootWhereItWires() {
+            // Without the exemption the rule fails on the class that wires the adapter: the name and the rule are live.
+            ArchRule rule = onlyReachedBy("eu.gabier.cli.NoSuchClass");
+
+            assertThatThrownBy(() -> rule.check(CLASSES))
+                    .isInstanceOf(AssertionError.class)
+                    .hasMessageContaining(CLI_COMPOSITION_ROOT);
         }
     }
 

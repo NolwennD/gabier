@@ -39,6 +39,16 @@ know is reported as the generic `internal-server-error`, without its message, it
 it waits (never on the standard output). Its refusals, `jdtls-start-failed` and `jdtls-start-timeout`, are problem
 objects like the others, with exit code 1. See [start](commands/start.md).
 
+## How the cli is built
+
+The cli (`modules/cli`, package `eu.gabier.cli`) is a hexagon next to the commands. The commands (`Rename`, `Diagnostics`...)
+read the command line (`Arguments`, `--json`) and print; they reach the daemon only through the port `Daemon` of
+`eu.gabier.cli.domain` (a method with string parameters in, the members of its result out, a refusal thrown as a
+`DaemonRefusal`), which an `Invocation` hands them with the arguments and the output. The adapter of the port,
+`SocketDaemon`, is in `eu.gabier.cli.infrastructure.secondary` with what talks on the socket and starts the daemon
+(`DaemonClient`, `DaemonLauncher`, `DaemonException`, `WaitNotice`); `Gabier` builds it, and no other class outside that
+package names it (`HexagonalArchTest`). A second front end, such as an MCP server, takes the same port.
+
 ## Text in a terminal
 
 In text, the file and the message are shown with the characters a terminal obeys or does not show written as `\uXXXX`

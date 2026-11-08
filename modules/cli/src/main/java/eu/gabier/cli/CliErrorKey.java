@@ -4,9 +4,6 @@ import eu.gabier.shared.error.domain.ErrorKey;
 
 /** The keys of the refusals of the command line itself. */
 enum CliErrorKey implements ErrorKey {
-    DAEMON_CONNECTION_FAILED("daemon-connection-failed"),
-    DAEMON_NOT_RUNNING("daemon-not-running"),
-    DAEMON_START_FAILED("daemon-start-failed"),
     INIT_AGENT_BLOCK_REPEATED("init-agent-block-repeated"),
     INIT_AGENT_BLOCK_UNFINISHED("init-agent-block-unfinished"),
     INIT_AGENT_FENCE_UNCLOSED("init-agent-fence-unclosed"),

@@ -1,8 +1,9 @@
-package eu.gabier.cli;
+package eu.gabier.cli.infrastructure.secondary;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import eu.gabier.cli.ScriptedDaemon;
 import eu.gabier.protocol.RpcResponse;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import java.io.ByteArrayInputStream;
@@ -17,7 +18,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** The client over streams: the command tests (a {@link CliTest} each) run it on a socket. */
+/** The client over streams: the command tests (a {@code CliTest} each) run it on a socket. */
 class DaemonClientTest {
 
     private static final String RESULT = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"pid\":7}}\n";
@@ -92,7 +93,7 @@ class DaemonClientTest {
             var failure =
                     catchThrowableOfType(DaemonException.class, () -> client("").call("status"));
 
-            assertThat(failure.key()).isEqualTo(CliErrorKey.DAEMON_CONNECTION_FAILED);
+            assertThat(failure.key()).isEqualTo(DaemonErrorKey.DAEMON_CONNECTION_FAILED);
             assertThat(failure.status()).isEqualTo(ErrorStatus.INTERNAL_SERVER_ERROR);
             assertThat(failure.getMessage()).contains("hung up");
         }
@@ -103,7 +104,7 @@ class DaemonClientTest {
 
             var failure = catchThrowableOfType(DaemonException.class, () -> client.call("status"));
 
-            assertThat(failure.key()).isEqualTo(CliErrorKey.DAEMON_CONNECTION_FAILED);
+            assertThat(failure.key()).isEqualTo(DaemonErrorKey.DAEMON_CONNECTION_FAILED);
             assertThat(failure.getCause()).isInstanceOf(IOException.class);
         }
 
@@ -113,7 +114,7 @@ class DaemonClientTest {
 
             var failure = catchThrowableOfType(DaemonException.class, () -> client.call("status"));
 
-            assertThat(failure.key()).isEqualTo(CliErrorKey.DAEMON_CONNECTION_FAILED);
+            assertThat(failure.key()).isEqualTo(DaemonErrorKey.DAEMON_CONNECTION_FAILED);
         }
     }
 
@@ -136,7 +137,7 @@ class DaemonClientTest {
 
             var failure = catchThrowableOfType(DaemonException.class, client::awaitEnd);
 
-            assertThat(failure.key()).isEqualTo(CliErrorKey.DAEMON_CONNECTION_FAILED);
+            assertThat(failure.key()).isEqualTo(DaemonErrorKey.DAEMON_CONNECTION_FAILED);
         }
     }
 

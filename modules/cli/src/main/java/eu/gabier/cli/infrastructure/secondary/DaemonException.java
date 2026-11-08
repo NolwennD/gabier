@@ -1,4 +1,4 @@
-package eu.gabier.cli;
+package eu.gabier.cli.infrastructure.secondary;
 
 import eu.gabier.shared.error.domain.GeneratorException;
 import java.nio.file.Path;
@@ -13,7 +13,7 @@ final class DaemonException extends GeneratorException {
 
     /** Nothing answers on the socket: no daemon, or one that was killed and left its socket file. */
     static DaemonException notRunning(Path socket) {
-        return new DaemonException(GeneratorException.badRequest(CliErrorKey.DAEMON_NOT_RUNNING)
+        return new DaemonException(GeneratorException.badRequest(DaemonErrorKey.DAEMON_NOT_RUNNING)
                 .message("No daemon answers on " + socket + ": start it with gabier-daemon")
                 .addParameter("socket", socket.toString()));
     }
@@ -24,7 +24,7 @@ final class DaemonException extends GeneratorException {
      * @param log where its output went, when it was started
      */
     static DaemonException startFailed(String reason, Path socket, @Nullable Path log, @Nullable Exception cause) {
-        var builder = GeneratorException.internalServerError(CliErrorKey.DAEMON_START_FAILED)
+        var builder = GeneratorException.internalServerError(DaemonErrorKey.DAEMON_START_FAILED)
                 .message("The daemon did not start: " + reason)
                 .addParameter("socket", socket.toString())
                 .cause(cause);
@@ -40,7 +40,7 @@ final class DaemonException extends GeneratorException {
         var reason = "gabier-daemon exited with code " + exitCode + " before it listened on " + socket
                 + "; its output is in " + log;
 
-        return new DaemonException(GeneratorException.internalServerError(CliErrorKey.DAEMON_START_FAILED)
+        return new DaemonException(GeneratorException.internalServerError(DaemonErrorKey.DAEMON_START_FAILED)
                 .message("The daemon did not start: " + reason)
                 .addParameter("socket", socket.toString())
                 .addParameter("log", log.toString())
@@ -49,7 +49,7 @@ final class DaemonException extends GeneratorException {
 
     /** The connection broke, or the daemon hung up without answering: a failure of the daemon, not of the request. */
     static DaemonException connectionFailed(String reason, @Nullable Exception cause) {
-        return new DaemonException(GeneratorException.internalServerError(CliErrorKey.DAEMON_CONNECTION_FAILED)
+        return new DaemonException(GeneratorException.internalServerError(DaemonErrorKey.DAEMON_CONNECTION_FAILED)
                 .message("The connection to the daemon failed: " + reason)
                 .cause(cause));
     }

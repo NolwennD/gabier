@@ -18,7 +18,8 @@ record ChangedFilesReply(Invocation invocation, ChangedFiles changed) {
     /** Asks the daemon for a change of files. */
     static ChangedFilesReply ask(Invocation invocation, String method, Map<String, String> params) {
         return new ChangedFilesReply(
-                invocation, ChangedFiles.of(invocation.ask(method, params).result()));
+                invocation,
+                ChangedFiles.of(invocation.daemon().ask(method, params).result()));
     }
 
     /** Whether the text of the answer holds nothing: no file changed and no diff. */

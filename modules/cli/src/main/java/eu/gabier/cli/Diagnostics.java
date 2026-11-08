@@ -30,8 +30,9 @@ final class Diagnostics implements Capability {
     @Override
     public void run(Invocation invocation) {
         var arguments = invocation.arguments().exactly(1);
-        var result = invocation.ask(
-                command().commandName(), Map.of("file", arguments.file(0).toString()));
+        var result = invocation
+                .daemon()
+                .ask(command().commandName(), Map.of("file", arguments.file(0).toString()));
         var diagnostics = FileDiagnostics.of(result.result());
         if (invocation.json()) {
             invocation.out().println(diagnostics.toJson());

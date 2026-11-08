@@ -7,12 +7,12 @@ import java.util.Arrays;
 import java.util.Optional;
 
 /** The executables of the tests that stand for {@code gabier-daemon}: shell scripts, so that the cli starts a process. */
-final class FakeDaemonScripts {
+public final class FakeDaemonScripts {
 
     private FakeDaemonScripts() {}
 
     /** An executable file with this body, written as {@code gabier-daemon} in the folder. */
-    static Path install(Path folder, String body) throws IOException {
+    public static Path install(Path folder, String body) throws IOException {
         Files.createDirectories(folder);
         var script = Files.writeString(folder.resolve("gabier-daemon"), "#!/bin/sh\n" + body + "\n");
         script.toFile().setExecutable(true);
@@ -21,7 +21,7 @@ final class FakeDaemonScripts {
     }
 
     /** A daemon that runs {@link FakeDaemonMain}, in a process of its own, on the class path of the tests. */
-    static Path installListening(Path folder) throws IOException {
+    public static Path installListening(Path folder) throws IOException {
         var java = ProcessHandle.current().info().command().orElseThrow();
 
         return install(
@@ -40,7 +40,7 @@ final class FakeDaemonScripts {
     }
 
     /** Ends the daemon whose log this is, which a test that started one must do. */
-    static void end(Path log) throws IOException {
+    public static void end(Path log) throws IOException {
         if (Files.exists(log)) {
             pidIn(log).flatMap(ProcessHandle::of).ifPresent(ProcessHandle::destroyForcibly);
         }

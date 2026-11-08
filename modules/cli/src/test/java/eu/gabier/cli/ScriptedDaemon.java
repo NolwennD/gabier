@@ -21,7 +21,7 @@ import java.util.concurrent.CountDownLatch;
  * (or nothing, or hangs up), then waits for the test to let it close the connection. It stands for the real daemon
  * that the end-to-end stage of {@code bin/ci} starts.
  */
-final class ScriptedDaemon implements AutoCloseable {
+public final class ScriptedDaemon implements AutoCloseable {
 
     private final ServerSocketChannel listener;
     private final String answer;
@@ -42,12 +42,12 @@ final class ScriptedDaemon implements AutoCloseable {
         Thread.ofVirtual().start(this::accept);
     }
 
-    ScriptedDaemon(Path socket, String answer) throws IOException {
+    public ScriptedDaemon(Path socket, String answer) throws IOException {
         this(socket, answer, new CountDownLatch(0));
     }
 
     /** The requests received so far, one line each. */
-    List<String> requests() {
+    public List<String> requests() {
         return requests;
     }
 

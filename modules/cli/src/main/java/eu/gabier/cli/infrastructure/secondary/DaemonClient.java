@@ -1,4 +1,4 @@
-package eu.gabier.cli;
+package eu.gabier.cli.infrastructure.secondary;
 
 import eu.gabier.protocol.RpcRequest;
 import eu.gabier.protocol.RpcResponse;

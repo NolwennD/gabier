@@ -77,10 +77,12 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   `@TempDir` and an explicit path: never the default path of the user, and keep the path short (107 bytes). The lazy
   start, its concurrency, its failure and retry and the stop are tested in `ProjectServerTest` with a counting starter and
   a hand-written language server (`ScriptedProject` stands for the project in `DaemonServerTest`). The cli is
-  tested the same way against `ScriptedDaemon` (`modules/cli/src/test`). The cli starting the daemon (`DaemonLauncher`:
+  tested the same way against `ScriptedDaemon` (`modules/cli/src/test`). The cli reaches the daemon through the port
+  `eu.gabier.cli.domain.Daemon`, whose adapter `SocketDaemon` is in `eu.gabier.cli.infrastructure.secondary` (with
+  `DaemonClient`, `DaemonLauncher`, `DaemonException` and `WaitNotice`). The cli starting the daemon (`DaemonLauncher`:
   next to its own binary, else on the `PATH`; log next to the socket; 20 seconds to listen) is tested with real
   processes: shell scripts named `gabier-daemon` (`FakeDaemonScripts`), one of which runs `FakeDaemonMain`, a daemon of
-  the test classes on a real socket (`DaemonLauncherTest`, `StartingTheDaemonTest`). Only the `native` stage runs the real cli
+  the test classes on a real socket (`DaemonLauncherTest`, in the package of the adapter, and `StartingTheDaemonTest`). Only the `native` stage runs the real cli
   against the real daemon.
 - The integration tests of the daemon (`modules/daemon/src/integrationTest`) all start a real jdtls and need
   `GABIER_JDTLS`, the path of the `jdtls` launcher (`mise exec -- ./gradlew jdtlsProbe` outside an activated mise); they

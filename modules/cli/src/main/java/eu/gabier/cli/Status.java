@@ -37,7 +37,7 @@ final class Status implements Capability {
     @Override
     public void run(Invocation invocation) {
         invocation.arguments().exactly(0);
-        var result = invocation.askRunning(command().commandName(), false);
+        var result = invocation.daemon().askRunning(command().commandName(), false);
         var status = DaemonStatus.of(result.result());
         invocation.out().println(invocation.json() ? status.toJson() : text(status));
     }

@@ -1,5 +1,7 @@
 package eu.gabier.cli;
 
+import eu.gabier.cli.domain.DaemonRefusal;
+import eu.gabier.cli.infrastructure.secondary.SocketDaemon;
 import eu.gabier.protocol.ExitCode;
 import eu.gabier.protocol.Problem;
 import eu.gabier.protocol.ProblemMapper;
@@ -24,7 +26,7 @@ public final class Gabier {
     }
 
     static int run(String[] args, Map<String, String> environment, PrintStream out, PrintStream err) {
-        return run(args, environment, out, err, WaitNotice.DELAY);
+        return run(args, environment, out, err, SocketDaemon.NOTICE_DELAY);
     }
 
     /** As {@link #run(String[], Map, PrintStream, PrintStream)}, with the time a request waits before its notice. */
@@ -40,7 +42,9 @@ public final class Gabier {
 
             return ExitCode.SUCCESS.value();
         } catch (DaemonRefusal refusal) {
-            return report(refusal.problem(), HelpPointer.after(refusal.problem(), words.getFirst()), json, err);
+            var problem = problemOf(refusal);
+
+            return report(problem, HelpPointer.after(problem, words.getFirst()), json, err);
         } catch (RuntimeException e) {
             return fail(e, json, err);
         }
@@ -66,7 +70,19 @@ public final class Gabier {
 
             return;
         }
-        capability.get().run(new Invocation(words, json, out, err, environment, noticeDelay));
+        var daemon = new SocketDaemon(environment, err, noticeDelay);
+        capability.get().run(new Invocation(words, json, out, daemon));
+    }
+
+    /** The problem object of a refusal of the daemon, as the daemon gave it. */
+    private static Problem problemOf(DaemonRefusal refusal) {
+        return new Problem(
+                refusal.type(),
+                refusal.title(),
+                refusal.detail(),
+                refusal.key(),
+                refusal.parameters(),
+                refusal.category());
     }
 
     /** Reports the failure as a problem object on the standard error, as JSON or as text, and gives the exit code. */

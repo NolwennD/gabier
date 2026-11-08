@@ -35,7 +35,7 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    JSON-RPC code `-32602` (`JsonRpc.PARAMETER`): a refusal of your own that is about one parameter does the same, with
    `addParameter(JsonRpc.PARAMETER, name)`; one that is not keeps `-32000`.
    Test it with the scripted method of `RequestHandlerTest` (`Reading`): its parameters, what it read, and that a
-   refused request never reaches `call`. The client writes them with `DaemonClient.call(method, params)`.
+   refused request never reaches `call`. The client writes them with `DaemonClient.call(method, params)` (in `eu.gabier.cli.infrastructure.secondary`).
    A method of the catalogue is a record around the use case of the core (`DiagnosticsMethod(Diagnose)`), which maps
    the domain types to the `protocol` ones; the positions stay 0-based in the protocol.
    A request has no optional parameter: an operation that can be asked in two ways is two methods (`rename`, by position,
@@ -82,12 +82,19 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      and refuses a wrong count, `exactly(count)` which keeps every word, `file(i)` as an absolute path, `position(i)` for
      `line:column` and `position(i, j)` for two numbers, both counted from 1 by the user and kept from 0; every refusal is
      the one usage error), asks the daemon and prints. A command of the catalogue (it asks for work on the project) calls
-     `invocation.ask(method, params)`, which starts `gabier-daemon` when nothing answers (`DaemonLauncher`); an
-     administrative command that must not start one (`status`, `stop`) calls `invocation.askRunning(method, awaitEnd)`.
+     `invocation.daemon().ask(method, params)`: `invocation.daemon()` is the port `Daemon` of `eu.gabier.cli.domain`
+     (a method with string parameters in, the members of the result out as a `DaemonReply`, a refusal thrown as a
+     `DaemonRefusal` that holds the problem as plain fields, no `protocol` type: the command decodes the reply with the
+     `protocol` types, outside the domain). Its adapter, `SocketDaemon` in `eu.gabier.cli.infrastructure.secondary`
+     (with `DaemonClient`, `DaemonLauncher`, `DaemonException`, `WaitNotice`), starts `gabier-daemon` when nothing
+     answers (`DaemonLauncher`) and is built by `Gabier`, the one class outside the adapters that names it (a rule of
+     `HexagonalArchTest`); a new way to the daemon is a method of the port, with its adapter. An
+     administrative command that must not start the daemon (`status`, `stop`) calls
+     `invocation.daemon().askRunning(method, awaitEnd)`.
      A command that answers with changed files shares `ChangedFilesReply` (`ask`, `print`, `isEmpty`: the list of files,
      the diff, the dry run), by composition, not by inheritance. A command that does not talk to the daemon (`help`)
      asks nothing and has no row in `docs/protocol.md`. Its output is text by default and the result with `--json`, a
-     refusal of the daemon printed as its problem object with the exit code of its category (`DaemonRefusal`);
+     refusal of the daemon printed as its problem object with the exit code of its category (`DaemonRefusal`, turned into the `Problem` by `Gabier`);
    - its name in the `permits` clause of the sealed interface `Capability`: a capability left out does not compile;
    - one `new` in the list of `Capabilities`, at its place in the order of `gabier help`. The list rejects two
      capabilities with one name when the class loads; no test compares it with `permits`.

@@ -1,5 +1,6 @@
-package eu.gabier.cli;
+package eu.gabier.cli.infrastructure.secondary;
 
+import eu.gabier.cli.domain.Daemon;
 import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.RpcResponse;
@@ -18,7 +19,7 @@ import java.util.function.Supplier;
  * {@link #close} has returned, so the line never comes after the answer. The line is for the person or the agent who
  * waits: the standard output stays the answer alone.
  */
-final class WaitNotice implements AutoCloseable {
+final class WaitNotice implements Daemon.Notice {
 
     /** How long a request waits before the first line. */
     static final Duration DELAY = Duration.ofSeconds(3);

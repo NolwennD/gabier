@@ -65,14 +65,16 @@ final class Actions implements Capability {
         var operands = invocation.arguments().exactly(3);
         var start = operands.position(1);
         var end = operands.position(2);
-        var result = invocation.ask(
-                command().commandName(),
-                Map.of(
-                        "file", operands.file(0).toString(),
-                        "startLine", String.valueOf(start.line()),
-                        "startColumn", String.valueOf(start.column()),
-                        "endLine", String.valueOf(end.line()),
-                        "endColumn", String.valueOf(end.column())));
+        var result = invocation
+                .daemon()
+                .ask(
+                        command().commandName(),
+                        Map.of(
+                                "file", operands.file(0).toString(),
+                                "startLine", String.valueOf(start.line()),
+                                "startColumn", String.valueOf(start.column()),
+                                "endLine", String.valueOf(end.line()),
+                                "endColumn", String.valueOf(end.column())));
         var offered = CodeActions.of(result.result());
         var out = invocation.out();
         if (invocation.json()) {

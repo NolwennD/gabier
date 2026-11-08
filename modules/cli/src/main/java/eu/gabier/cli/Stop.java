@@ -20,7 +20,7 @@ final class Stop implements Capability {
     @Override
     public void run(Invocation invocation) {
         invocation.arguments().exactly(0);
-        invocation.askRunning(command().commandName(), true);
+        invocation.daemon().askRunning(command().commandName(), true);
         invocation.out().println(invocation.json() ? "{\"stopped\":true}" : "gabier-daemon stopped");
     }
 }

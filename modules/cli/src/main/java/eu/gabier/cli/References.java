@@ -60,13 +60,15 @@ final class References implements Capability {
         var arguments = invocation.arguments();
         var operands = arguments.without(INCLUDE_DECLARATION).exactly(2);
         var position = operands.position(1);
-        var result = invocation.ask(
-                command().commandName(),
-                Map.of(
-                        "file", operands.file(0).toString(),
-                        "line", String.valueOf(position.line()),
-                        "column", String.valueOf(position.column()),
-                        "includeDeclaration", String.valueOf(arguments.has(INCLUDE_DECLARATION))));
+        var result = invocation
+                .daemon()
+                .ask(
+                        command().commandName(),
+                        Map.of(
+                                "file", operands.file(0).toString(),
+                                "line", String.valueOf(position.line()),
+                                "column", String.valueOf(position.column()),
+                                "includeDeclaration", String.valueOf(arguments.has(INCLUDE_DECLARATION))));
         var found = FoundReferences.of(result.result());
         if (invocation.json()) {
             invocation.out().println(found.toJson());

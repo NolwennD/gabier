@@ -1,8 +1,10 @@
-package eu.gabier.cli;
+package eu.gabier.cli.infrastructure.secondary;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import eu.gabier.cli.FakeDaemonScripts;
+import eu.gabier.cli.ScriptedDaemon;
 import eu.gabier.protocol.JsonRpc;
 import eu.gabier.protocol.RpcResponse;
 import eu.gabier.shared.error.domain.ErrorStatus;
