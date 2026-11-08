@@ -69,6 +69,9 @@ runs:
       uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
       with:
         java-version-file: .sdkmanrc
+        # The Gradle distribution of the wrapper and the dependencies of the build, keyed on the Gradle files: the first
+        # call of ./gradlew also downloads (services.gradle.org answered with a timeout on 08-11-2026).
+        cache: gradle
 
     # The step above must have given the release that `.sdkmanrc` pins, not another one.
     - name: Check the JDK of .sdkmanrc

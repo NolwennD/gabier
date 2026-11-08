@@ -1,7 +1,8 @@
 # Fills the caches of the build environment (.github/actions/setup-build) from `main`. A cache saved by a pull request is
 # seen by that request only, so the requests would each start cold: this run, on the default branch, saves what they
 # restore. It runs when a pin changes, every week (a cache nobody reads for seven days is evicted) and by hand; it
-# installs the environment and builds nothing.
+# installs the environment and runs `bin/ci --fast` (format, build, test), which downloads the Gradle distribution and the
+# dependencies that setup-java then keeps.
 name: Warm the caches
 
 on:
@@ -12,6 +13,8 @@ on:
       - mise.toml
       - scripts/jdtls-install.sh
       - build-logic/src/main/kotlin/gabier.java-module-conventions.gradle.kts
+      - gradle/**
+      - "**/*.gradle.kts"
       - .github/actions/setup-build/**
       - .github/workflows/warm-cache.yml
   schedule:
@@ -25,7 +28,7 @@ jobs:
   warm:
     name: warm
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Check out the code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -36,3 +39,6 @@ jobs:
         uses: ./.github/actions/setup-build
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch what the build downloads
+        run: mise exec -- bin/ci --fast
