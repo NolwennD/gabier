@@ -178,6 +178,19 @@ class GuideThroughMcpTest extends CliTest {
     }
 
     @Test
+    void saysToCallAgainWithoutDryRunWhereTheGuideSaysThenWithoutIt() {
+        var sections = new Guide(GuideTopic.text()).sections();
+
+        var answers = answersToEverySection(sections).stream()
+                .map(GuideThroughMcpTest::text)
+                .toList();
+
+        assertThat(sections).anySatisfy(section -> assertThat(section.how()).contains("then without `--dry-run`"));
+        assertThat(answers).noneSatisfy(text -> assertThat(text).contains("without `dryRun=true`"));
+        assertThat(answers).anySatisfy(text -> assertThat(text).contains("then call it again without `dryRun`"));
+    }
+
+    @Test
     void writesTheRenameByTokenAsTheToolRenameToken() {
         var tools = listedTools();
 

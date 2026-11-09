@@ -20,9 +20,27 @@ class ToolWordsTest {
     @Test
     void turnsAnOptionIntoTheBooleanParameterOfTheSameNameSetToTrue() {
         assertThat(ToolWords.of(
-                        "`gabier references [--include-declaration] <file>`; then without `--dry-run`, and check",
+                        "`gabier references [--include-declaration] <file>`; then `--dry-run`, and check", tools))
+                .isEqualTo("`references [includeDeclaration=true] <file>`; then `dryRun=true`, and check");
+    }
+
+    @Test
+    void saysToCallAgainWithoutTheParameterWhereTheTextSaysThenWithoutTheOption() {
+        assertThat(ToolWords.of(
+                        "Ask: `gabier organize-imports --dry-run <file>`, then without `--dry-run`, and `gabier"
+                                + " diagnostics <file>`.",
                         tools))
-                .isEqualTo("`references [includeDeclaration=true] <file>`; then without `dryRun=true`, and check");
+                .isEqualTo("Ask: `organize-imports dryRun=true <file>`, then call it again without `dryRun`, and"
+                        + " `diagnostics <file>`.");
+    }
+
+    @Test
+    void saysToCallAgainWithoutTheParameterWhateverTheOption() {
+        assertThat(ToolWords.of(
+                        "Ask: `gabier references --include-declaration <file>`; then without `--include-declaration`.",
+                        tools))
+                .isEqualTo("Ask: `references includeDeclaration=true <file>`; then call it again without"
+                        + " `includeDeclaration`.");
     }
 
     @Test
