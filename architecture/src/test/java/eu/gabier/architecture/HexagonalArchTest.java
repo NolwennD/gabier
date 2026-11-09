@@ -1,6 +1,5 @@
 package eu.gabier.architecture;
 
-import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
 import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.name;
 import static com.tngtech.archunit.lang.SimpleConditionEvent.violated;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
@@ -204,9 +203,13 @@ class HexagonalArchTest {
             assertThatCode(() -> rule.check(daemonClass)).doesNotThrowAnyException();
         }
 
-        @Test
-        void shouldBeAnHexagonalArchitecture() {
-            CONTEXTS.forEach(context -> layeredArchitecture()
+        /**
+         * The layers of a context. The entry point is a layer of its own, made of the one class that wires the adapters
+         * and starts the primary one (the composition root of the cli): it is the only thing that may reach an adapter
+         * from outside the layers, which the rule would otherwise count as a forbidden access.
+         */
+        private static ArchRule hexagonal(String context, String entryPoint) {
+            return layeredArchitecture()
                     .consideringOnlyDependenciesInAnyPackage(context + "..")
                     .withOptionalLayers(true)
                     .layer("domain")
@@ -217,18 +220,33 @@ class HexagonalArchTest {
                     .definedBy(context + ".infrastructure.primary..")
                     .layer("secondary adapters")
                     .definedBy(context + ".infrastructure.secondary..")
+                    .layer("entry point")
+                    .definedBy(name(entryPoint))
                     .whereLayer("application services")
                     .mayOnlyBeAccessedByLayers("primary adapters")
                     .whereLayer("primary adapters")
-                    .mayNotBeAccessedByAnyLayer()
+                    .mayOnlyBeAccessedByLayers("entry point")
                     .whereLayer("secondary adapters")
-                    .mayNotBeAccessedByAnyLayer()
-                    // The layers are optional, but a class outside them that reaches a secondary adapter still
-                    // counts as a layer access: the composition root of the cli is that class, see CliAdapters.
-                    .ignoreDependency(name(CLI_COMPOSITION_ROOT), resideInAPackage(CLI_ADAPTERS_PACKAGE + ".."))
-                    .ignoreDependency(name(CLI_COMPOSITION_ROOT), name(CLI_COMMAND_LINE))
-                    .because("Each bounded context should implement a hexagonal architecture")
-                    .check(CLASSES));
+                    .mayOnlyBeAccessedByLayers("entry point")
+                    .because("Each bounded context should implement a hexagonal architecture");
+        }
+
+        @Test
+        void shouldBeAnHexagonalArchitecture() {
+            CONTEXTS.forEach(context -> hexagonal(context, CLI_COMPOSITION_ROOT).check(CLASSES));
+        }
+
+        @Test
+        void shouldFindTheEntryPointWhereItStartsTheAdapters() {
+            // Without the entry point the rule fails on both accesses of the class that wires the cli: the secondary
+            // adapter it builds and the primary adapter it starts. The name and the layer are live.
+            ArchRule rule = hexagonal(ROOT_PACKAGE + ".cli", ROOT_PACKAGE + ".cli.NoSuchClass");
+
+            assertThatThrownBy(() -> rule.check(CLASSES))
+                    .isInstanceOf(AssertionError.class)
+                    .hasMessageContaining(CLI_COMPOSITION_ROOT + ".run(")
+                    .hasMessageContaining(CLI_ADAPTERS_PACKAGE)
+                    .hasMessageContaining(CLI_COMMAND_LINE);
         }
     }
 
