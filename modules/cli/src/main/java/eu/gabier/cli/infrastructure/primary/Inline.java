@@ -1,5 +1,6 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.domain.Operations;
 import java.util.Map;
 
 /**
@@ -9,7 +10,6 @@ import java.util.Map;
 final class Inline implements Capability {
 
     static final Command COMMAND = Command.called("inline")
-            .summary("replace a local variable, a method or a constant by its value")
             .usage("gabier [--json] inline [--dry-run] <file> <line>:<column>")
             .example("""
                 $ gabier inline --dry-run src/main/java/demo/Prices.java 4:22
@@ -18,21 +18,7 @@ final class Inline implements Capability {
                 modified /work/demo/src/main/java/demo/Checkout.java
                 ...\
                 """)
-            .asksTheDaemon(
-                    "language-server-not-inlinable: nothing the server can inline at the position (not on a variable,"
-                            + " a method or a constant; a variable assigned more than once; a recursive or abstract"
-                            + " method; a declaration that nothing uses)",
-                    Refusal.FILE_OUTSIDE_PROJECT,
-                    Refusal.FILE_MISSING,
-                    Refusal.NOT_A_FILE,
-                    Refusal.STALE_EDIT_OF_FILES,
-                    Refusal.NOT_READY)
-            .withNotes("""
-                The position is on the name of a local variable, a method or a constant.
-                A local variable is inlined everywhere, whatever the position.
-                A position on the declaration of a method or a constant inlines every use and removes it;
-                a position on one use inlines that use only and keeps the declaration.\
-                """);
+            .asksTheDaemon(Operations.INLINE);
 
     @Override
     public Command command() {

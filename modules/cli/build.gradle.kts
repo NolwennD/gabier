@@ -14,6 +14,10 @@ tasks.test {
   val commandPages = rootProject.layout.projectDirectory.dir("docs/commands")
   inputs.dir(commandPages).withPropertyName("commandPages")
   systemProperty("gabier.docs.commands", commandPages.asFile.path)
+  // The table of the methods of the daemon: the parameters of each operation are checked against its row.
+  val protocolPage = rootProject.layout.projectDirectory.file("docs/protocol.md")
+  inputs.file(protocolPage).withPropertyName("protocolPage")
+  systemProperty("gabier.docs.protocol", protocolPage.asFile.path)
 }
 
 // The guide of the improvements, `gabier help guide`: `docs/improve.md` is the one source (read on GitHub), copied into the

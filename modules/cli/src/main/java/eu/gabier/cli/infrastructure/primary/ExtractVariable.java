@@ -1,5 +1,7 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.domain.Operations;
+
 /**
  * {@code extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>}: the option may stand anywhere
  * after the command. The selection is the expression to extract, from its first character to the position just after
@@ -8,7 +10,6 @@ package eu.gabier.cli.infrastructure.primary;
 final class ExtractVariable implements Capability {
 
     static final Command COMMAND = Command.called("extract-variable")
-            .summary("turn an expression into a local variable")
             .usage("gabier [--json] extract-variable [--dry-run] <file> <line>:<column> <line>:<column> <name>")
             .example("""
                 $ gabier extract-variable --dry-run src/main/java/demo/Greeter.java 7:26 7:48 joined
@@ -16,14 +17,7 @@ final class ExtractVariable implements Capability {
                 modified /work/demo/src/main/java/demo/Greeter.java
                 ...\
                 """)
-            .asksTheDaemon(
-                    Refusal.NOT_EXTRACTABLE,
-                    "language-server-invalid-name: the name is not a Java identifier, or is a parameter of the method",
-                    Refusal.FILE_OUTSIDE_PROJECT,
-                    Refusal.FILE_MISSING,
-                    Refusal.NOT_A_FILE,
-                    Refusal.STALE_EDIT_OF_A_FILE,
-                    Refusal.NOT_READY);
+            .asksTheDaemon(Operations.EXTRACT_VARIABLE);
 
     @Override
     public Command command() {

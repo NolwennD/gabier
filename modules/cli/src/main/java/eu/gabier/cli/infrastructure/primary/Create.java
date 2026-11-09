@@ -1,5 +1,6 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.domain.Operations;
 import java.util.Map;
 
 /**
@@ -10,7 +11,6 @@ import java.util.Map;
 final class Create implements Capability {
 
     static final Command COMMAND = Command.called("create")
-            .summary("create a file that holds an empty class, interface, record or enum")
             .usage("gabier [--json] create [--dry-run] <file> <class|interface|record|enum>")
             .example("""
                 $ gabier create --dry-run src/main/java/demo/Widget.java class
@@ -26,22 +26,7 @@ final class Create implements Capability {
                 +
                 +}\
                 """)
-            .asksTheDaemon(
-                    "editing-file-exists: a file is already there; nothing is overwritten",
-                    "editing-folder-missing: a file is where a folder of the file would go; nothing is made",
-                    "editing-not-a-type-name: the name of the file, without .java, is not the name of a type",
-                    "language-server-not-creatable: the file is under no source folder of the project, or the Java"
-                            + " level of the project has no such type",
-                    Refusal.FILE_OUTSIDE_PROJECT,
-                    "invalid-parameter: the kind is not class, interface, record or enum",
-                    Refusal.NOT_READY)
-            .withNotes("""
-                The name of the type is the name of the file; the package line comes from the folder of the file.
-                A file in the default package has no package line.
-                The new type has no comment and an empty body.
-                The folders of the file that do not exist are made with it: a new package needs no mkdir.
-                A dry run makes none. A file where a folder would go is refused and nothing is made.\
-                """);
+            .asksTheDaemon(Operations.CREATE);
 
     @Override
     public Command command() {

@@ -1,6 +1,7 @@
 package eu.gabier.cli.infrastructure.primary;
 
 import eu.gabier.cli.application.ResultText;
+import eu.gabier.cli.domain.Operations;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.TerminalText;
 import java.util.Map;
@@ -15,13 +16,12 @@ import java.util.Map;
 final class Diagnostics implements Capability {
 
     static final Command COMMAND = Command.called("diagnostics")
-            .summary("the errors and warnings of a Java file, without a build")
             .usage("gabier [--json] diagnostics <file>")
             .example("""
                 $ gabier diagnostics src/main/java/demo/Broken.java
                 src/main/java/demo/Broken.java:5:16: error: Type mismatch: cannot convert from String to int\
                 """)
-            .asksTheDaemon(Refusal.FILE_OUTSIDE_PROJECT, Refusal.FILE_MISSING, Refusal.NOT_A_FILE, Refusal.NOT_READY);
+            .asksTheDaemon(Operations.DIAGNOSTICS);
 
     @Override
     public Command command() {

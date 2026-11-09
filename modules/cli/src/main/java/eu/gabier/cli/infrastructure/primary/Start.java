@@ -1,5 +1,6 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.domain.Operations;
 import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.Json;
@@ -15,31 +16,14 @@ import java.util.Optional;
  */
 final class Start implements Capability {
 
-    static final Command COMMAND = Command.called("start")
-            .summary("start the daemon and jdtls, so that the first command finds them ready")
-            .usage("""
+    static final Command COMMAND =
+            Command.called("start").usage("""
                 gabier [--json] start
                 gabier [--json] start --wait [--timeout=<seconds>]\
-                """)
-            .example("""
-                $ gabier start
-                gabier-daemon started, pid 4242, project /work/demo, jdtls starting; socket /run/user/1000/gabier/demo-6f1c0d4e.sock, log /run/user/1000/gabier/demo-6f1c0d4e.sock.log\
-                """)
-            .asksTheDaemon(
-                    "jdtls-start-failed: with --wait, jdtls failed to start (the reason follows when the daemon knows"
-                            + " it)",
-                    "jdtls-start-timeout: with --wait, jdtls was not ready after the time given; it keeps starting,"
-                            + " and the problem says where it was")
-            .withNotes("""
-                Start it first thing in a session, in the background, and work on something else: jdtls takes about a
-                minute to start and import a Gradle project, and the first command that needs it waits for all of it.
-                Without --wait the answer is at once: the daemon is started if none runs (its log is named then), jdtls
-                starts in it unless it is already starting or ready, and the answer says where jdtls is. With --wait the
-                answer comes when jdtls is ready, after at most --timeout seconds (300 by default); while it waits, a line
-                on the standard error says what jdtls is doing, as for any command that waits for it. A jdtls that is
-                ready is left alone. When the time passes, the refusal gives the last state of jdtls; jdtls goes on
-                starting in the daemon.\
-                """);
+                """).example("""
+                    $ gabier start
+                    gabier-daemon started, pid 4242, project /work/demo, jdtls starting; socket /run/user/1000/gabier/demo-6f1c0d4e.sock, log /run/user/1000/gabier/demo-6f1c0d4e.sock.log\
+                    """).asksTheDaemon(Operations.START);
 
     static final String WAIT = "--wait";
     static final String TIMEOUT = "--timeout=";

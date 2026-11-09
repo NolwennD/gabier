@@ -1,6 +1,7 @@
 package eu.gabier.cli.infrastructure.primary;
 
 import eu.gabier.cli.application.ResultText;
+import eu.gabier.cli.domain.Operations;
 import eu.gabier.protocol.CodeActions;
 import eu.gabier.protocol.TerminalText;
 import java.util.Map;
@@ -20,7 +21,6 @@ import java.util.Map;
 final class Actions implements Capability {
 
     static final Command COMMAND = Command.called("actions")
-            .summary("list the fixes and the rewrites the language server offers on a range")
             .usage("gabier [--json] actions <file> <line>:<column> <line>:<column>")
             .example("""
                 $ gabier actions src/main/java/demo/Offers.java 4:5 4:9
@@ -28,32 +28,7 @@ final class Actions implements Capability {
                 2 refactor.extract.variable Extract to local variable -> gabier extract-variable
                 ...\
                 """)
-            .asksTheDaemon(
-                    "editing-invalid-range: the range ends before it starts",
-                    Refusal.FILE_OUTSIDE_PROJECT,
-                    Refusal.FILE_MISSING,
-                    Refusal.NOT_A_FILE,
-                    Refusal.NOT_READY)
-            .withNotes("""
-                Nothing is written. The range is two positions, each line:column from 1, the end excluded; to ask\
-                 about a point, give it twice.
-                The actions are the fixes of the problems the range holds (a type that is not imported, a method to\
-                 create) and the rewrites of the code it covers (a concatenation to a text block, an extraction).\
-                 The actions of a whole file (organize the imports, generate accessors) are not listed: they are not\
-                 about a range.
-                Each line is the number of the action in the list, its kind (quickfix, refactor.extract.variable,\
-                 quickassist, ...) and its title. The kind and the title are the language server's own text, which\
-                 gabier does not interpret. A range with nothing offered prints "no actions" and exits with 0.
-                An action that a command of gabier also does is followed by "-> gabier <command>", read from its kind\
-                 (and, for the kind refactor.inline that "Make Static" shares, from its title, which must start with\
-                 "Inline"): extract-variable, extract-field, extract-method and extract-constant (the same file and\
-                 range, then the name to give), and inline (the file and one position, on the name). The command\
-                 is not always what the action does: extract-variable replaces the selected expression only, so the\
-                 action "Extract to local variable (replace all occurrences)" is linked to it but replaces every\
-                 occurrence, which only apply-action does. Prefer the command when the name matters: apply-action\
-                 takes the name jdtls guesses. With --json the action has a member "command", only when there is one.
-                To apply one as the server proposes it, give its title to gabier apply-action with the same range.\
-                """);
+            .asksTheDaemon(Operations.ACTIONS);
 
     @Override
     public Command command() {

@@ -103,10 +103,12 @@ $ gabier help frobnicate
 Usage error: Unknown command; the commands are diagnostics, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move, inline, create, references, actions, apply-action, start, status, stop, init-agent, help (usage-error; command=frobnicate)
 ```
 
-**Where the text lives.** The help text of every command is written once, in the class of its capability in the cli
-(`modules/cli`), as the constant `COMMAND` built by `Command.called(...)`: a step builder asks for the summary, the usage,
-the example and the family of refusals one after the other, so a command without one of them does not compile (the notes
-are optional). The order of `gabier help` is the order of the list in `Capabilities`. It is not
+**Where the text lives.** The help text of every command is written once. What the daemon does (the summary, the notes,
+the refusals of the method) is in its operation, `eu.gabier.cli.domain.Operations`; what is the command line's own (the
+usage, the example, the operations it runs) is in the class of its capability in the cli (`modules/cli`), as the constant
+`COMMAND` built by `Command.called(...)`: a step builder asks for the usage, the example and the family of refusals one
+after the other, so a command without one of them does not compile. `help` and `init-agent` are no operation of the
+daemon and hold their own summary and notes. The order of `gabier help` is the order of the list in `Capabilities`. It is not
 copied from these pages, which say more (the reasons, the limits); the help says what an agent needs to call the command
 and read its refusals. When a command changes, change its constant and its page together. The refusals are the one part
 the pages hold too: each page has a `## Refusals` section, one bullet per key (`` - `key`: what it means ``), and

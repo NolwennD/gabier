@@ -1,5 +1,6 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.domain.Operations;
 import java.util.Map;
 
 /**
@@ -11,7 +12,6 @@ import java.util.Map;
 final class ApplyAction implements Capability {
 
     static final Command COMMAND = Command.called("apply-action")
-            .summary("apply the fix or the rewrite the language server offers on a range, chosen by its title")
             .usage("gabier [--json] apply-action [--dry-run] <file> <line>:<column> <line>:<column> <title>")
             .example("""
                 $ gabier apply-action --dry-run src/main/java/demo/Offers.java 4:5 4:9 "Import 'List' (java.util)"
@@ -23,28 +23,7 @@ final class ApplyAction implements Capability {
                 @@ ... @@
                 ...\
                 """)
-            .asksTheDaemon(
-                    "editing-no-such-code-action: the server offers no action with this title on the range; the problem"
-                            + " lists the ones it offers",
-                    "editing-ambiguous-code-action: several actions have this title on the range; the problem lists"
-                            + " them, and a narrower range may leave one",
-                    "language-server-not-applicable: the action gives no edit (it is a command for an editor, such as a"
-                            + " dialog to fill in, or it changes nothing)",
-                    "editing-invalid-range: the range ends before it starts",
-                    Refusal.FILE_OUTSIDE_PROJECT,
-                    Refusal.FILE_MISSING,
-                    Refusal.NOT_A_FILE,
-                    Refusal.STALE_EDIT_OF_FILES,
-                    Refusal.NOT_READY)
-            .withNotes("""
-                The title is the one gabier actions lists for the same file and range, exactly as written: the number\
-                 of an action changes from one call to the next, the title does not.
-                A title that no action has is refused with the titles the range offers; one that several have, with\
-                 those actions. Nothing is written.
-                Some actions of the language server are commands for an editor: they ask a question (a dialog) or a\
-                 place before they change anything, and give no edit. They are listed by gabier actions and refused\
-                 here as language-server-not-applicable.\
-                """);
+            .asksTheDaemon(Operations.APPLY_ACTION);
 
     @Override
     public Command command() {

@@ -1,5 +1,6 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.domain.Operations;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -12,7 +13,6 @@ import java.util.stream.Collectors;
 final class Cleanup implements Capability {
 
     static final Command COMMAND = Command.called("cleanup")
-            .summary("apply clean-ups of the language server to a file, such as stringConcatToTextBlock")
             .usage("gabier [--json] cleanup [--dry-run] <file> <cleanup>...")
             .example("""
                 $ gabier cleanup --dry-run src/main/java/demo/Banner.java stringConcatToTextBlock
@@ -24,28 +24,7 @@ final class Cleanup implements Capability {
                 @@ ... @@
                 ...\
                 """)
-            .asksTheDaemon(
-                    "editing-unknown-clean-up: an identifier is not a clean-up of the language server; the problem"
-                            + " lists the ones it knows (organizeImports is not one: use organize-imports)",
-                    Refusal.FILE_OUTSIDE_PROJECT,
-                    Refusal.FILE_MISSING,
-                    Refusal.NOT_A_FILE,
-                    Refusal.STALE_EDIT_OF_A_FILE,
-                    Refusal.NOT_READY)
-            .withNotes("""
-                Each clean-up rewrites the whole file, in the order given, on the text the one before left.
-                A clean-up applies to the whole file; for one place only, ask gabier actions for the range, then give\
-                 the title of the action to gabier apply-action (for a text block, "Convert String concatenation to\
-                 Text Block").
-                The identifiers are those of jdtls: addDeprecated, addFinalModifier, addOverride,
-                instanceofPatternMatch, invertEquals, lambdaExpression, lambdaExpressionFromAnonymousClass,
-                qualifyMembers, qualifyStaticMembers, redundantComparisonStatement,
-                redundantFallingThroughBlockEnd, redundantIfCondition, redundantModifiers, redundantSuperCall,
-                renameUnusedLocalVariables, stringConcatToTextBlock, switchExpression, tryWithResource,
-                useSwitchForInstanceofPattern.
-                A file with nothing to clean up is not an error: the answer is nothing to change.
-                To organize the imports, use gabier organize-imports.\
-                """);
+            .asksTheDaemon(Operations.CLEANUP);
 
     @Override
     public Command command() {

@@ -41,6 +41,15 @@ objects like the others, with exit code 1. See [start](commands/start.md).
 
 ## How the cli is built
 
+An operation the daemon serves is declared once, in `eu.gabier.cli.domain.Operations`: its method, summary, notes,
+refusals and typed parameters (`Operation`, `Parameter`; a position is counted from 1 there). The command line keeps only
+what is its own, in the `Command` of the command (`eu.gabier.cli.infrastructure.primary`): the usage line, the example,
+and the operations it runs (`rename` runs two). `gabier help` prints what the operations say; a test
+(`OperationParametersTest`) fails when the parameters of an operation, those of the usage line and the row of
+[the protocol](protocol.md) disagree. A new operation is declared in `Operations`
+([add-daemon-method](../.claude/skills/add-daemon-method/SKILL.md), step 5).
+
+
 The cli (`modules/cli`, package `eu.gabier.cli`) is a hexagon. The command line is its primary adapter, in
 `eu.gabier.cli.infrastructure.primary` (`CommandLine`, the commands `Rename`, `Diagnostics`... and their tests); only `Gabier`,
 the entry point and composition root, stays in `eu.gabier.cli`. The commands

@@ -1,55 +1,116 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.domain.Operation;
 import eu.gabier.shared.error.domain.Assert;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
+import java.util.stream.Collectors;
 
 /**
- * What {@code gabier help} says about a command, written once, in the class of its {@link Capability}: its name, a
- * one-line summary, the usage, an example, the notes to read before the call (none for most commands) and the refusals
- * it can answer. A command is built with {@link #called(String)}, which asks for the parts one after the other, so that
- * one left out does not compile, and ends by choosing the family of its refusals. A new optional datum gets a default
- * in the builder and a {@code withXxx} method here, which only the commands that need it call.
+ * What {@code gabier help} says about a command: its name, the usage, an example, and the operations of the daemon it
+ * runs ({@link Operation}, which hold the summary, the notes, the refusals and the parameters, written once in the
+ * domain). The command line keeps only what is its own: how a person types the command, and the refusals that a
+ * command line meets whatever it asks (a usage error, a daemon that cannot be reached). A command that never reaches
+ * the daemon ({@code help}, {@code init-agent}) has no operation, and holds its own summary, notes and refusals. A
+ * command is built with {@link #called(String)}, which asks for the parts one after the other, so that one left out
+ * does not compile, and ends by choosing the family of its refusals.
  *
  * @param commandName the word that names it on the command line
- * @param summary one line: what it does
  * @param usage the command line, one line per form
  * @param example an example of a call and of its answer, the call on a line that starts with {@code $ }
- * @param notes what a person must know before running the command, none (empty) for most of them
- * @param refusals the refusals, each as the key of its problem, a colon and what it means
+ * @param operations the operations of the daemon it runs, in the order of its usage lines; none for a command of the
+ *     cli alone
+ * @param ownSummary the summary of a command that has no operation, else empty
+ * @param ownNotes the notes of a command that has no operation, else empty
+ * @param commandLineRefusals the refusals of the command line, which follow those of its operations; all of them for a
+ *     command that has no operation
  */
-record Command(String commandName, String summary, String usage, String example, String notes, List<String> refusals) {
+record Command(
+        String commandName,
+        String usage,
+        String example,
+        List<Operation> operations,
+        String ownSummary,
+        String ownNotes,
+        List<String> commandLineRefusals) {
 
     Command {
         Assert.field("commandName", commandName).notBlank().noWhitespace();
-        Assert.notBlank("summary", summary);
         Assert.field("usage", usage)
                 .matchesPattern(Pattern.compile("(?s).*gabier \\[--json] " + Pattern.quote(commandName) + "\\b.*"));
         Assert.field("example", example).matchesPattern(Pattern.compile("(?s)\\$ gabier .*"));
-        Assert.notNull("notes", notes);
-        Assert.field("refusals", refusals).notEmpty().noNullElement();
-        refusals.forEach(refusal -> Assert.notBlank("refusal", refusal));
-        refusals = List.copyOf(refusals);
+        Assert.field("operations", operations).notNull().noNullElement();
+        Assert.notNull("ownSummary", ownSummary);
+        Assert.notNull("ownNotes", ownNotes);
+        Assert.field("commandLineRefusals", commandLineRefusals).notEmpty().noNullElement();
+        commandLineRefusals.forEach(refusal -> Assert.notBlank("refusal", refusal));
+        if (operations.isEmpty()) {
+            Assert.notBlank("ownSummary", ownSummary);
+        } else if (!ownSummary.isEmpty() || !ownNotes.isEmpty()) {
+            throw new IllegalArgumentException("The command " + commandName + " has operations: they say what it does");
+        }
+        operations = List.copyOf(operations);
+        commandLineRefusals = List.copyOf(commandLineRefusals);
     }
 
     /** Starts the declaration of the command that this word names on the command line. */
-    static SummaryStep called(String commandName) {
+    static UsageStep called(String commandName) {
         return new Builder(commandName);
     }
 
-    /** The same command with notes, printed by {@code help} between the example and the refusals. */
-    Command withNotes(String notes) {
-        Assert.notBlank("notes", notes);
-
-        return new Command(commandName, summary, usage, example, notes, refusals);
+    /** One line: what it does, as its first operation says it. */
+    String summary() {
+        return operations.isEmpty() ? ownSummary : operations.getFirst().summary();
     }
 
-    /** The step that asks for the summary. */
-    interface SummaryStep {
+    /** What a person must know before running it: the notes of its operations, one after the other; often none. */
+    String notes() {
+        return operations.isEmpty()
+                ? ownNotes
+                : operations.stream()
+                        .map(Operation::notes)
+                        .filter(notes -> !notes.isEmpty())
+                        .collect(Collectors.joining("\n"));
+    }
 
-        /** One line: what the command does. */
-        UsageStep summary(String summary);
+    /**
+     * The refusals, each as the key of its problem, a colon and what it means: those of its operations, where the ones
+     * of a later operation that its first one does not have are put before the first refusal that both have, then those
+     * of the command line.
+     */
+    List<String> refusals() {
+        var refusals = new ArrayList<String>();
+        for (var operation : operations) {
+            mergeInto(refusals, operation.refusals());
+        }
+        refusals.addAll(commandLineRefusals);
+
+        return List.copyOf(refusals);
+    }
+
+    /** The same standalone command with notes, printed by {@code help} between the example and the refusals. */
+    Command withNotes(String notes) {
+        Assert.notBlank("notes", notes);
+        if (!operations.isEmpty()) {
+            throw new IllegalArgumentException("The notes of " + commandName + " are those of its operations");
+        }
+
+        return new Command(commandName, usage, example, operations, ownSummary, notes, commandLineRefusals);
+    }
+
+    private static void mergeInto(List<String> merged, List<String> refusals) {
+        var pending = new ArrayList<String>();
+        for (var refusal : refusals) {
+            var at = merged.indexOf(refusal);
+            if (at < 0) {
+                pending.add(refusal);
+            } else {
+                merged.addAll(at, pending);
+                pending.clear();
+            }
+        }
+        merged.addAll(pending);
     }
 
     /** The step that asks for the usage. */
@@ -66,35 +127,27 @@ record Command(String commandName, String summary, String usage, String example,
         RefusalsStep example(String example);
     }
 
-    /** The last step: the family of refusals decides which refusals every command of that family answers. */
+    /** The last step: the family of the command decides which refusals of the command line it answers. */
     interface RefusalsStep {
 
-        /** A command that asks the daemon, starting it if need be: its own refusals, then the ones of every such command. */
-        Command asksTheDaemon(String... own);
+        /** A command that asks the daemon, starting it if need be, for these operations. */
+        Command asksTheDaemon(Operation... operations);
 
-        /** A command that asks a daemon that is running and never starts one. */
-        Command asksARunningDaemon();
+        /** A command that asks a daemon that is running for this operation, and never starts one. */
+        Command asksARunningDaemon(Operation operation);
 
-        /** A command that never talks to the daemon: exactly these refusals. */
-        Command standalone(String... refusals);
+        /** A command that never talks to the daemon: what it does, and exactly these refusals. */
+        Command standalone(String summary, String... refusals);
     }
 
-    private static final class Builder implements SummaryStep, UsageStep, ExampleStep, RefusalsStep {
+    private static final class Builder implements UsageStep, ExampleStep, RefusalsStep {
 
         private final String commandName;
-        private String summary = "";
         private String usage = "";
         private String example = "";
 
         private Builder(String commandName) {
             this.commandName = commandName;
-        }
-
-        @Override
-        public UsageStep summary(String summary) {
-            this.summary = summary;
-
-            return this;
         }
 
         @Override
@@ -112,20 +165,32 @@ record Command(String commandName, String summary, String usage, String example,
         }
 
         @Override
-        public Command asksTheDaemon(String... own) {
-            return standalone(Stream.concat(
-                            Stream.of(own), Stream.of(Refusal.USAGE, Refusal.START_FAILED, Refusal.CONNECTION_FAILED))
-                    .toArray(String[]::new));
+        public Command asksTheDaemon(Operation... operations) {
+            return new Command(
+                    commandName,
+                    usage,
+                    example,
+                    List.of(operations),
+                    "",
+                    "",
+                    List.of(Refusal.USAGE, Refusal.START_FAILED, Refusal.CONNECTION_FAILED));
         }
 
         @Override
-        public Command asksARunningDaemon() {
-            return standalone(Refusal.NOT_RUNNING, Refusal.USAGE, Refusal.CONNECTION_FAILED);
+        public Command asksARunningDaemon(Operation operation) {
+            return new Command(
+                    commandName,
+                    usage,
+                    example,
+                    List.of(operation),
+                    "",
+                    "",
+                    List.of(Refusal.NOT_RUNNING, Refusal.USAGE, Refusal.CONNECTION_FAILED));
         }
 
         @Override
-        public Command standalone(String... refusals) {
-            return new Command(commandName, summary, usage, example, "", List.of(refusals));
+        public Command standalone(String summary, String... refusals) {
+            return new Command(commandName, usage, example, List.of(), summary, "", List.of(refusals));
         }
     }
 }

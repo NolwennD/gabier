@@ -7,7 +7,6 @@ package eu.gabier.cli.infrastructure.primary;
 final class Help implements Capability {
 
     static final Command COMMAND = Command.called("help")
-            .summary("list the commands, or explain one")
             .usage("""
                 gabier [--json] help [<command>]
                 gabier [--json] help guide
@@ -21,7 +20,7 @@ final class Help implements Capability {
                 gabier [--json] rename [--dry-run] <file> <line> <column> <new-name>
                 ...\
                 """)
-            .standalone(Refusal.USAGE);
+            .standalone("list the commands, or explain one", Refusal.USAGE);
 
     @Override
     public Command command() {

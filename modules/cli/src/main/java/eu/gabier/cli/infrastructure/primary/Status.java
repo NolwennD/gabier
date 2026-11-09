@@ -1,5 +1,6 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.domain.Operations;
 import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.TerminalText;
 import java.util.ArrayList;
@@ -13,21 +14,12 @@ import java.util.stream.Collectors;
 final class Status implements Capability {
 
     static final Command COMMAND = Command.called("status")
-            .summary("the project the daemon serves, and where jdtls is")
             .usage("gabier [--json] status")
             .example("""
                 $ gabier status
                 gabier-daemon 0.1.0, pid 4242, up 65s, project /work/demo, jdtls not-started\
                 """)
-            .asksARunningDaemon()
-            .withNotes("""
-                jdtls is in one of four states: not-started (no request has needed it yet), starting, ready, or
-                failed (the reason follows in parentheses when it is known). While it is starting, the line also says
-                what it is doing and for how long it has been doing it: launching jdtls (its process and its runtime
-                come up), then importing the project (for a Gradle project, jdtls runs the build), with the last task
-                it reported. With --json, the same is the member jdtlsProgress (phase, message, spentMillis), present
-                only while jdtls is starting. A request made while jdtls is starting waits for it.\
-                """);
+            .asksARunningDaemon(Operations.STATUS);
 
     @Override
     public Command command() {

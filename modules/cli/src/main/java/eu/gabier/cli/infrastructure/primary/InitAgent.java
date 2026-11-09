@@ -15,7 +15,6 @@ import java.util.List;
 final class InitAgent implements Capability {
 
     static final Command COMMAND = Command.called("init-agent")
-            .summary("write the instructions for a coding agent into the project, as a skill, a rule or a snippet")
             .usage("""
                 gabier [--json] init-agent [--dry-run] [--force] [--target=<folder>] [--only=<command>,...] \
                 <skill|rule|snippet>\
@@ -32,6 +31,7 @@ final class InitAgent implements Capability {
                 <!-- gabier:end -->\
                 """)
             .standalone(
+                    "write the instructions for a coding agent into the project, as a skill, a rule or a snippet",
                     Refusal.USAGE,
                     "init-agent-file-exists: the file exists and gabier did not write it (it holds no gabier block);"
                             + " --force overwrites it",

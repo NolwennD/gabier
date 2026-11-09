@@ -57,25 +57,34 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    `TerminalText.neutralise`, as the text of `gabier status` does.
 5. **The cli command**, if there is one: a **capability** of `modules/cli`, a class of its own that holds its help text,
    in the package `eu.gabier.cli.infrastructure.primary` (the command line, with `Capabilities` and `CommandLine`).
-   Three things, and no other file changes:
+   Five things, and no other file changes:
+   - the **operation**, declared once in `eu.gabier.cli.domain.Operations` (no protocol type, no JSON): a constant
+     `public static final Operation <NAME> = new Operation(method, summary, notes, refusals, parameters)`, added to
+     `all()` in the order of the table of `docs/protocol.md`. It is the one place that names the **typed parameters**
+     of the method (`Parameter.string`, `.integer`, `.bool`, `.array`: name as the daemon reads it, description; every
+     parameter of a method is required; a position is counted from 1 on this side, and the description says so), the
+     one-line **summary**, the optional **notes** (a warning to read before the call: `move-type-to-file` and `inline`
+     are the models) and the **refusals** of the method, `<key>: <meaning>`, in the order `gabier help` lists them. A
+     refusal that more than one operation answers is a constant of `Refusals` (the file, the language server and the
+     stale edit ones), not a copy; a parameter that more than one shares is one of `Parameters`. An operation that can be
+     asked in two ways is two operations (`RENAME`, `RENAME_TOKEN`). A key of the method that says the language server
+     declined the operation (`language-server-not-...`) goes into `DECLINED_OPERATIONS` of `HelpPointer`, so that its
+     refusal ends with the pointer to `gabier help <name>`. Any other front end (MCP) builds its tool from this
+     descriptor, not from the command line;
    - a final class implementing `Capability` (`command()`, `run(Invocation)`), named after the command (`Rename`,
-     `OrganizeImports`; `Diagnostics`, `Status` are the models). It declares its **help text** once, as the constant
-     `static final Command COMMAND = Command.called("<name>")`, which a step builder fills one part after the other, so
-     that a part left out does not compile: `.summary(...)` (one line), `.usage(...)` (one line per form, each starting
-     with `gabier [--json] <name>`), `.example(...)` (a call on a line that starts with `$ gabier `, and its answer),
-     then the family of refusals: `.asksTheDaemon(own...)` for a command that asks the daemon, starting it if need be
-     (its own refusals, `<key>: <meaning>`, in the order `gabier help` lists them; `usage-error`, `daemon-start-failed`
-     and `daemon-connection-failed` are added), `.asksARunningDaemon()` for one that never starts it (`status`, `stop`),
-     or `.standalone(refusals...)` for one that never talks to it (`help`). A refusal that more than one command
-     answers is a constant of `Refusal` (the file, the language server and the stale edit ones), not a copy. A key
-     of the method that says the language server declined the operation (`language-server-not-...`) goes into
-     `DECLINED_OPERATIONS` of `HelpPointer`, so that its refusal ends with the pointer to `gabier help <name>`. The
-     invariants (non-blank parts, the usage names the command, the example starts with `$ gabier `) are `Assert`s of the
-     compact constructor of `Command`. A warning to read before the call goes in the optional **notes**, `.withNotes(...)`
-     on the built command (`move-type-to-file` and `inline` are the models), printed by `help` between the example and
-     the refusals and added to the JSON of `help` when there are some. A new optional datum of the help text is a default
-     of the builder and a `withXxx(...)` of `Command`, called only by the commands that have it. `command()` returns
-     `COMMAND`. `gabier help`, `gabier help <command>` and `gabier <command> --help` (handled once, in the dispatch of
+     `OrganizeImports`; `Diagnostics`, `Status` are the models). It declares what is the command line's own, once, as
+     the constant `static final Command COMMAND = Command.called("<name>")`, which a step builder fills one part after
+     the other, so that a part left out does not compile: `.usage(...)` (one line per form, each starting with
+     `gabier [--json] <name>`), `.example(...)` (a call on a line that starts with `$ gabier `, and its answer), then
+     the family of refusals and the operations it runs: `.asksTheDaemon(Operations.X...)` for a command that asks the
+     daemon, starting it if need be (`usage-error`, `daemon-start-failed` and `daemon-connection-failed` are added to the
+     refusals of its operations; a command with two operations, `rename`, has one usage line for each, in the order of
+     its operations), `.asksARunningDaemon(Operations.X)` for one that never starts it (`status`, `stop`), or
+     `.standalone(summary, refusals...)` for one that never talks to it (`help`, `init-agent`: they are no operation of
+     the daemon, so they hold their own summary and refusals, and `.withNotes(...)` for their notes). The summary, the
+     notes and the refusals that `gabier help` prints are those of the operations. The invariants (the usage names the
+     command, the example starts with `$ gabier `) are `Assert`s of the compact constructor of `Command`. `command()`
+     returns `COMMAND`. `gabier help`, `gabier help <command>` and `gabier <command> --help` (handled once, in the dispatch of
      `Gabier`, for every command) print it, and `UsageException` points to them: nothing else lists the commands, so the
      usage text is not edited. The refusals are the keys of the `## Refusals` section of the command's page (below):
      `CommandRefusalsTest` fails when they differ. `run` reads the words with `invocation.arguments()`
@@ -96,6 +105,10 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      the diff, the dry run), by composition, not by inheritance. A command that does not talk to the daemon (`help`)
      asks nothing and has no row in `docs/protocol.md`. Its output is text by default and the result with `--json`, a
      refusal of the daemon printed as its problem object with the exit code of its category (`DaemonRefusal`, turned into the `Problem` by `Gabier`);
+   - the row of the method in the table of `docs/protocol.md`, with the same parameters: `OperationParametersTest`
+     fails when the parameters of the operation, those of the usage line of its command (`<new-name>` for `newName`,
+     `<line>:<column>` for `line` and `column`, two of them for the four of a range; a word it does not know fails the
+     test, and is added to its table) and the row disagree, or when a row has no operation;
    - its name in the `permits` clause of the sealed interface `Capability`: a capability left out does not compile;
    - one `new` in the list of `Capabilities`, at its place in the order of `gabier help`. The list rejects two
      capabilities with one name when the class loads; no test compares it with `permits`.

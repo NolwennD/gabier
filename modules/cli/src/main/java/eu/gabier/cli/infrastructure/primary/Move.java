@@ -1,5 +1,6 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.domain.Operations;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -15,7 +16,6 @@ import java.util.stream.IntStream;
 final class Move implements Capability {
 
     static final Command COMMAND = Command.called("move")
-            .summary("move Java classes to a package, creating the package when it does not exist")
             .usage("gabier [--json] move [--dry-run] <file>... <package>")
             .example("""
                 $ gabier move --dry-run src/main/java/demo/Invoice.java demo.billing
@@ -25,34 +25,7 @@ final class Move implements Capability {
                 renamed /work/demo/src/main/java/demo/Invoice.java -> /work/demo/src/main/java/demo/billing/Invoice.java
                 ...\
                 """)
-            .asksTheDaemon(
-                    """
-                    language-server-not-movable-to-package: the files cannot go to the package (the reason says why:\
-                     already in it, a file of that name there, not a Java source, in no source folder, in\
-                     several source folders, the folder cannot be made, or the language server has no change\
-                     to make)\
-                    """,
-                    "editing-not-a-package-name: the last operand is not a package name (the default package, a"
-                            + " keyword, an empty part)",
-                    Refusal.FILE_OUTSIDE_PROJECT,
-                    Refusal.FILE_MISSING,
-                    Refusal.NOT_A_FILE,
-                    "editing-file-exists: a file to create appeared since the language server answered",
-                    Refusal.STALE_EDIT_OF_FILES,
-                    Refusal.NOT_READY)
-            .withNotes("""
-                The last operand is the package, such as demo.billing; the other operands are the files to move.
-                The package is created, with its folder, when it does not exist; a dry run creates nothing.
-                The default package cannot be the target.
-                The files must be Java sources of one source folder of the project.
-                The references and the imports of the project follow the moved classes, the fully qualified names
-                too, and a nested type keeps its outer type (Invoice.Line). A name in a string literal or a comment
-                is not rewritten.
-                jdtls does not sort the imports it writes: run gabier organize-imports on the modified files.
-                When no Java file is left in the old package, its exports and opens in module-info.java follow it.
-                A member that was package-private in the old package, used from there, is no longer reachable.
-                Run gabier diagnostics on the files that use it after the move.\
-                """);
+            .asksTheDaemon(Operations.MOVE);
 
     @Override
     public Command command() {
