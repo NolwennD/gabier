@@ -88,6 +88,25 @@ final class McpExchange {
         return request("1", "tools/call", "{" + members + "," + MODERN_META + "}");
     }
 
+    /** The line of a call of the tool of this name, under this id, with these arguments as JSON, in the modern era. */
+    static String modernCall(String id, String name, String arguments) {
+        return request(
+                id,
+                "tools/call",
+                "{\"name\":" + Json.quote(name) + ",\"arguments\":" + arguments + "," + MODERN_META + "}");
+    }
+
+    /** As {@link #modernCall(String, String, String)}, from a client that asks to be told how it goes with this token. */
+    static String modernCall(String id, String name, String arguments, String progressToken) {
+        return request(
+                id,
+                "tools/call",
+                "{\"name\":" + Json.quote(name) + ",\"arguments\":" + arguments + ",\"_meta\":{"
+                        + "\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\","
+                        + "\"io.modelcontextprotocol/clientCapabilities\":{},\"progressToken\":" + progressToken
+                        + "}}");
+    }
+
     /** The line of a call of the tool of this name with these arguments, as JSON, in the modern era. */
     static String modernCall(String name, String arguments) {
         return modernCall("\"name\":" + Json.quote(name) + ",\"arguments\":" + arguments);
@@ -124,11 +143,25 @@ final class McpExchange {
         return serverOf(daemon, silent(), warmUp);
     }
 
+    /** A server over this daemon whose calls that wait keep this time. */
+    static McpServer serverOf(Daemon daemon, ManualTime time) {
+        return serverOf(daemon, silent(), noWarmUp(), time.pacing());
+    }
+
+    /** A server over this daemon, that logs on this stream, and begins this warm-up, whose calls keep this time. */
+    static McpServer serverOf(Daemon daemon, WarmUp warmUp, ManualTime time) {
+        return serverOf(daemon, silent(), warmUp, time.pacing());
+    }
+
     private static McpServer serverOf(Daemon daemon, PrintStream err, WarmUp warmUp) {
+        return serverOf(daemon, err, warmUp, Pacing.real());
+    }
+
+    private static McpServer serverOf(Daemon daemon, PrintStream err, WarmUp warmUp, Pacing pacing) {
         var backend = new McpServer.Backend(
                 new OperationRunner(daemon), operation -> "command-of-" + operation.method(), new Guide(GUIDE));
 
-        return new McpServer(backend, err, INSTRUCTIONS, warmUp);
+        return new McpServer(backend, err, INSTRUCTIONS, warmUp, pacing);
     }
 
     /** A warm-up that starts nothing, for the tests that are not about it. */

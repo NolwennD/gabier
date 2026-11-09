@@ -1,5 +1,6 @@
 package eu.gabier.cli.application;
 
+import eu.gabier.cli.application.InvalidValuesException.OperationName;
 import eu.gabier.cli.domain.Guide;
 import eu.gabier.cli.domain.GuideSection;
 import eu.gabier.cli.domain.ranking.Ranking;
@@ -15,7 +16,7 @@ import java.util.stream.IntStream;
  */
 public final class AskTheGuide {
 
-    private static final String QUESTION = "guide";
+    private static final OperationName QUESTION = new OperationName("guide");
     private static final String TASK = "task";
 
     private AskTheGuide() {}

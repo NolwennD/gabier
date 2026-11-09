@@ -1,6 +1,7 @@
 package eu.gabier.cli.infrastructure.primary.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -59,6 +60,23 @@ class WarmUpTest {
         assertThat(log.toString(StandardCharsets.UTF_8))
                 .isEqualTo("gabier mcp: the daemon could not be started: gabier-daemon was not found"
                         + System.lineSeparator());
+    }
+
+    @Test
+    void takesAnErrorOfTheProcessForAStartThatFailedToo() {
+        var warmUp = new WarmUp(
+                () -> {
+                    throw new UnsatisfiedLinkError("no spawn in the image");
+                },
+                err,
+                Runnable::run);
+
+        warmUp.begin();
+
+        assertThatCode(warmUp::awaitEnd).doesNotThrowAnyException();
+        assertThat(log.toString(StandardCharsets.UTF_8))
+                .isEqualTo(
+                        "gabier mcp: the daemon could not be started: no spawn in the image" + System.lineSeparator());
     }
 
     @Test

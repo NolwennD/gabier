@@ -79,7 +79,9 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      command-line word (`--json`, `gabier <command>`) in the description of any tool or of its parameters: what only a
      person at the command line reads (an option, the text it prints, `line:column`) goes in `.withNotes(...)` of its
      `Command`, which `help` prints after the notes of the operation. If an agent should know the tool before it needs it,
-     name it between backticks in `mcp-instructions.md` (a test checks that every tool named there is listed);
+     name it between backticks in `mcp-instructions.md` (a test checks that every tool named there is listed, and that
+     every tool that changes code, one with no `readOnlyHint`, is named there: a new one fails it until the text says it);
+     a parameter that holds a path is `Parameter.path` (or `paths`), so that the runner refuses it empty;
    - a final class implementing `Capability` (`command()`, `run(Invocation)`), named after the command (`Rename`,
      `OrganizeImports`; `Diagnostics`, `Status` are the models). It declares what is the command line's own, once, as
      the constant `static final Command COMMAND = Command.called("<name>")`, which a step builder fills one part after

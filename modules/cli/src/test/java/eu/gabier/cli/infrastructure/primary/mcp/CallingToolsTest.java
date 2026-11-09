@@ -6,6 +6,7 @@ import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.at;
 import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.exchange;
 import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.modernCall;
 import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.notification;
+import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.number;
 import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.object;
 import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.request;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -185,6 +186,20 @@ class CallingToolsTest {
         }
 
         @Test
+        void refusesOneFileWhereAListOfFilesIsAsked() {
+            var daemon = new StubDaemon();
+
+            var answer = exchange(
+                            daemon,
+                            modernCall("move", "{\"files\":\"/work/A.java\",\"package\":\"demo\",\"dryRun\":false}"))
+                    .getFirst();
+
+            assertThat(at(answer, "result", "structuredContent", "detail"))
+                    .isEqualTo("The value files of the operation move must be a list of texts");
+            assertThat(daemon.asked()).isEmpty();
+        }
+
+        @Test
         void sendsAFileThatIsNotAPathAsItIsForTheDaemonToRefuse() {
             var daemon = new StubDaemon().answering(NOTHING.toJson());
 
@@ -345,6 +360,49 @@ class CallingToolsTest {
         }
 
         @Test
+        void refusesAnEmptyFileAsAnInvalidValueInsteadOfSendingTheFolderOfTheServer() {
+            var daemon = new StubDaemon();
+
+            var answers = exchange(
+                    daemon,
+                    modernCall("diagnostics", "{\"file\":\"\"}"),
+                    modernCall("move", "{\"files\":[\"/work/A.java\",\"\"],\"package\":\"demo\",\"dryRun\":false}"));
+
+            assertThat(answers).hasSize(2).allSatisfy(answer -> {
+                assertThat(at(answer, "result", "isError")).isEqualTo(true);
+                assertThat(at(answer, "result", "structuredContent", "key")).isEqualTo("operation-invalid-values");
+            });
+            assertThat(at(answers.get(0), "result", "structuredContent", "detail"))
+                    .isEqualTo("The value file of the operation diagnostics must not be empty");
+            assertThat(at(answers.get(1), "result", "structuredContent", "detail"))
+                    .isEqualTo("The value files of the operation move must not have an empty element");
+            assertThat(daemon.asked()).isEmpty();
+        }
+
+        @Test
+        void tellsAnErrorOfTheProcessAsAFailedCallAndGoesOn() {
+            var log = new ByteArrayOutputStream();
+            var daemon = new StubDaemon().crashing(new NoClassDefFoundError("java/lang/ProcessBuilder"));
+
+            var answers = exchange(
+                    daemon,
+                    new PrintStream(log, true, StandardCharsets.UTF_8),
+                    modernCall("1", "diagnostics", "{\"file\":\"/work/A.java\"}"),
+                    McpExchange.modern("2", "ping"));
+
+            assertThat(answers).hasSize(2);
+            var call = answers.stream()
+                    .filter(answer -> at(answer, "id").equals(number(1)))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(at(call, "result", "isError")).isEqualTo(true);
+            assertThat(at(call, "result", "structuredContent", "key")).isEqualTo("internal-server-error");
+            assertThat(log.toString(StandardCharsets.UTF_8))
+                    .contains("gabier mcp: the call of diagnostics failed")
+                    .contains("java/lang/ProcessBuilder");
+        }
+
+        @Test
         void tellsADaemonThatCannotBeReachedAsAFailedCallWithoutItsInternals() {
             var daemon = new StubDaemon().failing(new IllegalStateException("socket /secret/path broke"));
 
@@ -398,7 +456,9 @@ class CallingToolsTest {
                     daemon, modernCall("diagnostics", "{\"file\":\"/work/A.java\"}"), McpExchange.modern("2", "ping"));
 
             assertThat(answers).hasSize(2);
-            assertThat(at(answers.get(1), "id")).isEqualTo(McpExchange.number(2));
+            assertThat(answers)
+                    .extracting(answer -> at(answer, "id"))
+                    .containsExactlyInAnyOrder(McpExchange.number(1), McpExchange.number(2));
         }
     }
 

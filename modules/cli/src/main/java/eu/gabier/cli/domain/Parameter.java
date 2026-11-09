@@ -25,6 +25,16 @@ public record Parameter(String name, Type type, boolean required, String descrip
         return new Parameter(name, Type.STRING, true, description);
     }
 
+    /** A required parameter that holds a path, the text that names a file of the project. */
+    public static Parameter path(String name, String description) {
+        return new Parameter(name, Type.PATH, true, description);
+    }
+
+    /** A required parameter that holds a list of paths. */
+    public static Parameter paths(String name, String description) {
+        return new Parameter(name, Type.PATHS, true, description);
+    }
+
     /** A required parameter that holds a whole number that is no position. */
     public static Parameter integer(String name, String description) {
         return new Parameter(name, Type.INTEGER, true, description);
@@ -53,6 +63,10 @@ public record Parameter(String name, Type type, boolean required, String descrip
     public enum Type {
         /** A text, sent as it is. */
         STRING,
+        /** A text that names a file: it is never empty (an empty path would be the working directory), sent as it is. */
+        PATH,
+        /** A list of paths, each as a {@link #PATH} is, sent as an {@link #ARRAY} is. */
+        PATHS,
         /** A whole number that is no position, sent in decimal. */
         INTEGER,
         /** A line or a column, a whole number from 1; the daemon counts from 0, so it is sent less one. */

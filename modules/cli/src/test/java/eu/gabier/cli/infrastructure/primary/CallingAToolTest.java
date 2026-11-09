@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,9 @@ class CallingAToolTest extends CliTest {
         "_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}\
         """;
 
+    /** The ids of the calls: each is its own, since a call that has not ended owns its id. */
+    private static final AtomicInteger IDS = new AtomicInteger();
+
     @AfterEach
     void endTheDaemon() throws IOException {
         FakeDaemonScripts.end(directory.resolve("gabier.sock.log"));
@@ -39,8 +43,8 @@ class CallingAToolTest extends CliTest {
 
     private static String call(String name, String arguments) {
         return """
-            {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"%s","arguments":%s,%s}}\
-            """.formatted(name, arguments, MODERN_META);
+            {"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":"%s","arguments":%s,%s}}\
+            """.formatted(IDS.incrementAndGet(), name, arguments, MODERN_META);
     }
 
     /** What {@code gabier mcp} wrote on the standard output for these lines, one JSON value for each answer. */

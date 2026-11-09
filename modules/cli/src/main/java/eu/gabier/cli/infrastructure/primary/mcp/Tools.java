@@ -130,11 +130,11 @@ final class Tools {
 
     private static String property(Parameter parameter) {
         var shape = switch (parameter.type()) {
-            case STRING -> "\"type\":\"string\"";
+            case STRING, PATH -> "\"type\":\"string\"";
             case INTEGER -> "\"type\":\"integer\"";
             case POSITION -> "\"type\":\"integer\",\"minimum\":1";
             case BOOLEAN -> "\"type\":\"boolean\"";
-            case ARRAY -> "\"type\":\"array\",\"items\":{\"type\":\"string\"}";
+            case ARRAY, PATHS -> "\"type\":\"array\",\"items\":{\"type\":\"string\"}";
         };
 
         return "{" + shape + ",\"description\":" + Json.quote(parameter.description()) + "}";

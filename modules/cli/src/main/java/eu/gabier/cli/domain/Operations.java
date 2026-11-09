@@ -224,7 +224,7 @@ public final class Operations {
                     Refusals.STALE_EDIT_OF_FILES,
                     Refusals.NOT_READY),
             List.of(
-                    Parameter.array("files", "the Java files to move, absolute paths"),
+                    Parameter.paths("files", "the Java files to move, absolute paths"),
                     Parameter.string("package", "the package to move them to, in dotted form"),
                     DRY_RUN));
 

@@ -38,6 +38,19 @@ class DiagnosticsTest extends CliTest {
         }
     }
 
+    @Test
+    void refusesAnEmptyFileNameAsAnInvalidValueInsteadOfReadingTheWorkingDirectory() throws IOException {
+        try (var daemon = daemonAnswering(CLEAN)) {
+            assertThat(runWithSocket("diagnostics", "")).isEqualTo(2);
+
+            assertThat(out()).isEmpty();
+            assertThat(err())
+                    .contains("The value file of the operation diagnostics must not be empty")
+                    .contains("operation-invalid-values");
+            assertThat(daemon.requests()).isEmpty();
+        }
+    }
+
     private static String resultOf(String message) {
         return new FileDiagnostics(
                         List.of(new FileDiagnostics.Diagnosis(FileDiagnostics.Severity.ERROR, 0, 0, message)))

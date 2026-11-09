@@ -29,6 +29,9 @@ final class DaemonLauncher {
     /** How long a started daemon has to listen on its socket. It binds first, jdtls starts later, at a request. */
     static final Duration START_DELAY = Duration.ofSeconds(20);
 
+    /** What the starts of a daemon take turns on: the log file of a start is written by that start alone. */
+    private static final Object LAUNCH = new Object();
+
     private static final String DAEMON_NAME = "gabier-daemon";
     private static final Pattern PATH_SEPARATOR = Pattern.compile(Pattern.quote(File.pathSeparator));
     private static final long POLL_MILLIS = 25;
@@ -66,7 +69,15 @@ final class DaemonLauncher {
      * @throws DaemonException when the daemon cannot be started or does not come up
      */
     DaemonClient connect(Path socket) {
-        return DaemonClient.tryConnect(socket).orElseGet(() -> start(socket));
+        var running = DaemonClient.tryConnect(socket);
+        if (running.isPresent()) {
+            return running.get();
+        }
+        // One start at a time in this process: calls that run together (the server of MCP answers several at once)
+        // would each launch a daemon and write its log, and the one that comes second finds the socket of the first.
+        synchronized (LAUNCH) {
+            return DaemonClient.tryConnect(socket).orElseGet(() -> start(socket));
+        }
     }
 
     /** Where the output of the daemon that the cli starts for this socket goes. */

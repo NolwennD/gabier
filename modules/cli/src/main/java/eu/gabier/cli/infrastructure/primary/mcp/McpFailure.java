@@ -40,6 +40,11 @@ final class McpFailure extends RuntimeException {
         return new McpFailure(INVALID_REQUEST, "Invalid Request", null);
     }
 
+    /** The message is a request, and says what is wrong with it. */
+    static McpFailure invalidRequest(String detail) {
+        return new McpFailure(INVALID_REQUEST, "Invalid Request: " + detail, null);
+    }
+
     /** No method of that name. */
     static McpFailure methodNotFound() {
         return new McpFailure(METHOD_NOT_FOUND, "Method not found", null);

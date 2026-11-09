@@ -105,6 +105,21 @@ class JsonTest {
         }
 
         @Test
+        void keepsTheTextOfANumberAsItWasWritten() {
+            var numbers = (List<?>) Json.parse("[1.0,1e2,-0,12345678901234567890123,0.50]");
+
+            assertThat(numbers)
+                    .map(number -> Json.sourceOf((BigDecimal) number))
+                    .containsExactly("1.0", "1e2", "-0", "12345678901234567890123", "0.50");
+        }
+
+        @Test
+        void writesANumberThatWasNotReadAsItsPlainValue() {
+            assertThat(Json.sourceOf(new BigDecimal("1E+2"))).isEqualTo("1E+2");
+            assertThat(Json.sourceOf(BigDecimal.TEN)).isEqualTo("10");
+        }
+
+        @Test
         void readsTheEscapesOfAString() {
             assertThat(Json.parse("\"\\\"\\\\\\/\\b\\f\\n\\r\\t\\u00e9\"")).isEqualTo("\"\\/\b\f\n\r\té");
         }

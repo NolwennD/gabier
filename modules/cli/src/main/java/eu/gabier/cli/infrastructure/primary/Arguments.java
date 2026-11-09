@@ -127,10 +127,13 @@ record Arguments(List<String> all, List<String> operands) {
 
     /**
      * The operand at this index as a file: the absolute path, not cleaned. The daemon's working directory is not the one
-     * of the cli, and only the daemon cleans paths.
+     * of the cli, and only the daemon cleans paths. An empty operand stays empty, which is no path: made absolute it
+     * would be the working directory, and the operation refuses it as an invalid value.
      */
     Path file(int index) {
-        return Path.of(operand(index)).toAbsolutePath();
+        var operand = operand(index);
+
+        return operand.isEmpty() ? Path.of(operand) : Path.of(operand).toAbsolutePath();
     }
 
     /** The operand at this index as {@code line:column}, each from 1. */

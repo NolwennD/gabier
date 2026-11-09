@@ -12,8 +12,9 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.concurrent.Executor;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -26,7 +27,18 @@ import org.jspecify.annotations.Nullable;
  * metadata. A request is served in the era it names, or, with no metadata, in the earlier one once {@code initialize}
  * has come.
  *
- * <p>No SDK and no library: the cli is a native image. The only state is whether {@code initialize} has come.
+ * <p>The server reads the client on one thread and answers on it what needs no daemon, in the order the messages come
+ * (the handshake, {@code ping}, the list of the tools, the guide, a call whose values are wrong). A call that asks the
+ * daemon runs in a thread of its own ({@link Calls}), so that the server goes on reading while it waits for the start
+ * of the daemon, the import of the project by jdtls or a slow answer: its answer is written when it ends, which can be
+ * after the answer to a message that came later (the id tells them apart). Calls are not ordered among themselves: a
+ * host that needs one to end before the next asks for it waits for its answer. At the end of the input the server waits
+ * for the calls that have not ended, so that what was asked is answered. A call that has waited too long is answered
+ * as a failed call, and a call that carries a {@code progressToken} is told, every few seconds, where jdtls is. A
+ * {@code notifications/cancelled} ends the call it names with no answer.
+ *
+ * <p>No SDK and no library: the cli is a native image. The state is whether {@code initialize} has come, which only the
+ * thread that reads the client touches, and the calls that run.
  */
 public final class McpServer {
 
@@ -46,6 +58,10 @@ public final class McpServer {
     /** The tools do not change while the server runs: an hour is a hint, not a promise ({@code ttlMs}). */
     private static final int TTL_MILLISECONDS = 3_600_000;
 
+    /** Where a call that asks the daemon runs: a thread of its own, which does not keep the program alive. */
+    private static final Executor CALL_THREADS =
+            task -> Thread.ofPlatform().daemon().name("gabier-mcp-call").start(task);
+
     private static final String SERVER_INFO =
             "{\"name\":\"gabier\",\"version\":" + Json.quote(ProtocolVersion.CURRENT.value()) + "}";
 
@@ -54,6 +70,7 @@ public final class McpServer {
     private final ToolCalls calls;
     private final String instructions;
     private final WarmUp warmUp;
+    private final Pacing pacing;
     private boolean initialized;
 
     /**
@@ -74,9 +91,14 @@ public final class McpServer {
      * @param warmUp what starts the daemon at the first handshake, so that it is ready when the first call comes
      */
     public McpServer(Backend backend, PrintStream err, String instructions, WarmUp warmUp) {
+        this(backend, err, instructions, warmUp, Pacing.real());
+    }
+
+    McpServer(Backend backend, PrintStream err, String instructions, WarmUp warmUp, Pacing pacing) {
         calls = new ToolCalls(tools, backend, err);
         this.instructions = instructions;
         this.warmUp = warmUp;
+        this.pacing = pacing;
     }
 
     /** The era a request is served in. */
@@ -87,43 +109,70 @@ public final class McpServer {
 
     /**
      * Serves the client until it closes its output (the end of the input): reads a line, answers it when it is a
-     * request, and goes on, whatever the line holds.
+     * request, and goes on, whatever the line holds. Then waits for the calls that have not ended.
      *
      * @param in what the client writes, read as UTF-8
      * @param out where the answers go, one line each, written as UTF-8 whatever the encoding of the stream
      */
     public void serve(InputStream in, PrintStream out) {
+        var output = new Output(out);
+        var running = new Calls(output, pacing, CALL_THREADS);
         new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))
                 .lines()
                 .filter(line -> !line.isBlank())
-                .forEach(line -> answer(line).ifPresent(answer -> write(out, answer)));
+                .forEach(line -> read(line, output, running));
+        running.drain();
     }
 
-    private Optional<String> answer(String line) {
-        return switch (Incoming.of(line)) {
-            case Incoming.Silent _ -> Optional.empty();
-            case Incoming.Refused refused -> Optional.of(refused.failure().toJson(refused.id()));
-            case Incoming.Request request -> Optional.of(answer(request));
-        };
+    private void read(String line, Output output, Calls running) {
+        switch (Incoming.of(line)) {
+            case Incoming.Silent _ -> {}
+            case Incoming.Notification notification -> notified(notification, running);
+            case Incoming.Refused refused -> output.write(refused.failure().toJson(refused.id()));
+            case Incoming.Request request -> answer(request, output, running);
+        }
     }
 
-    private String answer(Incoming.Request request) {
+    /** The one notification the server reads: the cancellation of a call, which ends it with no answer. */
+    private static void notified(Incoming.Notification notification, Calls running) {
+        if (notification.method().equals("notifications/cancelled")) {
+            Incoming.keyOf(notification.params().get("requestId")).ifPresent(running::cancel);
+        }
+    }
+
+    private void answer(Incoming.Request request, Output output, Calls running) {
         try {
-            return "{\"jsonrpc\":\"2.0\",\"id\":" + request.id() + ",\"result\":" + result(request) + "}";
+            if (request.method().equals("tools/call")) {
+                call(request, output, running);
+
+                return;
+            }
+            output.write("{\"jsonrpc\":\"2.0\",\"id\":" + request.id() + ",\"result\":" + result(request) + "}");
         } catch (McpFailure failure) {
-            return failure.toJson(request.id());
+            output.write(failure.toJson(request.id()));
         }
     }
 
     private String result(Incoming.Request request) {
         return switch (request.method()) {
             case "initialize" -> initialize(request.params());
-            case "ping" -> "{}";
+            case "ping" -> ping(request.params());
             case "server/discover" -> discover(request.params());
             case "tools/list" -> toolsList(request.params());
-            case "tools/call" -> toolsCall(request.params());
             default -> throw McpFailure.methodNotFound();
         };
+    }
+
+    /**
+     * {@code ping}, which revision 2026-07-28 removed and the hosts still send: it is answered whatever the era, even
+     * before {@code initialize}. A request that names the modern era in its metadata gets what every result of that era
+     * holds ({@code resultType}), the others the empty result.
+     */
+    private static String ping(Map<String, @Nullable Object> params) {
+        var modern =
+                params.get("_meta") instanceof Map<?, ?> meta && MODERN_VERSION.equals(meta.get(PROTOCOL_VERSION_KEY));
+
+        return modern ? modern("") : "{}";
     }
 
     /** The handshake of the earlier era: the version asked when the server knows it, else its latest. */
@@ -157,16 +206,45 @@ public final class McpServer {
         };
     }
 
-    /** A call of a tool, in the era its metadata names: its result says whether the operation worked. */
-    private String toolsCall(Map<String, @Nullable Object> params) {
+    /**
+     * A call of a tool, in the era its metadata names: its result says whether the operation worked. Everything that
+     * needs no daemon is decided here, on the thread that reads the client, and answered at once; what asks the daemon
+     * runs in a thread of its own, after the warm-up that may be starting it (a call that does not ask it, {@code
+     * status}, does not wait for it).
+     */
+    private void call(Incoming.Request request, Output output, Calls running) {
+        var params = request.params();
         var era = eraOf(params);
-        warmUp.awaitEnd();
-        var members = calls.call(params);
+        Function<String, String> answer = members -> "{\"jsonrpc\":\"2.0\",\"id\":" + request.id() + ",\"result\":"
+                + (era == Era.MODERN ? modern(members) : "{" + members + "}") + "}";
+        switch (calls.prepare(params)) {
+            case ToolCalls.Done done -> output.write(answer.apply(done.members()));
+            case ToolCalls.Waiting waiting -> {
+                Supplier<String> work = () -> {
+                    if (waiting.asksDaemon()) {
+                        warmUp.awaitEnd();
+                    }
 
-        return switch (era) {
-            case MODERN -> modern(members);
-            case EARLIER -> "{" + members + "}";
-        };
+                    return calls.complete(waiting);
+                };
+                var job = new Calls.Job(
+                        request.id(),
+                        request.key(),
+                        progressTokenOf(params),
+                        answer,
+                        work,
+                        calls::status,
+                        () -> calls.timedOut(pacing.bound()));
+                if (!running.start(job)) {
+                    throw McpFailure.invalidRequest("the id is the one of a request that has not been answered yet");
+                }
+            }
+        }
+    }
+
+    /** The token that asks to be told how the call goes, as JSON, none when the request carries none. */
+    private static @Nullable String progressTokenOf(Map<String, @Nullable Object> params) {
+        return params.get("_meta") instanceof Map<?, ?> meta ? Incoming.jsonIdOf(meta.get("progressToken")) : null;
     }
 
     /** What the server offers: tools, which never change while it runs. */
@@ -184,8 +262,8 @@ public final class McpServer {
 
     /** A result of the modern era: it says it is complete and who the server is, besides what it holds. */
     private static String modern(String members) {
-        return "{\"resultType\":\"complete\"," + members + ",\"_meta\":{\"io.modelcontextprotocol/serverInfo\":"
-                + SERVER_INFO + "}}";
+        return "{\"resultType\":\"complete\"," + (members.isEmpty() ? "" : members + ",")
+                + "\"_meta\":{\"io.modelcontextprotocol/serverInfo\":" + SERVER_INFO + "}}";
     }
 
     /**
@@ -220,17 +298,5 @@ public final class McpServer {
         }
 
         return Era.MODERN;
-    }
-
-    /**
-     * One line, in UTF-8 bytes (a {@code PrintStream} would use the encoding of the platform, which can be ASCII where
-     * the cli runs). The line and paragraph separators are escaped, which JSON allows only in a string, the only place
-     * they can be: a reader that splits lines on them would cut the message.
-     */
-    private static void write(PrintStream out, String answer) {
-        var line = answer.replace("\u2028", "\\u2028").replace("\u2029", "\\u2029") + "\n";
-        var bytes = line.getBytes(StandardCharsets.UTF_8);
-        out.write(bytes, 0, bytes.length);
-        out.flush();
     }
 }

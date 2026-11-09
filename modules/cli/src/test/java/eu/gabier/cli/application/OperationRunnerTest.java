@@ -2,6 +2,7 @@ package eu.gabier.cli.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import eu.gabier.cli.domain.Daemon;
 import eu.gabier.cli.domain.DaemonRefusal;
@@ -373,6 +374,33 @@ class OperationRunnerTest {
         }
 
         @Test
+        void refusesAnEmptyPathSinceAFrontEndThatMadeItAbsoluteWouldHaveSentItsWorkingDirectory() {
+            assertThatThrownBy(() -> runner.run(Operations.DIAGNOSTICS, Map.of("file", "")))
+                    .isInstanceOf(InvalidValuesException.class)
+                    .hasMessage("The value file of the operation diagnostics must not be empty");
+        }
+
+        @Test
+        void refusesAPathThatIsNotATextAsAnyOtherText() {
+            assertThatThrownBy(() -> runner.run(Operations.DIAGNOSTICS, Map.of("file", 7)))
+                    .isInstanceOf(InvalidValuesException.class)
+                    .hasMessage("The value file of the operation diagnostics must be a text");
+        }
+
+        @Test
+        void checksTheValuesWhenItPreparesACallAndAsksTheDaemonOnlyWhenTheCallRuns() {
+            daemon.answers(new FileDiagnostics(List.of()).toJson());
+
+            var wrong = catchThrowable(() -> runner.prepare(Operations.DIAGNOSTICS, Map.of("file", "")));
+            var prepared = runner.prepare(Operations.DIAGNOSTICS, Map.of("file", "/project/A.java"));
+
+            assertThat(wrong).isInstanceOf(InvalidValuesException.class);
+            assertThat(daemon.asked).isEmpty();
+            assertThat(prepared.get()).isEqualTo(new OperationResult.Diagnosed(new FileDiagnostics(List.of())));
+            assertThat(daemon.asked).hasSize(1);
+        }
+
+        @Test
         void refusesAListThatIsNotOne() {
             assertThatThrownBy(() ->
                             runner.run(Operations.MOVE, Map.of("files", "A.java", "package", "p", "dryRun", true)))
@@ -470,10 +498,10 @@ class OperationRunnerTest {
                 .forEach(parameter -> values.put(
                         parameter.name(),
                         switch (parameter.type()) {
-                            case STRING -> "x";
+                            case STRING, PATH -> "x";
                             case INTEGER, POSITION -> 1;
                             case BOOLEAN -> false;
-                            case ARRAY -> List.of("x");
+                            case ARRAY, PATHS -> List.of("x");
                         }));
 
         return values;

@@ -17,7 +17,8 @@ public final class WarmUp {
     private final Runnable start;
     private final PrintStream err;
     private final Executor executor;
-    private @Nullable CompletableFuture<Void> running;
+    /** Begun by the thread that reads the client, awaited by the threads of the calls. */
+    private volatile @Nullable CompletableFuture<Void> running;
 
     /**
      * A warm-up that runs the start with this executor.
@@ -55,15 +56,18 @@ public final class WarmUp {
 
     /** Waits for the start that is running to end; returns at once when none was begun, or when it ended. */
     void awaitEnd() {
-        if (running != null) {
-            running.join();
+        var begun = running;
+        if (begun != null) {
+            begun.join();
         }
     }
 
     private void startQuietly() {
         try {
             start.run();
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException | Error failure) {
+            // An Error as well (a class or a library that is missing, as when the native image spawns a process): the
+            // thread of the warm-up must end quietly, or the call that waits for it would be thrown the Error.
             err.println("gabier mcp: the daemon could not be started: " + failure.getMessage());
         }
     }

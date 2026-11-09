@@ -63,6 +63,19 @@ class MovingToAPackageTest extends CliTest {
     }
 
     @Test
+    void refusesAnEmptyFileNameAsAnInvalidValueInsteadOfMovingTheWorkingDirectory() throws IOException {
+        try (var daemon = daemonAnswering(MODIFIED.toJson())) {
+            assertThat(runWithSocket("move", "/project/A.java", "", "demo")).isEqualTo(2);
+
+            assertThat(out()).isEmpty();
+            assertThat(err())
+                    .contains("The value files of the operation move must not have an empty element")
+                    .contains("operation-invalid-values");
+            assertThat(daemon.requests()).isEmpty();
+        }
+    }
+
+    @Test
     void showsWhatATerminalWouldObeyInTheRefusedPackageNameAsAnEscape() throws IOException {
         var refusal = new Problem(
                 "urn:gabier:error:editing-not-a-package-name",

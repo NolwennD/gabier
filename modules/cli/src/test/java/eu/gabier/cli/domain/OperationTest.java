@@ -69,13 +69,17 @@ class OperationTest {
                                 Parameter.integer("b", "number"),
                                 Parameter.position("c", "line"),
                                 Parameter.bool("d", "flag"),
-                                Parameter.array("e", "list"))
+                                Parameter.array("e", "list"),
+                                Parameter.path("f", "file"),
+                                Parameter.paths("g", "files"))
                         .map(Parameter::type))
                 .containsExactly(
                         Parameter.Type.STRING,
                         Parameter.Type.INTEGER,
                         Parameter.Type.POSITION,
                         Parameter.Type.BOOLEAN,
-                        Parameter.Type.ARRAY);
+                        Parameter.Type.ARRAY,
+                        Parameter.Type.PATH,
+                        Parameter.Type.PATHS);
     }
 }

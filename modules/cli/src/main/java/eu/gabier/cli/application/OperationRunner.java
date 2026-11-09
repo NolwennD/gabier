@@ -1,5 +1,6 @@
 package eu.gabier.cli.application;
 
+import eu.gabier.cli.application.InvalidValuesException.OperationName;
 import eu.gabier.cli.domain.Daemon;
 import eu.gabier.cli.domain.Operation;
 import eu.gabier.cli.domain.Parameter;
@@ -14,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 
 /**
  * The one way to run an operation, whatever front end asks for it: it checks the named values against the descriptor of
@@ -49,8 +51,24 @@ public final class OperationRunner {
      * @throws IllegalArgumentException when the operation is not one that asks the daemon for a result to decode
      */
     public OperationResult run(Operation operation, Map<String, Object> values) {
+        return prepare(operation, values).get();
+    }
+
+    /**
+     * Checks the values and gives what asks the daemon, which is not asked yet: a front end that must not wait for the
+     * daemon to refuse a call that is wrong in itself checks first, and asks after.
+     *
+     * @throws GeneratorException when {@link #run} would, before it asks the daemon
+     * @throws IllegalArgumentException when the operation is not one that asks the daemon for a result to decode
+     */
+    public Supplier<OperationResult> prepare(Operation operation, Map<String, Object> values) {
         var kind = kindOf(operation);
         var parameters = parameters(operation, values);
+
+        return () -> ask(operation, kind, parameters);
+    }
+
+    private OperationResult ask(Operation operation, Kind kind, Map<String, String> parameters) {
         var result = (kind == Kind.REPORTED
                         ? daemon.askRunning(operation.method(), false)
                         : daemon.ask(operation.method(), parameters))
@@ -102,7 +120,7 @@ public final class OperationRunner {
     private static Map<String, String> parameters(Operation operation, Map<String, Object> values) {
         for (var name : new TreeSet<>(values.keySet())) {
             if (!operation.parameterNames().contains(name)) {
-                throw InvalidValuesException.unknown(operation.method(), name);
+                throw InvalidValuesException.unknown(OperationName.of(operation), name);
             }
         }
         var parameters = new HashMap<String, String>();
@@ -110,7 +128,7 @@ public final class OperationRunner {
             var value = values.get(parameter.name());
             if (value == null) {
                 if (parameter.required()) {
-                    throw InvalidValuesException.missing(operation.method(), parameter.name());
+                    throw InvalidValuesException.missing(OperationName.of(operation), parameter.name());
                 }
             } else {
                 parameters.put(parameter.name(), text(operation, parameter, value));
@@ -122,11 +140,13 @@ public final class OperationRunner {
 
     private static String text(Operation operation, Parameter parameter, Object value) {
         return switch (parameter.type()) {
-            case STRING -> {
-                if (value instanceof String text) {
-                    yield text;
+            case STRING -> textOf(operation, parameter, value);
+            case PATH -> {
+                var path = textOf(operation, parameter, value);
+                if (path.isEmpty()) {
+                    throw InvalidValuesException.invalid(OperationName.of(operation), parameter.name(), "not be empty");
                 }
-                throw InvalidValuesException.invalid(operation.method(), parameter.name(), "be a text");
+                yield path;
             }
             case INTEGER -> String.valueOf(wholeNumber(operation, parameter, value));
             case POSITION -> String.valueOf(zeroBased(operation, parameter, value));
@@ -134,17 +154,26 @@ public final class OperationRunner {
                 if (value instanceof Boolean flag) {
                     yield flag.toString();
                 }
-                throw InvalidValuesException.invalid(operation.method(), parameter.name(), "be true or false");
+                throw InvalidValuesException.invalid(OperationName.of(operation), parameter.name(), "be true or false");
             }
-            case ARRAY -> String.join("\n", elements(operation, parameter, value));
+            case ARRAY, PATHS -> String.join("\n", elements(operation, parameter, value));
         };
+    }
+
+    private static String textOf(Operation operation, Parameter parameter, Object value) {
+        if (value instanceof String text) {
+            return text;
+        }
+
+        throw InvalidValuesException.invalid(OperationName.of(operation), parameter.name(), "be a text");
     }
 
     /** A position as the daemon counts it: the whole number the front end gave, counted from 1, less one. */
     private static long zeroBased(Operation operation, Parameter parameter, Object value) {
         var number = wholeNumber(operation, parameter, value);
         if (number < 1) {
-            throw InvalidValuesException.invalid(operation.method(), parameter.name(), "be a position, from 1");
+            throw InvalidValuesException.invalid(
+                    OperationName.of(operation), parameter.name(), "be a position, from 1");
         }
 
         return number - 1;
@@ -163,20 +192,21 @@ public final class OperationRunner {
             }
         }
 
-        throw InvalidValuesException.invalid(operation.method(), parameter.name(), "be a whole number");
+        throw InvalidValuesException.invalid(OperationName.of(operation), parameter.name(), "be a whole number");
     }
 
     private static List<String> elements(Operation operation, Parameter parameter, Object value) {
         if (!(value instanceof List<?> list) || !list.stream().allMatch(String.class::isInstance)) {
-            throw InvalidValuesException.invalid(operation.method(), parameter.name(), "be a list of texts");
+            throw InvalidValuesException.invalid(OperationName.of(operation), parameter.name(), "be a list of texts");
         }
         var texts = list.stream().map(String.class::cast).toList();
         if (texts.stream().anyMatch(text -> text.contains("\n") || text.contains("\r"))) {
             throw InvalidValuesException.invalid(
-                    operation.method(), parameter.name(), "not have a line break in an element");
+                    OperationName.of(operation), parameter.name(), "not have a line break in an element");
         }
         if (texts.stream().anyMatch(String::isEmpty)) {
-            throw InvalidValuesException.invalid(operation.method(), parameter.name(), "not have an empty element");
+            throw InvalidValuesException.invalid(
+                    OperationName.of(operation), parameter.name(), "not have an empty element");
         }
 
         return texts;

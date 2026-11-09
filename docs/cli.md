@@ -75,7 +75,10 @@ handshake, the resource `mcp-instructions.md` (`McpInstructions`, beside `agents
 first handshake begins a `WarmUp`, which starts the daemon in a background thread (as `gabier start` does) so that jdtls
 imports the project while the host loads the tools: a failure to start is logged on the standard error and fails neither
 the handshake nor the call, which meets the same failure by itself, and a call waits for the start that runs so as not to
-launch a second daemon. The guide of the improvements
+launch a second daemon. A call that asks the daemon runs in a thread of its own (`Calls`), so that the server goes on
+reading while it waits: `ping` and `status` are answered meanwhile, a call that carries a `progressToken` is told where
+jdtls is, a call that waits too long is a failed call (`daemon-timeout`) and `notifications/cancelled` ends one (see
+[Calls that wait](commands/mcp.md#calls-that-wait)). The guide of the improvements
 (`gabier help guide`, `docs/improve.md`) is below the command line too: `Guide`, `GuideSection`, `GuideSections` and the
 `ranking` package are in `eu.gabier.cli.domain`, the answer to a question (`help --for`) is `AskTheGuide.answer` in
 `eu.gabier.cli.application` (the text of the answer is `GuideText` there), and the command line only reads the resource

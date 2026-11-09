@@ -92,6 +92,28 @@ class ServingMcpTest extends CliTest {
     }
 
     @Test
+    void tellsACallOfStatusWhenNoDaemonRunsAsAFailedCallAndStartsNone() {
+        var status = """
+            {"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"status","arguments":{},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}
+            """;
+
+        var exit = runWithInput(status, "mcp");
+
+        assertThat(exit).isZero();
+        assertThat(out().lines())
+                .singleElement()
+                .satisfies(answer -> assertThat(Json.parse(answer))
+                        .asInstanceOf(InstanceOfAssertFactories.MAP)
+                        .extractingByKey("result")
+                        .asInstanceOf(InstanceOfAssertFactories.MAP)
+                        .containsEntry("isError", true)
+                        .extractingByKey("structuredContent")
+                        .asInstanceOf(InstanceOfAssertFactories.MAP)
+                        .containsEntry("key", "daemon-not-running"));
+        assertThat(err()).isEmpty();
+    }
+
+    @Test
     void tellsOnTheStandardErrorThatTheDaemonCouldNotBeStartedAndAnswersTheHandshakeAnyway() throws Exception {
         var exit = runWithInput(DISCOVER + "\n", "mcp");
         eventually(() -> err().contains("gabier mcp: the daemon could not be started"));

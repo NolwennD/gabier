@@ -44,6 +44,28 @@ public final class Json {
     }
 
     /**
+     * The number as it was written in the text {@link #parse} read, digit for digit ({@code 1e2} stays {@code 1e2},
+     * which {@link BigDecimal#toString()} would give as {@code 1E+2}); for a number that was not read, its plain
+     * {@code toString()}. For whoever must give a number back as it came, such as the id of a JSON-RPC request.
+     */
+    public static String sourceOf(BigDecimal number) {
+        return number instanceof Written written ? written.source : number.toString();
+    }
+
+    /** A number read by the parser, which remembers how it was written. */
+    private static final class Written extends BigDecimal {
+
+        private static final long serialVersionUID = 1L;
+
+        private final String source;
+
+        private Written(String source) {
+            super(source);
+            this.source = source;
+        }
+    }
+
+    /**
      * Reads one JSON value, RFC 8259 and nothing more but one refusal: an object whose member name is repeated (the
      * same name once decoded, {@code "a"} and {@code "a"} for instance) is not read, at any depth, so that no
      * member is silently dropped. An object is a {@code Map} in the order of its members, an array a {@code List}, a
@@ -245,7 +267,7 @@ public final class Json {
         /** The number, or nothing when its exponent is beyond what the daemon reads. */
         private static Optional<BigDecimal> bounded(String digits) {
             try {
-                var number = new BigDecimal(digits);
+                var number = new Written(digits);
 
                 return Math.abs((long) number.scale()) > MAX_SCALE ? Optional.empty() : Optional.of(number);
             } catch (NumberFormatException e) {

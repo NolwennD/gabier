@@ -9,6 +9,9 @@ import eu.gabier.cli.application.ResultText;
 import eu.gabier.cli.domain.DaemonRefusal;
 import eu.gabier.cli.domain.Guide;
 import eu.gabier.cli.domain.Operation;
+import eu.gabier.cli.domain.Operations;
+import eu.gabier.cli.domain.Parameter;
+import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.Json;
 import eu.gabier.protocol.Problem;
 import eu.gabier.protocol.ProblemMapper;
@@ -16,13 +19,15 @@ import eu.gabier.shared.error.domain.GeneratorException;
 import java.io.PrintStream;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -36,9 +41,6 @@ import org.jspecify.annotations.Nullable;
  * own: it asks the guide, never the daemon.
  */
 final class ToolCalls {
-
-    /** The values that name files: a path of the project, which the daemon reads from its own folder, not the server's. */
-    private static final Set<String> FILES = Set.of("file", "files");
 
     private static final String NO_PROBLEMS = "no problems";
 
@@ -63,33 +65,97 @@ final class ToolCalls {
         this.err = err;
     }
 
+    /** What a call is, once it is read: an answer already, or an operation that asks the daemon and waits for it. */
+    sealed interface Prepared {}
+
     /**
-     * Calls the tool the params name with their arguments.
+     * A call that needs no wait: the guide, or values that do not fit the operation, which are refused before any
+     * daemon is asked.
      *
-     * @return the members of the result: {@code content}, {@code structuredContent} and {@code isError}
+     * @param members the members of the result
+     */
+    record Done(String members) implements Prepared {}
+
+    /**
+     * An operation that is run once the daemon answers.
+     *
+     * @param operation the operation
+     * @param run what asks the daemon
+     * @param file the file as the call gave it, for the text of {@code diagnostics}
+     * @param dryRun whether the call asked to write nothing
+     */
+    record Waiting(Operation operation, Supplier<OperationResult> run, String file, boolean dryRun)
+            implements Prepared {
+
+        /** Whether the daemon is asked: {@code status} asks a daemon that runs, and starts none, so it never waits. */
+        boolean asksDaemon() {
+            return !operation.equals(Operations.STATUS);
+        }
+    }
+
+    /**
+     * Reads the call the params name: the checks that need no daemon are made here, so that what is wrong in itself is
+     * answered at once.
+     *
+     * @return the call, ready to run
      * @throws McpFailure when the name is not a text or names no tool, or the arguments are not an object
      */
-    String call(Map<String, @Nullable Object> params) {
+    Prepared prepare(Map<String, @Nullable Object> params) {
         if (!(params.get("name") instanceof String name)) {
             throw McpFailure.invalidParams("name must be a text");
         }
         if (tools.isGuide(name)) {
-            return askTheGuide(arguments(params));
+            return new Done(askTheGuide(arguments(params)));
         }
         var operation = tools.find(name).orElseThrow(() -> McpFailure.invalidParams("Unknown tool: " + name));
         var arguments = arguments(params);
-        var values = values(arguments);
+        var values = values(operation, arguments);
         var file = arguments.get("file") instanceof String given ? given : "";
         var dryRun = Boolean.TRUE.equals(values.get("dryRun"));
         try {
-            return success(operations.run(operation, values), file, dryRun);
-        } catch (DaemonRefusal refusal) {
+            return new Waiting(operation, operations.prepare(operation, values), file, dryRun);
+        } catch (RuntimeException invalid) {
+            return new Done(refused(operation, invalid));
+        }
+    }
+
+    /**
+     * Runs the call and waits for the daemon: the members of the result, which is a failed call when the operation
+     * does not work. It never throws, an {@code Error} of the process (a class or a library that is missing) included:
+     * what it meets is the result of this call, and the server goes on.
+     */
+    String complete(Waiting waiting) {
+        try {
+            return success(waiting.run().get(), waiting.file(), waiting.dryRun());
+        } catch (RuntimeException | Error failure) {
+            return refused(waiting.operation(), failure);
+        }
+    }
+
+    /** The members of the result of a call that was given up after this long. */
+    String timedOut(Duration bound) {
+        return failed("call", CallTimedOutException.after(bound));
+    }
+
+    /** Where the daemon is, asked on a connection of its own: none when it does not answer. */
+    Optional<DaemonStatus> status() {
+        try {
+            return Optional.of(((OperationResult.Reported) operations.run(Operations.STATUS, Map.of())).status());
+        } catch (RuntimeException notRunning) {
+            return Optional.empty();
+        }
+    }
+
+    private String refused(Operation operation, Throwable failure) {
+        if (failure instanceof DaemonRefusal refusal) {
             var problem = Problems.of(refusal);
 
             return failure(problem, Problems.pointer(problem, commandOf.apply(operation)));
-        } catch (RuntimeException failure) {
-            return failed(operation.method(), failure);
         }
+
+        return failed(
+                operation.method(),
+                failure instanceof RuntimeException unexpected ? unexpected : new IllegalStateException(failure));
     }
 
     /**
@@ -145,9 +211,11 @@ final class ToolCalls {
     }
 
     /** The values of the operation: a value that is null is not given, and a path is made absolute. */
-    private static Map<String, Object> values(Map<String, @Nullable Object> arguments) {
+    private static Map<String, Object> values(Operation operation, Map<String, @Nullable Object> arguments) {
+        var types = new HashMap<String, Parameter.Type>();
+        operation.parameters().forEach(parameter -> types.put(parameter.name(), parameter.type()));
         var values = new LinkedHashMap<String, Object>();
-        given(arguments).forEach((name, value) -> values.put(name, FILES.contains(name) ? absolute(value) : value));
+        given(arguments).forEach((name, value) -> values.put(name, absolute(types.get(name), value)));
 
         return values;
     }
@@ -164,11 +232,11 @@ final class ToolCalls {
         return given;
     }
 
-    private static Object absolute(Object value) {
-        if (value instanceof String file) {
+    private static Object absolute(Parameter.@Nullable Type type, Object value) {
+        if (type == Parameter.Type.PATH && value instanceof String file) {
             return absolute(file);
         }
-        if (value instanceof List<?> files) {
+        if (type == Parameter.Type.PATHS && value instanceof List<?> files) {
             return files.stream()
                     .map(file -> file instanceof String text ? absolute(text) : file)
                     .toList();
@@ -177,8 +245,14 @@ final class ToolCalls {
         return value;
     }
 
-    /** The path from the folder of the server, which the daemon cannot guess; a text that is no path is left to it. */
+    /**
+     * The path from the folder of the server, which the daemon cannot guess; a text that is no path is left to it, and
+     * so is an empty one, which the operation refuses (made absolute, it would be the folder of the server).
+     */
     private static String absolute(String file) {
+        if (file.isEmpty()) {
+            return file;
+        }
         try {
             return Path.of(file).toAbsolutePath().toString();
         } catch (InvalidPathException notAPath) {

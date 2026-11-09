@@ -32,7 +32,12 @@ final class Mcp implements Capability {
                 The tool guide is added to them: it answers a task as gabier help --for does and asks no
                 daemon. tools/call runs the operation as the command line does (starting the daemon when
                 none runs, except for status, which starts none) and answers the text the command line prints, with the
-                result of the daemon beside it.
+                result of the daemon beside it. A call that asks the daemon runs in a thread of its own: the server goes
+                on reading while it waits (for the start of the daemon, the import of the project by jdtls, a slow
+                answer), so ping and status are answered at once, the answers of the calls are written as they end (the
+                id tells them apart), and a call that carries a progressToken is told every few seconds, with
+                notifications/progress, where jdtls is. A call the daemon has not answered after 11 minutes ends as a
+                failed call; a notifications/cancelled ends a call with no answer.
                 gabier mcp itself ends only with usage-error. A call that does not work is a result with isError, holding
                 the problem and, for a refusal where the language server declined, the pointer to gabier help <command>.
                 The keys of such a result are those of the operation called (gabier help <command>) and:
@@ -40,6 +45,7 @@ final class Mcp implements Capability {
                   daemon-start-failed: no daemon answered and gabier-daemon could not be started
                   daemon-connection-failed: the connection to the daemon was lost, or it hung up without answering
                   daemon-not-running: a call of status when no daemon answers; status never starts one
+                  daemon-timeout: the daemon had not answered after 11 minutes; it may still be working on the call
                   internal-server-error: a failure gabier does not know, logged on the standard error with its cause\
                 """);
 

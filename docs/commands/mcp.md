@@ -65,6 +65,44 @@ project (`GABIER_PROJECT`, else the nearest folder with a `.git`), started by th
 does; `status` asks a daemon that runs and starts none. Starting the server asks no daemon; its first handshake starts one
 (below).
 
+## Calls that wait
+
+A call that asks the daemon waits for it: for the start of the daemon, for the import of the project by jdtls (about a
+minute for a Gradle project, on the first call of a session), or for a slow answer. The server **goes on reading
+meanwhile**, so a host sees it answer:
+
+- **Threads.** The server reads the client on one thread and answers on it what needs no daemon, in the order the messages
+  come: the handshake, `ping`, `tools/list`, the tool `guide`, a call whose values are wrong (a value that is missing,
+  unknown or of the wrong kind, an empty file) and a call that names no tool. A call that asks the daemon runs in a thread
+  of its own, and its answer is written when it ends, which can be after the answer to a message that came later (the id
+  tells them apart, as JSON-RPC means it to). **Calls are not ordered among themselves**: a host that needs one to end
+  before the next waits for its answer. The server writes one message to a line, each whole, never mixed. At the end of
+  the input the server waits for the calls that have not ended, so that what was asked is answered; it does not wait for
+  the daemon that a handshake starts.
+- **`status`** asks a daemon that runs and starts none, and does not wait for the start the handshake began: called on the
+  side, it answers at once with the state of jdtls (starting, ready...) and, while jdtls starts, `jdtlsProgress` (launching
+  or importing, the last task it reported, for how long).
+- **Progress.** A request that carries `_meta.progressToken` (a text or a whole number) is told how the call goes: every 5
+  seconds, while the call waits, a `notifications/progress` with the token, a `progress` that grows by one at each notice
+  and a `message` such as `jdtls is starting: importing the project for 15s: Build model (waiting 20s so far)` (or
+  `waiting for the daemon (5s so far)` when no daemon says where jdtls is). No `total`: nobody knows it. The notices stop
+  when the call ends, as the protocol requires (revisions 2025-11-25 and 2026-07-28 say the same of progress). A call that
+  asked nothing is told nothing.
+- **The bound.** A call that the daemon has not answered 11 minutes after it came ends as a failed call, `isError: true`,
+  key `daemon-timeout`, and its thread is left to end by itself. The bound is above what the daemon allows itself (jdtls has
+  5 minutes to start, then 5 for a request, and the cli 20 seconds to launch the daemon), so the daemon's own refusal, which
+  says what went wrong, comes first; this one only catches a daemon that does not answer at all. The operation may still
+  run in the daemon.
+- **Cancellation.** A `notifications/cancelled` whose `requestId` is the id of a call that has not ended ends it with no
+  answer and no more notices, as both revisions ask (the stdio page of 2026-07-28 makes it a MUST). The request of another
+  id, one that has ended or a malformed notification is ignored. The server does not interrupt the thread of the call: the
+  daemon may still run what was asked.
+- **Ids.** The id of a request is given back as it was written: `1.0` and `1e2` stay as they are, and a whole number that
+  no `long` holds is answered. A text or a whole number is an id, a fraction is not (`-32600`, null id). A request whose id is
+  that of a call still running is refused (`-32600`).
+- **`ping`** is answered `{}`; a request that names the modern era in its `_meta` gets `{"resultType":"complete",...}`,
+  which revision 2026-07-28 requires of every result (it removed `ping`, and hosts still send it).
+
 ## The `guide` tool
 
 `guide` is the last tool and the one that is no operation of the daemon: it asks the guide of the improvements
@@ -100,7 +138,7 @@ One server answers both:
   2025-03-26, 2025-06-18 or 2025-11-25, else with 2025-11-25) and `notifications/initialized`; its requests carry no `_meta`
   and the results have no `resultType`. A request with no `_meta` before `initialize` is `-32602`.
 
-`ping` is answered `{}` in both. A method the server does not know is `-32601`; a line that is not JSON is `-32700` with a
+`ping` is answered `{}` in both (see [Calls that wait](#calls-that-wait) for the modern era). A method the server does not know is `-32601`; a line that is not JSON is `-32700` with a
 null id; a message that is no request is `-32600`.
 
 ## `tools/call`
@@ -140,9 +178,12 @@ A call that does not work is a result with `isError: true`, not an end of the se
 refusal of the operation that the call runs (the page of its command lists them, `gabier help <command>`) or one of these:
 
 - `operation-invalid-values`: a value is missing, is not a parameter of the operation, or is not of the kind of its
-  parameter (a position below 1, a list with an element that is empty or holds a line break...).
+  parameter (a position below 1, a path that is empty (it would be the working directory), a list with an element that is
+  empty or holds a line break...).
 - `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.
 - `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.
 - `daemon-not-running`: a call of `status` when no daemon answers; `status` never starts one, every other tool does.
+- `daemon-timeout`: the daemon had not answered 11 minutes after the call came; the call is given up and the daemon may
+  still be working on it (`status` tells).
 - `internal-server-error`: a failure gabier does not know; the problem says nothing of it, and the server logs it on the
   standard error with its cause.

@@ -78,6 +78,35 @@ class McpInstructionsTest extends CliTest {
         return tools.stream().map(tool -> (String) tool.get("name")).toList();
     }
 
+    /** The tools that change code: those the server does not annotate as read-only, but the guide, which asks no daemon. */
+    @SuppressWarnings("unchecked") // The server lists its tools as an array of objects.
+    private List<String> toolsThatChangeCode() {
+        var tools =
+                (List<Map<String, Object>>) result(mcp(TOOLS_LIST).getFirst()).get("tools");
+
+        return tools.stream()
+                .filter(tool -> !tool.containsKey("annotations"))
+                .map(tool -> (String) tool.get("name"))
+                .filter(name -> !name.equals("guide"))
+                .toList();
+    }
+
+    @Test
+    void namesEveryToolThatChangesCodeSoThatAToolAddedLaterFailsHereUntilTheTextSaysIt() {
+        var changing = toolsThatChangeCode();
+
+        assertThat(changing).contains("rename", "rename-token", "apply-action", "move", "create");
+        assertThat(named(McpInstructions.text())).containsAll(changing);
+    }
+
+    @Test
+    void sayStatusStartsNoDaemonAndThatTheConnectionHasStartedOne() {
+        assertThat(McpInstructions.text())
+                .contains("`status` starts no daemon")
+                .contains("the connection has started")
+                .contains("the key daemon-timeout");
+    }
+
     @Test
     void isAResourceOfTheCliThatIsNotBlank() {
         assertThat(McpInstructions.text()).isNotBlank();

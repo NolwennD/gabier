@@ -6,7 +6,7 @@ import java.util.List;
 /** The parameters that several operations share, written once for {@link Operations}. */
 final class Parameters {
 
-    static final Parameter FILE = Parameter.string("file", "the Java file, a path in the project");
+    static final Parameter FILE = Parameter.path("file", "the Java file, a path in the project");
     static final Parameter DRY_RUN = Parameter.bool("dryRun", "true to say what would change and write nothing");
     static final Parameter LINE = Parameter.position("line", "the line of the position, counted from 1");
     static final Parameter COLUMN = Parameter.position("column", "the column of the position, counted from 1");
