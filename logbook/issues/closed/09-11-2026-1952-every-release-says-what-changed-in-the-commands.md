@@ -18,3 +18,19 @@ Done when:
 - `bin/ci` is green.
 
 Not part of this ticket: editing any published release.
+
+## Resolution
+
+Commit `6648867`. `bin/ci` as in the issue of the idle stop (same branch; the `release-notes` stage ran and passed).
+
+- A release reads `docs/releases/<version>.md` through `scripts/release-notes.sh`; the first job of the workflow fails before
+  the full `bin/ci` and any asset when the file of the version is missing or empty. `docs/releases/0.5.0.md` holds the text
+  published. No published release was touched.
+- The workflow itself cannot be run on a branch: only the script and the `bin/ci` stage are proven. The first tag to pass
+  through it is the next one. Suggestions of the review (cases with `& \ @ $1` and CRLF, the call of the script as the stage
+  calls it) are in an on-hold issue.
+
+Tokens:
+- worker: shared with the issue of the idle stop (one worker, one batch)
+- reviewer: shared with the issue of the idle stop
+- supervisor: shared with the issue of the idle stop
