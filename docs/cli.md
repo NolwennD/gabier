@@ -65,8 +65,8 @@ outside that package names it (`HexagonalArchTest`). The text of a result (`Chan
 `CodeActions`) is a pure function of the result, `ResultText` in `eu.gabier.cli.application`: the commands only print its
 lines. A second front end takes the same port and the same text: the MCP server, `gabier mcp`, is a second primary adapter in
 `eu.gabier.cli.infrastructure.primary.mcp` (JDK and `Json` only; one JSON-RPC message per line on the standard input and
-output, nothing else on the output). `tools/list` generates one tool per descriptor of `Operations` but `start` and `stop`
-(`Tools`), so a parameter added to an operation shows in the schema of its tool with no other file edited; `tools/call`
+output, nothing else on the output). `tools/list` generates one tool per descriptor of `Operations` except `start` and `stop`, which are operations of the
+daemon and not tools (`Tools`, `NOT_TOOLS`: the server starts the daemon itself), so a parameter added to an operation shows in the schema of its tool with no other file edited; `tools/call`
 (`ToolCalls`) runs the operation through the same `OperationRunner` and gives the text of `ResultText` in `content` and the
 result of the daemon in `structuredContent`, a refusal being a result with `isError` that holds the problem and the pointer of
 `Problems` (`eu.gabier.cli.application`, which the command line uses too); the page of

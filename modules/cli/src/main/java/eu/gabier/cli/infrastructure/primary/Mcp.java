@@ -24,8 +24,12 @@ final class Mcp implements Capability {
                 The server speaks MCP on the stdio transport: one JSON-RPC 2.0 message per line on the standard input and on
                 the standard output, which carries nothing else. It answers the two eras of the protocol: server/discover
                 and the metadata of every request (revision 2026-07-28), and initialize (revision 2025-11-25 and
-                earlier). tools/list gives one tool per operation but start and stop, with the parameters of the operation
-                as its input schema, and the tool guide, which answers a task as gabier help --for does and asks no
+                earlier). tools/list gives these tools, named as the operations, with the parameters of the operation as
+                their input schema: diagnostics, rename, rename-token, organize-imports, cleanup, extract-variable,
+                extract-method, extract-constant, extract-field, move-type-to-file, move, inline, create, references,
+                actions, apply-action and status. The commands start and stop are not tools: the server starts the
+                daemon itself when the host connects, and an agent that stopped it would lose the tools that need it.
+                The tool guide is added to them: it answers a task as gabier help --for does and asks no
                 daemon. tools/call runs the operation as the command line does (starting the daemon when
                 none runs, except for status, which starts none) and answers the text the command line prints, with the
                 result of the daemon beside it.
