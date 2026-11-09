@@ -87,6 +87,28 @@ class JdtlsSessionTest {
         return start(fake, LONG, expectedProjects);
     }
 
+    /**
+     * Interrupts the thread once it is parked on the answer of a request, not before: the fake receives a request while
+     * the thread may still be inside the write that sent it, and an interrupt there closes the pipe (it is a channel) and
+     * fails the write, where an interrupt of the wait is what the test is about. Never waits more than ten seconds: the
+     * interrupt is then sent anyway, and the test fails on what it shows.
+     */
+    private static void interruptOnceAwaitingAnAnswer(Thread thread) {
+        long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+        while (!isAwaitingAnAnswer(thread) && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        thread.interrupt();
+    }
+
+    private static boolean isAwaitingAnAnswer(Thread thread) {
+        boolean parked = thread.getState() == Thread.State.WAITING || thread.getState() == Thread.State.TIMED_WAITING;
+
+        return parked
+                && Stream.of(thread.getStackTrace())
+                        .anyMatch(frame -> frame.getClassName().equals(CompletableFuture.class.getName()));
+    }
+
     private static void delete(Path directory) throws IOException {
         try (Stream<Path> files = Files.walk(directory)) {
             for (Path file : files.sorted(Comparator.reverseOrder()).toList()) {
@@ -374,8 +396,8 @@ class JdtlsSessionTest {
             // The test thread is interrupted while it awaits initialize, and again while the failed start closes.
             fake.neverAnswersInitialize()
                     .shutdown(FakeJdtls.Shutdown.NEVER_ANSWERS)
-                    .onInitialize(test::interrupt)
-                    .onShutdown(test::interrupt);
+                    .onInitialize(() -> interruptOnceAwaitingAnAnswer(test))
+                    .onShutdown(() -> interruptOnceAwaitingAnAnswer(test));
 
             assertThatThrownBy(() -> start())
                     .isInstanceOf(InterruptedException.class)
