@@ -15,6 +15,8 @@ import java.io.PrintStream;
  * @param operations how an operation is run, the one entry point that any front end uses
  * @param daemon the way to the daemon of the project
  * @param in what is typed or piped in, for the commands that read it ({@code mcp})
+ * @param err where a command logs what it must not print on its output, for the commands that run for long ({@code
+ *     mcp})
  */
 record Invocation(
         Arguments arguments,
@@ -22,4 +24,5 @@ record Invocation(
         PrintStream out,
         OperationRunner operations,
         Daemon daemon,
-        InputStream in) {}
+        InputStream in,
+        PrintStream err) {}

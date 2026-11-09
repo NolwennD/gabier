@@ -20,10 +20,10 @@ public final class Operations {
     public static final Operation STATUS =
             new Operation("status", "the project the daemon serves, and where jdtls is", """
                 jdtls is in one of four states: not-started (no request has needed it yet), starting, ready, or
-                failed (the reason follows in parentheses when it is known). While it is starting, the line also says
+                failed (the reason follows in parentheses when it is known). While it is starting, the status also says
                 what it is doing and for how long it has been doing it: launching jdtls (its process and its runtime
                 come up), then importing the project (for a Gradle project, jdtls runs the build), with the last task
-                it reported. With --json, the same is the member jdtlsProgress (phase, message, spentMillis), present
+                it reported. That is the member jdtlsProgress (phase, message, spentMillis) of the result, present
                 only while jdtls is starting. A request made while jdtls is starting waits for it.\
                 """, List.of(), List.of());
 
@@ -199,10 +199,10 @@ public final class Operations {
             The references and the imports of the project follow the moved classes, the fully qualified names
             too, and a nested type keeps its outer type (Invoice.Line). A name in a string literal or a comment
             is not rewritten.
-            jdtls does not sort the imports it writes: run gabier organize-imports on the modified files.
+            jdtls does not sort the imports it writes: run organize-imports on the modified files.
             When no Java file is left in the old package, its exports and opens in module-info.java follow it.
             A member that was package-private in the old package, used from there, is no longer reachable.
-            Run gabier diagnostics on the files that use it after the move.\
+            Run diagnostics on the files that use it after the move.\
             """,
             List.of(
                     """
@@ -269,17 +269,17 @@ public final class Operations {
             "references",
             "where a symbol is used, in every file of the project and its tests",
             """
-            Nothing is written. The position is line:column, each from 1, on the name of a type, a method, a field, a local\
-             variable or a parameter, at its declaration or at a use.
-            Without --include-declaration the declaration is not listed. With it, the declaration is listed apart, under\
+            Nothing is written. The position is a line and a column, each from 1, on the name of a type, a method, a field,\
+             a local variable or a parameter, at its declaration or at a use.
+            The declaration is not listed unless includeDeclaration is true; it is then listed apart, under\
              "declaration:", and the uses under "references:".
             The places are ordered by file, then by position. The uses in test sources are listed.
             The accessors of a field are not references of the field: a getter is found by asking for the getter.
-            A symbol nothing uses prints "no references" and exits with 0; with --json, two empty lists.
+            A symbol nothing uses has no references: the text says "no references", and the lists are empty.
             Only the symbols of the project have references: a type of the JDK or of a library is refused as\
              language-server-no-such-symbol, and no place in a library is ever listed.
             A name that does not resolve (its import names a package the project does not see) is refused the same\
-             way, not answered with the references of the type that holds it: gabier diagnostics tells why.\
+             way, not answered with the references of the type that holds it: diagnostics tells why.\
             """,
             List.of(
                     "language-server-no-such-symbol: no symbol of the project at the position (a blank, a comment,"
@@ -300,7 +300,7 @@ public final class Operations {
             "actions",
             "list the fixes and the rewrites the language server offers on a range",
             """
-            Nothing is written. The range is two positions, each line:column from 1, the end excluded; to ask\
+            Nothing is written. The range is two positions, each a line and a column from 1, the end excluded; to ask\
              about a point, give it twice.
             The actions are the fixes of the problems the range holds (a type that is not imported, a method to\
              create) and the rewrites of the code it covers (a concatenation to a text block, an extraction).\
@@ -308,16 +308,17 @@ public final class Operations {
              about a range.
             Each line is the number of the action in the list, its kind (quickfix, refactor.extract.variable,\
              quickassist, ...) and its title. The kind and the title are the language server's own text, which\
-             gabier does not interpret. A range with nothing offered prints "no actions" and exits with 0.
-            An action that a command of gabier also does is followed by "-> gabier <command>", read from its kind\
-             (and, for the kind refactor.inline that "Make Static" shares, from its title, which must start with\
-             "Inline"): extract-variable, extract-field, extract-method and extract-constant (the same file and\
-             range, then the name to give), and inline (the file and one position, on the name). The command\
-             is not always what the action does: extract-variable replaces the selected expression only, so the\
-             action "Extract to local variable (replace all occurrences)" is linked to it but replaces every\
-             occurrence, which only apply-action does. Prefer the command when the name matters: apply-action\
-             takes the name jdtls guesses. With --json the action has a member "command", only when there is one.
-            To apply one as the server proposes it, give its title to gabier apply-action with the same range.\
+             gabier does not interpret. A range with nothing offered gives no actions.
+            An action that another operation of gabier also does is followed by an arrow and the name of that\
+             operation, read from its kind (and, for the kind refactor.inline that "Make Static" shares, from its\
+             title, which must start with "Inline"): extract-variable, extract-field, extract-method and\
+             extract-constant (the same file and range, then the name to give), and inline (the file and one\
+             position, on the name). The operation is not always what the action does: extract-variable replaces the\
+             selected expression only, so the action "Extract to local variable (replace all occurrences)" is linked\
+             to it but replaces every occurrence, which only apply-action does. Prefer the operation when the name\
+             matters: apply-action takes the name jdtls guesses. The structured result gives it as the member\
+             "command" of the action, only when there is one.
+            To apply one as the server proposes it, give its title to apply-action with the same range.\
             """,
             List.of(
                     "editing-invalid-range: the range ends before it starts",
@@ -331,12 +332,12 @@ public final class Operations {
             "apply-action",
             "apply the fix or the rewrite the language server offers on a range, chosen by its title",
             """
-            The title is the one gabier actions lists for the same file and range, exactly as written: the number\
+            The title is the one actions lists for the same file and range, exactly as written: the number\
              of an action changes from one call to the next, the title does not.
             A title that no action has is refused with the titles the range offers; one that several have, with\
              those actions. Nothing is written.
             Some actions of the language server are commands for an editor: they ask a question (a dialog) or a\
-             place before they change anything, and give no edit. They are listed by gabier actions and refused\
+             place before they change anything, and give no edit. They are listed by actions and refused\
              here as language-server-not-applicable.\
             """,
             List.of(

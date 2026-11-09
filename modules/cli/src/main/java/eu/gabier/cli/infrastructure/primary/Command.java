@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * What {@code gabier help} says about a command: its name, the usage, an example, and the operations of the daemon it
@@ -22,7 +23,8 @@ import java.util.stream.Collectors;
  * @param operations the operations of the daemon it runs, in the order of its usage lines; none for a command of the
  *     cli alone
  * @param ownSummary the summary of a command that has no operation, else empty
- * @param ownNotes the notes of a command that has no operation, else empty
+ * @param ownNotes the notes of the command line itself, which follow those of its operations; all of them for a command
+ *     that has no operation; often empty
  * @param commandLineRefusals the refusals of the command line, which follow those of its operations; all of them for a
  *     command that has no operation
  */
@@ -47,7 +49,7 @@ record Command(
         commandLineRefusals.forEach(refusal -> Assert.notBlank("refusal", refusal));
         if (operations.isEmpty()) {
             Assert.notBlank("ownSummary", ownSummary);
-        } else if (!ownSummary.isEmpty() || !ownNotes.isEmpty()) {
+        } else if (!ownSummary.isEmpty()) {
             throw new IllegalArgumentException("The command " + commandName + " has operations: they say what it does");
         }
         operations = List.copyOf(operations);
@@ -64,14 +66,14 @@ record Command(
         return operations.isEmpty() ? ownSummary : operations.getFirst().summary();
     }
 
-    /** What a person must know before running it: the notes of its operations, one after the other; often none. */
+    /**
+     * What a person must know before running it: the notes of its operations, one after the other, then the notes of
+     * the command line itself (what only a person who types it reads: an option, the text it prints); often none.
+     */
     String notes() {
-        return operations.isEmpty()
-                ? ownNotes
-                : operations.stream()
-                        .map(Operation::notes)
-                        .filter(notes -> !notes.isEmpty())
-                        .collect(Collectors.joining("\n"));
+        return Stream.concat(operations.stream().map(Operation::notes), Stream.of(ownNotes))
+                .filter(notes -> !notes.isEmpty())
+                .collect(Collectors.joining("\n"));
     }
 
     /**
@@ -89,12 +91,12 @@ record Command(
         return List.copyOf(refusals);
     }
 
-    /** The same standalone command with notes, printed by {@code help} between the example and the refusals. */
+    /**
+     * The same command with notes of the command line, printed by {@code help} between the example and the refusals,
+     * after those of its operations.
+     */
     Command withNotes(String notes) {
         Assert.notBlank("notes", notes);
-        if (!operations.isEmpty()) {
-            throw new IllegalArgumentException("The notes of " + commandName + " are those of its operations");
-        }
 
         return new Command(commandName, usage, example, operations, ownSummary, notes, commandLineRefusals);
     }
@@ -138,6 +140,13 @@ record Command(
 
         /** A command that never talks to the daemon: what it does, and exactly these refusals. */
         Command standalone(String summary, String... refusals);
+
+        /**
+         * A command that serves the operations of the daemon to another front end, which calls them as it likes: the
+         * calls start the daemon and meet its refusals, and tell them to their caller, not to the command line. The
+         * command itself ends only with a usage error.
+         */
+        Command servesTheOperations(String summary);
     }
 
     private static final class Builder implements UsageStep, ExampleStep, RefusalsStep {
@@ -191,6 +200,11 @@ record Command(
         @Override
         public Command standalone(String summary, String... refusals) {
             return new Command(commandName, usage, example, List.of(), summary, "", List.of(refusals));
+        }
+
+        @Override
+        public Command servesTheOperations(String summary) {
+            return standalone(summary, Refusal.USAGE);
         }
     }
 }

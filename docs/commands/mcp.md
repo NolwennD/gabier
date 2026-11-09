@@ -42,7 +42,8 @@ result is:
   warnings, the files and the diff; `file:line:column: severity: message` for `diagnostics`, with the file as given; the
   places of `references`; the numbered `actions`; the line of `status`), so an agent reads the same words in both. An
   operation that changes files says `nothing to change` when the daemon changed nothing (`organize-imports` and `cleanup` do
-  the same on the command line);
+  the same on the command line). The one difference is a file with no problem: `diagnostics` says `no problems`, where the
+  command line prints nothing, because a text block with nothing in it is rejected by many hosts and by the Claude API;
 - `structuredContent`: the result of the daemon as it gave it, which `--json` prints (the positions counted from 0, as the
   protocol counts them);
 - `isError`: `false`.
@@ -52,16 +53,25 @@ A call that does not work is still a result, with `isError: true`, so that the a
 other ways: gabier help <command>` for a refusal where the language server declined the operation), and `structuredContent`
 is the problem object of `--json` (`type`, `title`, `detail`, `key`, `parameters`, and `help` when there is a pointer). An
 unreachable or failing daemon is such a result (`daemon-start-failed`...), and so is a failure gabier does not know
-(`internal-server-error`, without its message). The server goes on to the next message. A call that is no call is an error of the
+(`internal-server-error`, without its message, which goes to the standard error with its cause). The server goes on to the next message. A call that is no call is an error of the
 protocol, `-32602`: a tool that does not exist (`start` and `stop` are not tools), a `name` that is not a text, `arguments`
 that are not an object.
 
 ## Refusals
 
+`gabier mcp` itself ends only with this one; everything else a call meets is a result of that call, below.
+
 - `usage-error`: the arguments are not those of the command (gabier help <command> gives its usage).
-- `operation-invalid-values`: (in a failed call) a value is missing, is not a parameter of the operation, or is not of the
-  kind of its parameter (a position below 1, a list with an element that is empty or holds a line break...).
-- `daemon-start-failed`: (in a failed call) no daemon answered and `gabier-daemon` could not be started.
-- `daemon-connection-failed`: (in a failed call) the connection to the daemon was lost, or it hung up without answering.
-- `daemon-not-running`: (in a failed call of `status`) no daemon answers; `status` never starts one.
-- every refusal of the operation that the call runs: the page of its command lists them (`gabier help <command>`).
+
+## Failed calls
+
+A call that does not work is a result with `isError: true`, not an end of the server. Its problem has the key of the
+refusal of the operation that the call runs (the page of its command lists them, `gabier help <command>`) or one of these:
+
+- `operation-invalid-values`: a value is missing, is not a parameter of the operation, or is not of the kind of its
+  parameter (a position below 1, a list with an element that is empty or holds a line break...).
+- `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.
+- `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.
+- `daemon-not-running`: a call of `status` when no daemon answers; `status` never starts one, every other tool does.
+- `internal-server-error`: a failure gabier does not know; the problem says nothing of it, and the server logs it on the
+  standard error with its cause.

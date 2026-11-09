@@ -8,6 +8,7 @@ import eu.gabier.protocol.Json;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -67,7 +68,17 @@ final class McpExchange {
      * one a pointer to the help names.
      */
     static McpServer serverOf(Daemon daemon) {
-        return new McpServer(new OperationRunner(daemon), operation -> "command-of-" + operation.method());
+        return serverOf(daemon, silent());
+    }
+
+    /** A server over this daemon, that logs on this stream. */
+    static McpServer serverOf(Daemon daemon, PrintStream err) {
+        return new McpServer(new OperationRunner(daemon), operation -> "command-of-" + operation.method(), err);
+    }
+
+    /** A stream that keeps nothing, for the log that a test does not read. */
+    static PrintStream silent() {
+        return new PrintStream(OutputStream.nullOutputStream());
     }
 
     /** What the server wrote for these lines of input, as the JSON of each line of output; it never reaches a daemon. */
@@ -77,17 +88,22 @@ final class McpExchange {
 
     /** What the server over this daemon wrote for these lines of input, as the JSON of each line of output. */
     static List<@Nullable Object> exchange(Daemon daemon, String... lines) {
+        return exchange(daemon, silent(), lines);
+    }
+
+    /** As {@link #exchange(Daemon, String...)}, with the server logging on this stream. */
+    static List<@Nullable Object> exchange(Daemon daemon, PrintStream err, String... lines) {
         return exchange(
-                daemon, new ByteArrayInputStream(String.join("\n", lines).getBytes(StandardCharsets.UTF_8)));
+                daemon, err, new ByteArrayInputStream(String.join("\n", lines).getBytes(StandardCharsets.UTF_8)));
     }
 
     static List<@Nullable Object> exchange(InputStream in) {
-        return exchange(new StubDaemon(), in);
+        return exchange(new StubDaemon(), silent(), in);
     }
 
-    private static List<@Nullable Object> exchange(Daemon daemon, InputStream in) {
+    private static List<@Nullable Object> exchange(Daemon daemon, PrintStream err, InputStream in) {
         var out = new ByteArrayOutputStream();
-        serverOf(daemon).serve(in, new PrintStream(out, true, StandardCharsets.UTF_8));
+        serverOf(daemon, err).serve(in, new PrintStream(out, true, StandardCharsets.UTF_8));
 
         return out.toString(StandardCharsets.UTF_8).lines().map(Json::parse).toList();
     }

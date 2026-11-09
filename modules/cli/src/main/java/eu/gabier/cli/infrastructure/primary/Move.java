@@ -24,7 +24,11 @@ final class Move implements Capability {
                 renamed /work/demo/src/main/java/demo/Invoice.java -> /work/demo/src/main/java/demo/billing/Invoice.java
                 ...\
                 """)
-            .asksTheDaemon(Operations.MOVE);
+            .asksTheDaemon(Operations.MOVE)
+            .withNotes("""
+                gabier organize-imports <file> orders the imports of a file, and gabier diagnostics <file> lists its\
+                 problems.\
+                """);
 
     @Override
     public Command command() {

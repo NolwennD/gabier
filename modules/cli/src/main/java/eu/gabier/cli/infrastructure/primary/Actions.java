@@ -28,7 +28,13 @@ final class Actions implements Capability {
                 2 refactor.extract.variable Extract to local variable -> gabier extract-variable
                 ...\
                 """)
-            .asksTheDaemon(Operations.ACTIONS);
+            .asksTheDaemon(Operations.ACTIONS)
+            .withNotes("""
+                Each position is typed line:column. A range with nothing offered prints "no actions" and exits with 0.
+                An action that a command of gabier also does is followed by "-> gabier <command>"; with --json it has a\
+                 member "command", only when there is one. To apply one, give its title to gabier apply-action with the\
+                 same range.\
+                """);
 
     @Override
     public Command command() {

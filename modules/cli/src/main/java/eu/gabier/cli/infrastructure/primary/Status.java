@@ -19,7 +19,11 @@ final class Status implements Capability {
                 $ gabier status
                 gabier-daemon 0.1.0, pid 4242, up 65s, project /work/demo, jdtls not-started\
                 """)
-            .asksARunningDaemon(Operations.STATUS);
+            .asksARunningDaemon(Operations.STATUS)
+            .withNotes("""
+                In text, what jdtls is doing while it starts ends the line, in parentheses. With --json, it is the member\
+                 jdtlsProgress of the result.\
+                """);
 
     @Override
     public Command command() {

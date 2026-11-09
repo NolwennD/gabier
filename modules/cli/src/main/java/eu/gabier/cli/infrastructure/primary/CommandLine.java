@@ -39,7 +39,7 @@ public final class CommandLine {
                 .filter(argument -> !argument.equals(JSON_OPTION))
                 .toList();
         try {
-            execute(words, json, in, out, daemon);
+            execute(words, json, in, out, err, daemon);
 
             return ExitCode.SUCCESS.value();
         } catch (DaemonRefusal refusal) {
@@ -52,7 +52,8 @@ public final class CommandLine {
     }
 
     /** Runs the capability of the command the first word names; without one, only {@link Standalone} applies. */
-    private static void execute(List<String> arguments, boolean json, InputStream in, PrintStream out, Daemon daemon) {
+    private static void execute(
+            List<String> arguments, boolean json, InputStream in, PrintStream out, PrintStream err, Daemon daemon) {
         var capability = arguments.isEmpty() ? Optional.<Capability>empty() : Capabilities.named(arguments.getFirst());
         if (capability.isEmpty()) {
             Standalone.run(arguments, json, out);
@@ -65,7 +66,7 @@ public final class CommandLine {
 
             return;
         }
-        capability.get().run(new Invocation(words, json, out, new OperationRunner(daemon), daemon, in));
+        capability.get().run(new Invocation(words, json, out, new OperationRunner(daemon), daemon, in, err));
     }
 
     /** Reports the failure as a problem object on the standard error, as JSON or as text, and gives the exit code. */

@@ -58,9 +58,10 @@ public final class McpServer {
      *
      * @param operations how an operation is run, the one entry point that any front end uses
      * @param commandOf the word of the command line that runs an operation, for the pointer to its help
+     * @param err where the server logs what it must not say on its output, such as a call that failed unexpectedly
      */
-    public McpServer(OperationRunner operations, Function<Operation, String> commandOf) {
-        calls = new ToolCalls(tools, operations, commandOf);
+    public McpServer(OperationRunner operations, Function<Operation, String> commandOf, PrintStream err) {
+        calls = new ToolCalls(tools, operations, commandOf, err);
     }
 
     /** The era a request is served in. */

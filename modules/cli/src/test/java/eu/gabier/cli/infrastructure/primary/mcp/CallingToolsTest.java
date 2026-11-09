@@ -23,6 +23,10 @@ import eu.gabier.protocol.FoundReferences.Place;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.Json;
 import eu.gabier.shared.error.domain.ErrorStatus;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -80,6 +84,19 @@ class CallingToolsTest {
             assertThat(daemon.asked())
                     .containsExactly(
                             new StubDaemon.Asked("diagnostics", Map.of("file", absolute("src/Broken.java")), false));
+        }
+
+        @Test
+        void saysThereAreNoProblemsForAFileWithNoneWhereTheCommandLinePrintsNothing() {
+            var clean = new FileDiagnostics(List.of());
+            var daemon = new StubDaemon().answering(clean.toJson());
+
+            var answer = exchange(daemon, modernCall("diagnostics", "{\"file\":\"src/Clean.java\"}"))
+                    .getFirst();
+
+            assertThat(content(answer)).isEqualTo("no problems");
+            assertThat(at(answer, "result", "structuredContent")).isEqualTo(Json.parse(clean.toJson()));
+            assertThat(at(answer, "result", "isError")).isEqualTo(false);
         }
 
         @Test
@@ -337,6 +354,40 @@ class CallingToolsTest {
             assertThat(at(answer, "result", "isError")).isEqualTo(true);
             assertThat(at(answer, "result", "structuredContent", "key")).isEqualTo("internal-server-error");
             assertThat((String) content(answer)).doesNotContain("/secret/path");
+        }
+
+        @Test
+        void logsAnUnexpectedFailureOnTheStandardErrorWithItsCauseAndKeepsItOutOfTheResult() {
+            var log = new ByteArrayOutputStream();
+            var daemon = new StubDaemon()
+                    .failing(new IllegalStateException("socket broke", new IOException("disk /secret/path is full")));
+
+            var answer = exchange(
+                            daemon,
+                            new PrintStream(log, true, StandardCharsets.UTF_8),
+                            modernCall("diagnostics", "{\"file\":\"/work/A.java\"}"))
+                    .getFirst();
+
+            assertThat(log.toString(StandardCharsets.UTF_8))
+                    .contains("gabier mcp: the call of diagnostics failed")
+                    .contains("java.lang.IllegalStateException: socket broke")
+                    .contains("Caused by: java.io.IOException: disk /secret/path is full");
+            assertThat((String) content(answer)).doesNotContain("socket broke").doesNotContain("/secret/path");
+            assertThat(at(answer, "result", "structuredContent", "key")).isEqualTo("internal-server-error");
+        }
+
+        @Test
+        void logsNothingForAFailureThatIsARefusalTheAgentReads() {
+            var log = new ByteArrayOutputStream();
+            var daemon = new StubDaemon().failing(refusal("language-server-not-extractable"));
+
+            exchange(
+                    daemon,
+                    new PrintStream(log, true, StandardCharsets.UTF_8),
+                    modernCall("diagnostics", "{\"file\":\"/work/A.java\"}"),
+                    modernCall("diagnostics", "{}"));
+
+            assertThat(log.toString(StandardCharsets.UTF_8)).isEmpty();
         }
 
         @Test

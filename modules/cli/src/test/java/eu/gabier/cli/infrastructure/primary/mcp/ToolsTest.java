@@ -9,6 +9,8 @@ import eu.gabier.cli.domain.Parameter.Type;
 import eu.gabier.protocol.Json;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.MatchResult;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -41,6 +43,23 @@ class ToolsTest {
     @SuppressWarnings("unchecked") // The tools are a JSON array, written by the code under test.
     private static List<@Nullable Object> list(@Nullable Object json) {
         return (List<@Nullable Object>) json;
+    }
+
+    /**
+     * The words that only a person at a command line reads: an option ({@code --json}), or a command run as {@code
+     * gabier <command>} ({@code gabier} followed by a word that is not prose is not looked at: "which gabier does not
+     * interpret" is a sentence).
+     */
+    private static List<String> commandLineWords(String text) {
+        var commands = new java.util.ArrayList<>(
+                Operations.all().stream().map(Operation::method).toList());
+        commands.add("help");
+
+        return Pattern.compile("--[a-z][a-z-]*|\\bgabier (?:" + String.join("|", commands) + ")\\b")
+                .matcher(text)
+                .results()
+                .map(MatchResult::group)
+                .toList();
     }
 
     private static Operation operation(String method, String notes, Parameter... parameters) {
@@ -85,6 +104,26 @@ class ToolsTest {
 
                 assertThat(properties.keySet()).containsExactlyElementsOf(operation.parameterNames());
                 assertThat(schema).containsEntry("type", "object").containsEntry("additionalProperties", false);
+            }
+        }
+
+        @Test
+        void speaksOfNoWordOfTheCommandLineInTheDescriptionOfAToolOrOfItsParameters() {
+            for (var tool : tools(served)) {
+                var properties = tool.get("inputSchema") instanceof Map<?, ?> schema
+                                && schema.get("properties") instanceof Map<?, ?> found
+                        ? found.values().stream()
+                                .map(property -> object(property).get("description"))
+                                .toList()
+                        : List.of();
+
+                assertThat(commandLineWords((String) tool.get("description")))
+                        .as("the description of the tool %s", tool.get("name"))
+                        .isEmpty();
+                assertThat(properties)
+                        .allSatisfy(description -> assertThat(commandLineWords((String) description))
+                                .as("a parameter of the tool %s", tool.get("name"))
+                                .isEmpty());
             }
         }
 
@@ -143,6 +182,23 @@ class ToolsTest {
         @ValueSource(strings = {"rename", "move", "cleanup", "apply-action", "create"})
         void saysNothingOfTheHintForTheToolsThatWrite(String name) {
             assertThat(tool(served, name)).doesNotContainKey("annotations");
+        }
+    }
+
+    @Nested
+    class TheCheckOfTheCommandLineWords {
+
+        @Test
+        void findsAnOptionAndACommandRunAsOnTheCommandLine() {
+            assertThat(commandLineWords(
+                            "With --include-declaration, run gabier organize-imports then gabier help move"))
+                    .containsExactly("--include-declaration", "gabier organize-imports", "gabier help");
+        }
+
+        @Test
+        void leavesProseAloneThatNamesTheProgramOrAToolWithoutTheProgram() {
+            assertThat(commandLineWords("a title which gabier does not interpret; run organize-imports on the files"))
+                    .isEmpty();
         }
     }
 

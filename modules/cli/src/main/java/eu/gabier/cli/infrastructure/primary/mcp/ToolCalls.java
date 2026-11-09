@@ -9,6 +9,8 @@ import eu.gabier.cli.domain.Operation;
 import eu.gabier.protocol.Json;
 import eu.gabier.protocol.Problem;
 import eu.gabier.protocol.ProblemMapper;
+import eu.gabier.shared.error.domain.GeneratorException;
+import java.io.PrintStream;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -34,9 +36,12 @@ final class ToolCalls {
     /** The values that name files: a path of the project, which the daemon reads from its own folder, not the server's. */
     private static final Set<String> FILES = Set.of("file", "files");
 
+    private static final String NO_PROBLEMS = "no problems";
+
     private final Tools tools;
     private final OperationRunner operations;
     private final Function<Operation, String> commandOf;
+    private final PrintStream err;
 
     /**
      * The calls of the tools.
@@ -44,11 +49,13 @@ final class ToolCalls {
      * @param tools the tools that can be called
      * @param operations how an operation is run
      * @param commandOf the word of the command line that runs an operation, for the pointer to its help
+     * @param err where a call that failed unexpectedly is logged, with its cause
      */
-    ToolCalls(Tools tools, OperationRunner operations, Function<Operation, String> commandOf) {
+    ToolCalls(Tools tools, OperationRunner operations, Function<Operation, String> commandOf, PrintStream err) {
         this.tools = tools;
         this.operations = operations;
         this.commandOf = commandOf;
+        this.err = err;
     }
 
     /**
@@ -73,8 +80,23 @@ final class ToolCalls {
 
             return failure(problem, Problems.pointer(problem, commandOf.apply(operation)));
         } catch (RuntimeException failure) {
+            logIfUnexpected(operation, failure);
+
             return failure(ProblemMapper.toProblem(failure), Optional.empty());
         }
+    }
+
+    /**
+     * What the agent reads of a failure that gabier does not know is the generic problem, which keeps paths and secrets
+     * out of it; the person who runs the server reads the whole failure here, on the standard error. A failure that
+     * gabier knows (a refusal, a value that does not fit) says everything in its problem.
+     */
+    private void logIfUnexpected(Operation operation, RuntimeException failure) {
+        if (failure instanceof GeneratorException) {
+            return;
+        }
+        err.println("gabier mcp: the call of " + operation.method() + " failed");
+        failure.printStackTrace(err);
     }
 
     private static Map<String, @Nullable Object> arguments(Map<String, @Nullable Object> params) {
@@ -131,9 +153,7 @@ final class ToolCalls {
             case OperationResult.Reported reported ->
                 answer(ResultText.lines(reported.status()), reported.status().toJson());
             case OperationResult.Diagnosed diagnosed ->
-                answer(
-                        ResultText.lines(file, diagnosed.diagnostics()),
-                        diagnosed.diagnostics().toJson());
+                answer(problemsOf(file, diagnosed), diagnosed.diagnostics().toJson());
             case OperationResult.Referenced referenced ->
                 answer(ResultText.lines(referenced.found()), referenced.found().toJson());
             case OperationResult.Offered offered ->
@@ -143,6 +163,16 @@ final class ToolCalls {
                         ResultText.report(changed.changed(), dryRun, true),
                         changed.changed().toJson());
         };
+    }
+
+    /**
+     * The problems of the file as the command line prints them, which are none for a file with no problem: a text block
+     * with nothing in it is what hosts and the Claude API reject, so the call says {@code no problems}.
+     */
+    private static List<String> problemsOf(String file, OperationResult.Diagnosed diagnosed) {
+        var lines = ResultText.lines(file, diagnosed.diagnostics());
+
+        return lines.isEmpty() ? List.of(NO_PROBLEMS) : lines;
     }
 
     private static String answer(List<String> lines, String structuredContent) {

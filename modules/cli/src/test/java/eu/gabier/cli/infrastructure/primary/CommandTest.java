@@ -103,16 +103,46 @@ class CommandTest {
     }
 
     @Test
+    void aCommandThatServesTheOperationsToAnotherFrontEndEndsOnlyWithAUsageErrorWhateverItsCallsMeet() {
+        var command = Command.called("serve")
+                .usage("gabier [--json] serve")
+                .example(EXAMPLE)
+                .servesTheOperations("serve them")
+                .withNotes("a call that fails is a result");
+
+        assertThat(command.summary()).isEqualTo("serve them");
+        assertThat(command.operations()).isEmpty();
+        assertThat(command.refusals()).containsExactly(Refusal.USAGE);
+        assertThat(command.notes()).isEqualTo("a call that fails is a result");
+    }
+
+    @Test
     void aCommandOfTheCliAloneHasNoOperation() {
         assertThat(Help.COMMAND.operations()).isEmpty();
         assertThat(InitAgent.COMMAND.operations()).isEmpty();
     }
 
     @Test
-    void refusesNotesOnACommandThatHasOperations() {
-        assertThatThrownBy(() -> Stop.COMMAND.withNotes("what stop says"))
-                .isExactlyInstanceOf(IllegalArgumentException.class)
-                .hasMessage("The notes of stop are those of its operations");
+    void putsTheNotesOfTheCommandLineAfterThoseOfItsOperations() {
+        var command = Command.called("cut")
+                .usage("gabier [--json] cut <file>")
+                .example(EXAMPLE)
+                .asksTheDaemon(operation("cut", "first"), operation("cut-b", ""), operation("cut-c", "third"))
+                .withNotes("what a person types");
+
+        assertThat(command.notes()).isEqualTo("first\nthird\nwhat a person types");
+        assertThat(command.summary()).isEqualTo("cut cut");
+    }
+
+    @Test
+    void givesTheNotesOfTheCommandLineAloneWhenItsOperationsHaveNone() {
+        var command = Command.called("cut")
+                .usage("gabier [--json] cut <file>")
+                .example(EXAMPLE)
+                .asksTheDaemon(operation("cut", ""))
+                .withNotes("what a person types");
+
+        assertThat(command.notes()).isEqualTo("what a person types");
     }
 
     @Test
@@ -124,20 +154,6 @@ class CommandTest {
                         List.of(Operations.STOP),
                         "its own",
                         "",
-                        List.of(Refusal.USAGE)))
-                .isExactlyInstanceOf(IllegalArgumentException.class)
-                .hasMessage("The command stop has operations: they say what it does");
-    }
-
-    @Test
-    void refusesACommandThatHasOperationsAndNotesOfItsOwn() {
-        assertThatThrownBy(() -> new Command(
-                        "stop",
-                        "gabier [--json] stop",
-                        EXAMPLE,
-                        List.of(Operations.STOP),
-                        "",
-                        "its own notes",
                         List.of(Refusal.USAGE)))
                 .isExactlyInstanceOf(IllegalArgumentException.class)
                 .hasMessage("The command stop has operations: they say what it does");

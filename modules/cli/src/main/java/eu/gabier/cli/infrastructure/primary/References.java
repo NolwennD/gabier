@@ -26,7 +26,12 @@ final class References implements Capability {
                 /work/demo/src/main/java/demo/app/Bank.java:8:16: ledger.deposit(10);
                 /work/demo/src/test/java/demo/LedgerTest.java:6:16: ledger.deposit(20);\
                 """)
-            .asksTheDaemon(Operations.REFERENCES);
+            .asksTheDaemon(Operations.REFERENCES)
+            .withNotes("""
+                The position is typed line:column. Without --include-declaration the declaration is not listed; with it,\
+                 it is listed apart, under "declaration:", and the uses under "references:".
+                A symbol nothing uses prints "no references" and exits with 0; with --json, two empty lists.\
+                """);
 
     @Override
     public Command command() {
