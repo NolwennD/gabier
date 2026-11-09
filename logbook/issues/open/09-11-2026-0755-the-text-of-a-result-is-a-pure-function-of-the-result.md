@@ -1,6 +1,7 @@
 # The text of a result is a pure function of the result
 
 Opened: 09-11-2026 07:55
+Depends on: the-command-line-lives-in-the-primary-adapter-layer
 
 Step 2 of the plan that prepares the cli for an MCP facade (structure only, behaviour identical). Today the text of a
 daemon result is built inside the commands, next to the printing, and `ChangedFilesReply.text()` is private to a record
