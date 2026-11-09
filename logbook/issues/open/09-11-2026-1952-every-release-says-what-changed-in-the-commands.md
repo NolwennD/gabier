@@ -13,11 +13,8 @@ Done when:
 - a tag whose version has no such file, or one that is blank, fails the release workflow before any asset is published,
   with a message that names the file (a test or a check of `bin/ci` that does not need a tag, for a stage that can be run
   on a branch);
-- the files of 0.2.0, 0.3.0, 0.4.0 and 0.5.0 exist, written from what changed for a user of the commands between the tags
-  (`git log` of each range, the issues closed in it, the pages of `docs/commands`): a new command, a changed option, a
-  changed output or refusal, a changed requirement; each says "no change to the commands" when it is true; the 0.5.0 file
-  holds the text of the published release;
+- the file of 0.5.0 exists and holds the text of the published release (decision of the user, 09-11-2026: the published releases are not touched and the older versions are not back-filled, he is the only user); the files of later versions are written before their tag
 - `AGENTS.md` ("Releasing") and the skill or rule that describes a release say that the file is written before the tag;
 - `bin/ci` is green.
 
-Not part of this ticket: editing the published releases (the supervisor does it with the files, with the user's go).
+Not part of this ticket: editing any published release.
