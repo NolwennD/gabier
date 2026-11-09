@@ -2,13 +2,14 @@ package eu.gabier.cli.application;
 
 import eu.gabier.protocol.ChangedFiles;
 import eu.gabier.protocol.CodeActions;
+import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FoundReferences;
 
 /**
  * What an operation answered, decoded into the type of {@code protocol} that holds it. The kind of an operation is
- * fixed: the ones that change files give {@link Changed}, and {@code diagnostics}, {@code references} and {@code
- * actions} each their own.
+ * fixed: the ones that change files give {@link Changed}, and {@code diagnostics}, {@code references}, {@code actions}
+ * and {@code status} each their own.
  */
 public sealed interface OperationResult {
 
@@ -18,6 +19,13 @@ public sealed interface OperationResult {
      * @param changed the change
      */
     record Changed(ChangedFiles changed) implements OperationResult {}
+
+    /**
+     * What the daemon that runs says of itself.
+     *
+     * @param status the status
+     */
+    record Reported(DaemonStatus status) implements OperationResult {}
 
     /**
      * The problems of a file.

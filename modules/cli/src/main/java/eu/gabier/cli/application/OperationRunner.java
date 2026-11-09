@@ -5,6 +5,7 @@ import eu.gabier.cli.domain.Operation;
 import eu.gabier.cli.domain.Parameter;
 import eu.gabier.protocol.ChangedFiles;
 import eu.gabier.protocol.CodeActions;
+import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FoundReferences;
 import eu.gabier.shared.error.domain.GeneratorException;
@@ -49,10 +50,14 @@ public final class OperationRunner {
      */
     public OperationResult run(Operation operation, Map<String, Object> values) {
         var kind = kindOf(operation);
-        var result =
-                daemon.ask(operation.method(), parameters(operation, values)).result();
+        var parameters = parameters(operation, values);
+        var result = (kind == Kind.REPORTED
+                        ? daemon.askRunning(operation.method(), false)
+                        : daemon.ask(operation.method(), parameters))
+                .result();
 
         return switch (kind) {
+            case REPORTED -> new OperationResult.Reported(DaemonStatus.of(result));
             case DIAGNOSED -> new OperationResult.Diagnosed(FileDiagnostics.of(result));
             case REFERENCED -> new OperationResult.Referenced(FoundReferences.of(result));
             case OFFERED -> new OperationResult.Offered(CodeActions.of(result));
@@ -62,6 +67,7 @@ public final class OperationRunner {
 
     /** What an operation answers, which decides how the members of its result are decoded. */
     private enum Kind {
+        REPORTED,
         DIAGNOSED,
         REFERENCED,
         OFFERED,
@@ -70,6 +76,7 @@ public final class OperationRunner {
 
     private static Kind kindOf(Operation operation) {
         return switch (operation.method()) {
+            case "status" -> Kind.REPORTED;
             case "diagnostics" -> Kind.DIAGNOSED;
             case "references" -> Kind.REFERENCED;
             case "actions" -> Kind.OFFERED;

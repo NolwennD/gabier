@@ -377,7 +377,7 @@ class McpServerTest {
             var out = new ByteArrayOutputStream();
             var line = modern("\"a\\nb\\u2028c\"", "server/discover");
 
-            new McpServer()
+            McpExchange.serverOf(new StubDaemon())
                     .serve(
                             new ByteArrayInputStream((line + "\n").getBytes(StandardCharsets.UTF_8)),
                             new PrintStream(out, true, StandardCharsets.UTF_8));

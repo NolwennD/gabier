@@ -17,13 +17,20 @@ final class Mcp implements Capability {
                 {"jsonrpc":"2.0","id":1,"result":{"resultType":"complete","supportedVersions":["2026-07-28","2025-11-25"],...}}\
                 """)
             .standalone(
-                    "serve the operations of gabier as tools of MCP, on the standard input and output", Refusal.USAGE)
+                    "serve the operations of gabier as tools of MCP, on the standard input and output",
+                    Refusal.USAGE,
+                    Refusal.INVALID_VALUES,
+                    Refusal.START_FAILED,
+                    Refusal.CONNECTION_FAILED,
+                    Refusal.NOT_RUNNING)
             .withNotes("""
                 The server speaks MCP on the stdio transport: one JSON-RPC 2.0 message per line on the standard input and on
                 the standard output, which carries nothing else. It answers the two eras of the protocol: server/discover
                 and the metadata of every request (revision 2026-07-28), and initialize (revision 2025-11-25 and
                 earlier). tools/list gives one tool per operation but start and stop, with the parameters of the operation
-                as its input schema.\
+                as its input schema. tools/call runs the operation as the command line does (starting the daemon when
+                none runs) and answers the text the command line prints, with the result of the daemon beside it; a
+                refusal is a result with isError, holding the problem and the pointer to gabier help.\
                 """);
 
     @Override
@@ -34,6 +41,6 @@ final class Mcp implements Capability {
     @Override
     public void run(Invocation invocation) {
         invocation.arguments().exactly(0);
-        new McpServer().serve(invocation.in(), invocation.out());
+        new McpServer(invocation.operations(), Capabilities::commandOf).serve(invocation.in(), invocation.out());
     }
 }

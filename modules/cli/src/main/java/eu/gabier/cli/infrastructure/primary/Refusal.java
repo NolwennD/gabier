@@ -13,5 +13,9 @@ final class Refusal {
             "daemon-connection-failed: the connection to the daemon was lost, or it hung up without answering";
     static final String NOT_RUNNING = "daemon-not-running: no daemon answers; the command never starts one";
 
+    static final String INVALID_VALUES =
+            "operation-invalid-values: a value of the call is missing, is not a parameter of the operation, or is not"
+                    + " of its kind";
+
     private Refusal() {}
 }

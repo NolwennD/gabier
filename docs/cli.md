@@ -66,7 +66,10 @@ outside that package names it (`HexagonalArchTest`). The text of a result (`Chan
 lines. A second front end takes the same port and the same text: the MCP server, `gabier mcp`, is a second primary adapter in
 `eu.gabier.cli.infrastructure.primary.mcp` (JDK and `Json` only; one JSON-RPC message per line on the standard input and
 output, nothing else on the output). `tools/list` generates one tool per descriptor of `Operations` but `start` and `stop`
-(`Tools`), so a parameter added to an operation shows in the schema of its tool with no other file edited; the page of
+(`Tools`), so a parameter added to an operation shows in the schema of its tool with no other file edited; `tools/call`
+(`ToolCalls`) runs the operation through the same `OperationRunner` and gives the text of `ResultText` in `content` and the
+result of the daemon in `structuredContent`, a refusal being a result with `isError` that holds the problem and the pointer of
+`Problems` (`eu.gabier.cli.application`, which the command line uses too); the page of
 the command is [mcp](commands/mcp.md). The guide of the improvements
 (`gabier help guide`, `docs/improve.md`) is below the command line too: `Guide`, `GuideSection`, `GuideSections` and the
 `ranking` package are in `eu.gabier.cli.domain`, the answer to a question (`help --for`) is `AskTheGuide.answer` in

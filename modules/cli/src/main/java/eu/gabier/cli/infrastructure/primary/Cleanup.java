@@ -38,18 +38,10 @@ final class Cleanup implements Capability {
         if (cleanUps.stream().anyMatch(cleanUp -> cleanUp.lines().count() != 1)) {
             throw UsageException.unsupportedArguments(arguments.all());
         }
-        var reply = ChangedFilesReply.ask(
-                invocation,
-                Operations.CLEANUP,
-                Map.of("file", operands.file(0).toString(), "cleanUps", cleanUps, "dryRun", arguments.dryRun()));
-        if (!invocation.json() && reply.isEmpty()) {
-            if (arguments.dryRun()) {
-                invocation.out().println("dry run, nothing written");
-            }
-            invocation.out().println("nothing to change");
-
-            return;
-        }
-        reply.print();
+        ChangedFilesReply.ask(
+                        invocation,
+                        Operations.CLEANUP,
+                        Map.of("file", operands.file(0).toString(), "cleanUps", cleanUps, "dryRun", arguments.dryRun()))
+                .printSayingNothingToChange();
     }
 }

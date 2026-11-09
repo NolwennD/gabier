@@ -1,5 +1,7 @@
 package eu.gabier.cli.infrastructure.primary.mcp;
 
+import eu.gabier.cli.application.OperationRunner;
+import eu.gabier.cli.domain.Operation;
 import eu.gabier.protocol.Json;
 import eu.gabier.protocol.ProtocolVersion;
 import java.io.BufferedReader;
@@ -10,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -45,8 +48,20 @@ public final class McpServer {
     private static final String SERVER_INFO =
             "{\"name\":\"gabier\",\"version\":" + Json.quote(ProtocolVersion.CURRENT.value()) + "}";
 
-    private final String toolsJson = Tools.served().json();
+    private final Tools tools = Tools.served();
+    private final String toolsJson = tools.json();
+    private final ToolCalls calls;
     private boolean initialized;
+
+    /**
+     * A server of the operations of the daemon.
+     *
+     * @param operations how an operation is run, the one entry point that any front end uses
+     * @param commandOf the word of the command line that runs an operation, for the pointer to its help
+     */
+    public McpServer(OperationRunner operations, Function<Operation, String> commandOf) {
+        calls = new ToolCalls(tools, operations, commandOf);
+    }
 
     /** The era a request is served in. */
     private enum Era {
@@ -90,6 +105,7 @@ public final class McpServer {
             case "ping" -> "{}";
             case "server/discover" -> discover(request.params());
             case "tools/list" -> toolsList(request.params());
+            case "tools/call" -> toolsCall(request.params());
             default -> throw McpFailure.methodNotFound();
         };
     }
@@ -120,6 +136,17 @@ public final class McpServer {
         return switch (eraOf(params)) {
             case MODERN -> modern(tools + "," + caching());
             case EARLIER -> "{" + tools + "}";
+        };
+    }
+
+    /** A call of a tool, in the era its metadata names: its result says whether the operation worked. */
+    private String toolsCall(Map<String, @Nullable Object> params) {
+        var era = eraOf(params);
+        var members = calls.call(params);
+
+        return switch (era) {
+            case MODERN -> modern(members);
+            case EARLIER -> "{" + members + "}";
         };
     }
 

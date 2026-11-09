@@ -2,6 +2,8 @@ package eu.gabier.cli.infrastructure.primary.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import eu.gabier.cli.application.OperationRunner;
+import eu.gabier.cli.domain.Daemon;
 import eu.gabier.protocol.Json;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -37,6 +39,16 @@ final class McpExchange {
             """.formatted(id, method, MODERN_META);
     }
 
+    /** The line of a call of a tool in the modern era; the members of its params, but the metadata, are given as JSON. */
+    static String modernCall(String members) {
+        return request("1", "tools/call", "{" + members + "," + MODERN_META + "}");
+    }
+
+    /** The line of a call of the tool of this name with these arguments, as JSON, in the modern era. */
+    static String modernCall(String name, String arguments) {
+        return modernCall("\"name\":" + Json.quote(name) + ",\"arguments\":" + arguments);
+    }
+
     /** The line of a request with these params, as JSON. */
     static String request(String id, String method, String params) {
         return """
@@ -50,14 +62,32 @@ final class McpExchange {
             """.formatted(method);
     }
 
-    /** What the server wrote for these lines of input, as the JSON of each line of output. */
+    /**
+     * A server over this daemon. The command that does an operation is named after it, here, so that a test sees which
+     * one a pointer to the help names.
+     */
+    static McpServer serverOf(Daemon daemon) {
+        return new McpServer(new OperationRunner(daemon), operation -> "command-of-" + operation.method());
+    }
+
+    /** What the server wrote for these lines of input, as the JSON of each line of output; it never reaches a daemon. */
     static List<@Nullable Object> exchange(String... lines) {
-        return exchange(new ByteArrayInputStream(String.join("\n", lines).getBytes(StandardCharsets.UTF_8)));
+        return exchange(new StubDaemon(), lines);
+    }
+
+    /** What the server over this daemon wrote for these lines of input, as the JSON of each line of output. */
+    static List<@Nullable Object> exchange(Daemon daemon, String... lines) {
+        return exchange(
+                daemon, new ByteArrayInputStream(String.join("\n", lines).getBytes(StandardCharsets.UTF_8)));
     }
 
     static List<@Nullable Object> exchange(InputStream in) {
+        return exchange(new StubDaemon(), in);
+    }
+
+    private static List<@Nullable Object> exchange(Daemon daemon, InputStream in) {
         var out = new ByteArrayOutputStream();
-        new McpServer().serve(in, new PrintStream(out, true, StandardCharsets.UTF_8));
+        serverOf(daemon).serve(in, new PrintStream(out, true, StandardCharsets.UTF_8));
 
         return out.toString(StandardCharsets.UTF_8).lines().map(Json::parse).toList();
     }

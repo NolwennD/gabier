@@ -5,6 +5,7 @@ import eu.gabier.cli.domain.Operations;
 import eu.gabier.cli.domain.Parameter;
 import eu.gabier.protocol.Json;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -38,6 +39,13 @@ final class Tools {
         return new Tools(Operations.all().stream()
                 .filter(operation -> !NOT_TOOLS.contains(operation.method()))
                 .toList());
+    }
+
+    /** The operation of the tool of this name, if there is one. */
+    Optional<Operation> find(String name) {
+        return operations.stream()
+                .filter(operation -> operation.method().equals(name))
+                .findFirst();
     }
 
     /** The tools as a JSON array. */

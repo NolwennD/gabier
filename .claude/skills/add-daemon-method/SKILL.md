@@ -70,9 +70,11 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      refusal that more than one operation answers is a constant of `Refusals` (the file, the language server and the
      stale edit ones), not a copy; a parameter that more than one shares is one of `Parameters`. An operation that can be
      asked in two ways is two operations (`RENAME`, `RENAME_TOKEN`). A key of the method that says the language server
-     declined the operation (`language-server-not-...`) goes into `DECLINED_OPERATIONS` of `HelpPointer`, so that its
-     refusal ends with the pointer to `gabier help <name>`. Any other front end (MCP) builds its tool from this
-     descriptor, not from the command line;
+     declined the operation (`language-server-not-...`) goes into `DECLINED_OPERATIONS` of `Problems` (`eu.gabier.cli.application`), so that its
+     refusal ends with the pointer to `gabier help <name>`, on the command line and in the failed call of the MCP tool.
+     The MCP server (`gabier mcp`) builds its tool from this descriptor, not from the command line, and calls it
+     through `OperationRunner`: a new operation is a tool with no other file edited; one that answers with a new kind of
+     result also adds the case to the `switch` of `ToolCalls` (it does not compile without it);
    - a final class implementing `Capability` (`command()`, `run(Invocation)`), named after the command (`Rename`,
      `OrganizeImports`; `Diagnostics`, `Status` are the models). It declares what is the command line's own, once, as
      the constant `static final Command COMMAND = Command.called("<name>")`, which a step builder fills one part after
@@ -112,10 +114,12 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      (with `DaemonClient`, `DaemonLauncher`, `DaemonException`, `WaitNotice`), starts `gabier-daemon` when nothing
      answers (`DaemonLauncher`) and is built by `Gabier` (in `eu.gabier.cli`, which hands it to `CommandLine`), the one class outside the adapters that names it (a rule of
      `HexagonalArchTest`); a new way to the daemon is a method of the port, with its adapter. An
-     administrative command that must not start the daemon (`status`, `stop`) calls
-     `invocation.daemon().askRunning(method, awaitEnd)`.
-     A command that answers with changed files shares `ChangedFilesReply` (`ask(invocation, operation, values)`, `print`, `isEmpty`: the list of files,
-     the diff, the dry run), by composition, not by inheritance. A command that does not talk to the daemon (`help`)
+     administrative command that must not start the daemon calls `invocation.daemon().askRunning(method, awaitEnd)`
+     (`stop`), or runs its operation through the runner when the runner asks a daemon that runs (`status`, kind
+     `REPORTED` of `OperationRunner`).
+     A command that answers with changed files shares `ChangedFilesReply` (`ask(invocation, operation, values)`, `print`,
+     `printSayingNothingToChange`: the dry run, the warnings, the list of files and the diff, which is
+     `ResultText.report`, shared with the MCP server), by composition, not by inheritance. A command that does not talk to the daemon (`help`)
      asks nothing and has no row in `docs/protocol.md`. Its output is text by default and the result with `--json`, a
      refusal of the daemon printed as its problem object with the exit code of its category (`DaemonRefusal`, turned into the `Problem` by `Gabier`);
    - the row of the method in the table of `docs/protocol.md`, with the same parameters: `OperationParametersTest`

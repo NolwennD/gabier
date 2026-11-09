@@ -1,10 +1,10 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.application.OperationResult;
+import eu.gabier.cli.application.ResultText;
 import eu.gabier.cli.domain.Operations;
-import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.TerminalText;
-import java.util.ArrayList;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 /**
  * {@code status}: the daemon, if one runs. It takes no argument and starts no daemon. The version, the project, the
@@ -29,23 +29,13 @@ final class Status implements Capability {
     @Override
     public void run(Invocation invocation) {
         invocation.arguments().exactly(0);
-        var result = invocation.daemon().askRunning(command().commandName(), false);
-        var status = DaemonStatus.of(result.result());
-        invocation.out().println(invocation.json() ? status.toJson() : text(status));
-    }
+        var result = (OperationResult.Reported) invocation.operations().run(Operations.STATUS, Map.of());
+        var status = result.status();
+        if (invocation.json()) {
+            invocation.out().println(status.toJson());
 
-    /** The line of the daemon, then the settings of the imports it follows for the project, each with its source. */
-    private static String text(DaemonStatus status) {
-        var failure = status.jdtlsFailure().map(reason -> " (" + reason + ")").orElse("");
-        var progress =
-                status.jdtlsProgress().map(doing -> " (" + doing.text() + ")").orElse("");
-        var lines = new ArrayList<String>();
-        lines.add("gabier-daemon " + status.version() + ", pid " + status.pid() + ", up "
-                + status.uptime().toSeconds() + "s, project " + status.project() + ", jdtls "
-                + status.jdtls().text() + failure + progress);
-        lines.add("imports:");
-        status.imports().lines().forEach(line -> lines.add("  " + line));
-
-        return lines.stream().map(TerminalText::neutralise).collect(Collectors.joining(System.lineSeparator()));
+            return;
+        }
+        ResultText.lines(status).forEach(invocation.out()::println);
     }
 }

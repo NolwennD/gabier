@@ -2,6 +2,7 @@ package eu.gabier.cli.infrastructure.primary;
 
 import eu.gabier.cli.Gabier;
 import eu.gabier.cli.application.OperationRunner;
+import eu.gabier.cli.application.Problems;
 import eu.gabier.cli.domain.Daemon;
 import eu.gabier.cli.domain.DaemonRefusal;
 import eu.gabier.protocol.ExitCode;
@@ -42,7 +43,7 @@ public final class CommandLine {
 
             return ExitCode.SUCCESS.value();
         } catch (DaemonRefusal refusal) {
-            var problem = problemOf(refusal);
+            var problem = Problems.of(refusal);
 
             return report(problem, HelpPointer.after(problem, words.getFirst()), json, err);
         } catch (RuntimeException e) {
@@ -65,17 +66,6 @@ public final class CommandLine {
             return;
         }
         capability.get().run(new Invocation(words, json, out, new OperationRunner(daemon), daemon, in));
-    }
-
-    /** The problem object of a refusal of the daemon, as the daemon gave it. */
-    private static Problem problemOf(DaemonRefusal refusal) {
-        return new Problem(
-                refusal.type(),
-                refusal.title(),
-                refusal.detail(),
-                refusal.key(),
-                refusal.parameters(),
-                refusal.category());
     }
 
     /** Reports the failure as a problem object on the standard error, as JSON or as text, and gives the exit code. */

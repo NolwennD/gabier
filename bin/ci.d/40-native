@@ -14,7 +14,7 @@ import java.util.stream.Stream;
 /**
  * Stage {@code native} of the local CI (see {@code bin/ci}): builds the native cli and runs the binary alone, in an
  * empty directory with an empty environment, so that it cannot lean on anything of the checkout: {@code --version},
- * {@code help}, {@code help guide}, {@code help agents}, {@code help --for=<task>} (the guide and the instructions for an agent are resources of the image) and {@code init-agent} (run once in a temporary project folder: a snippet written, then replaced in place, a rule cut with {@code --only}, a dry run of a skill, a refusal), {@code mcp} (a {@code tools/list} and the handshakes of both eras piped in, with an empty environment), a usage error reported as a problem object (text, then JSON with {@code --json}) with its exit code, the two output
+ * {@code help}, {@code help guide}, {@code help agents}, {@code help --for=<task>} (the guide and the instructions for an agent are resources of the image) and {@code init-agent} (run once in a temporary project folder: a snippet written, then replaced in place, a rule cut with {@code --only}, a dry run of a skill, a refusal), {@code mcp} (a {@code tools/list} and the handshakes of both eras piped in, with an empty environment; and a {@code tools/call} of {@code actions} and a refused one of {@code apply-action} against the daemon served by the fake language server), a usage error reported as a problem object (text, then JSON with {@code --json}) with its exit code, the two output
  * streams kept apart, and then the cli against a real daemon: the installed {@code gabier-daemon} is started on a socket
  * in a temporary directory ({@code GABIER_SOCKET}, never the default path of the user), and {@code status} and {@code
  * stop} are run against it, with no daemon, with a stale socket and with a second daemon; {@code diagnostics} is run
@@ -1562,6 +1562,32 @@ public final class Native {
             expect(
                     nothing.exit() == 0 && nothing.err().isEmpty() && nothing.out().equals("no actions"),
                     "gabier actions says that a range with nothing offered has no actions, exit 0");
+
+            String meta = "\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\","
+                    + "\"io.modelcontextprotocol/clientCapabilities\":{}}";
+            String range = "\"file\":\"" + file + "\",\"startLine\":4,\"startColumn\":5,\"endLine\":4,\"endColumn\":9";
+            String calls = String.join(
+                            "\n",
+                            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"actions\","
+                                    + "\"arguments\":{" + range + "}," + meta + "}}",
+                            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"apply-action\","
+                                    + "\"arguments\":{" + range + ",\"title\":\"No such action\",\"dryRun\":false}," + meta + "}}")
+                    + "\n";
+            Run mcp = runBinaryReading(cli, directory, List.of("GABIER_SOCKET", socket.toString()), calls, "mcp");
+            List<String> answers = mcp.out().lines().toList();
+            System.out.println("gabier mcp (tools/call) -> " + answers.size() + " answers (exit " + mcp.exit() + "), stderr \"" + mcp.err() + "\"");
+            expect(
+                    mcp.exit() == 0
+                            && mcp.err().isEmpty()
+                            && answers.size() == 2
+                            && answers.get(0).contains("\"text\":\"1 quickfix " + title + "\"")
+                            && answers.get(0).contains("\"structuredContent\":{\"actions\":[{\"kind\":\"quickfix\"")
+                            && answers.get(0).contains("\"isError\":false")
+                            && answers.get(1).contains("\"isError\":true")
+                            && answers.get(1).contains("\"key\":\"editing-no-such-code-action\"")
+                            && answers.get(1).contains("Usage and other ways: gabier help apply-action"),
+                    "gabier mcp runs a tool against the daemon: the text of the command line and the result of the daemon,"
+                            + " a refusal as a failed call with the pointer to the help, nothing else on the output");
 
             Run dryRun = gabier("apply-action", "--dry-run", file, "4:5", "4:9", title);
             expect(

@@ -2,6 +2,7 @@ package eu.gabier.cli.application;
 
 import eu.gabier.protocol.ChangedFiles;
 import eu.gabier.protocol.CodeActions;
+import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FoundReferences;
 import eu.gabier.protocol.FoundReferences.Place;
@@ -18,6 +19,9 @@ import java.util.stream.IntStream;
  * language server, and none may drive a terminal or split a line.
  */
 public final class ResultText {
+
+    private static final String DRY_RUN = "dry run, nothing written";
+    private static final String NOTHING_TO_CHANGE = "nothing to change";
 
     private ResultText() {}
 
@@ -84,6 +88,47 @@ public final class ResultText {
         return neutralised(IntStream.range(0, offered.actions().size())
                 .mapToObj(index -> line(index + 1, offered.actions().get(index)))
                 .toList());
+    }
+
+    /**
+     * The status of the daemon: its line, then the settings of the imports it follows for the project, each with its
+     * source, indented. What jdtls said (the reason it failed, what it is doing) is neutralised.
+     */
+    public static List<String> lines(DaemonStatus status) {
+        var failure = status.jdtlsFailure().map(reason -> " (" + reason + ")").orElse("");
+        var progress =
+                status.jdtlsProgress().map(doing -> " (" + doing.text() + ")").orElse("");
+        var lines = new ArrayList<String>();
+        lines.add("gabier-daemon " + status.version() + ", pid " + status.pid() + ", up "
+                + status.uptime().toSeconds() + "s, project " + status.project() + ", jdtls "
+                + status.jdtls().text() + failure + progress);
+        lines.add("imports:");
+        status.imports().lines().forEach(line -> lines.add("  " + line));
+
+        return neutralised(lines);
+    }
+
+    /**
+     * The text of an operation that changes files, whole: the dry run said first when it was one, the warnings of the
+     * daemon, then the files and the diff. A change that holds nothing says {@code nothing to change} when the
+     * operation is one that says it (a file already clean, imports already in order), and nothing otherwise.
+     *
+     * @param dryRun whether the operation was asked to write nothing
+     * @param saysNothingToChange whether an empty change is said
+     */
+    public static List<String> report(ChangedFiles changed, boolean dryRun, boolean saysNothingToChange) {
+        var report = new ArrayList<String>();
+        if (dryRun) {
+            report.add(DRY_RUN);
+        }
+        report.addAll(warnings(changed));
+        var files = lines(changed);
+        if (files.isEmpty() && saysNothingToChange) {
+            report.add(NOTHING_TO_CHANGE);
+        }
+        report.addAll(files);
+
+        return report;
     }
 
     /** What the daemon noticed on the way, one {@code warning:} line each. */

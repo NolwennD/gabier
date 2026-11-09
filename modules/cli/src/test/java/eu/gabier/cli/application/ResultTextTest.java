@@ -6,13 +6,18 @@ import eu.gabier.protocol.ChangedFiles;
 import eu.gabier.protocol.ChangedFiles.Moved;
 import eu.gabier.protocol.CodeActions;
 import eu.gabier.protocol.CodeActions.Action;
+import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FileDiagnostics.Diagnosis;
 import eu.gabier.protocol.FileDiagnostics.Severity;
 import eu.gabier.protocol.FoundReferences;
 import eu.gabier.protocol.FoundReferences.Place;
+import eu.gabier.protocol.ImportSettings;
+import eu.gabier.protocol.JdtlsState;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -69,6 +74,107 @@ class ResultTextTest {
 
             assertThat(ResultText.warnings(changed))
                     .containsExactly("warning: two files disagree", "warning: see " + ESCAPED);
+        }
+    }
+
+    @Nested
+    class OfAReportOfChangedFiles {
+
+        private static final ChangedFiles EMPTY = new ChangedFiles(List.of(), List.of(), List.of(), List.of(), "");
+        private static final ChangedFiles RENAMED =
+                new ChangedFiles(List.of(), List.of(), List.of(), List.of(Path.of("/work/A.java")), "--- a\n+++ b");
+
+        @Test
+        void givesTheFilesAndTheDiffOfAChangeThatWrote() {
+            assertThat(ResultText.report(RENAMED, false, false))
+                    .containsExactly("modified /work/A.java", "", "--- a", "+++ b");
+        }
+
+        @Test
+        void saysADryRunBeforeTheRest() {
+            assertThat(ResultText.report(RENAMED, true, false))
+                    .containsExactly("dry run, nothing written", "modified /work/A.java", "", "--- a", "+++ b");
+        }
+
+        @Test
+        void putsTheWarningsBeforeTheFiles() {
+            var warned = RENAMED.withWarnings(List.of("two files disagree"));
+
+            assertThat(ResultText.report(warned, false, false))
+                    .containsExactly("warning: two files disagree", "modified /work/A.java", "", "--- a", "+++ b");
+        }
+
+        @Test
+        void saysNothingForAChangeThatHoldsNothingWhenTheOperationDoesNotSayIt() {
+            assertThat(ResultText.report(EMPTY, false, false)).isEmpty();
+            assertThat(ResultText.report(EMPTY, true, false)).containsExactly("dry run, nothing written");
+        }
+
+        @Test
+        void saysThereIsNothingToChangeForAChangeThatHoldsNothingWhenTheOperationSaysIt() {
+            assertThat(ResultText.report(EMPTY, false, true)).containsExactly("nothing to change");
+            assertThat(ResultText.report(EMPTY.withWarnings(List.of("careful")), true, true))
+                    .containsExactly("dry run, nothing written", "warning: careful", "nothing to change");
+        }
+
+        @Test
+        void doesNotSayThereIsNothingToChangeForAChangeThatHoldsSomething() {
+            assertThat(ResultText.report(RENAMED, false, true)).doesNotContain("nothing to change");
+        }
+    }
+
+    @Nested
+    class OfTheStatus {
+
+        private final DaemonStatus status = new DaemonStatus(
+                "0.1",
+                4242,
+                Duration.ofMillis(65432),
+                Path.of("/work/demo"),
+                JdtlsState.STARTING,
+                Optional.empty(),
+                ImportSettings.DEFAULTS);
+
+        @Test
+        void givesTheLineOfTheDaemonThenTheSettingsOfTheImports() {
+            var lines = ResultText.lines(status);
+
+            assertThat(lines.getFirst())
+                    .isEqualTo("gabier-daemon 0.1, pid 4242, up 65s, project /work/demo, jdtls starting");
+            assertThat(lines.get(1)).isEqualTo("imports:");
+            assertThat(lines.subList(2, lines.size()))
+                    .isNotEmpty()
+                    .allSatisfy(line -> assertThat(line).startsWith("  java."));
+        }
+
+        @Test
+        void saysWhyJdtlsFailed() {
+            var failed = new DaemonStatus(
+                    "0.1",
+                    4242,
+                    Duration.ofSeconds(3),
+                    Path.of("/work/demo"),
+                    JdtlsState.FAILED,
+                    Optional.of("no JDK"),
+                    ImportSettings.DEFAULTS);
+
+            assertThat(ResultText.lines(failed).getFirst()).endsWith("jdtls failed (no JDK)");
+        }
+
+        @Test
+        void writesOutWhatATerminalWouldObeyInTheReason() {
+            var failed = new DaemonStatus(
+                    "0.1",
+                    4242,
+                    Duration.ofSeconds(3),
+                    Path.of("/work/demo"),
+                    JdtlsState.FAILED,
+                    Optional.of("x" + ESCAPE + "\nforged"),
+                    ImportSettings.DEFAULTS);
+
+            assertThat(ResultText.lines(failed))
+                    .hasSize(ResultText.lines(status).size());
+            assertThat(ResultText.lines(failed).getFirst()).endsWith("(x" + ESCAPED + "\\u000aforged)");
         }
     }
 

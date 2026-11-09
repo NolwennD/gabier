@@ -1,5 +1,6 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.domain.Operation;
 import eu.gabier.shared.error.domain.Assert;
 import java.util.Arrays;
 import java.util.List;
@@ -43,6 +44,16 @@ final class Capabilities {
         return ALL.stream()
                 .filter(capability -> capability.command().commandName().equals(name))
                 .findFirst();
+    }
+
+    /** The word of the command line that runs this operation ({@code rename} for {@code rename-token} too). */
+    static String commandOf(Operation operation) {
+        return ALL.stream()
+                .map(Capability::command)
+                .filter(command -> command.operations().contains(operation))
+                .map(Command::commandName)
+                .findFirst()
+                .orElseThrow();
     }
 
     /** The capability of the command a word with one typo (a letter changed, added or removed, two swapped) was meant for. */

@@ -13,10 +13,12 @@ import eu.gabier.cli.domain.Parameter;
 import eu.gabier.cli.domain.Parameter.Type;
 import eu.gabier.protocol.ChangedFiles;
 import eu.gabier.protocol.CodeActions;
+import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FileDiagnostics.Diagnosis;
 import eu.gabier.protocol.FileDiagnostics.Severity;
 import eu.gabier.protocol.FoundReferences;
+import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.Json;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import java.math.BigDecimal;
@@ -240,6 +242,31 @@ class OperationRunnerTest {
     }
 
     @Nested
+    class ReportingTheStatus {
+
+        private final DaemonStatus status =
+                new DaemonStatus("0.1", 4242, Duration.ofSeconds(65), Path.of("/work/demo"), JdtlsState.READY);
+
+        @Test
+        void asksADaemonThatRunsAndStartsNone() {
+            daemon.answers(status.toJson());
+
+            var result = runner.run(Operations.STATUS, Map.of());
+
+            assertThat(result).isEqualTo(new OperationResult.Reported(status));
+            assertThat(daemon.askedRunning).containsExactly("status");
+        }
+
+        @Test
+        void refusesAValueTheOperationDoesNotTake() {
+            assertThatThrownBy(() -> runner.run(Operations.STATUS, Map.of("verbose", true)))
+                    .isInstanceOf(InvalidValuesException.class)
+                    .hasMessage("The operation status takes no value named verbose");
+            assertThat(daemon.askedRunning).isEmpty();
+        }
+    }
+
+    @Nested
     class Refusing {
 
         private static final Map<String, Object> RENAME =
@@ -404,11 +431,12 @@ class OperationRunnerTest {
     }
 
     static Stream<Operation> operationsOfTheDaemonThatAskDoesNotServe() {
-        return Stream.of(Operations.STATUS, Operations.START, Operations.STOP);
+        return Stream.of(Operations.START, Operations.STOP);
     }
 
     static Stream<Operation> operationsOfTheDaemonThatAskServes() {
         return Operations.all().stream()
+                .filter(operation -> !operation.equals(Operations.STATUS))
                 .filter(operation ->
                         operationsOfTheDaemonThatAskDoesNotServe().noneMatch(other -> other.equals(operation)));
     }
@@ -457,6 +485,7 @@ class OperationRunnerTest {
     private static final class FakeDaemon implements Daemon {
 
         private final List<Asked> asked = new ArrayList<>();
+        private final List<String> askedRunning = new ArrayList<>();
         private @Nullable String answer;
         private @Nullable RuntimeException refusal;
 
@@ -485,7 +514,9 @@ class OperationRunnerTest {
 
         @Override
         public DaemonReply askRunning(String method, boolean awaitEnd) {
-            throw new UnsupportedOperationException();
+            askedRunning.add(method);
+
+            return ask(method, Map.of());
         }
 
         @Override
