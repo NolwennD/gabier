@@ -82,6 +82,19 @@ class CleaningUpTest extends CliTest {
         }
     }
 
+    @Test
+    void refusesAnEmptyCleanUpAsAUsageErrorBeforeTheRunnerSeesIt() throws IOException {
+        try (var daemon = daemonAnswering(MODIFIED.toJson())) {
+            assertThat(runWithSocket("cleanup", "/project/Banner.java", "addOverride", ""))
+                    .isEqualTo(2);
+
+            assertThat(err())
+                    .startsWith("Usage error: Unsupported arguments;")
+                    .doesNotContain("operation-invalid-values");
+            assertThat(daemon.requests()).isEmpty();
+        }
+    }
+
     @Nested
     class ReturningChangedFiles implements ChangesCommandContract {
 

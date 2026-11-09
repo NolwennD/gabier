@@ -19,6 +19,7 @@ import eu.gabier.protocol.FileDiagnostics.Severity;
 import eu.gabier.protocol.FoundReferences;
 import eu.gabier.protocol.Json;
 import eu.gabier.shared.error.domain.ErrorStatus;
+import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -70,6 +71,34 @@ class OperationRunnerTest {
                                     "column", "17",
                                     "newName", "welcome",
                                     "dryRun", "false")));
+        }
+
+        @ParameterizedTest
+        @MethodSource("eu.gabier.cli.application.OperationRunnerTest#wholeNumbersAsAFrontEndGivesThem")
+        void takesAPositionAsAnyKindOfWholeNumberAFrontEndGives(Number number) {
+            daemon.answers(CHANGED.toJson());
+
+            runner.run(
+                    Operations.INLINE,
+                    Map.of("file", "/project/A.java", "line", number, "column", number, "dryRun", false));
+
+            assertThat(daemon.asked.getFirst().params())
+                    .containsEntry("line", "5")
+                    .containsEntry("column", "5");
+        }
+
+        @Test
+        void sendsAWholeNumberThatIsNoPositionAsItIsWhateverItsValue() {
+            daemon.answers(CHANGED.toJson());
+
+            runner.run(withATimeout(), Map.of("file", "/project/A.java", "timeout", 0));
+            runner.run(withATimeout(), Map.of("file", "/project/A.java", "timeout", 30L));
+
+            assertThat(daemon.asked)
+                    .extracting(Asked::params)
+                    .satisfiesExactly(
+                            first -> assertThat(first).containsEntry("timeout", "0"),
+                            second -> assertThat(second).containsEntry("timeout", "30"));
         }
 
         @Test
@@ -190,6 +219,17 @@ class OperationRunnerTest {
         }
 
         @ParameterizedTest
+        @MethodSource("eu.gabier.cli.application.OperationRunnerTest#operationsOfTheDaemonThatAskServes")
+        void decodesTheResultOfEveryOperationAsTheKindItAnswers(Operation operation) {
+            var expected = kindAnswered(operation);
+            daemon.answers(expected.json());
+
+            var result = runner.run(operation, validValuesOf(operation));
+
+            assertThat(result).isEqualTo(expected.result());
+        }
+
+        @ParameterizedTest
         @MethodSource("eu.gabier.cli.application.OperationRunnerTest#operationsOfTheDaemonThatAskDoesNotServe")
         void refusesAnOperationThatIsNotAskedForItsResult(Operation operation) {
             assertThatThrownBy(() -> runner.run(operation, Map.of()))
@@ -243,6 +283,23 @@ class OperationRunnerTest {
         }
 
         @Test
+        void saysTheValueNoParameterHasBeforeTheRequiredValueThatIsMissing() {
+            var values = without("newName");
+            values.put("token", "greet");
+
+            refused(values, "The operation rename takes no value named token", "token");
+        }
+
+        @Test
+        void refusesAnUnknownValueWhateverItsKind() {
+            var values = without("newName");
+            values.put("token", 7);
+            values.put("another", "x");
+
+            refused(values, "The operation rename takes no value named another", "another");
+        }
+
+        @Test
         void refusesATextThatIsAnotherKindOfValue() {
             refused(with("newName", 7), "The value newName of the operation rename must be a text", "newName");
         }
@@ -255,6 +312,29 @@ class OperationRunnerTest {
         @Test
         void refusesAPositionBelowOne() {
             refused(with("column", 0), "The value column of the operation rename must be a position, from 1", "column");
+        }
+
+        @ParameterizedTest
+        @MethodSource("eu.gabier.cli.application.OperationRunnerTest#numbersThatAreNoWholeNumber")
+        void refusesANumberThatHasAFractionOrIsNotOne(Number number) {
+            refused(with("line", number), "The value line of the operation rename must be a whole number", "line");
+        }
+
+        @Test
+        void refusesAWholeNumberThatIsNoLongerOne() {
+            refused(
+                    with("line", new BigDecimal("1e30")),
+                    "The value line of the operation rename must be a whole number",
+                    "line");
+        }
+
+        @Test
+        void refusesAWholeNumberThatTheOperationDoesNotHoldAsOne() {
+            assertThatThrownBy(() -> runner.run(withATimeout(), Map.of("file", "/project/A.java", "timeout", "30")))
+                    .isInstanceOfSatisfying(
+                            InvalidValuesException.class,
+                            failure -> assertThat(failure)
+                                    .hasMessage("The value timeout of the operation inline must be a whole number"));
         }
 
         @Test
@@ -281,6 +361,14 @@ class OperationRunnerTest {
                     .hasMessage("The value files of the operation move must be a list of texts");
         }
 
+        @Test
+        void refusesAnEmptyElementOfAListSinceTheDaemonWouldReadItAsNoElementAtAll() {
+            assertThatThrownBy(() -> runner.run(
+                            Operations.MOVE, Map.of("files", List.of("A.java", ""), "package", "p", "dryRun", true)))
+                    .isInstanceOf(InvalidValuesException.class)
+                    .hasMessage("The value files of the operation move must not have an empty element");
+        }
+
         @ParameterizedTest
         @MethodSource("eu.gabier.cli.application.OperationRunnerTest#lineBreaks")
         void refusesAnElementOfAListThatHasALineBreakSinceTheDaemonReadsOneElementToALine(String lineBreak) {
@@ -296,8 +384,71 @@ class OperationRunnerTest {
         return Stream.of("\n", "\r");
     }
 
+    static Stream<Number> wholeNumbersAsAFrontEndGivesThem() {
+        return Stream.of(
+                6, 6L, (short) 6, new BigDecimal("6"), new BigDecimal("6.0"), 6.0, 6.0f, new BigDecimal("0.6E1"));
+    }
+
+    static Stream<Number> numbersThatAreNoWholeNumber() {
+        return Stream.of(6.5, 6.5f, new BigDecimal("6.5"), Double.NaN, Double.POSITIVE_INFINITY);
+    }
+
+    /** An operation with a whole number that is no position, as no operation of the daemon has one today. */
+    private static Operation withATimeout() {
+        return new Operation(
+                "inline",
+                "inline it",
+                "",
+                List.of(),
+                List.of(Parameter.string("file", "the file"), Parameter.integer("timeout", "seconds")));
+    }
+
     static Stream<Operation> operationsOfTheDaemonThatAskDoesNotServe() {
         return Stream.of(Operations.STATUS, Operations.START, Operations.STOP);
+    }
+
+    static Stream<Operation> operationsOfTheDaemonThatAskServes() {
+        return Operations.all().stream()
+                .filter(operation ->
+                        operationsOfTheDaemonThatAskDoesNotServe().noneMatch(other -> other.equals(operation)));
+    }
+
+    /** What an operation answers, as a test writes it down: the answer of the daemon and what it decodes into. */
+    private record KindAnswered(String json, OperationResult result) {}
+
+    private static KindAnswered kindAnswered(Operation operation) {
+        return switch (operation.method()) {
+            case "diagnostics" -> {
+                var diagnostics = new FileDiagnostics(List.of(new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch")));
+                yield new KindAnswered(diagnostics.toJson(), new OperationResult.Diagnosed(diagnostics));
+            }
+            case "references" -> {
+                var found = new FoundReferences(List.of(), List.of());
+                yield new KindAnswered(found.toJson(), new OperationResult.Referenced(found));
+            }
+            case "actions" -> {
+                var offered = new CodeActions(List.of());
+                yield new KindAnswered(offered.toJson(), new OperationResult.Offered(offered));
+            }
+            default -> new KindAnswered(CHANGED.toJson(), new OperationResult.Changed(CHANGED));
+        };
+    }
+
+    /** Values that satisfy the descriptor of an operation: what the operation declares, of the kind it declares. */
+    private static Map<String, Object> validValuesOf(Operation operation) {
+        var values = new LinkedHashMap<String, Object>();
+        operation
+                .parameters()
+                .forEach(parameter -> values.put(
+                        parameter.name(),
+                        switch (parameter.type()) {
+                            case STRING -> "x";
+                            case INTEGER, POSITION -> 1;
+                            case BOOLEAN -> false;
+                            case ARRAY -> List.of("x");
+                        }));
+
+        return values;
     }
 
     private record Asked(String method, Map<String, String> params) {}

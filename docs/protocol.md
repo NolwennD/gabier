@@ -32,7 +32,9 @@ there is no second, smaller bound.
 ## Methods
 
 All the parameters of a method are required; a value is a string (`dryRun` is `true` or `false`, the lines and columns
-are numbers from 0). The page of each command says what it does. `help` and `init-agent` have no row: they are answered by the cli alone and never reach the
+are numbers from 0, and a list, `files` or `cleanUps`, is its elements one to a line, none empty). A front end that types
+the values, such as the descriptor `Operations` and `OperationRunner` of the cli, writes each as its kind says
+(`Parameter.Type`) and counts a position from 1. The page of each command says what it does. `help` and `init-agent` have no row: they are answered by the cli alone and never reach the
 daemon ([help](commands/help.md), [init-agent](commands/init-agent.md)).
 
 | Method             | Parameters                                                                  | Command                                                    |

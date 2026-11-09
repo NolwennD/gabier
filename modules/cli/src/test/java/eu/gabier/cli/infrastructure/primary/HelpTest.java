@@ -151,8 +151,8 @@ class HelpTest extends CliTest {
         assertThat(out())
                 .contains("applies to the whole file")
                 .contains("for one place only")
-                .contains("gabier actions")
-                .contains("gabier apply-action")
+                .contains("ask actions for the range")
+                .contains("to apply-action")
                 .contains("text block");
     }
 

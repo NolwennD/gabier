@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import eu.gabier.cli.domain.Operation;
 import eu.gabier.cli.domain.Operations;
+import eu.gabier.shared.error.domain.MissingMandatoryValueException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -110,8 +111,8 @@ class CommandTest {
     @Test
     void refusesNotesOnACommandThatHasOperations() {
         assertThatThrownBy(() -> Stop.COMMAND.withNotes("what stop says"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("stop");
+                .isExactlyInstanceOf(IllegalArgumentException.class)
+                .hasMessage("The notes of stop are those of its operations");
     }
 
     @Test
@@ -124,8 +125,8 @@ class CommandTest {
                         "its own",
                         "",
                         List.of(Refusal.USAGE)))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("operations");
+                .isExactlyInstanceOf(IllegalArgumentException.class)
+                .hasMessage("The command stop has operations: they say what it does");
     }
 
     @Test
@@ -138,8 +139,8 @@ class CommandTest {
                         "",
                         "its own notes",
                         List.of(Refusal.USAGE)))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("operations");
+                .isExactlyInstanceOf(IllegalArgumentException.class)
+                .hasMessage("The command stop has operations: they say what it does");
     }
 
     @Test
@@ -148,6 +149,7 @@ class CommandTest {
                         .usage("gabier [--json] cut <file>")
                         .example(EXAMPLE)
                         .standalone(" ", Refusal.USAGE))
-                .isInstanceOf(RuntimeException.class);
+                .isExactlyInstanceOf(MissingMandatoryValueException.class)
+                .hasMessage("The field \"ownSummary\" is mandatory and wasn't set (blank)");
     }
 }

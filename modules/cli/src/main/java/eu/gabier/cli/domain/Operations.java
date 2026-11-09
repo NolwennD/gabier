@@ -33,17 +33,17 @@ public final class Operations {
             """
             Start it first thing in a session, in the background, and work on something else: jdtls takes about a
             minute to start and import a Gradle project, and the first command that needs it waits for all of it.
-            Without --wait the answer is at once: the daemon is started if none runs (its log is named then), jdtls
-            starts in it unless it is already starting or ready, and the answer says where jdtls is. With --wait the
-            answer comes when jdtls is ready, after at most --timeout seconds (300 by default); while it waits, a line
-            on the standard error says what jdtls is doing, as for any command that waits for it. A jdtls that is
-            ready is left alone. When the time passes, the refusal gives the last state of jdtls; jdtls goes on
-            starting in the daemon.\
+            The answer is at once, unless the call asks to wait for jdtls: the daemon is started if none runs (its log
+            is named then), jdtls starts in it unless it is already starting or ready, and the answer says where jdtls
+            is. A call that waits is answered when jdtls is ready, after at most a time-out (300 seconds by default);
+            while it waits, a line on the standard error says what jdtls is doing, as for any command that waits for
+            it. A jdtls that is ready is left alone. When the time passes, the refusal gives the last state of jdtls;
+            jdtls goes on starting in the daemon.\
             """,
             List.of(
-                    "jdtls-start-failed: with --wait, jdtls failed to start (the reason follows when the daemon knows"
+                    "jdtls-start-failed: when waiting, jdtls failed to start (the reason follows when the daemon knows"
                             + " it)",
-                    "jdtls-start-timeout: with --wait, jdtls was not ready after the time given; it keeps starting,"
+                    "jdtls-start-timeout: when waiting, jdtls was not ready after the time given; it keeps starting,"
                             + " and the problem says where it was"),
             List.of());
 
@@ -86,8 +86,8 @@ public final class Operations {
             "rename the symbol that an identifier of a file names, and everything that refers to it, in every file",
             "",
             List.of(
-                    "editing-token-not-found: the identifier is not in the file (--token)",
-                    "editing-file-missing: with --token, no file is at the path",
+                    "editing-token-not-found: the identifier is not in the file",
+                    "editing-file-missing: when renaming by identifier, no file is at the path",
                     Refusals.FILE_OUTSIDE_PROJECT,
                     Refusals.FILE_MISSING,
                     Refusals.NOT_A_FILE,
@@ -120,8 +120,8 @@ public final class Operations {
             "apply clean-ups of the language server to a file, such as stringConcatToTextBlock",
             """
             Each clean-up rewrites the whole file, in the order given, on the text the one before left.
-            A clean-up applies to the whole file; for one place only, ask gabier actions for the range, then give\
-             the title of the action to gabier apply-action (for a text block, "Convert String concatenation to\
+            A clean-up applies to the whole file; for one place only, ask actions for the range, then give\
+             the title of the action to apply-action (for a text block, "Convert String concatenation to\
              Text Block").
             The identifiers are those of jdtls: addDeprecated, addFinalModifier, addOverride,
             instanceofPatternMatch, invertEquals, lambdaExpression, lambdaExpressionFromAnonymousClass,
@@ -130,7 +130,7 @@ public final class Operations {
             renameUnusedLocalVariables, stringConcatToTextBlock, switchExpression, tryWithResource,
             useSwitchForInstanceofPattern.
             A file with nothing to clean up is not an error: the answer is nothing to change.
-            To organize the imports, use gabier organize-imports.\
+            To organize the imports, use organize-imports.\
             """,
             List.of(
                     "editing-unknown-clean-up: an identifier is not a clean-up of the language server; the problem"

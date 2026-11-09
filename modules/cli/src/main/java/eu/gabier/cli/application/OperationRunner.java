@@ -7,6 +7,8 @@ import eu.gabier.protocol.ChangedFiles;
 import eu.gabier.protocol.CodeActions;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FoundReferences;
+import eu.gabier.shared.error.domain.GeneratorException;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,10 +19,12 @@ import java.util.TreeSet;
  * the operation, turns them into what the daemon reads, asks the daemon and decodes the answer. A front end reads its
  * own words into values, calls {@link #run}, and shows the result.
  *
- * <p>The values are the kinds the parameters declare: a text, a whole number (a position, counted from 1), {@code true}
- * or {@code false}, a list of texts. The daemon reads texts: a position is sent from 0, a boolean as {@code true} or
- * {@code false}, and a list as its elements one to a line, which is why an element may have no line break. A refusal of
- * the daemon goes through as it came ({@code DaemonRefusal}).
+ * <p>The values are the kinds the parameters declare ({@code Parameter.Type}): a text, a whole number, a position
+ * (a whole number counted from 1), {@code true} or {@code false}, a list of texts. A whole number is a {@code Number}
+ * with no fraction, whatever its class ({@code Integer}, {@code Long}, what a JSON reader gives). The daemon reads
+ * texts: a position is sent from 0, a boolean as {@code true} or {@code false}, and a list as its elements one to a
+ * line, which is why an element has no line break and is not empty. A refusal of the daemon goes through as it came
+ * ({@code DaemonRefusal}).
  */
 public final class OperationRunner {
 
@@ -38,8 +42,9 @@ public final class OperationRunner {
     /**
      * Runs the operation with these values, by the name of their parameter.
      *
-     * @throws InvalidValuesException when a required value is missing, a value is unknown, or one is not of the kind
-     *     its parameter holds
+     * @throws GeneratorException (the key {@code operation-invalid-values}, which any front end turns into a problem
+     *     as it does a refusal of the daemon) when a required value is missing, a value is unknown, or one is not of
+     *     the kind its parameter holds; a value that is unknown is said before one that is missing
      * @throws IllegalArgumentException when the operation is not one that asks the daemon for a result to decode
      */
     public OperationResult run(Operation operation, Map<String, Object> values) {
@@ -116,7 +121,8 @@ public final class OperationRunner {
                 }
                 throw InvalidValuesException.invalid(operation, parameter.name(), "be a text");
             }
-            case INTEGER -> String.valueOf(zeroBased(operation, parameter, value));
+            case INTEGER -> String.valueOf(wholeNumber(operation, parameter, value));
+            case POSITION -> String.valueOf(zeroBased(operation, parameter, value));
             case BOOLEAN -> {
                 if (value instanceof Boolean flag) {
                     yield flag.toString();
@@ -128,15 +134,29 @@ public final class OperationRunner {
     }
 
     /** A position as the daemon counts it: the whole number the front end gave, counted from 1, less one. */
-    private static int zeroBased(Operation operation, Parameter parameter, Object value) {
-        if (!(value instanceof Integer number)) {
-            throw InvalidValuesException.invalid(operation, parameter.name(), "be a whole number");
-        }
+    private static long zeroBased(Operation operation, Parameter parameter, Object value) {
+        var number = wholeNumber(operation, parameter, value);
         if (number < 1) {
             throw InvalidValuesException.invalid(operation, parameter.name(), "be a position, from 1");
         }
 
         return number - 1;
+    }
+
+    /**
+     * A whole number as a front end gives it: an {@code Integer}, a {@code Long}, or what a JSON reader gives (a {@code
+     * BigDecimal}, a {@code Double}) when it has no fraction ({@code 6.0} is 6).
+     */
+    private static long wholeNumber(Operation operation, Parameter parameter, Object value) {
+        if (value instanceof Number number) {
+            try {
+                return new BigDecimal(number.toString()).longValueExact();
+            } catch (NumberFormatException | ArithmeticException notWhole) {
+                // A fraction, a number out of range, NaN or an infinity: the refusal below.
+            }
+        }
+
+        throw InvalidValuesException.invalid(operation, parameter.name(), "be a whole number");
     }
 
     private static List<String> elements(Operation operation, Parameter parameter, Object value) {
@@ -146,6 +166,9 @@ public final class OperationRunner {
         var texts = list.stream().map(String.class::cast).toList();
         if (texts.stream().anyMatch(text -> text.contains("\n") || text.contains("\r"))) {
             throw InvalidValuesException.invalid(operation, parameter.name(), "not have a line break in an element");
+        }
+        if (texts.stream().anyMatch(String::isEmpty)) {
+            throw InvalidValuesException.invalid(operation, parameter.name(), "not have an empty element");
         }
 
         return texts;

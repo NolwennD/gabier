@@ -61,8 +61,10 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    - the **operation**, declared once in `eu.gabier.cli.domain.Operations` (no protocol type, no JSON): a constant
      `public static final Operation <NAME> = new Operation(method, summary, notes, refusals, parameters)`, added to
      `all()` in the order of the table of `docs/protocol.md`. It is the one place that names the **typed parameters**
-     of the method (`Parameter.string`, `.integer`, `.bool`, `.array`: name as the daemon reads it, description; every
-     parameter of a method is required; a position is counted from 1 on this side, and the description says so), the
+     of the method (`Parameter.string`, `.position`, `.integer`, `.bool`, `.array`: name as the daemon reads it,
+     description; every parameter of a method is required; a line or a column is a `.position`, counted from 1 on this
+     side, and the description says so; `.integer` is a whole number that is no position, sent as it is). The notes and the
+     refusals name no option of the command line (`--wait`) and no `gabier <command>`: another front end shows them too. The
      one-line **summary**, the optional **notes** (a warning to read before the call: `move-type-to-file` and `inline`
      are the models) and the **refusals** of the method, `<key>: <meaning>`, in the order `gabier help` lists them. A
      refusal that more than one operation answers is a constant of `Refusals` (the file, the language server and the
@@ -94,12 +96,13 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      the one usage error), runs its operation and prints. A command of the catalogue (it asks for work on the project)
      reduces to two steps, "words to named values" and "result to output", and builds no parameter of the daemon: it calls
      `invocation.operations().run(Operations.X, values)`, where `values` are the named values of the descriptor (a
-     `String`, an `Integer` position counted from 1, a `Boolean`, a `List<String>`), and gets an `OperationResult`
+     `String`, an `Integer` position counted from 1, a `Boolean`, a `List<String>`; any `Number` with no fraction is a
+     whole number), and gets an `OperationResult`
      (`Changed`, `Diagnosed`, `Referenced`, `Offered`: the `protocol` type, decoded). `invocation.operations()` is the
      `OperationRunner` of `eu.gabier.cli.application`, the one entry point of every front end: it checks the values
      against the descriptor (a required value missing, an unknown one, one of another kind, a position below 1: the
      refusal `operation-invalid-values`), sends the positions from 0, a boolean as `true` or `false` and a list one
-     element to a line (the form the daemon reads: an element with a line break is refused), asks the port, and decodes the
+     element to a line (the form the daemon reads: an element with a line break, or an empty one, is refused), asks the port, and decodes the
      answer. **A new operation is also named in `kindOf` of `OperationRunner`** (the `case` list of the operations that
      answer with changed files, or the case of `diagnostics`, `references`, `actions`); a method it does not list is
      refused with an `IllegalArgumentException`, and `OperationRunnerTest` shows it. One that answers with a new kind of

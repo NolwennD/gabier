@@ -1,6 +1,7 @@
 package eu.gabier.cli.infrastructure.primary;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import eu.gabier.cli.domain.Operation;
 import eu.gabier.cli.domain.Operations;
@@ -115,7 +116,7 @@ class OperationParametersTest {
     }
 
     /** The usage line of the operation, in the usage of the command that runs it. */
-    private static String usageLineOf(Command command, Operation operation) {
+    static String usageLineOf(Command command, Operation operation) {
         var lines = command.usage().lines().toList();
         if (lines.size() == command.operations().size()) {
             return lines.get(command.operations().indexOf(operation));
@@ -160,6 +161,51 @@ class OperationParametersTest {
     void everyOperationIsRunByACommand() {
         assertThat(commandsOfTheDaemon().flatMap(command -> command.operations().stream()))
                 .containsExactlyInAnyOrderElementsOf(Operations.all());
+    }
+
+    @Nested
+    class UsageLine {
+
+        private static final String EXAMPLE = "$ gabier cut a";
+
+        private Operation operation(String method) {
+            return new Operation(method, "cut " + method, "", List.of(), List.of());
+        }
+
+        @Test
+        void takesTheLineOfTheOperationWhenTheUsageHasOneLineForEach() {
+            var command = Rename.COMMAND;
+
+            assertThat(usageLineOf(command, Operations.RENAME))
+                    .isEqualTo("gabier [--json] rename [--dry-run] <file> <line>:<column> <new-name>");
+            assertThat(usageLineOf(command, Operations.RENAME_TOKEN))
+                    .isEqualTo("gabier [--json] rename [--dry-run] --token <file> <identifier> <new-name>");
+        }
+
+        @Test
+        void takesAllTheLinesOfTheUsageOfACommandThatHasOneOperation() {
+            var command = Start.COMMAND;
+
+            assertThat(command.usage().lines()).hasSize(2);
+            assertThat(usageLineOf(command, Operations.START)).isEqualTo(command.usage());
+        }
+
+        @Test
+        void refusesAUsageWhoseLinesAreNoneOfTheTwo() {
+            var command = Command.called("cut")
+                    .usage("""
+                        gabier [--json] cut <file>
+                        gabier [--json] cut --token <file>
+                        gabier [--json] cut --all\
+                        """)
+                    .example(EXAMPLE)
+                    .asksTheDaemon(operation("cut"), operation("cut-token"));
+
+            assertThatThrownBy(() -> usageLineOf(command, command.operations().getFirst()))
+                    .isInstanceOf(AssertionError.class)
+                    .hasMessageContaining(
+                            "the lines of the usage of cut are one per operation, or it has one operation");
+        }
     }
 
     @Nested
