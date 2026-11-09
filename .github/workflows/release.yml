@@ -1,7 +1,8 @@
 # A tag `v<version>` (semantic version: v0.1.0, v1.2.0-rc.1) publishes a GitHub release with the native cli, the archive
 # of the daemon, the archive of mise (cli, daemon and jdtls), `install.sh` and SHA256SUMS. Steps, in order, each one
 # needing the one before:
-#   1. version: the tag is checked, the version is the tag without its `v`;
+#   1. version: the tag is checked, the version is the tag without its `v`, and docs/releases/<version>.md, which says
+#      what changed in the commands, must exist and not be blank (before anything is built or published);
 #   2. check: the full bin/ci (ci.yml, the same job as the pull requests) on the tagged commit;
 #   3. release: the build with that version, the version the programs print is checked, the assets are packaged
 #      (scripts/package-release.sh) and attached to the release of the tag.
@@ -34,6 +35,18 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # What changed in the commands is written before the tag: a version with no file, or a blank one, publishes
+      # nothing (scripts/release-notes.sh, the same script that writes the notes of the release).
+      - name: Check out the tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check that docs/releases/<version>.md says what changed
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: scripts/release-notes.sh "$VERSION" .github/release-notes.md > /dev/null
 
   check:
     name: check

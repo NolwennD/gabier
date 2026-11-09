@@ -54,6 +54,17 @@ full `bin/ci` on the tagged commit (the check of the pull requests), builds with
 cli and the daemon print it, and attaches the assets to the release of the tag (the cli, the daemon archive, the archive
 of mise, `install.sh` and `SHA256SUMS`), with the notes of `.github/release-notes.md`.
 
+- **What changed in the commands is written before the tag.** Each version has a file `docs/releases/<version>.md`
+  (the version is the tag without its `v`, whole: `0.6.0-rc.1` has `docs/releases/0.6.0-rc.1.md`, not the file of
+  `0.6.0`), a section `## New in <version>` written from what a user of the commands sees between the previous tag and
+  this one (`git log <previous tag>..HEAD`, the issues closed in that range, `docs/commands`): a new command, a changed
+  option, output or refusal, a changed requirement, and `No change to the commands.` when it is true. It is merged to
+  `main` with the work, before the tag is pushed. `scripts/release-notes.sh` puts it in the notes of the release, in the
+  place of the line `@WHAT_CHANGED@` of `.github/release-notes.md` (the template stays generic), and the release
+  workflow fails, in its first job and before anything is built or published, when the file of the tag is missing or
+  blank, with a message that names it. The stage `release-notes` of `bin/ci` checks the script without a tag; it asks
+  nothing of the versions released before the rule (`docs/releases/` holds `0.5.0.md` only). A published release is not
+  edited to match.
 - A version with a pre-release suffix (`-rc.1`, any `-...`) gives a release marked pre-release, and the programs print
   the whole version (`0.1.0-rc.1`). A version with no suffix gives a normal release.
 - The version that `gabier --version` and `gabier status` print is the Gradle property `gabierVersion`

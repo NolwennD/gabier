@@ -3,7 +3,8 @@
 # of the daemon (the folder `installDist` makes, `gabier-daemon/bin` and `gabier-daemon/lib`), the archive of mise
 # (`gabier-linux-x86_64.tar.gz`: `bin/gabier`, `bin/gabier-daemon`, `lib/` and the pinned `jdtls/`, see below),
 # `install.sh` (written from scripts/release-install.sh.template), `SHA256SUMS` (which lists the four), and the release
-# notes. It first checks that the two programs print the version they were built with: a release that says another
+# notes (.github/release-notes.md with the file docs/releases/<version>.md put in, scripts/release-notes.sh: a version
+# with no such file is refused). It first checks that the two programs print the version they were built with: a release that says another
 # version than its tag is refused.
 #
 # The archive of mise is what `mise use github:NolwennD/gabier@<version>` installs: mise puts its `bin/` on the PATH,
@@ -29,6 +30,8 @@ if ! printf '%s' "$version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1
   echo "package-release: '$version' is not a semantic version (the tag is v<version>)" >&2
   exit 1
 fi
+# What changed in the commands is written before the tag (docs/releases/<version>.md): no file, no release.
+sh "$root/scripts/release-notes.sh" "$version" "$root/.github/release-notes.md" > /dev/null
 for built in "$cli" "$daemon"; do
   if [ ! -x "$built" ]; then
     echo "package-release: $built was not built" >&2
@@ -92,7 +95,9 @@ if grep -q '@[A-Z_]*@' "$out/install.sh"; then
   exit 1
 fi
 chmod 755 "$out/install.sh"
-fill "$root/.github/release-notes.md" "$out/release-notes.md"
+fill "$root/.github/release-notes.md" "$out/release-notes.template"
+sh "$root/scripts/release-notes.sh" "$version" "$out/release-notes.template" > "$out/release-notes.md"
+rm -f "$out/release-notes.template"
 (cd "$out" && sha256sum "$cli_asset" "$daemon_asset" "$mise_asset" install.sh > SHA256SUMS)
 
 echo "package-release: gabier $version packaged in $out"

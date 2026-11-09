@@ -88,7 +88,7 @@ user, 02-11-2026):
 - The subagent that does the ticket runs `bin/ci` on its worktree when it thinks the work is ready, and fixes what it
   shows (skill `verify`). Slow checks stay off the working path: while working, only targeted tests and, at most,
   `bin/ci --fast` (format, build, test, the install script); the full `bin/ci` (native image, real jdtls) is run
-  **once**, at the end. Its `release-install`, `native` and `jdtls` stages skip themselves, with the reason in the
+  **once**, at the end. Its `release-install`, `release-notes`, `native` and `jdtls` stages skip themselves, with the reason in the
   summary, when no changed file can reach them (`--all` forces them); a failed stage is run again alone with
   `--stage <name>`, never the whole run. The gates it runs (coverage at 100%, architecture tests) and the formatting
   are described in `.claude/rules/quality.md`. The supervisor does not run these checks again: the `bin/ci` summary in the subagent's
@@ -119,7 +119,8 @@ merge of the pull request, so the hashes the resolutions cite stay true. A commi
 skills, documents) is pushed to `main` directly, through the bypass of the protection that the owner holds. The rulesets
 of GitHub are `main` (a pull request, the check `bin-ci`, a linear history, no force-push or deletion) and `release tags`
 (no `v*` tag is created, moved or deleted but by the owner, whose push of a tag publishes a release, `release.yml`); both
-let the admin role bypass them. A tag is pushed by the supervisor only, with the user's go. The very small
+let the admin role bypass them. A tag is pushed by the supervisor only, with the user's go, and only once `docs/releases/<version>.md` (what changed in the
+commands, see "Releasing" in `AGENTS.md`) is on `main`: the release workflow refuses a tag whose version has none. The very small
 technical tasks of the supervisor that touch code go through a pull request of their own too. The check of the pull
 requests is `bin-ci`, the full `bin/ci --all` on GitHub (`.github/workflows/ci.yml`), next to the subagent's `bin/ci`
 summary.

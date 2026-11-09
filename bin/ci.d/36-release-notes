@@ -1,0 +1,185 @@
+#!/usr/bin/env -S java --source 25
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Stage {@code release-notes} of the local CI (see {@code bin/ci}): the rule that a release says what changed in the
+ * commands, checked without a tag. It runs {@code scripts/release-notes.sh} on a temporary folder of
+ * {@code docs/releases} and on the real template {@code .github/release-notes.md}: the section of a version is put in
+ * the place of the template, before the attached files; a version with no file, a blank file, or whose own file is
+ * missing while another version's exists (a pre-release has a file of its own) fails with a message that names the file
+ * and writes nothing; a template with no place for the section fails. Runs in the current directory, the checkout under
+ * verification. It looks at no tag and no published release: the versions released before the rule are not asked for a
+ * file.
+ */
+public final class ReleaseNotes {
+
+    private static final String VERSION = "9.9.9";
+    private static final String TEMPLATE = ".github/release-notes.md";
+    private static final String SCRIPT = "scripts/release-notes.sh";
+
+    private record Result(int status, String out, String err) {}
+
+    public static void main(String[] args) throws Exception {
+        String skip = !Files.isRegularFile(Path.of(SCRIPT))
+                ? "no " + SCRIPT
+                : !reachedBy(
+                                SCRIPT,
+                                TEMPLATE,
+                                "scripts/package-release.sh",
+                                "docs/releases/",
+                                ".github/workflows/release.yml",
+                                "bin/ci.d/36-release-notes")
+                        ? "no changed file reaches the release notes (bin/ci --all forces it)"
+                        : null;
+        if (args.length > 0 && args[0].equals("--describe")) {
+            System.out.println("release notes: the section of a version is put in the template, and a version with no"
+                    + " file, or a blank one, is refused with the name of the file");
+            if (skip != null) {
+                System.out.println("skip: " + skip);
+            }
+            return;
+        }
+        if (skip != null) {
+            System.out.println("skip: " + skip);
+            System.exit(77);
+        }
+        Path root = Files.createTempDirectory("gabier-release-notes").toRealPath();
+        try {
+            List<String> problems = new ArrayList<>();
+            checkTheSectionIsPutInTheTemplate(root, problems);
+            checkAMissingFileIsRefused(root, problems);
+            checkABlankFileIsRefused(root, problems);
+            checkAPreReleaseHasItsOwnFile(root, problems);
+            checkATemplateWithNoPlaceIsRefused(root, problems);
+            checkTheRealTemplateHasAPlace(root, problems);
+            if (problems.isEmpty()) {
+                System.out.println("ok: release notes");
+                System.exit(0);
+            }
+            System.out.println("FAILED: release notes");
+            problems.forEach(problem -> System.out.println("- " + problem));
+            System.exit(1);
+        } finally {
+            deleteTree(root);
+        }
+    }
+
+    /** True when a changed file starts with one of the prefixes, or when the changed files are unknown. */
+    private static boolean reachedBy(String... prefixes) {
+        String changed = System.getenv("GABIER_CI_CHANGED");
+        if (changed == null) {
+            return true;
+        }
+        return changed.lines().anyMatch(path -> Arrays.stream(prefixes).anyMatch(path::startsWith));
+    }
+
+    private static void checkTheSectionIsPutInTheTemplate(Path root, List<String> problems) throws Exception {
+        Path releases = Files.createDirectories(root.resolve("present"));
+        Files.writeString(releases.resolve(VERSION + ".md"), "## New in 9.9.9\n\n- A new command, `gabier demo`.\n");
+        Path template = Files.writeString(root.resolve("template.md"), "gabier 9.9.9: intro.\n\n@WHAT_CHANGED@\n\n## Attached\n\n- files\n");
+
+        Result result = run(releases, VERSION, template);
+
+        String expected = "gabier 9.9.9: intro.\n\n## New in 9.9.9\n\n- A new command, `gabier demo`.\n\n## Attached\n\n- files\n";
+        if (result.status() != 0 || !result.out().equals(expected)) {
+            problems.add("the section is not put in the place of the template, before the attached files: exit "
+                    + result.status() + ", wrote:\n" + result.out() + result.err());
+        }
+    }
+
+    private static void checkAMissingFileIsRefused(Path root, List<String> problems) throws Exception {
+        Path releases = Files.createDirectories(root.resolve("missing"));
+        Path template = Files.writeString(root.resolve("template-missing.md"), "@WHAT_CHANGED@\n");
+
+        Result result = run(releases, VERSION, template);
+
+        refused(problems, "a version with no file", result, releases.resolve(VERSION + ".md").toString());
+    }
+
+    private static void checkABlankFileIsRefused(Path root, List<String> problems) throws Exception {
+        Path releases = Files.createDirectories(root.resolve("blank"));
+        Files.writeString(releases.resolve(VERSION + ".md"), "  \n\t\n\n");
+        Path template = Files.writeString(root.resolve("template-blank.md"), "@WHAT_CHANGED@\n");
+
+        Result result = run(releases, VERSION, template);
+
+        refused(problems, "a blank file", result, releases.resolve(VERSION + ".md").toString());
+    }
+
+    private static void checkAPreReleaseHasItsOwnFile(Path root, List<String> problems) throws Exception {
+        Path releases = Files.createDirectories(root.resolve("pre-release"));
+        Files.writeString(releases.resolve(VERSION + ".md"), "## New in 9.9.9\n\n- Something.\n");
+        Path template = Files.writeString(root.resolve("template-pre.md"), "@WHAT_CHANGED@\n");
+
+        Result result = run(releases, VERSION + "-rc.1", template);
+
+        refused(problems, "a pre-release whose version has no file of its own", result,
+                releases.resolve(VERSION + "-rc.1.md").toString());
+    }
+
+    private static void checkATemplateWithNoPlaceIsRefused(Path root, List<String> problems) throws Exception {
+        Path releases = Files.createDirectories(root.resolve("no-place"));
+        Files.writeString(releases.resolve(VERSION + ".md"), "## New in 9.9.9\n\n- Something.\n");
+        Path template = Files.writeString(root.resolve("template-no-place.md"), "gabier 9.9.9: intro.\n");
+
+        Result result = run(releases, VERSION, template);
+
+        refused(problems, "a template with no line @WHAT_CHANGED@", result, "@WHAT_CHANGED@");
+    }
+
+    /** The real template keeps its place for the section, so that the real release puts it before the files. */
+    private static void checkTheRealTemplateHasAPlace(Path root, List<String> problems) throws Exception {
+        Path releases = Files.createDirectories(root.resolve("real"));
+        Files.writeString(releases.resolve(VERSION + ".md"), "## New in 9.9.9\n\n- Something.\n");
+
+        Result result = run(releases, VERSION, Path.of(TEMPLATE));
+
+        int section = result.out().indexOf("## New in 9.9.9");
+        int attached = result.out().indexOf("## Attached");
+        if (result.status() != 0 || section < 0 || attached < 0 || section > attached) {
+            problems.add("the template " + TEMPLATE + " does not put the section before the attached files: exit "
+                    + result.status() + "\n" + result.err());
+        }
+    }
+
+    private static void refused(List<String> problems, String what, Result result, String named) {
+        if (result.status() == 0) {
+            problems.add(what + " is not refused");
+        } else if (!result.out().isEmpty()) {
+            problems.add(what + " is refused, but notes are written:\n" + result.out());
+        } else if (!result.err().contains(named)) {
+            problems.add(what + " is refused, but the message does not name " + named + ":\n" + result.err());
+        }
+    }
+
+    private static Result run(Path releases, String version, Path template) throws Exception {
+        Path stderr = Files.createTempFile(releases.getParent(), "stderr", ".txt");
+        ProcessBuilder builder = new ProcessBuilder("sh", SCRIPT, version, template.toString())
+                .redirectError(stderr.toFile());
+        // The folder of the files is the one of the test, whatever the checkout holds.
+        Map<String, String> env = builder.environment();
+        env.put("RELEASE_NOTES_FOLDER", releases.toString());
+        Process process = builder.start();
+        String out = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        int status = process.waitFor();
+
+        return new Result(status, out, Files.readString(stderr));
+    }
+
+    private static void deleteTree(Path root) throws IOException {
+        try (var files = Files.walk(root)) {
+            for (Path file : files.sorted(Comparator.reverseOrder()).toList()) {
+                Files.delete(file);
+            }
+        }
+    }
+}

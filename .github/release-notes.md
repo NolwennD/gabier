@@ -1,5 +1,7 @@
 gabier @VERSION@: Java refactorings for a coding agent, through a language server.
 
+@WHAT_CHANGED@
+
 ## Attached
 
 - `gabier-linux-x86_64`: the native `gabier` cli (Linux, x86-64).
