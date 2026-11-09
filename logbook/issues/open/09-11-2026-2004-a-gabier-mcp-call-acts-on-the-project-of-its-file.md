@@ -1,6 +1,7 @@
 # A `gabier mcp` call acts on the project of the file it names
 
 Opened: 09-11-2026 20:04
+Depends on: mcp-keeps-answering-while-a-call-waits-and-reads-every-id
 
 Real risk met while trying the server in a session whose working directory is not the one it was launched from (a
 worktree entered after the host started, the usual use of this repository). `gabier mcp` takes its project from its own
