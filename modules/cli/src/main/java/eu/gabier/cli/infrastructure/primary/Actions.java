@@ -1,9 +1,9 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.application.ResultText;
 import eu.gabier.protocol.CodeActions;
 import eu.gabier.protocol.TerminalText;
 import java.util.Map;
-import java.util.stream.IntStream;
 
 /**
  * {@code actions <file> <line>:<column> <line>:<column>}: what the language server offers on a range, one line per
@@ -76,26 +76,11 @@ final class Actions implements Capability {
                                 "endLine", String.valueOf(end.line()),
                                 "endColumn", String.valueOf(end.column())));
         var offered = CodeActions.of(result.result());
-        var out = invocation.out();
         if (invocation.json()) {
-            out.println(offered.toJson());
+            invocation.out().println(offered.toJson());
 
             return;
         }
-        if (offered.actions().isEmpty()) {
-            out.println("no actions");
-
-            return;
-        }
-        IntStream.range(0, offered.actions().size())
-                .mapToObj(index -> line(index + 1, offered.actions().get(index)))
-                .forEach(out::println);
-    }
-
-    private static String line(int number, CodeActions.Action action) {
-        var reference = action.command().isEmpty() ? "" : " -> gabier " + action.command();
-
-        return TerminalText.neutralise(
-                number + " " + (action.kind().isEmpty() ? "-" : action.kind()) + " " + action.title() + reference);
+        ResultText.lines(offered).forEach(invocation.out()::println);
     }
 }

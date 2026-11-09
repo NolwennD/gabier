@@ -1,9 +1,8 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.application.ResultText;
 import eu.gabier.protocol.FoundReferences;
-import eu.gabier.protocol.FoundReferences.Place;
 import eu.gabier.protocol.TerminalText;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -75,31 +74,6 @@ final class References implements Capability {
 
             return;
         }
-        print(invocation, found);
-    }
-
-    private static void print(Invocation invocation, FoundReferences found) {
-        var out = invocation.out();
-        if (!found.declarations().isEmpty()) {
-            out.println("declaration:");
-            lines(found.declarations()).forEach(out::println);
-        }
-        if (found.references().isEmpty()) {
-            out.println("no references");
-        } else {
-            if (!found.declarations().isEmpty()) {
-                out.println("references:");
-            }
-            lines(found.references()).forEach(out::println);
-        }
-    }
-
-    private static List<String> lines(List<Place> places) {
-        return places.stream().map(References::line).toList();
-    }
-
-    private static String line(Place place) {
-        return TerminalText.neutralise(place.file() + ":" + (place.line() + 1) + ":" + (place.column() + 1) + ": "
-                + place.source().strip());
+        ResultText.lines(found).forEach(invocation.out()::println);
     }
 }

@@ -1,5 +1,6 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.application.ResultText;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.TerminalText;
 import java.util.Map;
@@ -39,14 +40,6 @@ final class Diagnostics implements Capability {
 
             return;
         }
-        var file = arguments.operand(0);
-        diagnostics
-                .diagnostics()
-                .forEach(diagnosis -> invocation
-                        .out()
-                        .println(TerminalText.neutralise(file + ":" + (diagnosis.line() + 1) + ":"
-                                + (diagnosis.column() + 1) + ": "
-                                + diagnosis.severity().text() + ": "
-                                + diagnosis.message())));
+        ResultText.lines(arguments.operand(0), diagnostics).forEach(invocation.out()::println);
     }
 }

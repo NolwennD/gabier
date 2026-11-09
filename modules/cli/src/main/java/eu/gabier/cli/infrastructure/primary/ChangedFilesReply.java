@@ -1,9 +1,7 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.application.ResultText;
 import eu.gabier.protocol.ChangedFiles;
-import eu.gabier.protocol.TerminalText;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -24,12 +22,12 @@ record ChangedFilesReply(Invocation invocation, ChangedFiles changed) {
 
     /** Whether the text of the answer holds nothing: no file changed and no diff. */
     boolean isEmpty() {
-        return text().isEmpty();
+        return ResultText.lines(changed).isEmpty();
     }
 
-    /** Says what the daemon noticed on the way, one {@code warning:} line each: text of the project, neutralised. */
+    /** Says what the daemon noticed on the way, one {@code warning:} line each. */
     void printWarnings() {
-        changed.warnings().forEach(warning -> invocation.out().println(TerminalText.neutralise("warning: " + warning)));
+        ResultText.warnings(changed).forEach(invocation.out()::println);
     }
 
     /**
@@ -47,21 +45,6 @@ record ChangedFilesReply(Invocation invocation, ChangedFiles changed) {
             out.println("dry run, nothing written");
         }
         printWarnings();
-        text().forEach(line -> out.println(TerminalText.neutralise(line)));
-    }
-
-    /** One line per file changed, a blank line, then the diff; nothing for a result that holds nothing. */
-    private List<String> text() {
-        var lines = new ArrayList<String>();
-        changed.modified().forEach(file -> lines.add("modified " + file));
-        changed.created().forEach(file -> lines.add("created " + file));
-        changed.renamed().forEach(moved -> lines.add("renamed " + moved.from() + " -> " + moved.to()));
-        changed.deleted().forEach(file -> lines.add("deleted " + file));
-        if (!changed.diff().isEmpty()) {
-            lines.add("");
-            changed.diff().lines().forEach(lines::add);
-        }
-
-        return lines;
+        ResultText.lines(changed).forEach(out::println);
     }
 }

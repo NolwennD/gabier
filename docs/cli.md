@@ -49,7 +49,9 @@ read the command line (`Arguments`, `--json`) and print; they reach the daemon o
 `DaemonRefusal`), which an `Invocation` hands them with the arguments and the output. The adapter of the port,
 `SocketDaemon`, is in `eu.gabier.cli.infrastructure.secondary` with what talks on the socket and starts the daemon
 (`DaemonClient`, `DaemonLauncher`, `DaemonException`, `WaitNotice`); `Gabier` builds it and hands it to `CommandLine`, and no other class
-outside that package names it (`HexagonalArchTest`). A second front end, such as an MCP server, takes the same port.
+outside that package names it (`HexagonalArchTest`). The text of a result (`ChangedFiles`, `FileDiagnostics`, `FoundReferences`,
+`CodeActions`) is a pure function of the result, `ResultText` in `eu.gabier.cli.application`: the commands only print its
+lines. A second front end, such as an MCP server, takes the same port and the same text.
 
 ## Text in a terminal
 
