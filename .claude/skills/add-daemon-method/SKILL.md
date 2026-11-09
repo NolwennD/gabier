@@ -81,7 +81,8 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      `Command`, which `help` prints after the notes of the operation. If an agent should know the tool before it needs it,
      name it between backticks in `mcp-instructions.md` (a test checks that every tool named there is listed, and that
      every tool that changes code, one with no `readOnlyHint`, is named there: a new one fails it until the text says it);
-     a parameter that holds a path is `Parameter.path` (or `paths`), so that the runner refuses it empty;
+     a parameter that holds a path is `Parameter.path` (or `paths`), so that the runner refuses it empty and the MCP server
+     (`ProjectOperations`) refuses it relative and sends the call to the daemon of the project of the file;
    - a final class implementing `Capability` (`command()`, `run(Invocation)`), named after the command (`Rename`,
      `OrganizeImports`; `Diagnostics`, `Status` are the models). It declares what is the command line's own, once, as
      the constant `static final Command COMMAND = Command.called("<name>")`, which a step builder fills one part after

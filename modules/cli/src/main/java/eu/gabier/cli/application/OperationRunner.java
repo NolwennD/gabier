@@ -117,7 +117,7 @@ public final class OperationRunner {
     }
 
     /** The parameters of the daemon: every value as a text, the positions from 0. */
-    private static Map<String, String> parameters(Operation operation, Map<String, Object> values) {
+    static Map<String, String> parameters(Operation operation, Map<String, Object> values) {
         for (var name : new TreeSet<>(values.keySet())) {
             if (!operation.parameterNames().contains(name)) {
                 throw InvalidValuesException.unknown(OperationName.of(operation), name);

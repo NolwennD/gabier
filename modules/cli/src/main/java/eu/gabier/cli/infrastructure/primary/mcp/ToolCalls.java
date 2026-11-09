@@ -3,25 +3,22 @@ package eu.gabier.cli.infrastructure.primary.mcp;
 import eu.gabier.cli.application.AskTheGuide;
 import eu.gabier.cli.application.GuideText;
 import eu.gabier.cli.application.OperationResult;
-import eu.gabier.cli.application.OperationRunner;
 import eu.gabier.cli.application.Problems;
+import eu.gabier.cli.application.ProjectOperations;
 import eu.gabier.cli.application.ResultText;
 import eu.gabier.cli.domain.DaemonRefusal;
 import eu.gabier.cli.domain.Guide;
 import eu.gabier.cli.domain.Operation;
 import eu.gabier.cli.domain.Operations;
-import eu.gabier.cli.domain.Parameter;
 import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.Json;
 import eu.gabier.protocol.Problem;
 import eu.gabier.protocol.ProblemMapper;
 import eu.gabier.shared.error.domain.GeneratorException;
 import java.io.PrintStream;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +29,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The calls of the tools: the arguments of a call are the values of an operation, which the one entry point of the
- * application runs ({@link OperationRunner}), and the answer is the text that the command line prints for the same
+ * application runs ({@link ProjectOperations}), in the project of the files it names, and the answer is the text that the command line prints for the same
  * result and, beside it, the result as the daemon gave it. A call that does not work (a refusal of the daemon, a value
  * that does not fit the operation, a daemon that cannot be reached) is a result that says so ({@code isError}) and holds
  * the problem and the pointer to {@code gabier help} that the command line gives, so that the agent reads it and tries
@@ -45,7 +42,7 @@ final class ToolCalls {
     private static final String NO_PROBLEMS = "no problems";
 
     private final Tools tools;
-    private final OperationRunner operations;
+    private final ProjectOperations operations;
     private final Function<Operation, String> commandOf;
     private final Guide guide;
     private final PrintStream err;
@@ -83,8 +80,9 @@ final class ToolCalls {
      * @param run what asks the daemon
      * @param file the file as the call gave it, for the text of {@code diagnostics}
      * @param dryRun whether the call asked to write nothing
+     * @param project the folder of the project whose daemon is asked
      */
-    record Waiting(Operation operation, Supplier<OperationResult> run, String file, boolean dryRun)
+    record Waiting(Operation operation, Supplier<OperationResult> run, String file, boolean dryRun, Path project)
             implements Prepared {
 
         /** Whether the daemon is asked: {@code status} asks a daemon that runs, and starts none, so it never waits. */
@@ -109,11 +107,13 @@ final class ToolCalls {
         }
         var operation = tools.find(name).orElseThrow(() -> McpFailure.invalidParams("Unknown tool: " + name));
         var arguments = arguments(params);
-        var values = values(operation, arguments);
+        var values = given(arguments);
         var file = arguments.get("file") instanceof String given ? given : "";
         var dryRun = Boolean.TRUE.equals(values.get("dryRun"));
         try {
-            return new Waiting(operation, operations.prepare(operation, values), file, dryRun);
+            var prepared = operations.prepare(operation, values);
+
+            return new Waiting(operation, prepared.run(), file, dryRun, prepared.project());
         } catch (RuntimeException invalid) {
             return new Done(refused(operation, invalid));
         }
@@ -132,15 +132,23 @@ final class ToolCalls {
         }
     }
 
+    /**
+     * Whether the call waits for the warm-up, which starts the daemon of the project the server was launched in: a call
+     * that asks the daemon of another project meets no start of its own to wait for, and starts its daemon itself.
+     */
+    boolean awaitsTheWarmUp(Waiting waiting) {
+        return waiting.asksDaemon() && waiting.project().equals(operations.launched());
+    }
+
     /** The members of the result of a call that was given up after this long. */
     String timedOut(Duration bound) {
         return failed("call", CallTimedOutException.after(bound));
     }
 
-    /** Where the daemon is, asked on a connection of its own: none when it does not answer. */
-    Optional<DaemonStatus> status() {
+    /** Where the daemon of the project of the call is, asked on a connection of its own: none when it does not answer. */
+    Optional<DaemonStatus> status(Waiting waiting) {
         try {
-            return Optional.of(((OperationResult.Reported) operations.run(Operations.STATUS, Map.of())).status());
+            return Optional.of(operations.statusOf(waiting.project()));
         } catch (RuntimeException notRunning) {
             return Optional.empty();
         }
@@ -210,16 +218,6 @@ final class ToolCalls {
         return Map.of();
     }
 
-    /** The values of the operation: a value that is null is not given, and a path is made absolute. */
-    private static Map<String, Object> values(Operation operation, Map<String, @Nullable Object> arguments) {
-        var types = new HashMap<String, Parameter.Type>();
-        operation.parameters().forEach(parameter -> types.put(parameter.name(), parameter.type()));
-        var values = new LinkedHashMap<String, Object>();
-        given(arguments).forEach((name, value) -> values.put(name, absolute(types.get(name), value)));
-
-        return values;
-    }
-
     /** The arguments that are given: one that is null is not. */
     private static Map<String, Object> given(Map<String, @Nullable Object> arguments) {
         var given = new LinkedHashMap<String, Object>();
@@ -230,34 +228,6 @@ final class ToolCalls {
         });
 
         return given;
-    }
-
-    private static Object absolute(Parameter.@Nullable Type type, Object value) {
-        if (type == Parameter.Type.PATH && value instanceof String file) {
-            return absolute(file);
-        }
-        if (type == Parameter.Type.PATHS && value instanceof List<?> files) {
-            return files.stream()
-                    .map(file -> file instanceof String text ? absolute(text) : file)
-                    .toList();
-        }
-
-        return value;
-    }
-
-    /**
-     * The path from the folder of the server, which the daemon cannot guess; a text that is no path is left to it, and
-     * so is an empty one, which the operation refuses (made absolute, it would be the folder of the server).
-     */
-    private static String absolute(String file) {
-        if (file.isEmpty()) {
-            return file;
-        }
-        try {
-            return Path.of(file).toAbsolutePath().toString();
-        } catch (InvalidPathException notAPath) {
-            return file;
-        }
     }
 
     private static String success(OperationResult result, String file, boolean dryRun) {

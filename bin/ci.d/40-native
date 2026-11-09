@@ -341,7 +341,8 @@ public final class Native {
      * tools/list} after it gives the same tools; a {@code tools/call} of {@code guide} answers the cleanup for the text
      * block task with the command written as the tool, and a blank task is a failed call; the daemon that the handshake
      * starts in the background cannot be started here, which is one line on the standard error and fails no answer; the
-     * id of a request is given back as it came, in UTF-8; a line that is not JSON is a parse error and the server goes on.
+     * id of a request is given back as it came, in UTF-8; a relative path is refused as an invalid value; a line that is
+     * not JSON is a parse error and the server goes on.
      */
     private static int mcp(Path binary, Path directory) throws IOException, InterruptedException {
         String meta = "\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\","
@@ -361,13 +362,15 @@ public final class Native {
                         "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"diagnostics\","
                                 + "\"arguments\":{\"file\":\"/nowhere/A.java\"}," + meta + "}}",
                         "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"diagnostics\","
-                                + "\"arguments\":{\"file\":\"\"}," + meta + "}}")
+                                + "\"arguments\":{\"file\":\"\"}," + meta + "}}",
+                        "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"diagnostics\","
+                                + "\"arguments\":{\"file\":\"src/A.java\"}," + meta + "}}")
                 + "\n";
         Run run = runBinaryReading(binary, directory, List.of(), input, "mcp");
         List<String> answers = run.out().lines().toList();
         System.out.println("gabier mcp -> " + answers.size() + " answers (exit " + run.exit() + "), stderr \"" + run.err() + "\"");
 
-        if (answers.size() != 9) {
+        if (answers.size() != 10) {
             return 1;
         }
         // The handshakes started the daemon in the background; there is none to start here (an empty environment, no
@@ -377,13 +380,18 @@ public final class Native {
         // answers of the calls are found by their id. The line on the standard error is there when the server ends.
         String asked = answerOf(answers, "7");
         String empty = answerOf(answers, "8");
+        // A relative path is refused at once, whatever the folder the server runs in: it does not know the session's.
+        String relative = answerOf(answers, "9");
         boolean warmUpFailed = run.err().lines().count() == 1
                 && run.err().startsWith("gabier mcp: the daemon could not be started: ")
                 && asked.contains("\"isError\":true")
                 && asked.contains("\"key\":\"daemon-start-failed\"")
                 && empty.contains("\"isError\":true")
                 && empty.contains("\"key\":\"operation-invalid-values\"")
-                && empty.contains("must not be empty");
+                && empty.contains("must not be empty")
+                && relative.contains("\"isError\":true")
+                && relative.contains("\"key\":\"operation-invalid-values\"")
+                && relative.contains("must be an absolute path");
         // The instructions are a resource of the image: a phrase of mcp-instructions.md proves it is in it.
         String instructions = "Use its tools instead of editing Java as text";
         boolean instructed = answers.get(1).contains("\"instructions\":\"Gabier changes Java through the language server")
@@ -1735,7 +1743,8 @@ public final class Native {
 
             String meta = "\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\","
                     + "\"io.modelcontextprotocol/clientCapabilities\":{}}";
-            String range = "\"file\":\"" + file + "\",\"startLine\":4,\"startColumn\":5,\"endLine\":4,\"endColumn\":9";
+            // A tool takes an absolute path: the server does not know the folder the session works in.
+            String range = "\"file\":\"" + offers + "\",\"startLine\":4,\"startColumn\":5,\"endLine\":4,\"endColumn\":9";
             String calls = String.join(
                             "\n",
                             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"actions\","

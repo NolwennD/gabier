@@ -2,6 +2,7 @@ package eu.gabier.cli.infrastructure.primary;
 
 import eu.gabier.cli.application.OperationRunner;
 import eu.gabier.cli.domain.Daemon;
+import eu.gabier.cli.domain.Projects;
 import java.io.InputStream;
 import java.io.PrintStream;
 
@@ -14,6 +15,7 @@ import java.io.PrintStream;
  * @param out where the result is printed
  * @param operations how an operation is run, the one entry point that any front end uses
  * @param daemon the way to the daemon of the project
+ * @param projects the way to the daemon of any project, for the commands that are not run in one ({@code mcp})
  * @param in what is typed or piped in, for the commands that read it ({@code mcp})
  * @param err where a command logs what it must not print on its output, for the commands that run for long ({@code
  *     mcp})
@@ -24,5 +26,6 @@ record Invocation(
         PrintStream out,
         OperationRunner operations,
         Daemon daemon,
+        Projects projects,
         InputStream in,
         PrintStream err) {}

@@ -1,6 +1,6 @@
 package eu.gabier.cli.infrastructure.primary.mcp;
 
-import eu.gabier.cli.application.OperationRunner;
+import eu.gabier.cli.application.ProjectOperations;
 import eu.gabier.cli.domain.Guide;
 import eu.gabier.cli.domain.Operation;
 import eu.gabier.protocol.Json;
@@ -76,11 +76,11 @@ public final class McpServer {
     /**
      * What the tools lean on: the application, which runs an operation and answers a question to the guide.
      *
-     * @param operations how an operation is run, the one entry point that any front end uses
+     * @param operations how an operation is run, in the project of the files it names
      * @param commandOf the word of the command line that runs an operation, for the pointer to its help
      * @param guide the guide that the tool {@code guide} is asked
      */
-    public record Backend(OperationRunner operations, Function<Operation, String> commandOf, Guide guide) {}
+    public record Backend(ProjectOperations operations, Function<Operation, String> commandOf, Guide guide) {}
 
     /**
      * A server of the operations of the daemon, and of the guide.
@@ -209,8 +209,9 @@ public final class McpServer {
     /**
      * A call of a tool, in the era its metadata names: its result says whether the operation worked. Everything that
      * needs no daemon is decided here, on the thread that reads the client, and answered at once; what asks the daemon
-     * runs in a thread of its own, after the warm-up that may be starting it (a call that does not ask it, {@code
-     * status}, does not wait for it).
+     * runs in a thread of its own, after the warm-up that may be starting it when it is for the project the server was
+     * launched in (a call that does not ask the daemon, {@code status}, or one for another project, does not wait for
+     * it).
      */
     private void call(Incoming.Request request, Output output, Calls running) {
         var params = request.params();
@@ -221,7 +222,7 @@ public final class McpServer {
             case ToolCalls.Done done -> output.write(answer.apply(done.members()));
             case ToolCalls.Waiting waiting -> {
                 Supplier<String> work = () -> {
-                    if (waiting.asksDaemon()) {
+                    if (calls.awaitsTheWarmUp(waiting)) {
                         warmUp.awaitEnd();
                     }
 
@@ -233,7 +234,7 @@ public final class McpServer {
                         progressTokenOf(params),
                         answer,
                         work,
-                        calls::status,
+                        () -> calls.status(waiting),
                         () -> calls.timedOut(pacing.bound()));
                 if (!running.start(job)) {
                     throw McpFailure.invalidRequest("the id is the one of a request that has not been answered yet");

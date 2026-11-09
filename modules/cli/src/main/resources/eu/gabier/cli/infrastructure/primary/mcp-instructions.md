@@ -4,7 +4,9 @@ Gabier changes Java through the language server of the project. Use its tools in
   says that the language server does not offer it. The tools that change code: `rename`, `rename-token`, `move`,
   `inline`, `create`, `cleanup`, `organize-imports`, `extract-variable`, `extract-method`, `extract-constant`,
   `extract-field`, `move-type-to-file`, `apply-action`. A text edit is the last resort.
-- A file is given by its path; every line and column is counted from 1, as an editor shows them.
+- A file is given by its absolute path (a relative path is refused: the server does not know the folder you work in), and
+  the call acts on the project of that file, the worktree you entered included; the files of one call must be in one
+  project. Every line and column is counted from 1, as an editor shows them.
 - Try a change that crosses files with dryRun set to true: it answers the change and writes nothing. Call it again with
   dryRun false to write.
 - After a change, call `diagnostics` on the files that changed, and `organize-imports` after adding or removing a usage.

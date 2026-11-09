@@ -67,7 +67,10 @@ lines. A second front end takes the same port and the same text: the MCP server,
 `eu.gabier.cli.infrastructure.primary.mcp` (JDK and `Json` only; one JSON-RPC message per line on the standard input and
 output, nothing else on the output). `tools/list` generates one tool per descriptor of `Operations` except `start` and `stop`, which are operations of the
 daemon and not tools (`Tools`, `NOT_TOOLS`: the server starts the daemon itself), so a parameter added to an operation shows in the schema of its tool with no other file edited; `tools/call`
-(`ToolCalls`) runs the operation through the same `OperationRunner` and gives the text of `ResultText` in `content` and the
+(`ToolCalls`) runs the operation through the same `OperationRunner`, in the project of the file it names: the server is
+not run in one folder, so `ProjectOperations` (`eu.gabier.cli.application`) refuses a relative path and a call whose files
+are in two projects, finds the project of the file with the port `Projects` (`eu.gabier.cli.domain`, adapter
+`SocketProjects`, the nearest folder with a `.git`) and gives the runner the daemon of that project, and gives the text of `ResultText` in `content` and the
 result of the daemon in `structuredContent`, a refusal being a result with `isError` that holds the problem and the pointer of
 `Problems` (`eu.gabier.cli.application`, which the command line uses too); the page of
 the command is [mcp](commands/mcp.md). The server tells the host how to use the tools in the `instructions` of its

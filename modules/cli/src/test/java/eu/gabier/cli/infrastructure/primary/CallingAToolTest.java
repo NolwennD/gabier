@@ -90,15 +90,15 @@ class CallingAToolTest extends CliTest {
                 new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch"),
                 new Diagnosis(Severity.WARNING, 0, 0, "Careful")));
         try (var daemon = daemonAnswering(diagnostics.toJson())) {
-            assertThat(runWithSocket("diagnostics", "src/Broken.java")).isZero();
+            assertThat(runWithSocket("diagnostics", "/project/Broken.java")).isZero();
             var printed = printed(out());
             out.reset();
-            assertThat(runWithSocket("--json", "diagnostics", "src/Broken.java"))
+            assertThat(runWithSocket("--json", "diagnostics", "/project/Broken.java"))
                     .isZero();
             var json = printed(out());
 
-            var result = result(
-                    mcp(call("diagnostics", "{\"file\":\"src/Broken.java\"}")).getFirst());
+            var result = result(mcp(call("diagnostics", "{\"file\":\"/project/Broken.java\"}"))
+                    .getFirst());
 
             assertThat(text(result)).isEqualTo(printed);
             assertThat(result.get("structuredContent")).isEqualTo(Json.parse(json));
@@ -129,12 +129,12 @@ class CallingAToolTest extends CliTest {
     @Test
     void moveTakesItsFilesAsAnArrayAndSendsTheSameRequestAsTheCommandLine() throws IOException {
         try (var daemon = daemonAnswering(MODIFIED.toJson())) {
-            assertThat(runWithSocket("move", "/project/Invoice.java", "src/Payment.java", "demo.billing"))
+            assertThat(runWithSocket("move", "/project/Invoice.java", "/project/Payment.java", "demo.billing"))
                     .isZero();
             var printed = printed(out());
 
             var result = result(mcp(call("move", """
-                {"files":["/project/Invoice.java","src/Payment.java"],"package":"demo.billing","dryRun":false}\
+                {"files":["/project/Invoice.java","/project/Payment.java"],"package":"demo.billing","dryRun":false}\
                 """)).getFirst());
 
             assertThat(text(result)).isEqualTo(printed);

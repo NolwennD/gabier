@@ -32,8 +32,8 @@ same server in a `.mcp.json` at the root of the project (a server with no `type`
 }
 ```
 
-The daemon serves the project the host starts the server in (`GABIER_PROJECT` to point elsewhere, as for any command);
-`/mcp` in Claude Code shows the server, its tools and its instructions. (Syntax checked against the MCP page of the
+The handshake starts the daemon of the project the host starts the server in (`GABIER_PROJECT` to point elsewhere, as for
+any command); a call acts on the project of its file ([The project of a call](#the-project-of-a-call)). `/mcp` in Claude Code shows the server, its tools and its instructions. (Syntax checked against the MCP page of the
 documentation of Claude Code, <https://code.claude.com/docs/en/mcp>.)
 
 ## Instructions and warm-up
@@ -47,8 +47,8 @@ names in step with `tools/list`.
 The first `server/discover` or `initialize` also **starts the daemon in the background**, as `gabier start` does (it answers
 at once, jdtls starts in the daemon), so that jdtls imports the project while the host loads the tools. It delays no answer
 and fails none: a daemon that cannot be started is told on the standard error (`gabier mcp: the daemon could not be
-started: ...`), and the first call that needs the daemon meets the failure again and answers it as a failed call. A call made
-while the start is still running waits for it, so as not to launch a second daemon. A server that is closed before the daemon
+started: ...`), and the first call that needs the daemon meets the failure again and answers it as a failed call. A call for
+that project made while the start is still running waits for it, so as not to launch a second daemon. A server that is closed before the daemon
 is up does not wait for it.
 
 The operations of gabier that work on the code or report on it are **tools**, named as the operation: `diagnostics`,
@@ -59,11 +59,28 @@ connects (below), and an agent that stopped it would lose the tools that need it
 notes of the operation, its input schema is its parameters (a text, a whole number, a position, `true` or `false`, a list of
 texts), all required. A **position is an integer counted from 1**, as on the command line; a list is a JSON array
 (`files` of `move`, `cleanUps` of `cleanup`). A parameter added to an operation shows in its tool with no other file
-edited. A path (`file`, `files`) may be relative: it is made absolute from the folder `gabier mcp` runs in, as the command
-line does. `diagnostics`, `references`, `actions` and `status` are annotated `readOnlyHint`. The daemon is the one of the
-project (`GABIER_PROJECT`, else the nearest folder with a `.git`), started by the first call that needs it, as any command
-does; `status` asks a daemon that runs and starts none. Starting the server asks no daemon; its first handshake starts one
-(below).
+edited. `diagnostics`, `references`, `actions` and `status` are annotated `readOnlyHint`. Starting the server asks no
+daemon; its first handshake starts one (below).
+
+## The project of a call
+
+A path (`file`, `files`) is **absolute**: a relative path is refused as an invalid value (`operation-invalid-values`, "must
+be an absolute path"), because the server does not know the folder the session works in (a host may enter a worktree after
+it started the server, and the server runs in the folder it was started in). This reverses the choice of the first calls of
+the server, which made a relative path absolute from the folder of the server: that applied a call to the project of the
+server, not to the one the agent was in. The command line is unchanged: it runs in a folder, so a relative path is
+relative to it.
+
+A call goes to the **daemon of the project of its file**: the nearest folder above the file that holds a `.git` (a folder
+in a clone, a file in a worktree, so a worktree inside a clone is its own project), else the project the server was
+started in (`GABIER_PROJECT`, else the nearest folder with a `.git` above its working directory). There is one daemon for
+each project, reached the first time a call needs it and kept; the daemon of the project of the launch is the one the
+handshake starts, and a call for another project starts its daemon itself, and waits for it as in [Calls that
+wait](#calls-that-wait), the notices of progress telling where the jdtls of that project is. The files of one call must
+be in one project: `move` with files of two projects is refused (`operation-invalid-values`, "must be in one project").
+A call that names no file (`status`) is for the project of the launch. When `GABIER_SOCKET` replaces the socket of the
+daemon, every project is that one socket, and a file outside the project of that daemon is refused by it
+(`language-server-file-outside-project`).
 
 ## Calls that wait
 
@@ -178,8 +195,8 @@ A call that does not work is a result with `isError: true`, not an end of the se
 refusal of the operation that the call runs (the page of its command lists them, `gabier help <command>`) or one of these:
 
 - `operation-invalid-values`: a value is missing, is not a parameter of the operation, or is not of the kind of its
-  parameter (a position below 1, a path that is empty (it would be the working directory), a list with an element that is
-  empty or holds a line break...).
+  parameter (a position below 1, a path that is empty or not absolute, files that are not all in one project, a list with
+  an element that is empty or holds a line break...).
 - `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.
 - `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.
 - `daemon-not-running`: a call of `status` when no daemon answers; `status` never starts one, every other tool does.

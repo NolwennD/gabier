@@ -48,10 +48,6 @@ class CallingToolsTest {
             "--- a/A.java\n+++ b/A.java\n@@ -1 +1 @@");
     private static final ChangedFiles NOTHING = new ChangedFiles(List.of(), List.of(), List.of(), List.of(), "");
 
-    private static String absolute(String file) {
-        return Path.of(file).toAbsolutePath().toString();
-    }
-
     private static Object content(Object answer) {
         return at(answer, "result", "content", 0, "text");
     }
@@ -74,17 +70,17 @@ class CallingToolsTest {
             var diagnostics = new FileDiagnostics(List.of(new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch")));
             var daemon = new StubDaemon().answering(diagnostics.toJson());
 
-            var answer = exchange(daemon, modernCall("diagnostics", "{\"file\":\"src/Broken.java\"}"))
+            var answer = exchange(daemon, modernCall("diagnostics", "{\"file\":\"/work/src/Broken.java\"}"))
                     .getFirst();
 
             assertThat(at(answer, "result", "content"))
                     .isEqualTo(List.of(Map.of("type", "text", "text", content(answer))));
-            assertThat(content(answer)).isEqualTo("src/Broken.java:5:16: error: Type mismatch");
+            assertThat(content(answer)).isEqualTo("/work/src/Broken.java:5:16: error: Type mismatch");
             assertThat(at(answer, "result", "structuredContent")).isEqualTo(Json.parse(diagnostics.toJson()));
             assertThat(at(answer, "result", "isError")).isEqualTo(false);
             assertThat(daemon.asked())
                     .containsExactly(
-                            new StubDaemon.Asked("diagnostics", Map.of("file", absolute("src/Broken.java")), false));
+                            new StubDaemon.Asked("diagnostics", Map.of("file", "/work/src/Broken.java"), false));
         }
 
         @Test
@@ -92,7 +88,7 @@ class CallingToolsTest {
             var clean = new FileDiagnostics(List.of());
             var daemon = new StubDaemon().answering(clean.toJson());
 
-            var answer = exchange(daemon, modernCall("diagnostics", "{\"file\":\"src/Clean.java\"}"))
+            var answer = exchange(daemon, modernCall("diagnostics", "{\"file\":\"/work/src/Clean.java\"}"))
                     .getFirst();
 
             assertThat(content(answer)).isEqualTo("no problems");
@@ -105,7 +101,7 @@ class CallingToolsTest {
             var daemon = new StubDaemon().answering(NOTHING.toJson());
 
             var result = at(
-                    exchange(daemon, modernCall("organize-imports", "{\"file\":\"A.java\",\"dryRun\":false}"))
+                    exchange(daemon, modernCall("organize-imports", "{\"file\":\"/work/A.java\",\"dryRun\":false}"))
                             .getFirst(),
                     "result");
 
@@ -120,7 +116,7 @@ class CallingToolsTest {
 
             var answers = exchange(
                     daemon, INITIALIZE, notification("notifications/initialized"), request("2", "tools/call", """
-                        {"name":"inline","arguments":{"file":"A.java","line":2,"column":3,"dryRun":false}}\
+                        {"name":"inline","arguments":{"file":"/work/A.java","line":2,"column":3,"dryRun":false}}\
                         """));
 
             var result = at(answers.get(1), "result");
@@ -156,18 +152,18 @@ class CallingToolsTest {
         }
 
         @Test
-        void sendsAListOfFilesAsAbsolutePathsOnePerLine() {
+        void sendsAListOfFilesOnePerLine() {
             var daemon = new StubDaemon().answering(RENAMED.toJson());
 
             exchange(daemon, modernCall("move", """
-                {"files":["src/Invoice.java","/work/Bill.java"],"package":"demo.archive","dryRun":false}\
+                {"files":["/work/src/Invoice.java","/work/Bill.java"],"package":"demo.archive","dryRun":false}\
                 """));
 
             assertThat(daemon.asked())
                     .containsExactly(new StubDaemon.Asked(
                             "move",
                             Map.of(
-                                    "files", absolute("src/Invoice.java") + "\n/work/Bill.java",
+                                    "files", "/work/src/Invoice.java\n/work/Bill.java",
                                     "package", "demo.archive",
                                     "dryRun", "false"),
                             false));
@@ -200,12 +196,19 @@ class CallingToolsTest {
         }
 
         @Test
-        void sendsAFileThatIsNotAPathAsItIsForTheDaemonToRefuse() {
-            var daemon = new StubDaemon().answering(NOTHING.toJson());
+        void refusesAFileThatIsNotAPathAsItIsNotAnAbsolutePath() {
+            var daemon = new StubDaemon();
 
-            exchange(daemon, modernCall("organize-imports", "{\"file\":\"A\\u0000.java\",\"dryRun\":false}"));
+            var answer = exchange(
+                            daemon,
+                            modernCall("organize-imports", "{\"file\":\"/work/A\\u0000.java\",\"dryRun\":false}"))
+                    .getFirst();
 
-            assertThat(daemon.asked().getFirst().params()).containsEntry("file", "A\u0000.java");
+            assertThat(at(answer, "result", "structuredContent", "detail"))
+                    .isEqualTo(
+                            "The value file of the operation organize-imports must be an absolute path: the folder the"
+                                    + " call is made from is not known");
+            assertThat(daemon.asked()).isEmpty();
         }
 
         @Test

@@ -2,6 +2,7 @@ package eu.gabier.cli;
 
 import eu.gabier.cli.infrastructure.primary.CommandLine;
 import eu.gabier.cli.infrastructure.secondary.SocketDaemon;
+import eu.gabier.cli.infrastructure.secondary.SocketProjects;
 import eu.gabier.shared.generation.ExcludeFromGeneratedCodeCoverage;
 import java.io.InputStream;
 import java.io.PrintStream;
@@ -48,6 +49,12 @@ public final class Gabier {
             PrintStream out,
             PrintStream err,
             Duration noticeDelay) {
-        return CommandLine.run(args, in, out, err, new SocketDaemon(environment, err, noticeDelay));
+        return CommandLine.run(
+                args,
+                in,
+                out,
+                err,
+                new SocketDaemon(environment, err, noticeDelay),
+                new SocketProjects(environment, err, noticeDelay));
     }
 }

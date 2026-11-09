@@ -2,9 +2,10 @@ package eu.gabier.cli.infrastructure.primary.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import eu.gabier.cli.application.OperationRunner;
+import eu.gabier.cli.application.ProjectOperations;
 import eu.gabier.cli.domain.Daemon;
 import eu.gabier.cli.domain.Guide;
+import eu.gabier.cli.domain.Projects;
 import eu.gabier.protocol.Json;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -158,8 +159,22 @@ final class McpExchange {
     }
 
     private static McpServer serverOf(Daemon daemon, PrintStream err, WarmUp warmUp, Pacing pacing) {
+        return serverOf(FakeProjects.only(daemon), err, warmUp, pacing);
+    }
+
+    /** A server over these projects, that begins this warm-up at its first handshake. */
+    static McpServer serverOf(Projects projects, WarmUp warmUp) {
+        return serverOf(projects, silent(), warmUp, Pacing.real());
+    }
+
+    /** A server over these projects whose calls that wait keep this time. */
+    static McpServer serverOf(Projects projects, ManualTime time) {
+        return serverOf(projects, silent(), noWarmUp(), time.pacing());
+    }
+
+    private static McpServer serverOf(Projects projects, PrintStream err, WarmUp warmUp, Pacing pacing) {
         var backend = new McpServer.Backend(
-                new OperationRunner(daemon), operation -> "command-of-" + operation.method(), new Guide(GUIDE));
+                new ProjectOperations(projects), operation -> "command-of-" + operation.method(), new Guide(GUIDE));
 
         return new McpServer(backend, err, INSTRUCTIONS, warmUp, pacing);
     }

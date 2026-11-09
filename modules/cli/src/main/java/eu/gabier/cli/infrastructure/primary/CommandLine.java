@@ -5,6 +5,7 @@ import eu.gabier.cli.application.OperationRunner;
 import eu.gabier.cli.application.Problems;
 import eu.gabier.cli.domain.Daemon;
 import eu.gabier.cli.domain.DaemonRefusal;
+import eu.gabier.cli.domain.Projects;
 import eu.gabier.protocol.ExitCode;
 import eu.gabier.protocol.Problem;
 import eu.gabier.protocol.ProblemMapper;
@@ -31,15 +32,17 @@ public final class CommandLine {
      * @param out where the result is printed
      * @param err where a problem is printed
      * @param daemon the way to the daemon of the project
+     * @param projects the way to the daemon of any project, for {@code mcp}, which is not run in one
      */
-    public static int run(String[] args, InputStream in, PrintStream out, PrintStream err, Daemon daemon) {
+    public static int run(
+            String[] args, InputStream in, PrintStream out, PrintStream err, Daemon daemon, Projects projects) {
         var arguments = List.of(args);
         var json = arguments.contains(JSON_OPTION);
         var words = arguments.stream()
                 .filter(argument -> !argument.equals(JSON_OPTION))
                 .toList();
         try {
-            execute(words, json, in, out, err, daemon);
+            execute(words, json, in, out, err, daemon, projects);
 
             return ExitCode.SUCCESS.value();
         } catch (DaemonRefusal refusal) {
@@ -53,7 +56,13 @@ public final class CommandLine {
 
     /** Runs the capability of the command the first word names; without one, only {@link Standalone} applies. */
     private static void execute(
-            List<String> arguments, boolean json, InputStream in, PrintStream out, PrintStream err, Daemon daemon) {
+            List<String> arguments,
+            boolean json,
+            InputStream in,
+            PrintStream out,
+            PrintStream err,
+            Daemon daemon,
+            Projects projects) {
         var capability = arguments.isEmpty() ? Optional.<Capability>empty() : Capabilities.named(arguments.getFirst());
         if (capability.isEmpty()) {
             Standalone.run(arguments, json, out);
@@ -66,7 +75,7 @@ public final class CommandLine {
 
             return;
         }
-        capability.get().run(new Invocation(words, json, out, new OperationRunner(daemon), daemon, in, err));
+        capability.get().run(new Invocation(words, json, out, new OperationRunner(daemon), daemon, projects, in, err));
     }
 
     /** Reports the failure as a problem object on the standard error, as JSON or as text, and gives the exit code. */
