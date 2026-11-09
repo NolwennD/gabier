@@ -56,7 +56,8 @@ neutralised on one line, so that a task read from a page cannot forge an entry o
 is the exact text. An empty task (`--for=`, `--for`) is a usage error.
 
 The sections are ranked by BM25 over the words of their title, their `Words:` line and their text (`ranking` package of
-the cli, written in plain Java): a word is cut at case changes, punctuation, hyphens and digits, so
+the domain of the cli, `eu.gabier.cli.domain.ranking`, written in plain Java; `AskTheGuide` in its application layer
+asks it a question, `HelpText` writes the answer): a word is cut at case changes, punctuation, hyphens and digits, so
 `stringConcatToTextBlock` is "string concat to text block"; there is no stemming, so the `Words:` line of an entry holds
 the forms a person uses (`ifs` and `if` are two words). A section is part of the answer when it holds **at least two
 distinctive words of the task in its title or its `Words:` line**, and its confidence (its score over the highest score

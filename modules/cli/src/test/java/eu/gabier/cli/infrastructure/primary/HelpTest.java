@@ -261,7 +261,7 @@ class HelpTest extends CliTest {
         assertThat(guide).containsOnlyKeys("name", "summary", "text");
         assertThat(guide.get("name")).isEqualTo("guide");
         assertThat((String) guide.get("summary")).contains("problem");
-        assertThat((String) guide.get("text")).isEqualTo(Guide.text());
+        assertThat((String) guide.get("text")).isEqualTo(GuideTopic.text());
     }
 
     @Test

@@ -36,8 +36,8 @@ final class Help implements Capability {
             return;
         }
         var name = arguments.exactly(1).operand(0);
-        if (name.equals(Guide.FOR) || name.startsWith(Guide.FOR + "=")) {
-            var task = name.substring(Math.min(name.length(), Guide.FOR.length() + 1))
+        if (name.equals(GuideTopic.FOR) || name.startsWith(GuideTopic.FOR + "=")) {
+            var task = name.substring(Math.min(name.length(), GuideTopic.FOR.length() + 1))
                     .strip();
             if (task.isEmpty()) {
                 throw UsageException.unsupportedArguments(arguments.all());
@@ -46,7 +46,7 @@ final class Help implements Capability {
 
             return;
         }
-        if (name.equals(Guide.TOPIC)) {
+        if (name.equals(GuideTopic.TOPIC)) {
             invocation.out().println(HelpText.guide(invocation.json()));
 
             return;

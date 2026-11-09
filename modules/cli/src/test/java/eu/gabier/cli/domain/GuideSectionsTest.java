@@ -1,4 +1,4 @@
-package eu.gabier.cli.infrastructure.primary;
+package eu.gabier.cli.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -117,22 +117,6 @@ class GuideSectionsTest {
     @Test
     void aPageWithNoSectionHasNone() {
         assertThat(GuideSections.parse("# Only a title\n\nSome text.\n")).isEmpty();
-    }
-
-    @Test
-    void theSectionsOfTheGuideAreAllOfItsHeadingsWithTheirWordsAndTheirCommand() {
-        var headings =
-                Guide.text().lines().filter(line -> line.startsWith("### ")).toList();
-
-        var sections = GuideSections.ofTheGuide();
-
-        assertThat(sections).extracting(section -> "### " + section.title()).isEqualTo(headings);
-        assertThat(sections).extracting(GuideSection::title).doesNotHaveDuplicates();
-        assertThat(sections).allSatisfy(section -> {
-            assertThat(section.words()).isNotBlank();
-            assertThat(section.how()).matches("(Ask|By hand): .+");
-        });
-        assertThat(sections).extracting(GuideSection::byHand).contains(true, false);
     }
 
     @Test

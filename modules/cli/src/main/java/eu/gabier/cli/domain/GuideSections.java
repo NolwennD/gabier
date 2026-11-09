@@ -1,4 +1,4 @@
-package eu.gabier.cli.infrastructure.primary;
+package eu.gabier.cli.domain;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,11 +23,6 @@ final class GuideSections {
     private static final List<String> HOW = List.of("Ask:", "By hand:");
 
     private GuideSections() {}
-
-    /** The sections of the guide of the build. */
-    static List<GuideSection> ofTheGuide() {
-        return parse(Guide.text());
-    }
 
     /** The {@code ###} sections of this page, in order. */
     static List<GuideSection> parse(String page) {

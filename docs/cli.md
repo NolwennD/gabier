@@ -63,7 +63,11 @@ answer into its `protocol` type (`OperationResult`). The adapter of the port,
 (`DaemonClient`, `DaemonLauncher`, `DaemonException`, `WaitNotice`); `Gabier` builds it and hands it to `CommandLine`, and no other class
 outside that package names it (`HexagonalArchTest`). The text of a result (`ChangedFiles`, `FileDiagnostics`, `FoundReferences`,
 `CodeActions`) is a pure function of the result, `ResultText` in `eu.gabier.cli.application`: the commands only print its
-lines. A second front end, such as an MCP server, takes the same port and the same text.
+lines. A second front end, such as an MCP server, takes the same port and the same text. The guide of the improvements
+(`gabier help guide`, `docs/improve.md`) is below the command line too: `Guide`, `GuideSection`, `GuideSections` and the
+`ranking` package are in `eu.gabier.cli.domain`, the answer to a question (`help --for`) is `AskTheGuide.answer` in
+`eu.gabier.cli.application`, and the command line only reads the resource (`GuideTopic`) and writes the answer
+(`HelpText`).
 
 ## Text in a terminal
 

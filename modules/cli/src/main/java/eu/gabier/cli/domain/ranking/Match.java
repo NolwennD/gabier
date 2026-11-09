@@ -1,4 +1,4 @@
-package eu.gabier.cli.ranking;
+package eu.gabier.cli.domain.ranking;
 
 import eu.gabier.shared.error.domain.Assert;
 

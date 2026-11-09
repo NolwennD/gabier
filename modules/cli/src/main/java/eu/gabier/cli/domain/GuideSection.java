@@ -1,6 +1,6 @@
-package eu.gabier.cli.infrastructure.primary;
+package eu.gabier.cli.domain;
 
-import eu.gabier.cli.ranking.Document;
+import eu.gabier.cli.domain.ranking.Document;
 import eu.gabier.shared.error.domain.Assert;
 
 /**
@@ -11,11 +11,11 @@ import eu.gabier.shared.error.domain.Assert;
  * @param how the paragraph {@code Ask:} or {@code By hand:}, as the section writes it, on one line
  * @param body the rest of the text of the section, with no code
  */
-record GuideSection(String title, String words, String how, String body) {
+public record GuideSection(String title, String words, String how, String body) {
 
     private static final String BY_HAND = "By hand:";
 
-    GuideSection {
+    public GuideSection {
         Assert.notBlank("title", title);
         Assert.notNull("words", words);
         Assert.notBlank("how", how);
@@ -23,17 +23,17 @@ record GuideSection(String title, String words, String how, String body) {
     }
 
     /** Whether gabier has no command for this situation. */
-    boolean byHand() {
+    public boolean byHand() {
         return how.startsWith(BY_HAND);
     }
 
     /** What the section says to do, without its label: the command or the action, or the way to do it by hand. */
-    String instruction() {
+    public String instruction() {
         return how.substring(how.indexOf(':') + 1).strip();
     }
 
     /** The text to find it by. */
-    Document document() {
+    public Document document() {
         return new Document(title, words, how + " " + body);
     }
 }

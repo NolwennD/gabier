@@ -21,7 +21,7 @@ class AgentInstructionsTest extends CliTest {
     /** A command cited as {@code `gabier <word>`}; after {@code gabier help} the word may be a topic of the help. */
     private static final Pattern CITED = Pattern.compile("`gabier (help )?([a-z][a-z-]*)");
 
-    private static final Set<String> TOPICS = Set.of(Guide.TOPIC, AgentInstructions.TOPIC);
+    private static final Set<String> TOPICS = Set.of(GuideTopic.TOPIC, AgentInstructions.TOPIC);
 
     /** The commands a text cites, so that a test can compare them to the ones the help lists. */
     static List<String> citedCommands(String text) {

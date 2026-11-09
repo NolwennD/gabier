@@ -6,9 +6,13 @@ argument-hint: '<the situation, in the words of the person who had it>'
 
 # Add an entry to the guide of the improvements
 
-`docs/improve.md` is the one source of the guide. The build copies it into the resources of the cli, next to the class `Guide` (`eu/gabier/cli/infrastructure/primary`; `:cli:copyGuide`,
+`docs/improve.md` is the one source of the guide. The build copies it into the resources of the cli, next to the class `GuideTopic` (`eu/gabier/cli/infrastructure/primary`, the primary adapter that reads the resource and
+names the topic `guide` of `gabier help`; `:cli:copyGuide`,
 `modules/cli/build.gradle.kts`; kept by the native image in `modules/cli/src/main/resources/META-INF/native-image/
-eu.gabier/cli/resource-config.json`), and `gabier help guide` prints it with no clone. A page of the guide per
+eu.gabier/cli/resource-config.json`), and `gabier help guide` prints it with no clone. Below the command line, the guide
+is the domain value `Guide` (`eu.gabier.cli.domain`: the text, and its `GuideSection`s, read by `GuideSections`), ranked
+by the `ranking` package (`eu.gabier.cli.domain.ranking`), and a question is answered by `AskTheGuide.answer(task,
+guide)` (`eu.gabier.cli.application`), which another front end calls too; `HelpText` only writes the answer. A page of the guide per
 situation: its title is the situation, never the name of a tool. A situation met with no entry becomes an entry.
 
 ## Steps

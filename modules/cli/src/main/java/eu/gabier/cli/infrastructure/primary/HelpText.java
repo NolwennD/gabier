@@ -1,13 +1,13 @@
 package eu.gabier.cli.infrastructure.primary;
 
-import eu.gabier.cli.ranking.Match;
-import eu.gabier.cli.ranking.Ranking;
+import eu.gabier.cli.application.AskTheGuide;
+import eu.gabier.cli.application.GuideMatch;
+import eu.gabier.cli.domain.Guide;
 import eu.gabier.protocol.Json;
 import eu.gabier.protocol.TerminalText;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * What {@code gabier help} prints, from the commands of {@link Capabilities}: plain text, or the same content as a JSON
@@ -57,7 +57,12 @@ final class HelpText {
             an unknown command with gabier help --for="<task>".
             gabier --version prints the version. With --json, the answer and a refusal are JSON.\
             """.formatted(
-                lines, Guide.TOPIC, Guide.SUMMARY, Guide.FOR, AgentInstructions.TOPIC, AgentInstructions.SUMMARY);
+                        lines,
+                        GuideTopic.TOPIC,
+                        GuideTopic.SUMMARY,
+                        GuideTopic.FOR,
+                        AgentInstructions.TOPIC,
+                        AgentInstructions.SUMMARY);
     }
 
     /** The instructions for a coding agent, as they are written: the text of {@code agents.md}, or a JSON object. */
@@ -73,41 +78,36 @@ final class HelpText {
     /** The guide of the improvements, as it is written: the text of {@code docs/improve.md}, or a JSON object. */
     static String guide(boolean json) {
         if (json) {
-            return "{\"name\":" + Json.quote(Guide.TOPIC) + ",\"summary\":" + Json.quote(Guide.SUMMARY) + ",\"text\":"
-                    + Json.quote(Guide.text()) + "}";
+            return "{\"name\":" + Json.quote(GuideTopic.TOPIC) + ",\"summary\":" + Json.quote(GuideTopic.SUMMARY)
+                    + ",\"text\":" + Json.quote(GuideTopic.text()) + "}";
         }
 
-        return Guide.text().stripTrailing();
+        return GuideTopic.text().stripTrailing();
     }
 
     /**
      * The sections of the guide that answer a task, best first, each with what to do and a confidence; or the plain
-     * word that none does. Computed from the guide of the build, with no daemon and no network.
+     * word that none does. The answer is worked out by {@link AskTheGuide} from the guide of the build, with no daemon
+     * and no network; this only writes it.
      */
     static String answer(String task, boolean json) {
-        var sections = GuideSections.ofTheGuide();
-        var matches = Ranking.of(sections.stream().map(GuideSection::document).toList())
-                .answer(task);
-        var found = IntStream.range(0, matches.size())
-                .mapToObj(rank ->
-                        new Found(rank + 1, sections.get(matches.get(rank).index()), confidence(matches.get(rank))))
-                .toList();
+        var found = AskTheGuide.answer(task, new Guide(GuideTopic.text()));
 
         return json ? answerAsJson(task, found) : answerAsText(task, found);
     }
 
-    private static String answerAsJson(String task, List<Found> found) {
+    private static String answerAsJson(String task, List<GuideMatch> found) {
         var matches = found.stream()
                 .map(match -> "{\"rank\":" + match.rank() + ",\"title\":"
                         + Json.quote(match.section().title())
                         + ",\"kind\":" + Json.quote(match.section().byHand() ? "by-hand" : "ask") + ",\"how\":"
-                        + Json.quote(match.section().instruction()) + ",\"confidence\":" + match.confidence() + "}")
+                        + Json.quote(match.section().instruction()) + ",\"confidence\":" + confidence(match) + "}")
                 .collect(Collectors.joining(","));
 
         return "{\"question\":" + Json.quote(task) + ",\"matches\":[" + matches + "]}";
     }
 
-    private static String answerAsText(String task, List<Found> found) {
+    private static String answerAsText(String task, List<GuideMatch> found) {
         if (found.isEmpty()) {
             return """
                 Nothing in the guide matches "%s".
@@ -119,7 +119,7 @@ final class HelpText {
                         .formatted(
                                 match.rank(),
                                 match.section().title(),
-                                match.confidence(),
+                                confidence(match),
                                 match.section().how()))
                 .collect(Collectors.joining("\n\n"));
 
@@ -132,12 +132,10 @@ final class HelpText {
             """.formatted(TerminalText.neutralise(task), matches);
     }
 
-    private static String confidence(Match match) {
+    /** The confidence written with two decimals. */
+    private static String confidence(GuideMatch match) {
         return String.format(Locale.ROOT, "%.2f", match.confidence());
     }
-
-    /** A section of the guide that answers, with its rank (from 1) and its confidence written with two decimals. */
-    private record Found(int rank, GuideSection section, String confidence) {}
 
     /** The usage, an example and the refusals of one command. */
     static String of(Command command, boolean json) {

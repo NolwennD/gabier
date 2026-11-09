@@ -2,8 +2,10 @@ package eu.gabier.cli.infrastructure.primary;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import eu.gabier.cli.ranking.Match;
-import eu.gabier.cli.ranking.Ranking;
+import eu.gabier.cli.domain.Guide;
+import eu.gabier.cli.domain.GuideSection;
+import eu.gabier.cli.domain.ranking.Match;
+import eu.gabier.cli.domain.ranking.Ranking;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -22,12 +24,14 @@ import org.junit.jupiter.params.provider.MethodSource;
  */
 class GuideQuestionsTest {
 
-    private static final Ranking RANKING = Ranking.of(
-            GuideSections.ofTheGuide().stream().map(GuideSection::document).toList());
+    private static final Guide GUIDE = new Guide(GuideTopic.text());
+
+    private static final Ranking RANKING =
+            Ranking.of(GUIDE.sections().stream().map(GuideSection::document).toList());
 
     private static final String FIELDS_WITHOUT_THIS = "Fields used without `this.`";
 
-    private static final List<GuideSection> SECTIONS = GuideSections.ofTheGuide();
+    private static final List<GuideSection> SECTIONS = GUIDE.sections();
 
     static Stream<Arguments> questions() {
         return Stream.of(

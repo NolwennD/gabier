@@ -2,6 +2,8 @@ package eu.gabier.cli.infrastructure.primary;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import eu.gabier.cli.domain.Guide;
+import eu.gabier.cli.domain.GuideSection;
 import java.util.Arrays;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -20,7 +22,7 @@ class GuideTest {
     private static final Pattern IDENTIFIERS = Pattern.compile("The identifiers are those of jdtls:\\s*([^.]*)\\.");
 
     static Stream<String> sections() {
-        return Arrays.stream(Guide.text().split("(?m)^### ")).skip(1).map(section -> "### " + section);
+        return Arrays.stream(GuideTopic.text().split("(?m)^### ")).skip(1).map(section -> "### " + section);
     }
 
     /** The identifiers of the clean-ups as {@code gabier help cleanup} lists them, so that this test follows that list. */
@@ -35,7 +37,25 @@ class GuideTest {
 
     @Test
     void theGuideIsTheTextOfTheBuiltResource() {
-        assertThat(Guide.text()).startsWith("# Improving Java with gabier").contains("gabier help guide");
+        assertThat(GuideTopic.text()).startsWith("# Improving Java with gabier").contains("gabier help guide");
+    }
+
+    @Test
+    void theSectionsOfTheGuideAreAllOfItsHeadingsWithTheirWordsAndTheirCommand() {
+        var headings = GuideTopic.text()
+                .lines()
+                .filter(line -> line.startsWith("### "))
+                .toList();
+
+        var sections = new Guide(GuideTopic.text()).sections();
+
+        assertThat(sections).extracting(section -> "### " + section.title()).isEqualTo(headings);
+        assertThat(sections).extracting(GuideSection::title).doesNotHaveDuplicates();
+        assertThat(sections).allSatisfy(section -> {
+            assertThat(section.words()).isNotBlank();
+            assertThat(section.how()).matches("(Ask|By hand): .+");
+        });
+        assertThat(sections).extracting(GuideSection::byHand).contains(true, false);
     }
 
     @ParameterizedTest
@@ -79,7 +99,7 @@ class GuideTest {
 
     @Test
     void noLineIsLongerThanOneHundredAndTwentyColumns() {
-        assertThat(Guide.text().lines())
+        assertThat(GuideTopic.text().lines())
                 .allSatisfy(line -> assertThat(line.length()).isLessThanOrEqualTo(120));
     }
 
@@ -104,7 +124,7 @@ class GuideTest {
 
     @Test
     void theGuideStartsWithTheSituationsMetOnGabierItself() {
-        var text = Guide.text();
+        var text = GuideTopic.text();
 
         assertThat(text)
                 .contains("### A concatenation that is not only literals")
@@ -162,7 +182,7 @@ class GuideTest {
 
     @Test
     void whatJdtlsDoesNotOfferIsSaidPlainlyAsByHand() {
-        var text = Guide.text();
+        var text = GuideTopic.text();
 
         assertThat(text)
                 .contains("## What jdtls does not offer")

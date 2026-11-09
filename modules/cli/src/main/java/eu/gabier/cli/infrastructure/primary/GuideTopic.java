@@ -5,7 +5,7 @@ package eu.gabier.cli.infrastructure.primary;
  * into the resources of the cli (and the native image keeps, see {@code resource-config.json}), so that it is read
  * without a clone of the repository.
  */
-final class Guide {
+final class GuideTopic {
 
     /** The word after {@code help} that asks for the guide. */
     static final String TOPIC = "guide";
@@ -18,10 +18,10 @@ final class Guide {
 
     private static final String RESOURCE = "improve.md";
 
-    private Guide() {}
+    private GuideTopic() {}
 
     /** The text of the guide. */
     static String text() {
-        return TextResource.read(RESOURCE, Guide.class.getResourceAsStream(RESOURCE));
+        return TextResource.read(RESOURCE, GuideTopic.class.getResourceAsStream(RESOURCE));
     }
 }
