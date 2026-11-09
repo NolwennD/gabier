@@ -1,7 +1,8 @@
 # `gabier mcp` keeps answering while a call waits and reads every id (review findings of PR 36)
 
 Opened: 09-11-2026 13:37
-On hold: review suggestions of PR 36 that break no `Done when` point; the first one matters for a host that pings, lift the hold if a host kills the server during a cold start.
+
+The hold is lifted (09-11-2026) after a probe of the installed build on a cold daemon, in a real session of Claude Code 2.1.319 (modern era, connected in 306 ms, tools named `mcp__gabier__<operation>`): a `diagnostics` call sent at 19:53:42 was answered at 19:54:28, 51 s later, and a `status` and a `ping` sent during that wait were answered only then, in the same second, because the server reads one message at a time. The agent sees nothing during the import: the progress of jdtls ("importing the project for 15s: Build model ...") goes to the standard error, which a host logs and does not show.
 
 Done when:
 - a `tools/call` that waits for the daemon (start, jdtls import, a slow answer) does not stop the server from reading and answering `ping` meanwhile, and a call has a bound after which it ends as a failed call (`isError: true`, the problem `daemon-timeout` or the key the cli already has);
@@ -14,3 +15,4 @@ Done when:
 - an `Error` in the warm-up thread (`NoClassDefFoundError`, `UnsatisfiedLinkError` when the native image spawns a process) does not end the server: `WarmUp.startQuietly` catches it as a failed start, or `awaitEnd` does not throw it;
 - `mcp-instructions.md` lists `rename-token` among the tools that change code, `McpInstructionsTest` fails when a tool that changes code is missing from the text, and the text says `status` starts no daemon but a handshake has already started one;
 - `InvalidValuesException` keeps its guard against swapped strings (a small `OperationName` record, or the `Operation` overload for the operations).
+- while a call waits for the daemon, an agent can learn that jdtls is importing the project and for how long: the call sends `notifications/progress` (with the state line of jdtls: starting, launching, importing and its last task, and the seconds so far) when the request carries a `progressToken`, and `status`, called on the side, answers at once with the same state (`jdtlsProgress`); a test drives a call against a fake daemon that stays in "starting" and shows both.
