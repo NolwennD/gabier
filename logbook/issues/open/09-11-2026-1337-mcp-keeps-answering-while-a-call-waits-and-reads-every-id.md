@@ -2,7 +2,7 @@
 
 Opened: 09-11-2026 13:37
 
-The hold is lifted (09-11-2026) after a probe of the installed build on a cold daemon, in a real session of Claude Code 2.1.319 (modern era, connected in 306 ms, tools named `mcp__gabier__<operation>`): a `diagnostics` call sent at 19:53:42 was answered at 19:54:28, 51 s later, and a `status` and a `ping` sent during that wait were answered only then, in the same second, because the server reads one message at a time. The agent sees nothing during the import: the progress of jdtls ("importing the project for 15s: Build model ...") goes to the standard error, which a host logs and does not show.
+The hold is lifted (09-11-2026) after a probe of the installed build on a cold daemon, in a real session of Claude Code 2.1.319 (modern era, connected in 306 ms, tools named `mcp__gabier__<operation>`): a `diagnostics` call sent at about 19:53:38 was answered at 19:54:28, 50 s later, and a `status` (sent at about 19:53:42) and a `ping` (about 19:53:45) sent during that wait were answered only then, in the same second, because the server reads one message at a time. The agent sees nothing during the import: the progress of jdtls ("importing the project for 15s: Build model ...") goes to the standard error, which a host logs and does not show.
 
 Done when:
 - a `tools/call` that waits for the daemon (start, jdtls import, a slow answer) does not stop the server from reading and answering `ping` meanwhile, and a call has a bound after which it ends as a failed call (`isError: true`, the problem `daemon-timeout` or the key the cli already has);
