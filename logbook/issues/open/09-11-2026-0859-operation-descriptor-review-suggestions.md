@@ -1,7 +1,8 @@
 # The operation descriptor says what a second front end needs (review suggestions)
 
 Opened: 09-11-2026 08:59
-On hold: review suggestions of the batches of PR 33 (command line, rendered results, named operations) and PR 34 (entry point, guide). The first two points and those on the runner matter when the MCP adapter (plan step 6) is built; lift the hold then.
+
+Tidy first for the MCP server (plan step 6): a tool is generated from this descriptor and run by `OperationRunner`, so what a second front end would trip on is fixed before it is built. The hold is lifted by the user's request to continue the MCP work (09-11-2026).
 
 Done when:
 - command-line words (`--wait`, `--timeout`, `--token`, `gabier organize-imports`) do not appear in the notes and refusals of `Operations.START`, `RENAME`, `RENAME_TOKEN` and `CLEANUP`: a tool built from the descriptor does not mention an option it lacks;
