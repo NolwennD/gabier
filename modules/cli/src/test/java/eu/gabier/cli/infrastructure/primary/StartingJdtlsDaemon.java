@@ -14,6 +14,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A daemon of the tests whose jdtls goes through states: it answers {@code start} with the first status it was given and
@@ -25,6 +27,8 @@ final class StartingJdtlsDaemon implements AutoCloseable {
     private final ServerSocketChannel listener;
     private final List<String> requests = new CopyOnWriteArrayList<>();
     private final String start;
+    private final CountDownLatch statusRequested = new CountDownLatch(1);
+    private volatile boolean silentOnStatus;
     private List<String> statuses;
     private int next;
     private boolean closesAfterTheStart;
@@ -54,6 +58,19 @@ final class StartingJdtlsDaemon implements AutoCloseable {
         closesAfterTheStart = true;
     }
 
+    /**
+     * From now on, a {@code status} request is read and never answered: the connection stays open until the cli closes
+     * it, so a cli that asks for the status is blocked reading the answer.
+     */
+    void staysSilentOnStatus() {
+        silentOnStatus = true;
+    }
+
+    /** True once a {@code status} request has been read by a daemon that stays silent on it ({@link #staysSilentOnStatus}). */
+    boolean awaitsAStatusRequest() throws InterruptedException {
+        return statusRequested.await(10, TimeUnit.SECONDS);
+    }
+
     /** The requests received so far, one line each. */
     List<String> requests() {
         return requests;
@@ -80,6 +97,12 @@ final class StartingJdtlsDaemon implements AutoCloseable {
             }
             requests.add(line);
             var isStart = line.contains("\"method\":\"start\"");
+            if (!isStart && silentOnStatus) {
+                statusRequested.countDown();
+                // The cli closes the connection when it gives up, which ends the read.
+                reader.readLine();
+                return;
+            }
             var result = isStart ? start : nextStatus();
             var answer = result.startsWith("{\"jsonrpc\"") ? result : JsonRpc.success("1", result);
             client.write(ByteBuffer.wrap((answer + "\n").getBytes(StandardCharsets.UTF_8)));

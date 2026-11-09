@@ -336,8 +336,10 @@ class StartingJdtlsTest extends CliTest {
         }
 
         @Test
-        void aWaitThatIsInterruptedIsAConnectionFailureAndKeepsTheInterruption() throws Exception {
-            try (var daemon = new StartingJdtlsDaemon(socket(), STARTING, STARTING)) {
+        void aWaitThatIsInterruptedWhileItAwaitsTheStatusIsAConnectionFailureAndKeepsTheInterruption()
+                throws Exception {
+            try (var daemon = new StartingJdtlsDaemon(socket(), STARTING)) {
+                daemon.staysSilentOnStatus();
                 var code = new AtomicInteger(-1);
                 var interrupted = new AtomicBoolean();
                 var run = new Thread(() -> {
@@ -346,15 +348,18 @@ class StartingJdtlsTest extends CliTest {
                 });
                 run.start();
 
-                while (daemon.requests().size() < 2) {
-                    Thread.sleep(10);
-                }
+                // The status is asked and not answered: the cli is blocked on the connection, or about to be.
+                assertThat(daemon.awaitsAStatusRequest()).isTrue();
                 run.interrupt();
                 run.join();
 
                 assertThat(code.get()).isEqualTo(1);
                 assertThat(interrupted).isTrue();
-                assertThat(err()).contains("the wait for jdtls was interrupted").contains("(daemon-connection-failed)");
+                assertThat(out()).isEmpty();
+                assertThat(err())
+                        .startsWith("Daemon connection failed: The connection to the daemon failed: the connection"
+                                + " was lost")
+                        .contains("(daemon-connection-failed)");
             }
         }
 
