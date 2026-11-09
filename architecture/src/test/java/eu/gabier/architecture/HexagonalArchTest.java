@@ -89,6 +89,12 @@ class HexagonalArchTest {
      */
     private static final String CLI_COMPOSITION_ROOT = ROOT_PACKAGE + ".cli.Gabier";
 
+    /**
+     * The primary adapter that the composition root starts: the command line. Being outside the layers, the entry point
+     * is the one class that reaches it too, and only it.
+     */
+    private static final String CLI_COMMAND_LINE = ROOT_PACKAGE + ".cli.infrastructure.primary.CommandLine";
+
     /** The JSpecify annotation that makes NullAway check a package; by name, as the module only needs it to compile. */
     private static final String NULL_MARKED = "org.jspecify.annotations.NullMarked";
 
@@ -220,6 +226,7 @@ class HexagonalArchTest {
                     // The layers are optional, but a class outside them that reaches a secondary adapter still
                     // counts as a layer access: the composition root of the cli is that class, see CliAdapters.
                     .ignoreDependency(name(CLI_COMPOSITION_ROOT), resideInAPackage(CLI_ADAPTERS_PACKAGE + ".."))
+                    .ignoreDependency(name(CLI_COMPOSITION_ROOT), name(CLI_COMMAND_LINE))
                     .because("Each bounded context should implement a hexagonal architecture")
                     .check(CLASSES));
         }

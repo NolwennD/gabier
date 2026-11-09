@@ -1,20 +1,17 @@
 package eu.gabier.cli;
 
-import eu.gabier.cli.domain.DaemonRefusal;
+import eu.gabier.cli.infrastructure.primary.CommandLine;
 import eu.gabier.cli.infrastructure.secondary.SocketDaemon;
-import eu.gabier.protocol.ExitCode;
-import eu.gabier.protocol.Problem;
-import eu.gabier.protocol.ProblemMapper;
 import eu.gabier.shared.generation.ExcludeFromGeneratedCodeCoverage;
 import java.io.PrintStream;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
+/**
+ * The entry point of the cli, and its composition root: the one class that builds the adapter of the daemon (the
+ * socket) and hands it to the command line.
+ */
 public final class Gabier {
-
-    private static final String JSON_OPTION = "--json";
 
     private Gabier() {}
 
@@ -25,79 +22,14 @@ public final class Gabier {
         System.exit(run(args, System.getenv(), System.out, System.err));
     }
 
-    static int run(String[] args, Map<String, String> environment, PrintStream out, PrintStream err) {
+    /** Runs the command line against the daemon of the project, and gives the exit code. */
+    public static int run(String[] args, Map<String, String> environment, PrintStream out, PrintStream err) {
         return run(args, environment, out, err, SocketDaemon.NOTICE_DELAY);
     }
 
     /** As {@link #run(String[], Map, PrintStream, PrintStream)}, with the time a request waits before its notice. */
-    static int run(
+    public static int run(
             String[] args, Map<String, String> environment, PrintStream out, PrintStream err, Duration noticeDelay) {
-        var arguments = List.of(args);
-        var json = arguments.contains(JSON_OPTION);
-        var words = arguments.stream()
-                .filter(argument -> !argument.equals(JSON_OPTION))
-                .toList();
-        try {
-            execute(words, environment, json, out, err, noticeDelay);
-
-            return ExitCode.SUCCESS.value();
-        } catch (DaemonRefusal refusal) {
-            var problem = problemOf(refusal);
-
-            return report(problem, HelpPointer.after(problem, words.getFirst()), json, err);
-        } catch (RuntimeException e) {
-            return fail(e, json, err);
-        }
-    }
-
-    /** Runs the capability of the command the first word names; without one, only {@link Standalone} applies. */
-    private static void execute(
-            List<String> arguments,
-            Map<String, String> environment,
-            boolean json,
-            PrintStream out,
-            PrintStream err,
-            Duration noticeDelay) {
-        var capability = arguments.isEmpty() ? Optional.<Capability>empty() : Capabilities.named(arguments.getFirst());
-        if (capability.isEmpty()) {
-            Standalone.run(arguments, json, out);
-
-            return;
-        }
-        var words = Arguments.of(arguments);
-        if (words.wantsHelp()) {
-            out.println(HelpText.of(capability.get().command(), json));
-
-            return;
-        }
-        var daemon = new SocketDaemon(environment, err, noticeDelay);
-        capability.get().run(new Invocation(words, json, out, daemon));
-    }
-
-    /** The problem object of a refusal of the daemon, as the daemon gave it. */
-    private static Problem problemOf(DaemonRefusal refusal) {
-        return new Problem(
-                refusal.type(),
-                refusal.title(),
-                refusal.detail(),
-                refusal.key(),
-                refusal.parameters(),
-                refusal.category());
-    }
-
-    /** Reports the failure as a problem object on the standard error, as JSON or as text, and gives the exit code. */
-    static int fail(RuntimeException failure, boolean json, PrintStream err) {
-        return report(ProblemMapper.toProblem(failure), HelpPointer.after(failure), json, err);
-    }
-
-    private static int report(Problem problem, Optional<String> pointer, boolean json, PrintStream err) {
-        if (json) {
-            err.println(pointer.map(problem::toJson).orElseGet(problem::toJson));
-        } else {
-            err.println(problem.toText());
-            pointer.ifPresent(err::println);
-        }
-
-        return ExitCode.of(problem).value();
+        return CommandLine.run(args, out, err, new SocketDaemon(environment, err, noticeDelay));
     }
 }

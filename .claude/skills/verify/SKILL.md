@@ -77,7 +77,8 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   `@TempDir` and an explicit path: never the default path of the user, and keep the path short (107 bytes). The lazy
   start, its concurrency, its failure and retry and the stop are tested in `ProjectServerTest` with a counting starter and
   a hand-written language server (`ScriptedProject` stands for the project in `DaemonServerTest`). The cli is
-  tested the same way against `ScriptedDaemon` (`modules/cli/src/test`). The cli reaches the daemon through the port
+  tested the same way against `ScriptedDaemon` (`modules/cli/src/test`; the command line, its commands and their tests are in
+  `eu.gabier.cli.infrastructure.primary`, only `Gabier` is in `eu.gabier.cli`). The cli reaches the daemon through the port
   `eu.gabier.cli.domain.Daemon`, whose adapter `SocketDaemon` is in `eu.gabier.cli.infrastructure.secondary` (with
   `DaemonClient`, `DaemonLauncher`, `DaemonException` and `WaitNotice`). The cli starting the daemon (`DaemonLauncher`:
   next to its own binary, else on the `PATH`; log next to the socket; 20 seconds to listen) is tested with real

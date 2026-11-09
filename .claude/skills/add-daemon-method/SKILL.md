@@ -55,7 +55,8 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    (`DaemonStatus.jdtlsFailure`, the reason jdtls failed, is the model). A text that comes from jdtls (a reason, a
    message) is hostile input: the result carries it exactly, and whatever prints it for a person goes through
    `TerminalText.neutralise`, as the text of `gabier status` does.
-5. **The cli command**, if there is one: a **capability** of `modules/cli`, a class of its own that holds its help text.
+5. **The cli command**, if there is one: a **capability** of `modules/cli`, a class of its own that holds its help text,
+   in the package `eu.gabier.cli.infrastructure.primary` (the command line, with `Capabilities` and `CommandLine`).
    Three things, and no other file changes:
    - a final class implementing `Capability` (`command()`, `run(Invocation)`), named after the command (`Rename`,
      `OrganizeImports`; `Diagnostics`, `Status` are the models). It declares its **help text** once, as the constant
@@ -87,7 +88,7 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      `DaemonRefusal` that holds the problem as plain fields, no `protocol` type: the command decodes the reply with the
      `protocol` types, outside the domain). Its adapter, `SocketDaemon` in `eu.gabier.cli.infrastructure.secondary`
      (with `DaemonClient`, `DaemonLauncher`, `DaemonException`, `WaitNotice`), starts `gabier-daemon` when nothing
-     answers (`DaemonLauncher`) and is built by `Gabier`, the one class outside the adapters that names it (a rule of
+     answers (`DaemonLauncher`) and is built by `Gabier` (in `eu.gabier.cli`, which hands it to `CommandLine`), the one class outside the adapters that names it (a rule of
      `HexagonalArchTest`); a new way to the daemon is a method of the port, with its adapter. An
      administrative command that must not start the daemon (`status`, `stop`) calls
      `invocation.daemon().askRunning(method, awaitEnd)`.

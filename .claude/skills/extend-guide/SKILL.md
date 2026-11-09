@@ -6,7 +6,7 @@ argument-hint: '<the situation, in the words of the person who had it>'
 
 # Add an entry to the guide of the improvements
 
-`docs/improve.md` is the one source of the guide. The build copies it into the resources of the cli (`:cli:copyGuide`,
+`docs/improve.md` is the one source of the guide. The build copies it into the resources of the cli, next to the class `Guide` (`eu/gabier/cli/infrastructure/primary`; `:cli:copyGuide`,
 `modules/cli/build.gradle.kts`; kept by the native image in `modules/cli/src/main/resources/META-INF/native-image/
 eu.gabier/cli/resource-config.json`), and `gabier help guide` prints it with no clone. A page of the guide per
 situation: its title is the situation, never the name of a tool. A situation met with no entry becomes an entry.

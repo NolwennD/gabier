@@ -20,7 +20,7 @@ tasks.test {
 // resources of the cli, and kept by the native image (`META-INF/native-image/eu.gabier/cli/resource-config.json`), so
 // that it is printed with no clone of the repository.
 val guide = tasks.register<Copy>("copyGuide") {
-  from(rootProject.layout.projectDirectory.file("docs/improve.md")) { into("eu/gabier/cli") }
+  from(rootProject.layout.projectDirectory.file("docs/improve.md")) { into("eu/gabier/cli/infrastructure/primary") }
   into(layout.buildDirectory.dir("generated/guide"))
 }
 

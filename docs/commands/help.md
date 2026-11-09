@@ -25,7 +25,7 @@ the session with [`gabier start`](start.md), to ask `gabier help --for="<the tas
 hand, which commands replace a text edit, to try a change with `--dry-run` first, and to read the refusal of a command with
 `gabier help <command>`. Like the guide it is a topic of `help`, not a command, and with `--json` it is one object,
 `{"name":"agents","summary":"...","text":"..."}`. The text is the resource `agents.md` of the cli
-(`modules/cli/src/main/resources/eu/gabier/cli/`, kept by the native image like the guide), the only copy; the class
+(`modules/cli/src/main/resources/eu/gabier/cli/infrastructure/primary/`, kept by the native image like the guide), the only copy; the class
 `AgentInstructions` holds it, and [`gabier init-agent`](init-agent.md), which writes it into a project as a skill, a rule or a block of `AGENTS.md`, calls the same `text()`. A test
 (`AgentInstructionsTest`) reads the commands the text cites in backticks (`` `gabier <command>` ``) and fails when one is
 not a command in the list of `gabier help` (or a topic of `help`): change the text and the commands together.

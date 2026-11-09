@@ -41,13 +41,15 @@ objects like the others, with exit code 1. See [start](commands/start.md).
 
 ## How the cli is built
 
-The cli (`modules/cli`, package `eu.gabier.cli`) is a hexagon next to the commands. The commands (`Rename`, `Diagnostics`...)
+The cli (`modules/cli`, package `eu.gabier.cli`) is a hexagon. The command line is its primary adapter, in
+`eu.gabier.cli.infrastructure.primary` (`CommandLine`, the commands `Rename`, `Diagnostics`... and their tests); only `Gabier`,
+the entry point and composition root, stays in `eu.gabier.cli`. The commands
 read the command line (`Arguments`, `--json`) and print; they reach the daemon only through the port `Daemon` of
 `eu.gabier.cli.domain` (a method with string parameters in, the members of its result out, a refusal thrown as a
 `DaemonRefusal`), which an `Invocation` hands them with the arguments and the output. The adapter of the port,
 `SocketDaemon`, is in `eu.gabier.cli.infrastructure.secondary` with what talks on the socket and starts the daemon
-(`DaemonClient`, `DaemonLauncher`, `DaemonException`, `WaitNotice`); `Gabier` builds it, and no other class outside that
-package names it (`HexagonalArchTest`). A second front end, such as an MCP server, takes the same port.
+(`DaemonClient`, `DaemonLauncher`, `DaemonException`, `WaitNotice`); `Gabier` builds it and hands it to `CommandLine`, and no other class
+outside that package names it (`HexagonalArchTest`). A second front end, such as an MCP server, takes the same port.
 
 ## Text in a terminal
 

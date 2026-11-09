@@ -2,8 +2,8 @@ package eu.gabier.cli.infrastructure.secondary;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import eu.gabier.cli.CliFixtures;
-import eu.gabier.cli.ScriptedDaemon;
+import eu.gabier.cli.infrastructure.primary.CliFixtures;
+import eu.gabier.cli.infrastructure.primary.ScriptedDaemon;
 import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsProgress;
