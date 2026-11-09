@@ -1,8 +1,8 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.application.OperationResult;
 import eu.gabier.cli.application.ResultText;
 import eu.gabier.cli.domain.Operations;
-import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.TerminalText;
 import java.util.Map;
 
@@ -32,9 +32,9 @@ final class Diagnostics implements Capability {
     public void run(Invocation invocation) {
         var arguments = invocation.arguments().exactly(1);
         var result = invocation
-                .daemon()
-                .ask(command().commandName(), Map.of("file", arguments.file(0).toString()));
-        var diagnostics = FileDiagnostics.of(result.result());
+                .operations()
+                .run(Operations.DIAGNOSTICS, Map.of("file", arguments.file(0).toString()));
+        var diagnostics = ((OperationResult.Diagnosed) result).diagnostics();
         if (invocation.json()) {
             invocation.out().println(diagnostics.toJson());
 

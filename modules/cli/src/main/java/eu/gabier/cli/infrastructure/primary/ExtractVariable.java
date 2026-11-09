@@ -26,6 +26,6 @@ final class ExtractVariable implements Capability {
 
     @Override
     public void run(Invocation invocation) {
-        new ExtractSelection(command()).run(invocation);
+        new ExtractSelection(Operations.EXTRACT_VARIABLE).run(invocation);
     }
 }

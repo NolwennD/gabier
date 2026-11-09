@@ -34,12 +34,12 @@ final class MoveTypeToFile implements Capability {
         var position = operands.position(1);
         ChangedFilesReply.ask(
                         invocation,
-                        command().commandName(),
+                        Operations.MOVE_TYPE_TO_FILE,
                         Map.of(
                                 "file", operands.file(0).toString(),
-                                "line", String.valueOf(position.line()),
-                                "column", String.valueOf(position.column()),
-                                "dryRun", String.valueOf(arguments.dryRun())))
+                                "line", position.line(),
+                                "column", position.column(),
+                                "dryRun", arguments.dryRun()))
                 .print();
     }
 }

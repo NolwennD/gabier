@@ -28,8 +28,8 @@ final class OrganizeImports implements Capability {
         var operands = arguments.operands(1);
         var reply = ChangedFilesReply.ask(
                 invocation,
-                command().commandName(),
-                Map.of("file", operands.file(0).toString(), "dryRun", String.valueOf(arguments.dryRun())));
+                Operations.ORGANIZE_IMPORTS,
+                Map.of("file", operands.file(0).toString(), "dryRun", arguments.dryRun()));
         if (!invocation.json() && reply.isEmpty()) {
             if (arguments.dryRun()) {
                 invocation.out().println("dry run, nothing written");

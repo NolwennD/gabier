@@ -1,6 +1,7 @@
 package eu.gabier.cli.infrastructure.primary;
 
 import eu.gabier.cli.Gabier;
+import eu.gabier.cli.application.OperationRunner;
 import eu.gabier.cli.domain.Daemon;
 import eu.gabier.cli.domain.DaemonRefusal;
 import eu.gabier.protocol.ExitCode;
@@ -61,7 +62,7 @@ public final class CommandLine {
 
             return;
         }
-        capability.get().run(new Invocation(words, json, out, daemon));
+        capability.get().run(new Invocation(words, json, out, new OperationRunner(daemon), daemon));
     }
 
     /** The problem object of a refusal of the daemon, as the daemon gave it. */

@@ -39,11 +39,11 @@ final class Create implements Capability {
         var operands = arguments.operands(2);
         ChangedFilesReply.ask(
                         invocation,
-                        command().commandName(),
+                        Operations.CREATE,
                         Map.of(
                                 "file", operands.file(0).toString(),
                                 "kind", operands.operand(1),
-                                "dryRun", String.valueOf(arguments.dryRun())))
+                                "dryRun", arguments.dryRun()))
                 .print();
     }
 }

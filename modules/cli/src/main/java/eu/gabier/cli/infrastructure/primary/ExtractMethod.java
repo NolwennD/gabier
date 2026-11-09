@@ -25,6 +25,6 @@ final class ExtractMethod implements Capability {
 
     @Override
     public void run(Invocation invocation) {
-        new ExtractSelection(command()).run(invocation);
+        new ExtractSelection(Operations.EXTRACT_METHOD).run(invocation);
     }
 }

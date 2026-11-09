@@ -1,6 +1,8 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.application.OperationResult;
 import eu.gabier.cli.application.ResultText;
+import eu.gabier.cli.domain.Operation;
 import eu.gabier.protocol.ChangedFiles;
 import java.util.Map;
 
@@ -13,11 +15,11 @@ import java.util.Map;
  */
 record ChangedFilesReply(Invocation invocation, ChangedFiles changed) {
 
-    /** Asks the daemon for a change of files. */
-    static ChangedFilesReply ask(Invocation invocation, String method, Map<String, String> params) {
-        return new ChangedFilesReply(
-                invocation,
-                ChangedFiles.of(invocation.daemon().ask(method, params).result()));
+    /** Runs an operation that changes files, with these values. */
+    static ChangedFilesReply ask(Invocation invocation, Operation operation, Map<String, Object> values) {
+        var result = (OperationResult.Changed) invocation.operations().run(operation, values);
+
+        return new ChangedFilesReply(invocation, result.changed());
     }
 
     /** Whether the text of the answer holds nothing: no file changed and no diff. */

@@ -57,7 +57,7 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    `TerminalText.neutralise`, as the text of `gabier status` does.
 5. **The cli command**, if there is one: a **capability** of `modules/cli`, a class of its own that holds its help text,
    in the package `eu.gabier.cli.infrastructure.primary` (the command line, with `Capabilities` and `CommandLine`).
-   Five things, and no other file changes:
+   Five things, and the line of the operation in `kindOf` of `OperationRunner` (below), and no other file changes:
    - the **operation**, declared once in `eu.gabier.cli.domain.Operations` (no protocol type, no JSON): a constant
      `public static final Operation <NAME> = new Operation(method, summary, notes, refusals, parameters)`, added to
      `all()` in the order of the table of `docs/protocol.md`. It is the one place that names the **typed parameters**
@@ -90,18 +90,28 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      `CommandRefusalsTest` fails when they differ. `run` reads the words with `invocation.arguments()`
      (`Arguments`: `dryRun()`, `has(option)`, `operands(count, options...)` which takes `--dry-run` and the options out
      and refuses a wrong count, `exactly(count)` which keeps every word, `file(i)` as an absolute path, `position(i)` for
-     `line:column` and `position(i, j)` for two numbers, both counted from 1 by the user and kept from 0; every refusal is
-     the one usage error), asks the daemon and prints. A command of the catalogue (it asks for work on the project) calls
-     `invocation.daemon().ask(method, params)`: `invocation.daemon()` is the port `Daemon` of `eu.gabier.cli.domain`
+     `line:column` and `position(i, j)` for two numbers, both counted from 1 by the user and kept from 1; every refusal is
+     the one usage error), runs its operation and prints. A command of the catalogue (it asks for work on the project)
+     reduces to two steps, "words to named values" and "result to output", and builds no parameter of the daemon: it calls
+     `invocation.operations().run(Operations.X, values)`, where `values` are the named values of the descriptor (a
+     `String`, an `Integer` position counted from 1, a `Boolean`, a `List<String>`), and gets an `OperationResult`
+     (`Changed`, `Diagnosed`, `Referenced`, `Offered`: the `protocol` type, decoded). `invocation.operations()` is the
+     `OperationRunner` of `eu.gabier.cli.application`, the one entry point of every front end: it checks the values
+     against the descriptor (a required value missing, an unknown one, one of another kind, a position below 1: the
+     refusal `operation-invalid-values`), sends the positions from 0, a boolean as `true` or `false` and a list one
+     element to a line (the form the daemon reads: an element with a line break is refused), asks the port, and decodes the
+     answer. **A new operation is also named in `kindOf` of `OperationRunner`** (the `case` list of the operations that
+     answer with changed files, or the case of `diagnostics`, `references`, `actions`); a method it does not list is
+     refused with an `IllegalArgumentException`, and `OperationRunnerTest` shows it. One that answers with a new kind of
+     result is a new case of `OperationRunner` and a new record of `OperationResult`. The port is `Daemon` of `eu.gabier.cli.domain`
      (a method with string parameters in, the members of the result out as a `DaemonReply`, a refusal thrown as a
-     `DaemonRefusal` that holds the problem as plain fields, no `protocol` type: the command decodes the reply with the
-     `protocol` types, outside the domain). Its adapter, `SocketDaemon` in `eu.gabier.cli.infrastructure.secondary`
+     `DaemonRefusal` that holds the problem as plain fields, no `protocol` type, which the runner lets through). Its adapter, `SocketDaemon` in `eu.gabier.cli.infrastructure.secondary`
      (with `DaemonClient`, `DaemonLauncher`, `DaemonException`, `WaitNotice`), starts `gabier-daemon` when nothing
      answers (`DaemonLauncher`) and is built by `Gabier` (in `eu.gabier.cli`, which hands it to `CommandLine`), the one class outside the adapters that names it (a rule of
      `HexagonalArchTest`); a new way to the daemon is a method of the port, with its adapter. An
      administrative command that must not start the daemon (`status`, `stop`) calls
      `invocation.daemon().askRunning(method, awaitEnd)`.
-     A command that answers with changed files shares `ChangedFilesReply` (`ask`, `print`, `isEmpty`: the list of files,
+     A command that answers with changed files shares `ChangedFilesReply` (`ask(invocation, operation, values)`, `print`, `isEmpty`: the list of files,
      the diff, the dry run), by composition, not by inheritance. A command that does not talk to the daemon (`help`)
      asks nothing and has no row in `docs/protocol.md`. Its output is text by default and the result with `--json`, a
      refusal of the daemon printed as its problem object with the exit code of its category (`DaemonRefusal`, turned into the `Problem` by `Gabier`);

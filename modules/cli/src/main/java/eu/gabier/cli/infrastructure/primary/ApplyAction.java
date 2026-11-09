@@ -38,15 +38,15 @@ final class ApplyAction implements Capability {
         var end = operands.position(2);
         ChangedFilesReply.ask(
                         invocation,
-                        command().commandName(),
+                        Operations.APPLY_ACTION,
                         Map.of(
                                 "file", operands.file(0).toString(),
-                                "startLine", String.valueOf(start.line()),
-                                "startColumn", String.valueOf(start.column()),
-                                "endLine", String.valueOf(end.line()),
-                                "endColumn", String.valueOf(end.column()),
+                                "startLine", start.line(),
+                                "startColumn", start.column(),
+                                "endLine", end.line(),
+                                "endColumn", end.column(),
                                 "title", operands.operand(3),
-                                "dryRun", String.valueOf(arguments.dryRun())))
+                                "dryRun", arguments.dryRun()))
                 .print();
     }
 }

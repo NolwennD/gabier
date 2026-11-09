@@ -32,12 +32,12 @@ final class Inline implements Capability {
         var position = operands.position(1);
         ChangedFilesReply.ask(
                         invocation,
-                        command().commandName(),
+                        Operations.INLINE,
                         Map.of(
                                 "file", operands.file(0).toString(),
-                                "line", String.valueOf(position.line()),
-                                "column", String.valueOf(position.column()),
-                                "dryRun", String.valueOf(arguments.dryRun())))
+                                "line", position.line(),
+                                "column", position.column(),
+                                "dryRun", arguments.dryRun()))
                 .print();
     }
 }

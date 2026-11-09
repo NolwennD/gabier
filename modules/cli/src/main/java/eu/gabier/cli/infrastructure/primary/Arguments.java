@@ -7,7 +7,7 @@ import java.util.Optional;
 /**
  * The words of a command line, the command included ({@code --json} left out), and the rules to read them: the words
  * after the command, the options that may stand anywhere, the operands that are left, how many there must be, a file as
- * an absolute path and a position as the user counts it, from 1. Every refusal is the one usage error, which names the
+ * an absolute path and a position as the user counts it, from 1 (and keeps it). Every refusal is the one usage error, which names the
  * words given.
  *
  * @param all the words, the command first
@@ -142,23 +142,23 @@ record Arguments(List<String> all, List<String> operands) {
         }
 
         try {
-            return new Position(zeroBased(parts[0]), zeroBased(parts[1]));
+            return new Position(fromOne(parts[0]), fromOne(parts[1]));
         } catch (NumberFormatException notAPosition) {
             throw UsageException.invalidPosition(all, text);
         }
     }
 
-    private static int zeroBased(String number) {
+    private static int fromOne(String number) {
         int value = Integer.parseInt(number);
         if (value < 1) {
             throw new NumberFormatException("not from 1: " + number);
         }
 
-        return value - 1;
+        return value;
     }
 
     /**
-     * A line and a column counted from 0, as the daemon counts them.
+     * A line and a column counted from 1, as the user types them; the runner of the operations sends them from 0.
      *
      * @param line the line
      * @param column the column

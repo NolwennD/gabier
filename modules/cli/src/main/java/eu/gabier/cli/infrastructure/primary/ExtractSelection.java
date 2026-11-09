@@ -1,15 +1,16 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.domain.Operation;
 import java.util.Map;
 
 /**
  * What the commands that extract a selection under a name share: {@code <command> [--dry-run] <file>
- * <line>:<column> <line>:<column> <name>}, each position from 1 (the end excluded), sent to the daemon from 0, and the
- * answer of the daemon as {@code rename} gives it.
+ * <line>:<column> <line>:<column> <name>}, each position from 1 (the end excluded), and the answer of the operation as
+ * {@code rename} gives it.
  *
- * @param command the command that extracts
+ * @param operation the operation that extracts
  */
-record ExtractSelection(Command command) {
+record ExtractSelection(Operation operation) {
 
     void run(Invocation invocation) {
         var arguments = invocation.arguments();
@@ -18,15 +19,15 @@ record ExtractSelection(Command command) {
         var end = operands.position(2);
         ChangedFilesReply.ask(
                         invocation,
-                        command.commandName(),
+                        operation,
                         Map.of(
                                 "file", operands.file(0).toString(),
-                                "startLine", String.valueOf(start.line()),
-                                "startColumn", String.valueOf(start.column()),
-                                "endLine", String.valueOf(end.line()),
-                                "endColumn", String.valueOf(end.column()),
+                                "startLine", start.line(),
+                                "startColumn", start.column(),
+                                "endLine", end.line(),
+                                "endColumn", end.column(),
                                 "name", operands.operand(3),
-                                "dryRun", String.valueOf(arguments.dryRun())))
+                                "dryRun", arguments.dryRun()))
                 .print();
     }
 }

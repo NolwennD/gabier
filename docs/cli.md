@@ -53,9 +53,12 @@ and the operations it runs (`rename` runs two). `gabier help` prints what the op
 The cli (`modules/cli`, package `eu.gabier.cli`) is a hexagon. The command line is its primary adapter, in
 `eu.gabier.cli.infrastructure.primary` (`CommandLine`, the commands `Rename`, `Diagnostics`... and their tests); only `Gabier`,
 the entry point and composition root, stays in `eu.gabier.cli`. The commands
-read the command line (`Arguments`, `--json`) and print; they reach the daemon only through the port `Daemon` of
-`eu.gabier.cli.domain` (a method with string parameters in, the members of its result out, a refusal thrown as a
-`DaemonRefusal`), which an `Invocation` hands them with the arguments and the output. The adapter of the port,
+read the command line (`Arguments`, `--json`) and print: a command is reduced to "words to named values" and "result to
+output", and runs its operation through the one entry point of the application, `OperationRunner.run(operation, named
+values)` (`eu.gabier.cli.application`), which an `Invocation` hands them with the arguments and the output. The runner
+checks the values against the descriptor, sends the positions from 0, asks the port `Daemon` of `eu.gabier.cli.domain` (a
+method with string parameters in, the members of its result out, a refusal thrown as a `DaemonRefusal`) and decodes the
+answer into its `protocol` type (`OperationResult`). The adapter of the port,
 `SocketDaemon`, is in `eu.gabier.cli.infrastructure.secondary` with what talks on the socket and starts the daemon
 (`DaemonClient`, `DaemonLauncher`, `DaemonException`, `WaitNotice`); `Gabier` builds it and hands it to `CommandLine`, and no other class
 outside that package names it (`HexagonalArchTest`). The text of a result (`ChangedFiles`, `FileDiagnostics`, `FoundReferences`,

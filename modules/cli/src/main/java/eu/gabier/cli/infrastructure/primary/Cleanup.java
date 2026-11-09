@@ -2,7 +2,6 @@ package eu.gabier.cli.infrastructure.primary;
 
 import eu.gabier.cli.domain.Operations;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * {@code cleanup [--dry-run] <file> <cleanup>...}: the first operand is the file, the others are the identifiers of the
@@ -41,11 +40,8 @@ final class Cleanup implements Capability {
         }
         var reply = ChangedFilesReply.ask(
                 invocation,
-                command().commandName(),
-                Map.of(
-                        "file", operands.file(0).toString(),
-                        "cleanUps", cleanUps.stream().collect(Collectors.joining("\n")),
-                        "dryRun", String.valueOf(arguments.dryRun())));
+                Operations.CLEANUP,
+                Map.of("file", operands.file(0).toString(), "cleanUps", cleanUps, "dryRun", arguments.dryRun()));
         if (!invocation.json() && reply.isEmpty()) {
             if (arguments.dryRun()) {
                 invocation.out().println("dry run, nothing written");

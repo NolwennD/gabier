@@ -25,6 +25,6 @@ final class ExtractConstant implements Capability {
 
     @Override
     public void run(Invocation invocation) {
-        new ExtractSelection(command()).run(invocation);
+        new ExtractSelection(Operations.EXTRACT_CONSTANT).run(invocation);
     }
 }

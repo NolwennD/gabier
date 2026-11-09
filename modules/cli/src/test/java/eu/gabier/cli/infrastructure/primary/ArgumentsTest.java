@@ -130,11 +130,11 @@ class ArgumentsTest {
     }
 
     @Test
-    void aPositionIsCountedFromOneAndKeptFromZero() {
+    void aPositionIsCountedFromOneAndKeptFromOneForTheRunnerToSendFromZero() {
         var arguments = Arguments.of(List.of("extract-method", "A.java", "3:5", "1:2"));
 
-        assertThat(arguments.position(1)).isEqualTo(new Arguments.Position(2, 4));
-        assertThat(arguments.position(2)).isEqualTo(new Arguments.Position(0, 1));
+        assertThat(arguments.position(1)).isEqualTo(new Arguments.Position(3, 5));
+        assertThat(arguments.position(2)).isEqualTo(new Arguments.Position(1, 2));
     }
 
     @ParameterizedTest

@@ -1,8 +1,8 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.application.OperationResult;
 import eu.gabier.cli.application.ResultText;
 import eu.gabier.cli.domain.Operations;
-import eu.gabier.protocol.CodeActions;
 import eu.gabier.protocol.TerminalText;
 import java.util.Map;
 
@@ -41,16 +41,16 @@ final class Actions implements Capability {
         var start = operands.position(1);
         var end = operands.position(2);
         var result = invocation
-                .daemon()
-                .ask(
-                        command().commandName(),
+                .operations()
+                .run(
+                        Operations.ACTIONS,
                         Map.of(
                                 "file", operands.file(0).toString(),
-                                "startLine", String.valueOf(start.line()),
-                                "startColumn", String.valueOf(start.column()),
-                                "endLine", String.valueOf(end.line()),
-                                "endColumn", String.valueOf(end.column())));
-        var offered = CodeActions.of(result.result());
+                                "startLine", start.line(),
+                                "startColumn", start.column(),
+                                "endLine", end.line(),
+                                "endColumn", end.column()));
+        var offered = ((OperationResult.Offered) result).offered();
         if (invocation.json()) {
             invocation.out().println(offered.toJson());
 

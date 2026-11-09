@@ -1,0 +1,153 @@
+package eu.gabier.cli.application;
+
+import eu.gabier.cli.domain.Daemon;
+import eu.gabier.cli.domain.Operation;
+import eu.gabier.cli.domain.Parameter;
+import eu.gabier.protocol.ChangedFiles;
+import eu.gabier.protocol.CodeActions;
+import eu.gabier.protocol.FileDiagnostics;
+import eu.gabier.protocol.FoundReferences;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
+
+/**
+ * The one way to run an operation, whatever front end asks for it: it checks the named values against the descriptor of
+ * the operation, turns them into what the daemon reads, asks the daemon and decodes the answer. A front end reads its
+ * own words into values, calls {@link #run}, and shows the result.
+ *
+ * <p>The values are the kinds the parameters declare: a text, a whole number (a position, counted from 1), {@code true}
+ * or {@code false}, a list of texts. The daemon reads texts: a position is sent from 0, a boolean as {@code true} or
+ * {@code false}, and a list as its elements one to a line, which is why an element may have no line break. A refusal of
+ * the daemon goes through as it came ({@code DaemonRefusal}).
+ */
+public final class OperationRunner {
+
+    private final Daemon daemon;
+
+    /**
+     * The runner of the operations of this daemon.
+     *
+     * @param daemon the way to the daemon of the project
+     */
+    public OperationRunner(Daemon daemon) {
+        this.daemon = daemon;
+    }
+
+    /**
+     * Runs the operation with these values, by the name of their parameter.
+     *
+     * @throws InvalidValuesException when a required value is missing, a value is unknown, or one is not of the kind
+     *     its parameter holds
+     * @throws IllegalArgumentException when the operation is not one that asks the daemon for a result to decode
+     */
+    public OperationResult run(Operation operation, Map<String, Object> values) {
+        var kind = kindOf(operation);
+        var result =
+                daemon.ask(operation.method(), parameters(operation, values)).result();
+
+        return switch (kind) {
+            case DIAGNOSED -> new OperationResult.Diagnosed(FileDiagnostics.of(result));
+            case REFERENCED -> new OperationResult.Referenced(FoundReferences.of(result));
+            case OFFERED -> new OperationResult.Offered(CodeActions.of(result));
+            case CHANGED -> new OperationResult.Changed(ChangedFiles.of(result));
+        };
+    }
+
+    /** What an operation answers, which decides how the members of its result are decoded. */
+    private enum Kind {
+        DIAGNOSED,
+        REFERENCED,
+        OFFERED,
+        CHANGED
+    }
+
+    private static Kind kindOf(Operation operation) {
+        return switch (operation.method()) {
+            case "diagnostics" -> Kind.DIAGNOSED;
+            case "references" -> Kind.REFERENCED;
+            case "actions" -> Kind.OFFERED;
+            case "rename",
+                    "rename-token",
+                    "organize-imports",
+                    "cleanup",
+                    "extract-variable",
+                    "extract-method",
+                    "extract-constant",
+                    "extract-field",
+                    "move-type-to-file",
+                    "move",
+                    "inline",
+                    "create",
+                    "apply-action" -> Kind.CHANGED;
+            default ->
+                throw new IllegalArgumentException("The operation " + operation.method() + " is not run through run");
+        };
+    }
+
+    /** The parameters of the daemon: every value as a text, the positions from 0. */
+    private static Map<String, String> parameters(Operation operation, Map<String, Object> values) {
+        for (var name : new TreeSet<>(values.keySet())) {
+            if (!operation.parameterNames().contains(name)) {
+                throw InvalidValuesException.unknown(operation, name);
+            }
+        }
+        var parameters = new HashMap<String, String>();
+        for (var parameter : operation.parameters()) {
+            var value = values.get(parameter.name());
+            if (value == null) {
+                if (parameter.required()) {
+                    throw InvalidValuesException.missing(operation, parameter.name());
+                }
+            } else {
+                parameters.put(parameter.name(), text(operation, parameter, value));
+            }
+        }
+
+        return parameters;
+    }
+
+    private static String text(Operation operation, Parameter parameter, Object value) {
+        return switch (parameter.type()) {
+            case STRING -> {
+                if (value instanceof String text) {
+                    yield text;
+                }
+                throw InvalidValuesException.invalid(operation, parameter.name(), "be a text");
+            }
+            case INTEGER -> String.valueOf(zeroBased(operation, parameter, value));
+            case BOOLEAN -> {
+                if (value instanceof Boolean flag) {
+                    yield flag.toString();
+                }
+                throw InvalidValuesException.invalid(operation, parameter.name(), "be true or false");
+            }
+            case ARRAY -> String.join("\n", elements(operation, parameter, value));
+        };
+    }
+
+    /** A position as the daemon counts it: the whole number the front end gave, counted from 1, less one. */
+    private static int zeroBased(Operation operation, Parameter parameter, Object value) {
+        if (!(value instanceof Integer number)) {
+            throw InvalidValuesException.invalid(operation, parameter.name(), "be a whole number");
+        }
+        if (number < 1) {
+            throw InvalidValuesException.invalid(operation, parameter.name(), "be a position, from 1");
+        }
+
+        return number - 1;
+    }
+
+    private static List<String> elements(Operation operation, Parameter parameter, Object value) {
+        if (!(value instanceof List<?> list) || !list.stream().allMatch(String.class::isInstance)) {
+            throw InvalidValuesException.invalid(operation, parameter.name(), "be a list of texts");
+        }
+        var texts = list.stream().map(String.class::cast).toList();
+        if (texts.stream().anyMatch(text -> text.contains("\n") || text.contains("\r"))) {
+            throw InvalidValuesException.invalid(operation, parameter.name(), "not have a line break in an element");
+        }
+
+        return texts;
+    }
+}

@@ -1,8 +1,8 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.application.OperationResult;
 import eu.gabier.cli.application.ResultText;
 import eu.gabier.cli.domain.Operations;
-import eu.gabier.protocol.FoundReferences;
 import eu.gabier.protocol.TerminalText;
 import java.util.Map;
 
@@ -39,15 +39,15 @@ final class References implements Capability {
         var operands = arguments.without(INCLUDE_DECLARATION).exactly(2);
         var position = operands.position(1);
         var result = invocation
-                .daemon()
-                .ask(
-                        command().commandName(),
+                .operations()
+                .run(
+                        Operations.REFERENCES,
                         Map.of(
                                 "file", operands.file(0).toString(),
-                                "line", String.valueOf(position.line()),
-                                "column", String.valueOf(position.column()),
-                                "includeDeclaration", String.valueOf(arguments.has(INCLUDE_DECLARATION))));
-        var found = FoundReferences.of(result.result());
+                                "line", position.line(),
+                                "column", position.column(),
+                                "includeDeclaration", arguments.has(INCLUDE_DECLARATION)));
+        var found = ((OperationResult.Referenced) result).found();
         if (invocation.json()) {
             invocation.out().println(found.toJson());
 

@@ -4,7 +4,6 @@ import eu.gabier.cli.domain.Operations;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -45,11 +44,11 @@ final class Move implements Capability {
         }
         ChangedFilesReply.ask(
                         invocation,
-                        command().commandName(),
+                        Operations.MOVE,
                         Map.of(
-                                "files", files.stream().map(Path::toString).collect(Collectors.joining("\n")),
+                                "files", files.stream().map(Path::toString).toList(),
                                 "package", operands.operand(last),
-                                "dryRun", String.valueOf(arguments.dryRun())))
+                                "dryRun", arguments.dryRun()))
                 .print();
     }
 }
