@@ -24,6 +24,7 @@ sealed interface Capability
                 Start,
                 Status,
                 Stop,
+                Mcp,
                 InitAgent,
                 Help {
 

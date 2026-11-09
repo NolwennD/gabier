@@ -27,6 +27,7 @@ final class Capabilities {
             new Start(),
             new Status(),
             new Stop(),
+            new Mcp(),
             new InitAgent(),
             new Help());
 

@@ -2,6 +2,7 @@ package eu.gabier.cli.infrastructure.primary;
 
 import eu.gabier.cli.application.OperationRunner;
 import eu.gabier.cli.domain.Daemon;
+import java.io.InputStream;
 import java.io.PrintStream;
 
 /**
@@ -13,5 +14,12 @@ import java.io.PrintStream;
  * @param out where the result is printed
  * @param operations how an operation is run, the one entry point that any front end uses
  * @param daemon the way to the daemon of the project
+ * @param in what is typed or piped in, for the commands that read it ({@code mcp})
  */
-record Invocation(Arguments arguments, boolean json, PrintStream out, OperationRunner operations, Daemon daemon) {}
+record Invocation(
+        Arguments arguments,
+        boolean json,
+        PrintStream out,
+        OperationRunner operations,
+        Daemon daemon,
+        InputStream in) {}

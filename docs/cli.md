@@ -63,7 +63,11 @@ answer into its `protocol` type (`OperationResult`). The adapter of the port,
 (`DaemonClient`, `DaemonLauncher`, `DaemonException`, `WaitNotice`); `Gabier` builds it and hands it to `CommandLine`, and no other class
 outside that package names it (`HexagonalArchTest`). The text of a result (`ChangedFiles`, `FileDiagnostics`, `FoundReferences`,
 `CodeActions`) is a pure function of the result, `ResultText` in `eu.gabier.cli.application`: the commands only print its
-lines. A second front end, such as an MCP server, takes the same port and the same text. The guide of the improvements
+lines. A second front end takes the same port and the same text: the MCP server, `gabier mcp`, is a second primary adapter in
+`eu.gabier.cli.infrastructure.primary.mcp` (JDK and `Json` only; one JSON-RPC message per line on the standard input and
+output, nothing else on the output). `tools/list` generates one tool per descriptor of `Operations` but `start` and `stop`
+(`Tools`), so a parameter added to an operation shows in the schema of its tool with no other file edited; the page of
+the command is [mcp](commands/mcp.md). The guide of the improvements
 (`gabier help guide`, `docs/improve.md`) is below the command line too: `Guide`, `GuideSection`, `GuideSections` and the
 `ranking` package are in `eu.gabier.cli.domain`, the answer to a question (`help --for`) is `AskTheGuide.answer` in
 `eu.gabier.cli.application`, and the command line only reads the resource (`GuideTopic`) and writes the answer

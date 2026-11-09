@@ -7,6 +7,7 @@ import eu.gabier.cli.domain.DaemonRefusal;
 import eu.gabier.protocol.ExitCode;
 import eu.gabier.protocol.Problem;
 import eu.gabier.protocol.ProblemMapper;
+import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.List;
 import java.util.Optional;
@@ -25,18 +26,19 @@ public final class CommandLine {
      * Runs the command the arguments name, and gives the exit code.
      *
      * @param args the words of the command line
+     * @param in the standard input, which {@code mcp} reads until it is closed
      * @param out where the result is printed
      * @param err where a problem is printed
      * @param daemon the way to the daemon of the project
      */
-    public static int run(String[] args, PrintStream out, PrintStream err, Daemon daemon) {
+    public static int run(String[] args, InputStream in, PrintStream out, PrintStream err, Daemon daemon) {
         var arguments = List.of(args);
         var json = arguments.contains(JSON_OPTION);
         var words = arguments.stream()
                 .filter(argument -> !argument.equals(JSON_OPTION))
                 .toList();
         try {
-            execute(words, json, out, daemon);
+            execute(words, json, in, out, daemon);
 
             return ExitCode.SUCCESS.value();
         } catch (DaemonRefusal refusal) {
@@ -49,7 +51,7 @@ public final class CommandLine {
     }
 
     /** Runs the capability of the command the first word names; without one, only {@link Standalone} applies. */
-    private static void execute(List<String> arguments, boolean json, PrintStream out, Daemon daemon) {
+    private static void execute(List<String> arguments, boolean json, InputStream in, PrintStream out, Daemon daemon) {
         var capability = arguments.isEmpty() ? Optional.<Capability>empty() : Capabilities.named(arguments.getFirst());
         if (capability.isEmpty()) {
             Standalone.run(arguments, json, out);
@@ -62,7 +64,7 @@ public final class CommandLine {
 
             return;
         }
-        capability.get().run(new Invocation(words, json, out, new OperationRunner(daemon), daemon));
+        capability.get().run(new Invocation(words, json, out, new OperationRunner(daemon), daemon, in));
     }
 
     /** The problem object of a refusal of the daemon, as the daemon gave it. */
