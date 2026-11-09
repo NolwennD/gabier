@@ -148,6 +148,12 @@ Whichever way you installed it:
    `/mcp` shows the server and its tools. The server starts the daemon in the background when the host connects; see
    [`mcp`](docs/commands/mcp.md).
 
+   `claude mcp add` writes a server of your own (scope `local`, the default), which starts without a question. A
+   `.mcp.json` is a server of the project: Claude Code asks each developer to approve it at the first interactive launch,
+   and `claude mcp list` shows it as `Pending approval` until then. To approve it ahead of time, add
+   `"enabledMcpjsonServers": ["gabier"]` to your own `~/.claude/settings.json` or to `.claude/settings.local.json`; the same
+   line in the `.claude/settings.json` of the repository is ignored in a folder that Claude Code does not trust yet.
+
 ## Build gabier from its sources
 
 You need:

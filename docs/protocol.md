@@ -36,9 +36,10 @@ are numbers from 0, and a list, `files` or `cleanUps`, is its elements one to a 
 the values, such as the descriptor `Operations` and `OperationRunner` of the cli, writes each as its kind says
 (`Parameter.Type`) and counts a position from 1. The page of each command says what it does. `help` and `init-agent` have no row: they are answered by the cli alone and never reach the
 daemon ([help](commands/help.md), [init-agent](commands/init-agent.md)). The MCP server of the cli, `gabier mcp`
-([mcp](commands/mcp.md)), serves each method of the table but `start` and `stop` as a tool of the same name, with the
-same parameters (positions from 1, a list as an array), so a method added here is a tool by itself; the server's
-warm-up sends the daemon a `start`, as `gabier start` does.
+([mcp](commands/mcp.md)), serves each method of the table as a tool of the same name, with the same parameters, except
+`start` and `stop`: they are not tools (the server starts the daemon itself when the host connects, and an agent that
+stopped it would lose the tools that need it), while `status` is one. The parameters are those of the table, with the positions from 1 and a list as an array, so a
+method added here is a tool by itself; the warm-up of the server sends the daemon a `start`, as `gabier start` does.
 
 | Method             | Parameters                                                                  | Command                                                    |
 | ------------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
