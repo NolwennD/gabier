@@ -49,6 +49,11 @@ grep -ril "<two or three keywords of the work>" logbook/issues 2>/dev/null
   `logbook/issues/open/<DD-MM-YYYY-HHMM>-<slug>.md` as the logbook rule says. The title is English, an outcome like a
   commit subject; the slug is the title in lowercase kebab-case, 40 characters at most; the content is what the user
   asked for, in a few lines: the goal, then a `Done when:` list.
+  **The issue holds the need, not the content.** It says what must be true and how to check it, and which
+  documentation must stay true (the page, the help, the skill), never the wording of that documentation and never a
+  statement of behaviour, a list (names, counts, options) or a sentence of the code written again from memory: a fact
+  copied into an issue is copied again into the documentation by the worker, and is wrong as soon as the code decides
+  otherwise. When a fact matters, the issue names the symbol or the test that holds it (`Tools.NOT_TOOLS`), not its value.
   Commit **only that file** (never `git add -A`):
 
 ```bash
@@ -75,6 +80,11 @@ the points of each, one by one, in its report:
 - the ticket: the path of the issue file, which it reads first, and the `Done when` points as the only scope;
 - the project rules: read `CLAUDE.md` if it exists and `.claude/rules/`; test first, then implement; update the rules and
   skills that its change makes outdated;
+- the documentation is the worker's: it updates every page, help text and comment that its change makes outdated (the
+  issue says the need, not the words), **writing from the code**: each statement of behaviour, each list and each count
+  is read from the code that decides it (the symbol, the test), never copied from the issue, from a page or from the
+  report of a previous worker; where a list can be computed or checked against the code by a test, it is, instead of
+  being written by hand twice;
 - the quality: while working it runs targeted tests, and at most `bin/ci --fast` (no native image, no real jdtls: the
   slow checks stay off the working path); when it thinks the work is ready it runs the full `bin/ci` on its worktree
   **once** (`"$JAVA_HOME/bin/java" --source 25 bin/ci` while mise does not trust the repository) and fixes what it shows
@@ -85,7 +95,8 @@ the points of each, one by one, in its report:
   issue and does not merge;
 - the supervision (below);
 - the final report: what was done, the commit hash, the `bin/ci` summary, how each `Done when` point was proven, the
-  business cases handled with the test that covers each one (the reviewer starts from them), and the unrelated bugs
+  business cases handled with the test that covers each one (the reviewer starts from them), for each statement of
+  behaviour written in a page, a help text or a comment the code or the test that proves it, and the unrelated bugs
   found.
 
 The prompt and every answer of the subagent follow "Exchanges between agents" (`.claude/rules/workflow.md`): short,
@@ -120,6 +131,8 @@ The issue (file name), the branch, the commit, and every unrelated bug with the 
 ## Forbidden
 
 - Doing the ticket's work in the supervisor session: the subagent does it.
+- Writing the documentation, or a fact of the code from memory (a list, a count, a sentence), in the issue or in the
+  prompt of the subagent: they state the need and name the symbol that holds the fact.
 - Writing a time that did not come from `date`.
 - A second issue for a subject that has one open.
 - `git add -A`, `git add .`, or committing anything but the issue file on `main` when opening a ticket.
