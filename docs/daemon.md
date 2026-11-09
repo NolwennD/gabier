@@ -3,7 +3,7 @@
 One daemon runs per project. `gabier diagnostics`, `gabier rename`, `gabier organize-imports`, `gabier cleanup`, `gabier extract-variable`, `gabier extract-method`, `gabier extract-constant`, `gabier extract-field`, `gabier move-type-to-file`, `gabier move`, `gabier inline`, `gabier create`, `gabier references`, `gabier actions`, `gabier apply-action` and `gabier start` **start it when nothing answers on the socket**, so an
 agent runs them in a project folder and gets the answer; `gabier status` and `gabier stop` never start one (see [status and stop](commands/status-and-stop.md)).
 It can also be started by hand, with `gabier-daemon` from the installed distribution (`./gradlew :daemon:installDist`,
-then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until `gabier stop` or a SIGTERM; it
+then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until `gabier stop`, a SIGTERM, or the delay with no client below; it
 answers `status`, `start`, `stop`, `diagnostics`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions` and `apply-action`, and nothing else yet.
 
 **Installing both by name.** `mise run install` builds the native cli and the daemon of the checkout it is run in,
@@ -52,6 +52,29 @@ request that waits while the daemon stops is told that the daemon is stopping: i
 connection ends (the daemon gives the clients 5 seconds to end, then cuts them). What jdtls says of itself goes to the
 standard error of the daemon, prefixed with `jdtls:`, with control characters written as escapes like in the text of
 `gabier diagnostics`.
+
+**Stopping when nobody uses it.** A daemon stops by itself, the way `gabier stop` stops it (jdtls and its workspace
+folder are ended and removed, the socket is given back), once **no client has been connected for 60 minutes**: the delay
+is `GABIER_IDLE_TIMEOUT`, in whole minutes, read when the daemon starts (`0` turns the rule off; anything else that is not a
+whole number of minutes, 0 or more, is a `usage-error` that names the variable and starts nothing). The cli opens one
+connection per call, so a call in progress holds the daemon up however long it lasts, and the delay is counted from
+the end of the last connection (from the start of a daemon nobody has called yet): a `gabier status`, `gabier start` or
+any other command, even one that is refused, restarts it. The daemon does not read the messages of the MCP server of
+the cli (`ping` is answered by the cli itself), and the MCP server never stops the daemon when its host disconnects:
+the daemon is shared with the other sessions and the command line. A connection that stays open with no call counts
+as in use, so it keeps the daemon up. `gabier status` says the delay and the time left of it as it was when the call
+arrived (the call itself restarts the delay when it ends), in the member `idle`, absent when the rule is off.
+
+A request that reaches the daemon after it decided to stop, in the instant before it closes its listener, is answered
+with the refusal `daemon-stopping` (exit code 1) and is **never run**: the daemon answers every line of such a
+connection the same way and reads no parameter. A command that can start a daemon (every command but `status`, `stop`
+and the polling of `start --wait`) takes that answer as the order to ask again: it waits until nothing answers on the
+socket any more (it connects every 25 ms, for 5 seconds at most), starts a new daemon and sends the request to it, once.
+So such a command is answered by a new daemon, and fails with `daemon-connection-failed` (its message says the daemon is
+stopping) only when the old one is still there after the 5 seconds, or when the new daemon says it is stopping too. A
+connection that ends with no answer at all, or a failure of any other kind, is **never asked again**, whatever the daemon was doing:
+the request may have been run, and running it twice could change the files twice. It stays `daemon-connection-failed`.
+`gabier status` and `gabier stop` do not ask again: they say `daemon-stopping`.
 
 **What the first call costs.** The request that finds jdtls not started waits for all of this, in this order (measured
 on this checkout, a Gradle build of five modules plus its `build-logic`, on 08-11-2026 on a machine shared with

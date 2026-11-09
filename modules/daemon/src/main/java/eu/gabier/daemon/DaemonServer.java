@@ -17,6 +17,7 @@ import eu.gabier.editing.application.OrganizeImports;
 import eu.gabier.editing.application.Rename;
 import eu.gabier.editing.infrastructure.secondary.NioFileStore;
 import eu.gabier.protocol.DaemonStatus;
+import eu.gabier.protocol.IdleStop;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.ProtocolVersion;
 import eu.gabier.shared.generation.ExcludeFromGeneratedCodeCoverage;
@@ -35,6 +36,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.LongSupplier;
 
 /**
@@ -51,18 +53,23 @@ final class DaemonServer implements AutoCloseable {
 
     private final Path socket;
     private final ServerSocketChannel listener;
-    private final RequestHandler handler;
+    private final RequestHandler stoppingHandler = RequestHandler.refusing(DaemonStoppingException.idle());
+    private RequestHandler handler;
     private final ServedProject project;
     private final Set<SocketChannel> connections = ConcurrentHashMap.newKeySet();
     private final CompletableFuture<Void> stopRequested = new CompletableFuture<>();
     private boolean closed;
+    private final LongSupplier nanoClock;
     private Duration grace = DISCONNECT_GRACE;
+    private Optional<IdleWatch> idle = Optional.empty();
+    private IdleWatch.Pause pause = this::pauseUnlessStopping;
 
     private DaemonServer(
             Path socket, ServerSocketChannel listener, LongSupplier nanoClock, long pid, ServedProject project) {
         this.socket = socket;
         this.listener = listener;
         this.project = project;
+        this.nanoClock = nanoClock;
         var startedAt = nanoClock.getAsLong();
         var rename = new Rename(project, new NioFileStore());
         // The method table: to add a method, add it here (.claude/skills/add-daemon-method/SKILL.md).
@@ -139,16 +146,45 @@ final class DaemonServer implements AutoCloseable {
         }
     }
 
-    /** Serves until a client asks the daemon to stop, or until it is closed, then closes it. */
+    /**
+     * Serves until a client asks the daemon to stop, until it has been idle for the delay (see {@link
+     * #stoppingWhenIdleFor}), or until it is closed, then closes it: the same close in the three cases, which ends
+     * jdtls and removes its workspace.
+     */
     void serve() throws IOException {
         Thread.ofVirtual().name("gabier-accept").start(this::acceptClients);
+        idle.ifPresent(
+                watch -> Thread.ofVirtual().name("gabier-idle").start(() -> watch.watch(pause, this::requestStop)));
         stopRequested.join();
         close();
     }
 
+    /** Serves a client the daemon counts as connected (see {@link IdleWatch#connected}), whatever ends its serving. */
     private void serve(SocketChannel client) {
-        Connection.serve(Channels.newInputStream(client), Channels.newOutputStream(client), handler);
-        connections.remove(client);
+        try {
+            Connection.serve(Channels.newInputStream(client), Channels.newOutputStream(client), handler);
+        } finally {
+            // The idle watch is told first: a client that sees its connection end finds the daemon already counting.
+            idle.ifPresent(IdleWatch::disconnected);
+            connections.remove(client);
+        }
+    }
+
+    /** Serves a client that reached the daemon once it decided to stop: every request is answered, none is run. */
+    private void refuse(SocketChannel client) {
+        try {
+            Connection.serve(Channels.newInputStream(client), Channels.newOutputStream(client), stoppingHandler);
+        } finally {
+            connections.remove(client);
+        }
+    }
+
+    /** Waits for the time asked, or until the daemon is told to stop; false once it is. */
+    private boolean pauseUnlessStopping(Duration duration) {
+        return stopRequested
+                .thenApply(stopping -> false)
+                .completeOnTimeout(true, duration.toNanos(), TimeUnit.NANOSECONDS)
+                .join();
     }
 
     /**
@@ -239,7 +275,8 @@ final class DaemonServer implements AutoCloseable {
                 ImportPreferences.read(project.root()).settings(),
                 // Only a jdtls that is starting is doing anything to tell, whatever the project knows of an earlier
                 // start.
-                state == JdtlsState.STARTING ? project.jdtlsProgress() : Optional.empty());
+                state == JdtlsState.STARTING ? project.jdtlsProgress() : Optional.empty(),
+                idle.map(watch -> new IdleStop(watch.timeout(), watch.left())));
     }
 
     /** How long the clients are given to end by themselves when the daemon stops; for a test to shorten. */
@@ -247,6 +284,40 @@ final class DaemonServer implements AutoCloseable {
         this.grace = grace;
 
         return this;
+    }
+
+    /**
+     * Makes the daemon stop by itself, the way {@code stop} does, once no client has been connected for this long (a
+     * connection is a call in progress: see {@link IdleWatch}); a daemon that is not told so never stops by itself.
+     */
+    DaemonServer stoppingWhenIdleFor(Duration delay) {
+        idle = Optional.of(new IdleWatch(nanoClock, delay));
+
+        return this;
+    }
+
+    /** What answers the requests of the clients; for a test to replace by a handler whose methods it chooses. */
+    DaemonServer handlingWith(RequestHandler handler) {
+        this.handler = handler;
+
+        return this;
+    }
+
+    /** How the idle watch waits; for a test to replace by a wait it holds. */
+    DaemonServer pausingWith(IdleWatch.Pause pause) {
+        this.pause = pause;
+
+        return this;
+    }
+
+    /** Whether the daemon was told to stop, by a client or by itself; for a test to wait for. */
+    boolean stopRequested() {
+        return stopRequested.isDone();
+    }
+
+    /** How many clients are connected; for a test to wait for the end of a connection. */
+    int connectionCount() {
+        return connections.size();
     }
 
     private void requestStop() {
@@ -258,7 +329,12 @@ final class DaemonServer implements AutoCloseable {
             while (true) {
                 var client = listener.accept();
                 connections.add(client);
-                Thread.ofVirtual().start(() -> serve(client));
+                if (idle.map(IdleWatch::connected).orElse(true)) {
+                    Thread.ofVirtual().start(() -> serve(client));
+                } else {
+                    // The daemon has decided to stop: this client is told so and nothing it sends is run.
+                    Thread.ofVirtual().start(() -> refuse(client));
+                }
             }
         } catch (IOException closedOrFailed) {
             // The listener is closed when the daemon stops. If it failed instead, the daemon cannot go on either.

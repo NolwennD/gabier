@@ -11,6 +11,7 @@ enum DaemonErrorKey implements ErrorKey {
     MISSING_PARAMETER("missing-parameter"),
     NO_BUILD_TO_IMPORT("no-build-to-import"),
     SOCKET_NOT_PRIVATE("socket-not-private"),
+    STOPPING("daemon-stopping"),
     SOCKET_UNAVAILABLE("socket-unavailable"),
     UNKNOWN_PARAMETER("unknown-parameter"),
     USAGE("usage-error");

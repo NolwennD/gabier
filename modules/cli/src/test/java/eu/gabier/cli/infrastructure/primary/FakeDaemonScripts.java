@@ -22,12 +22,25 @@ public final class FakeDaemonScripts {
 
     /** A daemon that runs {@link FakeDaemonMain}, in a process of its own, on the class path of the tests. */
     public static Path installListening(Path folder) throws IOException {
+        return installFakeDaemon(folder, "");
+    }
+
+    /** A daemon of {@link FakeDaemonMain} that answers every request with a refusal that has this key. */
+    public static Path installRefusing(Path folder, String key) throws IOException {
+        return installFakeDaemon(folder, " " + key);
+    }
+
+    private static Path installFakeDaemon(Path folder, String arguments) throws IOException {
         var java = ProcessHandle.current().info().command().orElseThrow();
 
         return install(
                 folder,
-                "exec '%s' -cp '%s' %s"
-                        .formatted(java, System.getProperty("java.class.path"), FakeDaemonMain.class.getName()));
+                "exec '%s' -cp '%s' %s%s"
+                        .formatted(
+                                java,
+                                System.getProperty("java.class.path"),
+                                FakeDaemonMain.class.getName(),
+                                arguments));
     }
 
     /** The pid the daemon of {@link FakeDaemonMain} wrote in its log. */

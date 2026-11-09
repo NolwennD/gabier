@@ -12,6 +12,7 @@ import eu.gabier.protocol.FileDiagnostics.Diagnosis;
 import eu.gabier.protocol.FileDiagnostics.Severity;
 import eu.gabier.protocol.FoundReferences;
 import eu.gabier.protocol.FoundReferences.Place;
+import eu.gabier.protocol.IdleStop;
 import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsState;
 import java.nio.file.Path;
@@ -145,6 +146,45 @@ class ResultTextTest {
             assertThat(lines.subList(2, lines.size()))
                     .isNotEmpty()
                     .allSatisfy(line -> assertThat(line).startsWith("  java."));
+        }
+
+        private DaemonStatus idling(Duration timeout, Duration left) {
+            return new DaemonStatus(
+                    "0.1",
+                    4242,
+                    Duration.ofMillis(65432),
+                    Path.of("/work/demo"),
+                    JdtlsState.READY,
+                    Optional.empty(),
+                    ImportSettings.DEFAULTS,
+                    Optional.empty(),
+                    Optional.of(new IdleStop(timeout, left)));
+        }
+
+        @Test
+        void endsWithTheDelayAfterWhichTheDaemonStopsWhenIdleAndWhatIsLeftOfIt() {
+            var lines = ResultText.lines(idling(Duration.ofMinutes(60), Duration.ofSeconds(35 * 60 + 12)));
+
+            assertThat(lines.getLast()).isEqualTo("idle stop: after 60 min with no request, 35 min 12s left");
+            assertThat(lines.get(1)).isEqualTo("imports:");
+        }
+
+        @Test
+        void saysTheTimeLeftInWholeMinutesOrInSecondsWhenItIsRound() {
+            assertThat(ResultText.lines(idling(Duration.ofMinutes(60), Duration.ofMinutes(35)))
+                            .getLast())
+                    .endsWith("no request, 35 min left");
+            assertThat(ResultText.lines(idling(Duration.ofMinutes(60), Duration.ofSeconds(42)))
+                            .getLast())
+                    .endsWith("no request, 42s left");
+            assertThat(ResultText.lines(idling(Duration.ofMinutes(60), Duration.ZERO))
+                            .getLast())
+                    .endsWith("no request, 0s left");
+        }
+
+        @Test
+        void saysNothingOfAnIdleStopWhenTheDaemonNeverStopsWhenIdle() {
+            assertThat(ResultText.lines(status)).noneMatch(line -> line.startsWith("idle stop"));
         }
 
         @Test

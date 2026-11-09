@@ -113,6 +113,18 @@ class ServingMcpTest extends CliTest {
     }
 
     @Test
+    void doesNotStopTheDaemonWhenTheHostDisconnects() throws Exception {
+        try (var daemon = daemonAnswering("{}")) {
+            var exit = runWithInput(DISCOVER + "\n", "mcp");
+            eventually(() -> !daemon.requests().isEmpty());
+
+            assertThat(exit).isZero();
+            // The daemon is shared with the other sessions and the command line, and stops by itself when idle.
+            assertThat(daemon.requests()).noneMatch(request -> request.contains("\"method\":\"stop\""));
+        }
+    }
+
+    @Test
     void hasNoInputWhenTheCommandLineIsRunWithNone() {
         assertThat(run("mcp")).isZero();
 

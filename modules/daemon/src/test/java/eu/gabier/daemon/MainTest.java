@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -257,6 +258,53 @@ class MainTest {
             var answer = RpcResponse.parse(ask(STATUS));
 
             return DaemonStatus.of(((RpcResponse.Success) answer).result());
+        }
+
+        @Test
+        void stopsWhenIdleAfterSixtyMinutesByDefault() throws Exception {
+            var daemon = start();
+
+            assertThat(status().idle().orElseThrow().timeout()).isEqualTo(Duration.ofMinutes(60));
+            ask(STOP);
+
+            daemon.orTimeout(10, TimeUnit.SECONDS).join();
+        }
+
+        @Test
+        void stopsWhenIdleAfterTheMinutesOfTheEnvironment() throws Exception {
+            var daemon =
+                    start(Map.of("GABIER_SOCKET", socketPath().toString(), "GABIER_IDLE_TIMEOUT", "15"), socketPath());
+
+            assertThat(status().idle().orElseThrow().timeout()).isEqualTo(Duration.ofMinutes(15));
+            ask(STOP);
+
+            daemon.orTimeout(10, TimeUnit.SECONDS).join();
+        }
+
+        @Test
+        void neverStopsWhenIdleWhenTheEnvironmentSaysZero() throws Exception {
+            var daemon =
+                    start(Map.of("GABIER_SOCKET", socketPath().toString(), "GABIER_IDLE_TIMEOUT", "0"), socketPath());
+
+            assertThat(status().idle()).isEmpty();
+            ask(STOP);
+
+            daemon.orTimeout(10, TimeUnit.SECONDS).join();
+        }
+
+        @Test
+        void aDelayThatIsNotAWholeNumberOfMinutesOrIsTooLongIsAUsageErrorThatNamesTheVariableAndBindsNothing() {
+            // 999999999 minutes is about 1900 years: more than the clock of the daemon, in nanoseconds, can count.
+            for (var value :
+                    new String[] {"soon", "-5", "1.5", "", "999999999", "9223372036854775807", "99999999999999999999"
+                    }) {
+                var environment = Map.of("GABIER_SOCKET", socketPath().toString(), "GABIER_IDLE_TIMEOUT", value);
+
+                assertThat(run(environment, PASSING)).isEqualTo(2);
+            }
+
+            assertThat(err()).contains("GABIER_IDLE_TIMEOUT").contains("(usage-error; ");
+            assertThat(socketPath()).doesNotExist();
         }
 
         @Test

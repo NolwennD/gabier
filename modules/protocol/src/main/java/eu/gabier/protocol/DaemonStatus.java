@@ -24,6 +24,7 @@ import org.jspecify.annotations.Nullable;
  * @param imports the settings of the imports that gabier follows for the project, read from its files when the status
  *     is asked for
  * @param jdtlsProgress what jdtls is doing, while it is starting; empty in any other state
+ * @param idle the rule by which the daemon stops when nobody uses it, with the time left; empty when it never does
  */
 public record DaemonStatus(
         String version,
@@ -33,7 +34,8 @@ public record DaemonStatus(
         JdtlsState jdtls,
         Optional<String> jdtlsFailure,
         ImportSettings imports,
-        Optional<JdtlsProgress> jdtlsProgress) {
+        Optional<JdtlsProgress> jdtlsProgress,
+        Optional<IdleStop> idle) {
 
     public DaemonStatus {
         Assert.notBlank("version", version);
@@ -45,6 +47,20 @@ public record DaemonStatus(
         Assert.notNull("jdtlsFailure", jdtlsFailure);
         Assert.notNull("imports", imports);
         Assert.notNull("jdtlsProgress", jdtlsProgress);
+        Assert.notNull("idle", idle);
+    }
+
+    /** A status of a daemon that never stops when idle. */
+    public DaemonStatus(
+            String version,
+            long pid,
+            Duration uptime,
+            Path project,
+            JdtlsState jdtls,
+            Optional<String> jdtlsFailure,
+            ImportSettings imports,
+            Optional<JdtlsProgress> jdtlsProgress) {
+        this(version, pid, uptime, project, jdtls, jdtlsFailure, imports, jdtlsProgress, Optional.empty());
     }
 
     /** A status that says nothing of what jdtls is doing. */
@@ -78,8 +94,9 @@ public record DaemonStatus(
         var progress = jdtlsProgress
                 .map(doing -> ",\"jdtlsProgress\":" + doing.toJson())
                 .orElse("");
+        var idleStop = idle.map(rule -> ",\"idle\":" + rule.toJson()).orElse("");
         return """
-            {"version":%s,"pid":%d,"uptimeMillis":%d,"project":%s,"jdtls":%s,"imports":%s%s%s}\
+            {"version":%s,"pid":%d,"uptimeMillis":%d,"project":%s,"jdtls":%s,"imports":%s%s%s%s}\
             """.formatted(
                         Json.quote(version),
                         pid,
@@ -88,7 +105,8 @@ public record DaemonStatus(
                         Json.quote(jdtls.text()),
                         imports.toJson(),
                         failure,
-                        progress);
+                        progress,
+                        idleStop);
     }
 
     /**
@@ -109,7 +127,24 @@ public record DaemonStatus(
                 state(result.get("jdtls")),
                 failure(result.get("jdtlsFailure")),
                 imports(result.get("imports")),
-                progress(result.get("jdtlsProgress")));
+                progress(result.get("jdtlsProgress")),
+                idle(result.get("idle")));
+    }
+
+    private static Optional<IdleStop> idle(@Nullable Object idle) {
+        if (idle == null) {
+            return Optional.empty();
+        }
+        if (!(idle instanceof Map<?, ?> members)) {
+            throw member("idle");
+        }
+        var numbers = new LinkedHashMap<String, @Nullable Object>();
+        numbers.put("timeoutMillis", members.get("timeoutMillis"));
+        numbers.put("leftMillis", members.get("leftMillis"));
+
+        return Optional.of(new IdleStop(
+                Duration.ofMillis(integer(numbers, "timeoutMillis")),
+                Duration.ofMillis(integer(numbers, "leftMillis"))));
     }
 
     private static Optional<JdtlsProgress> progress(@Nullable Object progress) {

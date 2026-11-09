@@ -17,6 +17,15 @@ final class UsageException extends GeneratorException {
                 .addParameter("arguments", String.join(" ", arguments)));
     }
 
+    static UsageException invalidIdleTimeout(String value) {
+        return new UsageException(GeneratorException.badRequest(DaemonErrorKey.USAGE)
+                .message("GABIER_IDLE_TIMEOUT is the number of minutes with no request after which the daemon stops,"
+                        + " 0 for never; \"" + value
+                        + "\" is not a whole number of minutes between 0 and 153722867 (about 292"
+                        + " years)")
+                .addParameter("GABIER_IDLE_TIMEOUT", value));
+    }
+
     static UsageException notAFolder(Path folder) {
         return new UsageException(GeneratorException.badRequest(DaemonErrorKey.USAGE)
                 .message("The project " + folder + " is not a folder")

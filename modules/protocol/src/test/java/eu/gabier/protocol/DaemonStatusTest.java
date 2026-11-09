@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import eu.gabier.shared.error.domain.MissingMandatoryValueException;
+import eu.gabier.shared.error.domain.NumberValueTooHighException;
 import eu.gabier.shared.error.domain.NumberValueTooLowException;
 import java.math.BigDecimal;
 import java.nio.file.Path;
@@ -305,5 +306,79 @@ class DaemonStatusTest {
     void refusesAMissingStateOfJdtls() {
         assertThatExceptionOfType(MissingMandatoryValueException.class)
                 .isThrownBy(() -> new DaemonStatus("0.1", 1, Duration.ZERO, Path.of("/p"), null));
+    }
+
+    private static DaemonStatus idling(IdleStop idle) {
+        return new DaemonStatus(
+                "0.1",
+                4242,
+                Duration.ofMillis(65_432),
+                Path.of("/work/demo"),
+                JdtlsState.READY,
+                Optional.empty(),
+                ImportSettings.DEFAULTS,
+                Optional.empty(),
+                Optional.of(idle));
+    }
+
+    @Test
+    void saysTheIdleDelayAndWhatIsLeftOfItInAMemberThatIsOnlyThereWhenTheDaemonStopsWhenIdle() {
+        var idle = idling(new IdleStop(Duration.ofMinutes(60), Duration.ofMillis(3_541_250)));
+
+        assertThat(idle.toJson()).isEqualTo("""
+            {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"ready",\
+            "imports":%s,"idle":{"timeoutMillis":3600000,"leftMillis":3541250}}\
+            """.formatted(DEFAULT_IMPORTS_JSON));
+        StrictJson.parse(idle.toJson());
+        assertThat(STATUS.idle()).isEmpty();
+        assertThat(STATUS.toJson()).doesNotContain("idle");
+    }
+
+    @Test
+    void readsTheIdleDelayItWrites() {
+        var status = idling(new IdleStop(Duration.ofMinutes(60), Duration.ZERO));
+        var result = ((RpcResponse.Success) RpcResponse.parse(JsonRpc.success("1", status.toJson()))).result();
+
+        assertThat(DaemonStatus.of(result)).isEqualTo(status);
+    }
+
+    @Test
+    void isRefusedWhenTheIdleDelayIsNotWhatItIsWritten() {
+        var members = List.of(
+                Map.of("leftMillis", new BigDecimal("1")),
+                Map.of("timeoutMillis", new BigDecimal("1")),
+                Map.of("timeoutMillis", "soon", "leftMillis", new BigDecimal("1")));
+
+        for (var idle : members) {
+            assertThatExceptionOfType(InvalidResponseException.class)
+                    .isThrownBy(() -> DaemonStatus.of(result("idle", idle)));
+        }
+        assertThatExceptionOfType(InvalidResponseException.class)
+                .isThrownBy(() -> DaemonStatus.of(result("idle", "60")));
+    }
+
+    @Test
+    void refusesAMissingIdleHolder() {
+        assertThatExceptionOfType(MissingMandatoryValueException.class)
+                .isThrownBy(() -> new DaemonStatus(
+                        "0.1",
+                        1,
+                        Duration.ZERO,
+                        Path.of("/p"),
+                        JdtlsState.READY,
+                        Optional.empty(),
+                        ImportSettings.DEFAULTS,
+                        Optional.empty(),
+                        null));
+    }
+
+    @Test
+    void refusesAnIdleDelayThatIsNotPositiveOrWhoseTimeLeftIsOutsideIt() {
+        assertThatExceptionOfType(NumberValueTooLowException.class)
+                .isThrownBy(() -> new IdleStop(Duration.ZERO, Duration.ZERO));
+        assertThatExceptionOfType(NumberValueTooLowException.class)
+                .isThrownBy(() -> new IdleStop(Duration.ofMinutes(1), Duration.ofMillis(-1)));
+        assertThatExceptionOfType(NumberValueTooHighException.class)
+                .isThrownBy(() -> new IdleStop(Duration.ofMinutes(1), Duration.ofMinutes(2)));
     }
 }

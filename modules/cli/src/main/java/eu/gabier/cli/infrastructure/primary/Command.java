@@ -194,7 +194,7 @@ record Command(
                     List.of(operation),
                     "",
                     "",
-                    List.of(Refusal.NOT_RUNNING, Refusal.USAGE, Refusal.CONNECTION_FAILED));
+                    List.of(Refusal.NOT_RUNNING, Refusal.USAGE, Refusal.CONNECTION_FAILED, Refusal.STOPPING));
         }
 
         @Override

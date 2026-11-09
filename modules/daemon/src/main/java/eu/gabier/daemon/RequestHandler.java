@@ -8,6 +8,7 @@ import eu.gabier.protocol.UnknownMethodException;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Turns a line of the client into the line to answer, whatever the line is: a line that is not JSON, not a request, or
@@ -30,9 +31,20 @@ final class RequestHandler {
     }
 
     private final Map<String, DaemonMethod> methods = new LinkedHashMap<>();
+    private final Optional<RuntimeException> refusal;
 
     RequestHandler(Collection<DaemonMethod> methods) {
         methods.forEach(method -> this.methods.put(method.name(), method));
+        refusal = Optional.empty();
+    }
+
+    private RequestHandler(RuntimeException refusal) {
+        this.refusal = Optional.of(refusal);
+    }
+
+    /** A handler that runs no method: every well-formed request is answered with this refusal. */
+    static RequestHandler refusing(RuntimeException refusal) {
+        return new RequestHandler(refusal);
     }
 
     Reply handle(String line) {
@@ -43,6 +55,9 @@ final class RequestHandler {
             return Reply.of(JsonRpc.failure(invalid.id(), invalid));
         } catch (MalformedJsonException malformed) {
             return Reply.of(JsonRpc.failure(null, malformed));
+        }
+        if (refusal.isPresent()) {
+            return Reply.of(JsonRpc.failure(request.id(), refusal.get()));
         }
         var method = methods.get(request.method());
         if (method == null) {

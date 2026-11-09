@@ -11,6 +11,9 @@ final class Refusal {
     static final String START_FAILED = "daemon-start-failed: no daemon answered and gabier-daemon could not be started";
     static final String CONNECTION_FAILED =
             "daemon-connection-failed: the connection to the daemon was lost, or it hung up without answering";
+    static final String STOPPING =
+            "daemon-stopping: the daemon decided to stop because nobody used it and did not run the call;"
+                    + " the next command starts a new daemon";
     static final String NOT_RUNNING = "daemon-not-running: no daemon answers; the command never starts one";
 
     static final String INVALID_VALUES =

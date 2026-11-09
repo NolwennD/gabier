@@ -22,7 +22,10 @@ final class Status implements Capability {
             .asksARunningDaemon(Operations.STATUS)
             .withNotes("""
                 In text, what jdtls is doing while it starts ends the line, in parentheses. With --json, it is the member\
-                 jdtlsProgress of the result.\
+                 jdtlsProgress of the result. A daemon stops by itself after a delay with no client (60 minutes, \
+                GABIER_IDLE_TIMEOUT in minutes, 0 for never): a last line says the delay and the time left before this\
+                 call, which restarts it; with --json it is the member idle (timeoutMillis, leftMillis), absent when the\
+                 daemon never stops by itself.\
                 """);
 
     @Override

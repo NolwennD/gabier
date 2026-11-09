@@ -7,6 +7,7 @@ import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FoundReferences;
 import eu.gabier.protocol.FoundReferences.Place;
 import eu.gabier.protocol.TerminalText;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -92,7 +93,8 @@ public final class ResultText {
 
     /**
      * The status of the daemon: its line, then the settings of the imports it follows for the project, each with its
-     * source, indented. What jdtls said (the reason it failed, what it is doing) is neutralised.
+     * source, indented, and, when the daemon stops by itself once idle, the delay and the time left of it. What jdtls
+     * said (the reason it failed, what it is doing) is neutralised.
      */
     public static List<String> lines(DaemonStatus status) {
         var failure = status.jdtlsFailure().map(reason -> " (" + reason + ")").orElse("");
@@ -104,8 +106,22 @@ public final class ResultText {
                 + status.jdtls().text() + failure + progress);
         lines.add("imports:");
         status.imports().lines().forEach(line -> lines.add("  " + line));
+        status.idle()
+                .ifPresent(idle -> lines.add("idle stop: after " + span(idle.timeout()) + " with no request, "
+                        + span(idle.left()) + " left"));
 
         return neutralised(lines);
+    }
+
+    /** A time as a person reads it on a status: {@code 35 min 12s}, {@code 60 min}, {@code 42s}. */
+    private static String span(Duration time) {
+        var minutes = time.toMinutes();
+        var seconds = time.toSecondsPart();
+        if (minutes == 0) {
+            return seconds + "s";
+        }
+
+        return minutes + " min" + (seconds == 0 ? "" : " " + seconds + "s");
     }
 
     /**

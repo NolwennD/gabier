@@ -40,6 +40,9 @@ daemon ([help](commands/help.md), [init-agent](commands/init-agent.md)). The MCP
 `start` and `stop`: they are not tools (the server starts the daemon itself when the host connects, and an agent that
 stopped it would lose the tools that need it), while `status` is one. The parameters are those of the table, with the positions from 1 and a list as an array, so a
 method added here is a tool by itself; the warm-up of the server sends the daemon a `start`, as `gabier start` does.
+A daemon that stops by itself when nobody uses it (see [the daemon](daemon.md)) answers a request that reaches it after
+it decided, whatever the method, with the refusal `daemon-stopping` (a server error, exit code 1) and runs nothing; the
+`status` result has the member `idle` (`timeoutMillis`, `leftMillis`) while that rule is on.
 
 | Method             | Parameters                                                                  | Command                                                    |
 | ------------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------- |

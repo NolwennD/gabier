@@ -11,14 +11,18 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public final class Main {
 
     private static final String VERSION_OPTION = "--version";
     private static final String SELF_CHECK_OPTION = "--self-check";
+    private static final String IDLE_TIMEOUT = "GABIER_IDLE_TIMEOUT";
+    private static final Duration DEFAULT_IDLE_DELAY = Duration.ofMinutes(60);
     private static final int FAILED = 1;
 
     private Main() {}
@@ -136,10 +140,12 @@ public final class Main {
      */
     static int serve(Map<String, String> environment, Path workingDirectory, PrintStream out, ServedProject project)
             throws IOException {
+        var idleDelay = idleDelay(environment);
         var uid = UserId.current();
         var socket = SocketLocation.resolve(environment, uid, workingDirectory);
         var server = DaemonServer.open(
                 socket, uid, System::nanoTime, ProcessHandle.current().pid(), project);
+        idleDelay.ifPresent(server::stoppingWhenIdleFor);
         // A signal (SIGTERM) ends the JVM without serve() returning: the hook removes the socket.
         Runtime.getRuntime().addShutdownHook(server.shutdownHook());
         out.println("gabier-daemon " + ProtocolVersion.CURRENT + " listening on " + socket);
@@ -147,6 +153,39 @@ public final class Main {
         server.serve();
 
         return ExitCode.SUCCESS.value();
+    }
+
+    /**
+     * How long the daemon waits with no client before it stops itself: the minutes of {@code GABIER_IDLE_TIMEOUT},
+     * 60 when it is not set, none for {@code 0}.
+     *
+     * @throws UsageException when the variable is not a whole number of minutes, 0 or more
+     */
+    private static Optional<Duration> idleDelay(Map<String, String> environment) {
+        var value = environment.get(IDLE_TIMEOUT);
+        if (value == null) {
+            return Optional.of(DEFAULT_IDLE_DELAY);
+        }
+        long minutes;
+        try {
+            minutes = Long.parseLong(value);
+        } catch (NumberFormatException notANumber) {
+            throw UsageException.invalidIdleTimeout(value);
+        }
+        if (minutes < 0) {
+            throw UsageException.invalidIdleTimeout(value);
+        }
+
+        return minutes == 0 ? Optional.empty() : Optional.of(delayInTheUnitOfTheClock(minutes, value));
+    }
+
+    /** The delay, which must fit in nanoseconds, the unit of the clock the daemon measures it on. */
+    private static Duration delayInTheUnitOfTheClock(long minutes, String value) {
+        try {
+            return Duration.ofNanos(Duration.ofMinutes(minutes).toNanos());
+        } catch (ArithmeticException tooLong) {
+            throw UsageException.invalidIdleTimeout(value);
+        }
     }
 
     private static int runSelfCheck(SelfCheck selfCheck, PrintStream out, PrintStream err) {

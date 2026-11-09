@@ -86,7 +86,7 @@ class CommandTest {
     @Test
     void ofACommandThatAsksARunningDaemonEndsWithItsOwnRefusals() {
         assertThat(Stop.COMMAND.refusals())
-                .containsExactly(Refusal.NOT_RUNNING, Refusal.USAGE, Refusal.CONNECTION_FAILED);
+                .containsExactly(Refusal.NOT_RUNNING, Refusal.USAGE, Refusal.CONNECTION_FAILED, Refusal.STOPPING);
     }
 
     @Test

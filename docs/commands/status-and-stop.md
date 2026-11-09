@@ -30,6 +30,12 @@ three settings of jdtls that decide what `organize-imports` writes, its value an
 The files are read when `status` is asked, not when the daemon started, so a file edited a moment ago is already in it;
 with `--json` they are the member `imports`, each setting an object with its `value` and its `source`.
 
+**The daemon stops by itself when nobody uses it** (see [the daemon](../daemon.md)): after 60 minutes with no client, or
+the `GABIER_IDLE_TIMEOUT` minutes of the environment of the daemon, `0` for never. `status` ends with a line that says the
+delay and what is left of it before this call, which restarts it (`idle stop: after 60 min with no request, 59 min 30s
+left`); with `--json` they are the member `idle` (`timeoutMillis`, `leftMillis`), absent when the daemon never stops by
+itself. A command that finds the daemon gone, or that is told by it that it is stopping (`daemon-stopping`), starts a new one and is answered by it (`status` and `stop` never start one: see [the daemon](../daemon.md)), so nothing has to be done about it.
+
 ```text
 $ gabier status
 gabier-daemon 0.1.0, pid 4242, up 65s, project /work/demo, jdtls not-started
@@ -37,8 +43,9 @@ imports:
   java.completion.importOrder = ["#", ""] (.vscode)
   java.sources.organizeImports.starThreshold = 2147483647 (.vscode)
   java.sources.organizeImports.staticStarThreshold = 99 (default of jdtls)
+idle stop: after 60 min with no request, 59 min 30s left
 $ gabier --json status
-{"version":"0.1.0","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"not-started","imports":{"importOrder":{"value":["#",""],"source":".vscode"},"starThreshold":{"value":2147483647,"source":".vscode"},"staticStarThreshold":{"value":99,"source":"default"}}}
+{"version":"0.1.0","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"not-started","imports":{"importOrder":{"value":["#",""],"source":".vscode"},"starThreshold":{"value":2147483647,"source":".vscode"},"staticStarThreshold":{"value":99,"source":"default"}},"idle":{"timeoutMillis":3600000,"leftMillis":3570000}}
 $ gabier status    # a first command is waiting for jdtls to import the project
 gabier-daemon 0.1.0, pid 4242, up 52s, project /work/demo, jdtls starting (importing the project for 41s: Configure project :core)
 imports:
@@ -63,3 +70,5 @@ keys, and the help of each (`gabier help status`, `gabier help stop`) lists them
 - `daemon-not-running`: no daemon answers; the command never starts one.
 - `usage-error`: the arguments are not those of the command.
 - `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.
+- `daemon-stopping`: the daemon decided to stop because nobody used it and did not run the call (exit code 1); the next
+  command starts a new daemon.

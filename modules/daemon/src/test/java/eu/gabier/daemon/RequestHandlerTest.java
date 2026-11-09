@@ -169,6 +169,22 @@ class RequestHandlerTest {
         }
 
         @Test
+        void aHandlerThatRefusesEverythingAnswersEachRequestWithTheRefusalAndRunsNoMethod() {
+            var refusing = RequestHandler.refusing(GeneratorException.badRequest(RefusalKey.REFUSED)
+                    .message("No, not now")
+                    .build());
+
+            var known = refusing.handle(request("4", "status")).line();
+            var unknown = refusing.handle(request("5", "rename")).line();
+
+            assertThat(known).contains("\"id\":4");
+            assertThat(failure(known).problem().key()).isEqualTo("test-refused");
+            assertThat(failure(unknown).problem().key()).isEqualTo("test-refused");
+            assertThat(failure(refusing.handle("{not json").line()).problem().key())
+                    .isEqualTo("malformed-json");
+        }
+
+        @Test
         void aFailureOfAMethodIsAnInternalErrorThatLeaksNothing() {
             var line = handler.handle(request("3", "breaks")).line();
 

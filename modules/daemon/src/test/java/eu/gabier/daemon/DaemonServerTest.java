@@ -13,6 +13,7 @@ import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FileDiagnostics.Diagnosis;
 import eu.gabier.protocol.FileDiagnostics.Severity;
+import eu.gabier.protocol.IdleStop;
 import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
@@ -37,7 +38,11 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.LongSupplier;
 import org.junit.jupiter.api.AfterEach;
@@ -1309,6 +1314,210 @@ class DaemonServerTest {
     }
 
     @Nested
+    class Idle {
+
+        private static final Duration DELAY = Duration.ofMinutes(60);
+
+        private final GatedPause pause = new GatedPause();
+
+        @AfterEach
+        void endTheWatch() {
+            pause.giveUp();
+        }
+
+        private DaemonServer idling() {
+            return open().stoppingWhenIdleFor(DELAY).pausingWith(pause);
+        }
+
+        @Test
+        void stopsAfterTheDelayWithNoRequestAndEndsTheLanguageServerAsStopDoes() throws Exception {
+            var running = serve(idling());
+
+            assertThat(pause.nextWait()).isEqualTo(DELAY);
+            assertThat(socket()).exists();
+            clock.advance(DELAY);
+            pause.letItGo();
+
+            running.orTimeout(10, TimeUnit.SECONDS).join();
+            assertThat(socket()).doesNotExist();
+            assertThat(project.closes()).isEqualTo(1);
+        }
+
+        @Test
+        void doesNotStopBeforeTheDelayIsOver() throws Exception {
+            var running = serve(idling());
+
+            assertThat(pause.nextWait()).isEqualTo(DELAY);
+            clock.advance(DELAY.minusSeconds(1));
+            pause.letItGo();
+
+            assertThat(pause.nextWait()).isEqualTo(Duration.ofSeconds(1));
+            assertThat(running).isNotDone();
+            assertThat(project.closes()).isZero();
+        }
+
+        @Test
+        void aRequestRestartsTheDelayFromTheEndOfItsConnection() throws Exception {
+            var running = serve(idling());
+            assertThat(pause.nextWait()).isEqualTo(DELAY);
+            clock.advance(Duration.ofMinutes(40));
+
+            try (var client = connect(socket())) {
+                client.ask(STATUS_REQUEST);
+            }
+            awaitNoConnection();
+            clock.advance(Duration.ofMinutes(30));
+            pause.letItGo();
+
+            assertThat(pause.nextWait()).isEqualTo(Duration.ofMinutes(30));
+            assertThat(running).isNotDone();
+            assertThat(project.closes()).isZero();
+        }
+
+        @Test
+        void doesNotInterruptARequestInFlightHoweverLongItTakesAndCountsTheDelayFromItsAnswer() throws Exception {
+            project.whoseRequestsNeverEnd();
+            var running = serve(idling());
+            assertThat(pause.nextWait()).isEqualTo(DELAY);
+
+            try (var client = connect(socket())) {
+                client.send(diagnosticsRequest());
+                assertThat(project.awaitRequest())
+                        .as("the request is in flight")
+                        .isTrue();
+                clock.advance(Duration.ofHours(3));
+                pause.letItGo();
+
+                assertThat(pause.nextWait()).isEqualTo(DELAY);
+                assertThat(project.closes()).isZero();
+                project.release();
+                assertThat(client.readLine()).contains("\"result\"");
+            }
+            awaitNoConnection();
+            pause.letItGo();
+
+            assertThat(pause.nextWait()).isEqualTo(DELAY);
+            assertThat(running).isNotDone();
+        }
+
+        @Test
+        void answersARequestThatReachesItOnceItHasDecidedToStopWithADaemonStoppingRefusalAndRunsNothing()
+                throws Exception {
+            var server = idling();
+            var running = serve(server);
+            assertThat(pause.nextWait()).isEqualTo(DELAY);
+            clock.advance(DELAY);
+
+            // The daemon decides, and has not yet closed its listener: what a client that is quick enough finds.
+            synchronized (server) {
+                pause.letItGo();
+                awaitStopRequested(server);
+
+                try (var late = connect(socket())) {
+                    var answer = RpcResponse.parse(late.ask(START_REQUEST));
+                    var again = RpcResponse.parse(late.ask(STATUS_REQUEST));
+
+                    assertThat(((RpcResponse.Failure) answer).problem().key()).isEqualTo("daemon-stopping");
+                    assertThat(((RpcResponse.Failure) again).problem().key()).isEqualTo("daemon-stopping");
+                }
+            }
+
+            running.orTimeout(10, TimeUnit.SECONDS).join();
+            assertThat(project.warmUps()).isZero();
+        }
+
+        @Test
+        void stopsCountingAClientAsConnectedWhateverEndsItsServing() throws Exception {
+            var boom = new RequestHandler(List.of(new AfterReplyBreaking()));
+            var running = serve(idling().handlingWith(boom));
+            assertThat(pause.nextWait()).isEqualTo(DELAY);
+
+            try (var client = connect(socket())) {
+                client.ask("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"break\"}\n");
+                awaitNoConnection();
+            }
+            clock.advance(DELAY);
+            pause.letItGo();
+
+            // The client that broke is not held against the daemon: it stops, at the end of the delay.
+            running.orTimeout(10, TimeUnit.SECONDS).join();
+        }
+
+        @Test
+        void saysTheDelayAndTheTimeLeftBeforeTheCallThatAsksCountsAsOne() throws Exception {
+            serve(idling());
+            assertThat(pause.nextWait()).isEqualTo(DELAY);
+            clock.advance(Duration.ofMinutes(25));
+
+            try (var client = connect(socket())) {
+                var answer = RpcResponse.parse(client.ask(STATUS_REQUEST));
+
+                assertThat(DaemonStatus.of(((RpcResponse.Success) answer).result())
+                                .idle())
+                        .contains(new IdleStop(DELAY, Duration.ofMinutes(35)));
+            }
+        }
+
+        @Test
+        void saysNothingOfAnIdleDelayWhenTheDaemonNeverStopsWhenIdle() throws Exception {
+            serving();
+
+            try (var client = connect(socket())) {
+                var answer = RpcResponse.parse(client.ask(STATUS_REQUEST));
+
+                assertThat(DaemonStatus.of(((RpcResponse.Success) answer).result())
+                                .idle())
+                        .isEmpty();
+            }
+        }
+
+        @Test
+        void theRealWaitEndsAtOnceWhenTheDaemonIsToldToStop() throws Exception {
+            var running = serve(open().stoppingWhenIdleFor(DELAY));
+
+            try (var client = connect(socket())) {
+                client.ask(STOP_REQUEST);
+                assertThat(client.readLine()).isNull();
+            }
+
+            running.orTimeout(10, TimeUnit.SECONDS).join();
+        }
+
+        @Test
+        void theRealWaitLooksAgainWhenItIsOverAndStopsOnceTheDelayIsOver() {
+            // A delay of one millisecond is waited for for real, over and over, until the test moves the clock.
+            var running = serve(open().stoppingWhenIdleFor(Duration.ofMillis(1)));
+
+            clock.advance(Duration.ofMillis(1));
+
+            running.orTimeout(10, TimeUnit.SECONDS).join();
+            assertThat(project.closes()).isEqualTo(1);
+        }
+
+        private String diagnosticsRequest() {
+            return """
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"%s"}}
+                """.formatted(directory.resolve("src/main/java/demo/Broken.java"));
+        }
+
+        private void awaitStopRequested(DaemonServer server) {
+            var deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            while (!server.stopRequested() && System.nanoTime() < deadline) {
+                Thread.onSpinWait();
+            }
+            assertThat(server.stopRequested()).isTrue();
+        }
+
+        private void awaitNoConnection() {
+            var deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            while (servers.getFirst().connectionCount() > 0 && System.nanoTime() < deadline) {
+                Thread.onSpinWait();
+            }
+            assertThat(servers.getFirst().connectionCount()).isZero();
+        }
+    }
+
+    @Nested
     class Termination {
 
         @Test
@@ -1355,7 +1564,7 @@ class DaemonServerTest {
      */
     private static final class NanoClock implements LongSupplier {
 
-        private long now = Long.MAX_VALUE - Duration.ofSeconds(30).toNanos();
+        private volatile long now = Long.MAX_VALUE - Duration.ofSeconds(30).toNanos();
 
         void advance(Duration duration) {
             now += duration.toNanos();
@@ -1364,6 +1573,57 @@ class DaemonServerTest {
         @Override
         public long getAsLong() {
             return now;
+        }
+    }
+
+    /** A method whose work after the answer fails: nothing of the handler catches it, whatever ends the connection. */
+    private static final class AfterReplyBreaking implements DaemonMethod {
+
+        @Override
+        public String name() {
+            return "break";
+        }
+
+        @Override
+        public Outcome call(Map<String, String> params) {
+            return new Outcome("{}", () -> {
+                throw new IllegalStateException("after the reply");
+            });
+        }
+    }
+
+    /**
+     * The wait of the idle watch, held by the test: it tells which wait the watch asked for, and goes on only when the
+     * test lets it, so that the time the test moves is the time the watch sees. Nothing waits for real but the test,
+     * for a thread that answers at once.
+     */
+    private static final class GatedPause implements IdleWatch.Pause {
+
+        private final BlockingQueue<Duration> asked = new LinkedBlockingQueue<>();
+        private final Semaphore go = new Semaphore(0);
+        private volatile boolean gaveUp;
+
+        @Override
+        public boolean pause(Duration duration) {
+            asked.add(duration);
+            go.acquireUninterruptibly();
+
+            return !gaveUp;
+        }
+
+        /** The wait the watch asked for next, within ten seconds. */
+        Duration nextWait() throws InterruptedException {
+            return asked.poll(10, TimeUnit.SECONDS);
+        }
+
+        void letItGo() {
+            go.release();
+        }
+
+        /** Ends the watch, whatever it waits for. */
+        void giveUp() {
+            gaveUp = true;
+            go.release();
         }
     }
 }
