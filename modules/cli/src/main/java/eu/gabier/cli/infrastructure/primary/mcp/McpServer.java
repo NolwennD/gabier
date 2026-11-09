@@ -51,6 +51,8 @@ public final class McpServer {
     private final Tools tools = Tools.served();
     private final String toolsJson = tools.json();
     private final ToolCalls calls;
+    private final String instructions;
+    private final WarmUp warmUp;
     private boolean initialized;
 
     /**
@@ -59,9 +61,18 @@ public final class McpServer {
      * @param operations how an operation is run, the one entry point that any front end uses
      * @param commandOf the word of the command line that runs an operation, for the pointer to its help
      * @param err where the server logs what it must not say on its output, such as a call that failed unexpectedly
+     * @param instructions what the host is told about using the tools, in its handshake, as one text
+     * @param warmUp what starts the daemon at the first handshake, so that it is ready when the first call comes
      */
-    public McpServer(OperationRunner operations, Function<Operation, String> commandOf, PrintStream err) {
+    public McpServer(
+            OperationRunner operations,
+            Function<Operation, String> commandOf,
+            PrintStream err,
+            String instructions,
+            WarmUp warmUp) {
         calls = new ToolCalls(tools, operations, commandOf, err);
+        this.instructions = instructions;
+        this.warmUp = warmUp;
     }
 
     /** The era a request is served in. */
@@ -117,18 +128,20 @@ public final class McpServer {
             throw McpFailure.invalidParams("protocolVersion must be a text");
         }
         initialized = true;
+        warmUp.begin();
         var version = EARLIER_ERA_VERSIONS.contains(asked) ? asked : EARLIER_VERSION;
 
         return "{\"protocolVersion\":" + Json.quote(version) + ",\"capabilities\":" + capabilities()
-                + ",\"serverInfo\":" + SERVER_INFO + ",\"instructions\":\"\"}";
+                + ",\"serverInfo\":" + SERVER_INFO + ",\"instructions\":" + Json.quote(instructions) + "}";
     }
 
     /** {@code server/discover}, which is of the modern era whatever the metadata of the request says of its version. */
     private String discover(Map<String, @Nullable Object> params) {
         eraOf(params);
+        warmUp.begin();
 
         return modern("\"supportedVersions\":" + versions() + ",\"capabilities\":" + capabilities()
-                + ",\"instructions\":\"\"," + caching());
+                + ",\"instructions\":" + Json.quote(instructions) + "," + caching());
     }
 
     private String toolsList(Map<String, @Nullable Object> params) {
@@ -143,6 +156,7 @@ public final class McpServer {
     /** A call of a tool, in the era its metadata names: its result says whether the operation worked. */
     private String toolsCall(Map<String, @Nullable Object> params) {
         var era = eraOf(params);
+        warmUp.awaitEnd();
         var members = calls.call(params);
 
         return switch (era) {

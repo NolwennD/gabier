@@ -1,10 +1,55 @@
 # gabier mcp
 
 `gabier mcp` is the MCP server of gabier, for an agent host that speaks the [Model Context Protocol](https://modelcontextprotocol.io)
-(`claude mcp add gabier -- gabier mcp`). It reads one JSON-RPC 2.0 message per line on the standard input, writes one per
+(`claude mcp add gabier -- gabier mcp`, see [Adding it to a host](#adding-it-to-a-host)). It reads one JSON-RPC 2.0
+message per line on the standard input, writes one per
 line on the standard output, and ends when the input is closed. The standard output carries the messages of the protocol
 **and nothing else**: the notice of a daemon that is starting, like every log, goes to the standard error. It takes no
 argument and no option (`--json` changes nothing).
+
+## Adding it to a host
+
+`gabier` must be on the `PATH` of the host (`mise use github:NolwennD/gabier@<version>`, or `mise run install` from a
+clone). For Claude Code, from the project:
+
+```sh
+claude mcp add gabier -- gabier mcp
+```
+
+Everything after `--` is the command that starts the server, passed untouched. The server is then stored for you in
+this project (`--scope local`, the default); `--scope project` writes it to the `.mcp.json` of the project, to share it
+with the team (Claude Code asks each person to approve it), and `--scope user` makes it available in every project. The
+same server in a `.mcp.json` at the root of the project (a server with no `type` is a stdio server):
+
+```json
+{
+  "mcpServers": {
+    "gabier": {
+      "command": "gabier",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+The daemon serves the project the host starts the server in (`GABIER_PROJECT` to point elsewhere, as for any command);
+`/mcp` in Claude Code shows the server, its tools and its instructions. (Syntax checked against the MCP page of the
+documentation of Claude Code, <https://code.claude.com/docs/en/mcp>.)
+
+## Instructions and warm-up
+
+The handshake carries `instructions`, in `server/discover` (revision 2026-07-28) and in the result of `initialize` (revision
+2025-11-25 and before): the resource `mcp-instructions.md` of the cli, what an agent must know to use the tools. Use them
+instead of editing Java as text, count positions from 1, try a change that crosses files with `dryRun` set to true,
+call `diagnostics` after a change, and `organize-imports` after adding or removing a usage. A test keeps every tool the text
+names in step with `tools/list`.
+
+The first `server/discover` or `initialize` also **starts the daemon in the background**, as `gabier start` does (it answers
+at once, jdtls starts in the daemon), so that jdtls imports the project while the host loads the tools. It delays no answer
+and fails none: a daemon that cannot be started is told on the standard error (`gabier mcp: the daemon could not be
+started: ...`), and the first call that needs the daemon meets the failure again and answers it as a failed call. A call made
+while the start is still running waits for it, so as not to launch a second daemon. A server that is closed before the daemon
+is up does not wait for it.
 
 Every operation of gabier but `start` and `stop` is a **tool**, named as the operation (`rename`, `diagnostics`,
 `move`...) and generated from its descriptor in `eu.gabier.cli.domain.Operations`: its description is the summary and the
@@ -14,7 +59,8 @@ texts), all required. A **position is an integer counted from 1**, as on the com
 edited. A path (`file`, `files`) may be relative: it is made absolute from the folder `gabier mcp` runs in, as the command
 line does. `diagnostics`, `references`, `actions` and `status` are annotated `readOnlyHint`. The daemon is the one of the
 project (`GABIER_PROJECT`, else the nearest folder with a `.git`), started by the first call that needs it, as any command
-does; `status` asks a daemon that runs and starts none. Starting the server asks no daemon.
+does; `status` asks a daemon that runs and starts none. Starting the server asks no daemon; its first handshake starts one
+(below).
 
 ## The two eras of the protocol
 

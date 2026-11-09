@@ -6,12 +6,14 @@ import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.at;
 import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.exchange;
 import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.list;
 import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.modern;
+import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.modernCall;
 import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.notification;
 import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.number;
 import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.object;
 import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.request;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.Json;
 import eu.gabier.protocol.ProtocolVersion;
 import java.io.ByteArrayInputStream;
@@ -19,9 +21,16 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -52,7 +61,7 @@ class McpServerTest {
             assertThat(at(answer, "result", "capabilities")).isEqualTo(Map.of("tools", Map.of()));
             assertThat(at(answer, "result", "_meta", SERVER_INFO))
                     .isEqualTo(Map.of("name", "gabier", "version", ProtocolVersion.CURRENT.value()));
-            assertThat(at(answer, "result", "instructions")).isEqualTo("");
+            assertThat(at(answer, "result", "instructions")).isEqualTo(McpExchange.INSTRUCTIONS);
         }
 
         @Test
@@ -82,6 +91,114 @@ class McpServerTest {
     }
 
     @Nested
+    class WarmingUpTheDaemon {
+
+        private final List<Runnable> begun = new ArrayList<>();
+        private final WarmUp recorded = new WarmUp(() -> {}, McpExchange.silent(), begun::add);
+
+        private List<@Nullable Object> exchangeWith(WarmUp warmUp, String... lines) {
+            return exchange(McpExchange.serverOf(new StubDaemon(), warmUp), lines);
+        }
+
+        @Test
+        void beginsTheWarmUpAtTheFirstServerDiscover() {
+            exchangeWith(recorded, modern("1", "server/discover"));
+
+            assertThat(begun).hasSize(1);
+        }
+
+        @Test
+        void beginsTheWarmUpAtInitialize() {
+            exchangeWith(recorded, INITIALIZE);
+
+            assertThat(begun).hasSize(1);
+        }
+
+        @Test
+        void beginsItOnceWhateverTheNumberOfHandshakes() {
+            exchangeWith(recorded, modern("1", "server/discover"), modern("2", "server/discover"), INITIALIZE);
+
+            assertThat(begun).hasSize(1);
+        }
+
+        @Test
+        void beginsNothingForARequestThatIsNoHandshakeOrThatIsRefused() {
+            exchangeWith(
+                    recorded,
+                    modern("1", "ping"),
+                    modern("2", "tools/list"),
+                    request("3", "server/discover", "{}"),
+                    request("4", "initialize", "{}"));
+
+            assertThat(begun).isEmpty();
+        }
+
+        @Test
+        void answersTheHandshakeWhileTheDaemonIsStillStarting() throws InterruptedException {
+            var go = new CountDownLatch(1);
+            var warmUp = WarmUp.inBackground(() -> awaitQuietly(go), McpExchange.silent());
+
+            var answers = exchangeWith(warmUp, modern("1", "server/discover"));
+
+            assertThat(go.getCount()).isOne();
+            assertThat(at(answers.getFirst(), "result", "resultType")).isEqualTo("complete");
+            go.countDown();
+            warmUp.awaitEnd();
+        }
+
+        @Test
+        void answersTheHandshakeWhenTheDaemonCannotBeStarted() {
+            var log = new ByteArrayOutputStream();
+            var warmUp = WarmUp.inBackground(
+                    () -> {
+                        throw new IllegalStateException("gabier-daemon was not found");
+                    },
+                    new PrintStream(log, true, StandardCharsets.UTF_8));
+
+            var answers = exchangeWith(warmUp, INITIALIZE, notification("notifications/initialized"));
+            warmUp.awaitEnd();
+
+            assertThat(answers).hasSize(1);
+            assertThat(at(answers.getFirst(), "result", "protocolVersion")).isEqualTo("2025-11-25");
+            assertThat(log.toString(StandardCharsets.UTF_8)).contains("the daemon could not be started");
+        }
+
+        @Test
+        void makesACallWaitForTheStartOfTheDaemonSoThatItStartsNoSecondOne() throws Exception {
+            var go = new CountDownLatch(1);
+            var warmedUp = new AtomicBoolean();
+            var warmedUpWhenAsked = new CopyOnWriteArrayList<Boolean>();
+            var daemon = new StubDaemon()
+                    .answering(new FileDiagnostics(List.of()).toJson())
+                    .whenAsked(() -> warmedUpWhenAsked.add(warmedUp.get()));
+            var warmUp = WarmUp.inBackground(
+                    () -> {
+                        awaitQuietly(go);
+                        warmedUp.set(true);
+                    },
+                    McpExchange.silent());
+
+            var answers = CompletableFuture.supplyAsync(() -> exchange(
+                    McpExchange.serverOf(daemon, warmUp),
+                    modern("1", "server/discover"),
+                    modernCall("diagnostics", "{\"file\":\"/work/A.java\"}")));
+            Thread.sleep(200);
+            go.countDown();
+
+            assertThat(answers.get(10, TimeUnit.SECONDS)).hasSize(2);
+            assertThat(warmedUpWhenAsked).containsExactly(true);
+        }
+
+        private void awaitQuietly(CountDownLatch latch) {
+            try {
+                latch.await();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    @Nested
     class Initializing {
 
         @Test
@@ -93,7 +210,7 @@ class McpServerTest {
             assertThat(at(answer, "result", "capabilities")).isEqualTo(Map.of("tools", Map.of()));
             assertThat(at(answer, "result", "serverInfo"))
                     .isEqualTo(Map.of("name", "gabier", "version", ProtocolVersion.CURRENT.value()));
-            assertThat(at(answer, "result", "instructions")).isEqualTo("");
+            assertThat(at(answer, "result", "instructions")).isEqualTo(McpExchange.INSTRUCTIONS);
             assertThat(object(at(answer, "result"))).doesNotContainKeys("resultType", "ttlMs", "_meta");
         }
 

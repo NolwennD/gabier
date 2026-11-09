@@ -27,6 +27,9 @@ final class McpExchange {
         {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"host","version":"1"}}\
         """);
 
+    /** What a server of the tests tells a host to do with it: not the real text, which a test of the cli reads. */
+    static final String INSTRUCTIONS = "Use the tools of gabier, not text edits.\nPositions count from 1.";
+
     private static final String MODERN_META = """
         "_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}\
         """;
@@ -73,7 +76,26 @@ final class McpExchange {
 
     /** A server over this daemon, that logs on this stream. */
     static McpServer serverOf(Daemon daemon, PrintStream err) {
-        return new McpServer(new OperationRunner(daemon), operation -> "command-of-" + operation.method(), err);
+        return serverOf(daemon, err, noWarmUp());
+    }
+
+    /** A server over this daemon that begins this warm-up at its first handshake. */
+    static McpServer serverOf(Daemon daemon, WarmUp warmUp) {
+        return serverOf(daemon, silent(), warmUp);
+    }
+
+    private static McpServer serverOf(Daemon daemon, PrintStream err, WarmUp warmUp) {
+        return new McpServer(
+                new OperationRunner(daemon),
+                operation -> "command-of-" + operation.method(),
+                err,
+                INSTRUCTIONS,
+                warmUp);
+    }
+
+    /** A warm-up that starts nothing, for the tests that are not about it. */
+    static WarmUp noWarmUp() {
+        return new WarmUp(() -> {}, silent(), Runnable::run);
     }
 
     /** A stream that keeps nothing, for the log that a test does not read. */
@@ -101,9 +123,19 @@ final class McpExchange {
         return exchange(new StubDaemon(), silent(), in);
     }
 
+    /** What this server wrote for these lines of input, as the JSON of each line of output. */
+    static List<@Nullable Object> exchange(McpServer server, String... lines) {
+        return exchange(
+                server, new ByteArrayInputStream(String.join("\n", lines).getBytes(StandardCharsets.UTF_8)));
+    }
+
     private static List<@Nullable Object> exchange(Daemon daemon, PrintStream err, InputStream in) {
+        return exchange(serverOf(daemon, err), in);
+    }
+
+    private static List<@Nullable Object> exchange(McpServer server, InputStream in) {
         var out = new ByteArrayOutputStream();
-        serverOf(daemon, err).serve(in, new PrintStream(out, true, StandardCharsets.UTF_8));
+        server.serve(in, new PrintStream(out, true, StandardCharsets.UTF_8));
 
         return out.toString(StandardCharsets.UTF_8).lines().map(Json::parse).toList();
     }

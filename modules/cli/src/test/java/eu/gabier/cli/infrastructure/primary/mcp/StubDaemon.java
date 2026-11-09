@@ -6,9 +6,9 @@ import eu.gabier.cli.domain.DaemonStart;
 import eu.gabier.protocol.Json;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -20,7 +20,8 @@ final class StubDaemon implements Daemon {
     /** A request the daemon received. */
     record Asked(String method, Map<String, String> params, boolean running) {}
 
-    private final List<Asked> asked = new ArrayList<>();
+    private final List<Asked> asked = new CopyOnWriteArrayList<>();
+    private Runnable observer = () -> {};
     private @Nullable String answer;
     private @Nullable RuntimeException failure;
 
@@ -34,6 +35,13 @@ final class StubDaemon implements Daemon {
     /** Fails every request with this failure. */
     StubDaemon failing(RuntimeException failure) {
         this.failure = failure;
+
+        return this;
+    }
+
+    /** Runs this when the daemon is asked, before it answers, so that a test sees what happened by then. */
+    StubDaemon whenAsked(Runnable observation) {
+        observer = observation;
 
         return this;
     }
@@ -57,6 +65,7 @@ final class StubDaemon implements Daemon {
     }
 
     private DaemonReply reply() {
+        observer.run();
         if (failure != null) {
             throw failure;
         }

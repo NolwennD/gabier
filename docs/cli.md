@@ -70,7 +70,12 @@ output, nothing else on the output). `tools/list` generates one tool per descrip
 (`ToolCalls`) runs the operation through the same `OperationRunner` and gives the text of `ResultText` in `content` and the
 result of the daemon in `structuredContent`, a refusal being a result with `isError` that holds the problem and the pointer of
 `Problems` (`eu.gabier.cli.application`, which the command line uses too); the page of
-the command is [mcp](commands/mcp.md). The guide of the improvements
+the command is [mcp](commands/mcp.md). The server tells the host how to use the tools in the `instructions` of its
+handshake, the resource `mcp-instructions.md` (`McpInstructions`, beside `agents.md`, kept by the native image), and its
+first handshake begins a `WarmUp`, which starts the daemon in a background thread (as `gabier start` does) so that jdtls
+imports the project while the host loads the tools: a failure to start is logged on the standard error and fails neither
+the handshake nor the call, which meets the same failure by itself, and a call waits for the start that runs so as not to
+launch a second daemon. The guide of the improvements
 (`gabier help guide`, `docs/improve.md`) is below the command line too: `Guide`, `GuideSection`, `GuideSections` and the
 `ranking` package are in `eu.gabier.cli.domain`, the answer to a question (`help --for`) is `AskTheGuide.answer` in
 `eu.gabier.cli.application`, and the command line only reads the resource (`GuideTopic`) and writes the answer

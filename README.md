@@ -131,6 +131,21 @@ Whichever way you installed it:
    (`.claude/rules/gabier.md`) or `gabier init-agent snippet` (a marked block of `AGENTS.md`, replaced in place by a second
    run). `--only=rename,diagnostics` keeps the commands you want taught, `--dry-run` shows the text first; see
    [`init-agent`](docs/commands/init-agent.md).
+4. Or give an agent host that speaks [MCP](https://modelcontextprotocol.io) the operations as tools, with their
+   instructions and no command line to learn. For Claude Code, from the project:
+
+   ```sh
+   claude mcp add gabier -- gabier mcp
+   ```
+
+   or, to share it with the team, a `.mcp.json` at the root of the project:
+
+   ```json
+   { "mcpServers": { "gabier": { "command": "gabier", "args": ["mcp"] } } }
+   ```
+
+   `/mcp` shows the server and its tools. The server starts the daemon in the background when the host connects; see
+   [`mcp`](docs/commands/mcp.md).
 
 ## Build gabier from its sources
 
@@ -232,6 +247,8 @@ refusals of each one. `gabier help --for="<the task>"` tells which command does 
 - [`gabier init-agent <skill|rule|snippet>`](docs/commands/init-agent.md): write those instructions into the project as a
   skill, a rule or a marked block of `AGENTS.md`, with the commands you choose (`--only`) and the version of gabier that
   wrote them; a second run replaces the block. No daemon.
+- [`gabier mcp`](docs/commands/mcp.md): the MCP server, for an agent host: one tool per operation, with the instructions
+  of the server and the daemon started in the background.
 - [`gabier start`](docs/commands/start.md): start the daemon and jdtls ahead of the first command; `--wait` returns when
   jdtls is ready.
 - [`gabier status` and `gabier stop`](docs/commands/status-and-stop.md): see what the daemon serves, and stop it.

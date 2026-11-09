@@ -73,8 +73,13 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      declined the operation (`language-server-not-...`) goes into `DECLINED_OPERATIONS` of `Problems` (`eu.gabier.cli.application`), so that its
      refusal ends with the pointer to `gabier help <name>`, on the command line and in the failed call of the MCP tool.
      The MCP server (`gabier mcp`) builds its tool from this descriptor, not from the command line, and calls it
-     through `OperationRunner`: a new operation is a tool with no other file edited; one that answers with a new kind of
-     result also adds the case to the `switch` of `ToolCalls` (it does not compile without it);
+     through `OperationRunner`: a new operation is a tool by itself, with no other file edited (`tools/list`, the
+     schema, the call); one that answers with a new kind of
+     result also adds the case to the `switch` of `ToolCalls` (it does not compile without it). `ToolsTest` fails on a
+     command-line word (`--json`, `gabier <command>`) in the description of any tool or of its parameters: what only a
+     person at the command line reads (an option, the text it prints, `line:column`) goes in `.withNotes(...)` of its
+     `Command`, which `help` prints after the notes of the operation. If an agent should know the tool before it needs it,
+     name it between backticks in `mcp-instructions.md` (a test checks that every tool named there is listed);
    - a final class implementing `Capability` (`command()`, `run(Invocation)`), named after the command (`Rename`,
      `OrganizeImports`; `Diagnostics`, `Status` are the models). It declares what is the command line's own, once, as
      the constant `static final Command COMMAND = Command.called("<name>")`, which a step builder fills one part after

@@ -1,6 +1,8 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.domain.Operations;
 import eu.gabier.cli.infrastructure.primary.mcp.McpServer;
+import eu.gabier.cli.infrastructure.primary.mcp.WarmUp;
 
 /**
  * {@code mcp}: the MCP server of gabier on the standard input and output, for a host that speaks MCP ({@code claude mcp
@@ -43,7 +45,14 @@ final class Mcp implements Capability {
     @Override
     public void run(Invocation invocation) {
         invocation.arguments().exactly(0);
-        new McpServer(invocation.operations(), Capabilities::commandOf, invocation.err())
+        var warmUp =
+                WarmUp.inBackground(() -> invocation.daemon().askStarting(Operations.START.method()), invocation.err());
+        new McpServer(
+                        invocation.operations(),
+                        Capabilities::commandOf,
+                        invocation.err(),
+                        McpInstructions.text(),
+                        warmUp)
                 .serve(invocation.in(), invocation.out());
     }
 }
