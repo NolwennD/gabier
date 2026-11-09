@@ -3,7 +3,8 @@
 Coding agents that edit Java as text break packages, imports and references. gabier lets an agent change Java through
 a Java language server instead: it drives jdtls, which works on the syntax tree, and answers with the files changed and
 their diff, or a structured refusal. It is a command-line tool, `gabier`, backed by a daemon that keeps jdtls running
-for the project; both are written in Java.
+for the project; both are written in Java. An agent host that speaks [MCP](https://modelcontextprotocol.io) can use the
+same operations as tools: `gabier mcp` is the server (see [step 4 of the first steps](#first-steps)).
 
 An agent renames a method and every call to it in one command. This is the output of the installed `gabier` on a
 two-file project (the paths are shortened to `/work/demo`):
@@ -209,7 +210,10 @@ gabier rename --dry-run --token src/main/java/com/example/App.java App Applicati
 
 For a coding agent, point its instructions to `gabier help` (the line to give it is in the
 [first steps](#first-steps)). It lists the commands, and `gabier help <command>` gives the usage, an example and the
-refusals of each one. `gabier help --for="<the task>"` tells which command does a task.
+refusals of each one. `gabier help --for="<the task>"` tells which command does a task. An agent host that speaks MCP
+needs none of that: `gabier mcp` gives it the operations as tools, with the instructions and a `guide` tool that plays
+the part of `gabier help --for` (see [`mcp`](docs/commands/mcp.md)); the tools take the same values as the commands, the
+positions counted from 1 and `dryRun` in place of `--dry-run`.
 
 ## Capabilities
 
