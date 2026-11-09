@@ -27,3 +27,20 @@ Done when:
 - the daemon started at the handshake is that of the project of the launch directory, and a project reached later is
   started by its first call, with the wait said as in the waits issue;
 - `bin/ci` is green.
+
+## Resolution
+
+Commit `18e2580`, same branch and the same `bin/ci` and review as the issue above.
+
+- A call goes to the daemon of the project of its file (nearest `.git`, a file or a folder; else the launch project), one
+  daemon per project built when first needed (`Projects` port, `ProjectOperations`, `SocketProjects`). A relative path is
+  an invalid value asking for an absolute one, and files of one call in two projects are refused before any daemon is
+  asked. **This reverses** the choice of the call issue, which made a relative path absolute from the folder of the server:
+  the launch folder is not the project of a worktree entered afterwards.
+- The warm-up starts the launch project's daemon only. With `GABIER_SOCKET` every project is that one socket (documented).
+- Process: the main code was written before its tests for this issue (those tests were not seen red).
+
+Tokens:
+- worker: shared with the issue above (one batch)
+- reviewer: shared with the issue above
+- supervisor: shared with the issue above
