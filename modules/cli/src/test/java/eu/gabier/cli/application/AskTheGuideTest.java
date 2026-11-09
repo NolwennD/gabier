@@ -1,13 +1,20 @@
 package eu.gabier.cli.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import eu.gabier.cli.domain.Guide;
 import eu.gabier.cli.domain.GuideSection;
 import eu.gabier.cli.domain.ranking.Ranking;
+import eu.gabier.shared.error.domain.ErrorStatus;
+import eu.gabier.shared.error.domain.GeneratorException;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class AskTheGuideTest {
 
@@ -68,5 +75,51 @@ class AskTheGuideTest {
     @Test
     void givesNothingForAQuestionTheGuideDoesNotAnswer() {
         assertThat(AskTheGuide.answer("bake bread with sourdough", GUIDE)).isEmpty();
+    }
+
+    @Nested
+    class ReadingTheTaskOfAQuestionFromNamedValues {
+
+        private void refused(Map<String, Object> values, String message, String parameter) {
+            assertThatThrownBy(() -> AskTheGuide.taskIn(values))
+                    .isInstanceOfSatisfying(GeneratorException.class, failure -> {
+                        assertThat(failure).hasMessage(message);
+                        assertThat(failure.key().get()).isEqualTo("operation-invalid-values");
+                        assertThat(failure.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+                        assertThat(failure.parameters())
+                                .containsEntry("operation", "guide")
+                                .containsEntry("parameter", parameter);
+                    });
+        }
+
+        @Test
+        void givesTheTaskWithoutTheSpacesAroundIt() {
+            assertThat(AskTheGuide.taskIn(Map.of("task", "  sort the imports \n")))
+                    .isEqualTo("sort the imports");
+        }
+
+        @Test
+        void refusesAMissingTask() {
+            refused(Map.of(), "The operation guide needs the value task", "task");
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"", "   ", "\n\t"})
+        void refusesABlankTask(String task) {
+            refused(Map.of("task", task), "The value task of the operation guide must not be blank", "task");
+        }
+
+        @Test
+        void refusesATaskThatIsNotText() {
+            refused(Map.of("task", 7), "The value task of the operation guide must be a text", "task");
+        }
+
+        @Test
+        void refusesAValueTheQuestionDoesNotTake() {
+            refused(
+                    Map.of("task", "sort the imports", "verbose", true),
+                    "The operation guide takes no value named verbose",
+                    "verbose");
+        }
     }
 }

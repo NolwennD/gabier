@@ -89,6 +89,7 @@ class McpInstructionsTest extends CliTest {
                 .contains("instead of editing")
                 .contains("counted from 1")
                 .contains("dryRun")
+                .contains("`guide`")
                 .contains("`diagnostics`")
                 .contains("`organize-imports`")
                 .contains("`actions`")

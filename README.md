@@ -247,8 +247,8 @@ refusals of each one. `gabier help --for="<the task>"` tells which command does 
 - [`gabier init-agent <skill|rule|snippet>`](docs/commands/init-agent.md): write those instructions into the project as a
   skill, a rule or a marked block of `AGENTS.md`, with the commands you choose (`--only`) and the version of gabier that
   wrote them; a second run replaces the block. No daemon.
-- [`gabier mcp`](docs/commands/mcp.md): the MCP server, for an agent host: one tool per operation, with the instructions
-  of the server and the daemon started in the background.
+- [`gabier mcp`](docs/commands/mcp.md): the MCP server, for an agent host: one tool per operation, a `guide` tool that
+  answers which tool does a task, the instructions of the server and the daemon started in the background.
 - [`gabier start`](docs/commands/start.md): start the daemon and jdtls ahead of the first command; `--wait` returns when
   jdtls is ready.
 - [`gabier status` and `gabier stop`](docs/commands/status-and-stop.md): see what the daemon serves, and stop it.

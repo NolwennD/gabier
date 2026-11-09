@@ -78,8 +78,11 @@ the handshake nor the call, which meets the same failure by itself, and a call w
 launch a second daemon. The guide of the improvements
 (`gabier help guide`, `docs/improve.md`) is below the command line too: `Guide`, `GuideSection`, `GuideSections` and the
 `ranking` package are in `eu.gabier.cli.domain`, the answer to a question (`help --for`) is `AskTheGuide.answer` in
-`eu.gabier.cli.application`, and the command line only reads the resource (`GuideTopic`) and writes the answer
-(`HelpText`).
+`eu.gabier.cli.application` (the text of the answer is `GuideText` there), and the command line only reads the resource
+(`GuideTopic`) and adds its own pointer to the answer (`HelpText`). The MCP server asks it the same way for its tool
+`guide`, which is no operation of the daemon: it is declared in the adapter (`Tools`), takes the guide as a
+`McpServer.Backend` beside the runner of the operations, and asks no daemon; the domain and the application have no
+descriptor for it and do not know the word MCP.
 
 ## Text in a terminal
 

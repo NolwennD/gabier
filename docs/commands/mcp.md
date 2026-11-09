@@ -62,6 +62,28 @@ project (`GABIER_PROJECT`, else the nearest folder with a `.git`), started by th
 does; `status` asks a daemon that runs and starts none. Starting the server asks no daemon; its first handshake starts one
 (below).
 
+## The `guide` tool
+
+`guide` is the last tool and the one that is no operation of the daemon: it asks the guide of the improvements
+([`docs/improve.md`](../improve.md), `gabier help guide`) as `gabier help --for="<task>"` does, and asks no daemon. An
+agent that does not know which tool does a refactoring calls it before editing by hand, with `{"task":"turn this string
+concatenation into a text block"}` (a required text, in English), and reads the one to three entries that fit, each with
+its confidence and what to do (`Ask: cleanup ...`, or `By hand: ...` when jdtls offers nothing). It is annotated
+`readOnlyHint`.
+
+- **The words are those of `help --for`**: the same text (`GuideText`, `eu.gabier.cli.application`), the same ranking
+  (`AskTheGuide`), so an entry of the guide serves the command line and MCP at once; the command line text does not
+  change. Three differences, all for a tool (`ToolWords`): a command the text names as `gabier <command>` is written as
+  the name of the tool of that name (`cleanup <file> stringConcatToTextBlock`; the words in angle brackets are its
+  parameters); a form that is another tool is that tool (`gabier rename --token` is `rename-token`); an option of the
+  command line is the boolean parameter of the same name set to true (`--dry-run` is `dryRun=true`,
+  `--include-declaration` is `includeDeclaration=true`, which the description of the tool says), so the answer holds no
+  `--option`; and the line that points to `gabier help guide` is left out.
+- **A task that nothing matches** is an answer, not a failure: `Nothing in the guide matches "<task>".`, `isError` false.
+- **A missing, blank or non-text `task`**, or another value, is a failed call with the key `operation-invalid-values` (the
+  operation named `guide`).
+- The result has a `content` text and no `structuredContent`.
+
 ## The two eras of the protocol
 
 One server answers both:

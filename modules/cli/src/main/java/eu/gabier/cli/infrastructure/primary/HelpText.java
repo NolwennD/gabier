@@ -2,11 +2,10 @@ package eu.gabier.cli.infrastructure.primary;
 
 import eu.gabier.cli.application.AskTheGuide;
 import eu.gabier.cli.application.GuideMatch;
+import eu.gabier.cli.application.GuideText;
 import eu.gabier.cli.domain.Guide;
 import eu.gabier.protocol.Json;
-import eu.gabier.protocol.TerminalText;
 import java.util.List;
-import java.util.Locale;
 import java.util.stream.Collectors;
 
 /**
@@ -101,40 +100,28 @@ final class HelpText {
                 .map(match -> "{\"rank\":" + match.rank() + ",\"title\":"
                         + Json.quote(match.section().title())
                         + ",\"kind\":" + Json.quote(match.section().byHand() ? "by-hand" : "ask") + ",\"how\":"
-                        + Json.quote(match.section().instruction()) + ",\"confidence\":" + confidence(match) + "}")
+                        + Json.quote(match.section().instruction()) + ",\"confidence\":" + GuideText.confidence(match)
+                        + "}")
                 .collect(Collectors.joining(","));
 
         return "{\"question\":" + Json.quote(task) + ",\"matches\":[" + matches + "]}";
     }
 
+    /** The text of {@link GuideText}, then the line that points to the whole guide, as only the command line says it. */
     private static String answerAsText(String task, List<GuideMatch> found) {
+        var answer = GuideText.answer(task, found);
         if (found.isEmpty()) {
             return """
-                Nothing in the guide matches "%s".
+                %s
                 `gabier help guide` prints the whole guide, `gabier help` lists the commands.\
-                """.formatted(TerminalText.neutralise(task));
+                """.formatted(answer);
         }
-        var matches = found.stream()
-                .map(match -> "%d. %s (confidence %s)\n   %s"
-                        .formatted(
-                                match.rank(),
-                                match.section().title(),
-                                confidence(match),
-                                match.section().how()))
-                .collect(Collectors.joining("\n\n"));
 
         return """
-            For "%s":
-
             %s
 
             `gabier help guide` prints the whole guide.\
-            """.formatted(TerminalText.neutralise(task), matches);
-    }
-
-    /** The confidence written with two decimals. */
-    private static String confidence(GuideMatch match) {
-        return String.format(Locale.ROOT, "%.2f", match.confidence());
+            """.formatted(answer);
     }
 
     /** The usage, an example and the refusals of one command. */

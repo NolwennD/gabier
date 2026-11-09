@@ -1,8 +1,9 @@
 Gabier changes Java through the language server of the project. Use its tools instead of editing Java as text.
 
-- Before editing Java by hand, see whether a tool does the change: `rename`, `move`, `inline`, `create`, `cleanup`,
-  `organize-imports`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`. A text
-  edit is the last resort.
+- Before editing Java by hand, ask `guide` which tool does the change, with the task in English: it names the tool, or
+  says that the language server does not offer it. The tools that change code: `rename`, `move`, `inline`, `create`,
+  `cleanup`, `organize-imports`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`,
+  `move-type-to-file`. A text edit is the last resort.
 - A file is given by its path; every line and column is counted from 1, as an editor shows them.
 - Try a change that crosses files with dryRun set to true: it answers the change and writes nothing. Call it again with
   dryRun false to write.

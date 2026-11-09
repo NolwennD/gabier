@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import eu.gabier.cli.application.OperationRunner;
 import eu.gabier.cli.domain.Daemon;
+import eu.gabier.cli.domain.Guide;
 import eu.gabier.protocol.Json;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -26,6 +27,45 @@ final class McpExchange {
     static final String INITIALIZE = request("1", "initialize", """
         {"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"host","version":"1"}}\
         """);
+
+    /** The guide a server of the tests answers from: six situations, not the real guide, which a test of the cli reads. */
+    static final String GUIDE = """
+        ### Rename a method
+
+        Words: rename symbol, change name, method
+
+        Ask: `gabier rename <file> <line>:<column> <new-name>`
+
+        ### Rename a package
+
+        Words: rename symbol, change name, package
+
+        Ask: `gabier rename <file> <line>:<column> <new-name>`
+
+        ### Remove an else
+
+        Words: unnecessary else, else after return
+
+        By hand: remove the else
+
+        ### Make a text block
+
+        Words: text block, multi-line string
+
+        Ask: `gabier cleanup --dry-run <file> stringConcatToTextBlock`
+
+        ### Order the imports
+
+        Words: organize imports, sort imports
+
+        Ask: `gabier organize-imports <file>`
+
+        ### Move a class
+
+        Words: move class, other package
+
+        Ask: `gabier move <file>... <package>`
+        """;
 
     /** What a server of the tests tells a host to do with it: not the real text, which a test of the cli reads. */
     static final String INSTRUCTIONS = "Use the tools of gabier, not text edits.\nPositions count from 1.";
@@ -85,12 +125,10 @@ final class McpExchange {
     }
 
     private static McpServer serverOf(Daemon daemon, PrintStream err, WarmUp warmUp) {
-        return new McpServer(
-                new OperationRunner(daemon),
-                operation -> "command-of-" + operation.method(),
-                err,
-                INSTRUCTIONS,
-                warmUp);
+        var backend = new McpServer.Backend(
+                new OperationRunner(daemon), operation -> "command-of-" + operation.method(), new Guide(GUIDE));
+
+        return new McpServer(backend, err, INSTRUCTIONS, warmUp);
     }
 
     /** A warm-up that starts nothing, for the tests that are not about it. */

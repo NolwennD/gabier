@@ -1,5 +1,6 @@
 package eu.gabier.cli.infrastructure.primary;
 
+import eu.gabier.cli.domain.Guide;
 import eu.gabier.cli.domain.Operations;
 import eu.gabier.cli.infrastructure.primary.mcp.McpServer;
 import eu.gabier.cli.infrastructure.primary.mcp.WarmUp;
@@ -24,7 +25,8 @@ final class Mcp implements Capability {
                 the standard output, which carries nothing else. It answers the two eras of the protocol: server/discover
                 and the metadata of every request (revision 2026-07-28), and initialize (revision 2025-11-25 and
                 earlier). tools/list gives one tool per operation but start and stop, with the parameters of the operation
-                as its input schema. tools/call runs the operation as the command line does (starting the daemon when
+                as its input schema, and the tool guide, which answers a task as gabier help --for does and asks no
+                daemon. tools/call runs the operation as the command line does (starting the daemon when
                 none runs, except for status, which starts none) and answers the text the command line prints, with the
                 result of the daemon beside it.
                 gabier mcp itself ends only with usage-error. A call that does not work is a result with isError, holding
@@ -47,12 +49,9 @@ final class Mcp implements Capability {
         invocation.arguments().exactly(0);
         var warmUp =
                 WarmUp.inBackground(() -> invocation.daemon().askStarting(Operations.START.method()), invocation.err());
-        new McpServer(
-                        invocation.operations(),
-                        Capabilities::commandOf,
-                        invocation.err(),
-                        McpInstructions.text(),
-                        warmUp)
+        var backend =
+                new McpServer.Backend(invocation.operations(), Capabilities::commandOf, new Guide(GuideTopic.text()));
+        new McpServer(backend, invocation.err(), McpInstructions.text(), warmUp)
                 .serve(invocation.in(), invocation.out());
     }
 }

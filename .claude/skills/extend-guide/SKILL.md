@@ -55,7 +55,16 @@ situation: its title is the situation, never the name of a tool. A situation met
    line, not the weights.
 5. **Check the printed guide** with the native cli, run from a folder with no clone: `bin/ci --stage native` does
    (`help guide`, `help --for=...`), and the binary is `modules/cli/build/native/nativeCompile/gabier`.
-6. A new clean-up in `CleanUp` (core) is listed in the notes of `Cleanup` (cli), and `GuideTest` reads its identifiers
+6. **One entry serves the command line and MCP.** The `guide` tool of `gabier mcp` ranks the same sections
+   (`AskTheGuide`) and writes them with the same text (`GuideText`) as `gabier help --for`, with `gabier <command>` turned
+   into the name of the tool, `gabier <command> --token` into `<command>-token` and each `--option` into the parameter
+   `option=true` (`ToolWords`, only for a command that is a tool). So an entry names its commands as
+   `` `gabier <command> ...` `` and nothing else (no `gabier help ...` in an `Ask:` or `By hand:` line, where there is
+   no tool to turn it into), and writes an option as a flag that is a boolean parameter of the tool
+   (`--dry-run`, `--include-declaration`); `GuideThroughMcpTest` fails on an entry that names a command that is no tool,
+   on a command or an `--option` left in the answer of any section, and on a `name=true` that is no boolean parameter
+   of a tool.
+7. A new clean-up in `CleanUp` (core) is listed in the notes of `Cleanup` (cli), and `GuideTest` reads its identifiers
    from those notes: it fails until the guide has a section whose `Ask:` line names the new one.
 
 ## Applied once (04-11-2026)

@@ -1,10 +1,13 @@
 package eu.gabier.cli.infrastructure.primary.mcp;
 
+import eu.gabier.cli.application.AskTheGuide;
+import eu.gabier.cli.application.GuideText;
 import eu.gabier.cli.application.OperationResult;
 import eu.gabier.cli.application.OperationRunner;
 import eu.gabier.cli.application.Problems;
 import eu.gabier.cli.application.ResultText;
 import eu.gabier.cli.domain.DaemonRefusal;
+import eu.gabier.cli.domain.Guide;
 import eu.gabier.cli.domain.Operation;
 import eu.gabier.protocol.Json;
 import eu.gabier.protocol.Problem;
@@ -29,7 +32,8 @@ import org.jspecify.annotations.Nullable;
  * that does not fit the operation, a daemon that cannot be reached) is a result that says so ({@code isError}) and holds
  * the problem and the pointer to {@code gabier help} that the command line gives, so that the agent reads it and tries
  * again; a call that is no call (a tool that does not exist, arguments that are not an object) is an error of the
- * protocol. No failure of an operation ends the server.
+ * protocol. No failure of an operation ends the server. The tool {@code guide}, which is no operation, is a call of its
+ * own: it asks the guide, never the daemon.
  */
 final class ToolCalls {
 
@@ -41,20 +45,21 @@ final class ToolCalls {
     private final Tools tools;
     private final OperationRunner operations;
     private final Function<Operation, String> commandOf;
+    private final Guide guide;
     private final PrintStream err;
 
     /**
      * The calls of the tools.
      *
      * @param tools the tools that can be called
-     * @param operations how an operation is run
-     * @param commandOf the word of the command line that runs an operation, for the pointer to its help
+     * @param backend what the tools run: the operations and the guide
      * @param err where a call that failed unexpectedly is logged, with its cause
      */
-    ToolCalls(Tools tools, OperationRunner operations, Function<Operation, String> commandOf, PrintStream err) {
+    ToolCalls(Tools tools, McpServer.Backend backend, PrintStream err) {
         this.tools = tools;
-        this.operations = operations;
-        this.commandOf = commandOf;
+        this.operations = backend.operations();
+        this.commandOf = backend.commandOf();
+        this.guide = backend.guide();
         this.err = err;
     }
 
@@ -68,6 +73,9 @@ final class ToolCalls {
         if (!(params.get("name") instanceof String name)) {
             throw McpFailure.invalidParams("name must be a text");
         }
+        if (tools.isGuide(name)) {
+            return askTheGuide(arguments(params));
+        }
         var operation = tools.find(name).orElseThrow(() -> McpFailure.invalidParams("Unknown tool: " + name));
         var arguments = arguments(params);
         var values = values(arguments);
@@ -80,10 +88,32 @@ final class ToolCalls {
 
             return failure(problem, Problems.pointer(problem, commandOf.apply(operation)));
         } catch (RuntimeException failure) {
-            logIfUnexpected(operation, failure);
-
-            return failure(ProblemMapper.toProblem(failure), Optional.empty());
+            return failed(operation.method(), failure);
         }
+    }
+
+    /**
+     * The guide asked a question: the text of its answer, in the words of {@code help --for} but for the pointer to a way
+     * of reading the whole guide that only the command line has, and with the commands it names written as the tools
+     * that do them. A task that nothing in the guide answers is an answer, not an error. The guide asks no daemon.
+     */
+    private String askTheGuide(Map<String, @Nullable Object> arguments) {
+        try {
+            var task = AskTheGuide.taskIn(given(arguments));
+            var text = GuideText.answer(task, AskTheGuide.answer(task, guide));
+
+            return "\"content\":[{\"type\":\"text\",\"text\":" + Json.quote(ToolWords.of(text, tools))
+                    + "}],\"isError\":false";
+        } catch (RuntimeException failure) {
+            return failed(Tools.GUIDE, failure);
+        }
+    }
+
+    /** A call that did not work, as a result that says so: the problem, which only a failure gabier knows tells in full. */
+    private String failed(String tool, RuntimeException failure) {
+        logIfUnexpected(tool, failure);
+
+        return failure(ProblemMapper.toProblem(failure), Optional.empty());
     }
 
     /**
@@ -91,11 +121,11 @@ final class ToolCalls {
      * out of it; the person who runs the server reads the whole failure here, on the standard error. A failure that
      * gabier knows (a refusal, a value that does not fit) says everything in its problem.
      */
-    private void logIfUnexpected(Operation operation, RuntimeException failure) {
+    private void logIfUnexpected(String tool, RuntimeException failure) {
         if (failure instanceof GeneratorException) {
             return;
         }
-        err.println("gabier mcp: the call of " + operation.method() + " failed");
+        err.println("gabier mcp: the call of " + tool + " failed");
         failure.printStackTrace(err);
     }
 
@@ -117,13 +147,21 @@ final class ToolCalls {
     /** The values of the operation: a value that is null is not given, and a path is made absolute. */
     private static Map<String, Object> values(Map<String, @Nullable Object> arguments) {
         var values = new LinkedHashMap<String, Object>();
+        given(arguments).forEach((name, value) -> values.put(name, FILES.contains(name) ? absolute(value) : value));
+
+        return values;
+    }
+
+    /** The arguments that are given: one that is null is not. */
+    private static Map<String, Object> given(Map<String, @Nullable Object> arguments) {
+        var given = new LinkedHashMap<String, Object>();
         arguments.forEach((name, value) -> {
             if (value != null) {
-                values.put(name, FILES.contains(name) ? absolute(value) : value);
+                given.put(name, value);
             }
         });
 
-        return values;
+        return given;
     }
 
     private static Object absolute(Object value) {

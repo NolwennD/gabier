@@ -1,6 +1,7 @@
 package eu.gabier.cli.infrastructure.primary.mcp;
 
 import eu.gabier.cli.application.OperationRunner;
+import eu.gabier.cli.domain.Guide;
 import eu.gabier.cli.domain.Operation;
 import eu.gabier.protocol.Json;
 import eu.gabier.protocol.ProtocolVersion;
@@ -56,21 +57,24 @@ public final class McpServer {
     private boolean initialized;
 
     /**
-     * A server of the operations of the daemon.
+     * What the tools lean on: the application, which runs an operation and answers a question to the guide.
      *
      * @param operations how an operation is run, the one entry point that any front end uses
      * @param commandOf the word of the command line that runs an operation, for the pointer to its help
+     * @param guide the guide that the tool {@code guide} is asked
+     */
+    public record Backend(OperationRunner operations, Function<Operation, String> commandOf, Guide guide) {}
+
+    /**
+     * A server of the operations of the daemon, and of the guide.
+     *
+     * @param backend what the tools run
      * @param err where the server logs what it must not say on its output, such as a call that failed unexpectedly
      * @param instructions what the host is told about using the tools, in its handshake, as one text
      * @param warmUp what starts the daemon at the first handshake, so that it is ready when the first call comes
      */
-    public McpServer(
-            OperationRunner operations,
-            Function<Operation, String> commandOf,
-            PrintStream err,
-            String instructions,
-            WarmUp warmUp) {
-        calls = new ToolCalls(tools, operations, commandOf, err);
+    public McpServer(Backend backend, PrintStream err, String instructions, WarmUp warmUp) {
+        calls = new ToolCalls(tools, backend, err);
         this.instructions = instructions;
         this.warmUp = warmUp;
     }

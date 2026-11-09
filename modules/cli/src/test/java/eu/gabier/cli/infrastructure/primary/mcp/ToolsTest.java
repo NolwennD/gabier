@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.MatchResult;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -72,12 +73,23 @@ class ToolsTest {
         private final Tools served = Tools.served();
 
         @Test
-        void hasOneToolForEachOperationButStartAndStopNamedAsTheOperationInTheOrderOfTheDescriptors() {
+        void hasOneToolForEachOperationButStartAndStopNamedAsTheOperationInTheOrderOfTheDescriptorsThenTheGuide() {
+            var operations = Operations.all().stream()
+                    .filter(operation -> operation != Operations.START && operation != Operations.STOP)
+                    .map(Operation::method)
+                    .toList();
+
             assertThat(tools(served).stream().map(tool -> tool.get("name")))
-                    .containsExactlyElementsOf(Operations.all().stream()
-                            .filter(operation -> operation != Operations.START && operation != Operations.STOP)
-                            .map(Operation::method)
+                    .containsExactlyElementsOf(Stream.concat(operations.stream(), Stream.of("guide"))
                             .toList());
+        }
+
+        @Test
+        void knowsTheNamesOfItsToolsTheGuideIncluded() {
+            assertThat(served.has("rename")).isTrue();
+            assertThat(served.has("guide")).isTrue();
+            assertThat(served.has("start")).isFalse();
+            assertThat(served.has("frobnicate")).isFalse();
         }
 
         @Test
@@ -254,6 +266,15 @@ class ToolsTest {
             assertThat(object(object(schemaOf(tool(tools, "inline")).get("properties"))
                             .get("file")))
                     .containsEntry("description", "a \"file\"");
+        }
+
+        @Test
+        void hasNoGuideUnlessTheToolsAreTheServedOnes() {
+            var onlyOne = new Tools(List.of(operation("inline", "")));
+
+            assertThat(onlyOne.isGuide("guide")).isFalse();
+            assertThat(onlyOne.has("guide")).isFalse();
+            assertThat(tools(onlyOne)).extracting(tool -> tool.get("name")).containsExactly("inline");
         }
 
         @Test

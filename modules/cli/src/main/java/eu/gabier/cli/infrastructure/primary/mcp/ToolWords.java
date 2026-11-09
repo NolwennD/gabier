@@ -1,0 +1,47 @@
+package eu.gabier.cli.infrastructure.primary.mcp;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * Words of the command line, said to a tool: a text written for a person at a terminal names a command as {@code gabier
+ * <command>}, and what an agent calls is the tool of that name. A form of a command that is another tool ({@code gabier
+ * rename --token}) is that tool ({@code rename-token}), and an option ({@code --dry-run}) is the boolean parameter of
+ * the same name set to true ({@code dryRun=true}). Only a word that is a tool of the server is turned: the program named
+ * in a sentence ({@code gabier has none}), or a command that is no tool ({@code gabier help}), stays as the text wrote
+ * it, and so does an option given a value ({@code --for="a task"}).
+ */
+final class ToolWords {
+
+    /** The program and the word after it, which may be the name of a command (lower case letters and hyphens). */
+    private static final Pattern INVOCATION = Pattern.compile("\\bgabier ([a-z][a-z-]*)\\b");
+
+    /** A command followed by the option that makes it another tool, which is the command and the word joined. */
+    private static final Pattern FORM = Pattern.compile("\\bgabier ([a-z][a-z-]*) --token\\b");
+
+    /** An option with no value, not part of a longer word: the hyphens are those of the name of a flag. */
+    private static final Pattern OPTION = Pattern.compile("(?<![\\w-])--([a-z]+(?:-[a-z]+)*)(?![\\w=-])");
+
+    private ToolWords() {}
+
+    /** The text with the commands, the forms and the options of the command line written as tools and parameters. */
+    static String of(String text, Tools tools) {
+        var forms = FORM.matcher(text).replaceAll(match -> "gabier " + match.group(1) + "-token");
+        var invocations = INVOCATION
+                .matcher(forms)
+                .replaceAll(
+                        match -> Matcher.quoteReplacement(tools.has(match.group(1)) ? match.group(1) : match.group()));
+
+        return OPTION.matcher(invocations).replaceAll(match -> camelCase(match.group(1)) + "=true");
+    }
+
+    private static String camelCase(String kebab) {
+        var words = kebab.split("-");
+        var camel = new StringBuilder(words[0]);
+        for (var index = 1; index < words.length; index++) {
+            camel.append(Character.toUpperCase(words[index].charAt(0))).append(words[index].substring(1));
+        }
+
+        return camel.toString();
+    }
+}

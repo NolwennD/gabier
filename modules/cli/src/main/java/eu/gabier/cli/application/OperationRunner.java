@@ -102,7 +102,7 @@ public final class OperationRunner {
     private static Map<String, String> parameters(Operation operation, Map<String, Object> values) {
         for (var name : new TreeSet<>(values.keySet())) {
             if (!operation.parameterNames().contains(name)) {
-                throw InvalidValuesException.unknown(operation, name);
+                throw InvalidValuesException.unknown(operation.method(), name);
             }
         }
         var parameters = new HashMap<String, String>();
@@ -110,7 +110,7 @@ public final class OperationRunner {
             var value = values.get(parameter.name());
             if (value == null) {
                 if (parameter.required()) {
-                    throw InvalidValuesException.missing(operation, parameter.name());
+                    throw InvalidValuesException.missing(operation.method(), parameter.name());
                 }
             } else {
                 parameters.put(parameter.name(), text(operation, parameter, value));
@@ -126,7 +126,7 @@ public final class OperationRunner {
                 if (value instanceof String text) {
                     yield text;
                 }
-                throw InvalidValuesException.invalid(operation, parameter.name(), "be a text");
+                throw InvalidValuesException.invalid(operation.method(), parameter.name(), "be a text");
             }
             case INTEGER -> String.valueOf(wholeNumber(operation, parameter, value));
             case POSITION -> String.valueOf(zeroBased(operation, parameter, value));
@@ -134,7 +134,7 @@ public final class OperationRunner {
                 if (value instanceof Boolean flag) {
                     yield flag.toString();
                 }
-                throw InvalidValuesException.invalid(operation, parameter.name(), "be true or false");
+                throw InvalidValuesException.invalid(operation.method(), parameter.name(), "be true or false");
             }
             case ARRAY -> String.join("\n", elements(operation, parameter, value));
         };
@@ -144,7 +144,7 @@ public final class OperationRunner {
     private static long zeroBased(Operation operation, Parameter parameter, Object value) {
         var number = wholeNumber(operation, parameter, value);
         if (number < 1) {
-            throw InvalidValuesException.invalid(operation, parameter.name(), "be a position, from 1");
+            throw InvalidValuesException.invalid(operation.method(), parameter.name(), "be a position, from 1");
         }
 
         return number - 1;
@@ -163,19 +163,20 @@ public final class OperationRunner {
             }
         }
 
-        throw InvalidValuesException.invalid(operation, parameter.name(), "be a whole number");
+        throw InvalidValuesException.invalid(operation.method(), parameter.name(), "be a whole number");
     }
 
     private static List<String> elements(Operation operation, Parameter parameter, Object value) {
         if (!(value instanceof List<?> list) || !list.stream().allMatch(String.class::isInstance)) {
-            throw InvalidValuesException.invalid(operation, parameter.name(), "be a list of texts");
+            throw InvalidValuesException.invalid(operation.method(), parameter.name(), "be a list of texts");
         }
         var texts = list.stream().map(String.class::cast).toList();
         if (texts.stream().anyMatch(text -> text.contains("\n") || text.contains("\r"))) {
-            throw InvalidValuesException.invalid(operation, parameter.name(), "not have a line break in an element");
+            throw InvalidValuesException.invalid(
+                    operation.method(), parameter.name(), "not have a line break in an element");
         }
         if (texts.stream().anyMatch(String::isEmpty)) {
-            throw InvalidValuesException.invalid(operation, parameter.name(), "not have an empty element");
+            throw InvalidValuesException.invalid(operation.method(), parameter.name(), "not have an empty element");
         }
 
         return texts;
