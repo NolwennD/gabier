@@ -27,7 +27,7 @@ final class Tools {
 
     /** The operations that write nothing, which a host may run with no confirmation (the hint {@code readOnlyHint}). */
     private static final Set<String> WRITE_NOTHING =
-            Set.of("status", "diagnostics", "diagnostics-all", "references", "actions");
+            Set.of("status", "diagnostics", "diagnostics-all", "references", "actions", "affected-tests");
 
     /** What a person asks the daemon for by the command line only: starting and stopping it is not a tool. */
     private static final Set<String> NOT_TOOLS = Set.of("start", "stop");

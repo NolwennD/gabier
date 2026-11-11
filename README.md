@@ -246,6 +246,9 @@ positions counted from 1 and `dryRun` in place of `--dry-run`.
 - [`gabier actions`](docs/commands/actions.md): list the fixes (a missing import) and the rewrites (a concatenation to a
   text block) the language server offers on a range of a file.
 - [`gabier apply-action`](docs/commands/apply-action.md): apply one of them, chosen by its title.
+- [`gabier affected-tests`](docs/commands/affected-tests.md): list the test classes to run again after a change to Java
+  files (JUnit 3, 4, 5 and TestNG, the dependencies read in the classes jdtls compiled, `infinitest.filters`), with no
+  Maven or Gradle.
 - [`gabier help [<command>]`](docs/commands/help.md): list the commands, or explain one (usage, example, refusals).
 - [`gabier help guide`](docs/improve.md): which problem each improvement of the code solves (a text block, a switch
   expression, a condition to turn round...), what jdtls offers for it and what it leaves to you. The page is inside the

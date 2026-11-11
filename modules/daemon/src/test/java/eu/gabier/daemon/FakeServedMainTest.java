@@ -33,6 +33,21 @@ class FakeServedMainTest {
     }
 
     @Test
+    void compilesTheShopOfTheSelectionOfTestsNextToTheScenariosWithItsFilters() throws IOException {
+        FakeServedMain.serving(directory);
+
+        var built = FakeServedMain.building(directory);
+
+        assertThat(built.folders())
+                .extracting(folder -> directory.relativize(folder.classes()))
+                .containsExactly(Path.of("bin"), Path.of("test-bin"));
+        assertThat(directory.resolve("bin/shop/Greeter.class")).isRegularFile();
+        assertThat(directory.resolve("test-bin/shop/GreeterTest.class")).isRegularFile();
+        assertThat(directory.resolve("infinitest.filters")).hasContent("exclude .*IT\n");
+        assertThat(directory.resolve(BROKEN)).isRegularFile();
+    }
+
+    @Test
     void acceptsAFolderThatDoesNotExistYetAndAnEmptyOne() throws IOException {
         assertThat(FakeServedMain.refusal(directory.resolve("project"))).isEmpty();
         assertThat(FakeServedMain.refusal(directory)).isEmpty();

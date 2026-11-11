@@ -1021,6 +1021,27 @@ changed on disk are told to jdtls and its build is waited for before the answer,
 nothing. The first call waits for jdtls to have finished starting. What is not a `.java` file of the project is left
 out and does not refuse the call. See `gabier help diagnostics`.
 
+### The tests that a change affects
+
+Words: affected tests, which tests are affected, tests to rerun, retest after a change, test selection
+
+Ask: `gabier affected-tests <file>...`, with every Java file the change touched in one call.
+
+Output, one test class per line, the binary name of the class, in the order of the names:
+
+```text
+demo.LedgerTest
+demo.app.BankTest
+```
+
+Limits: the tests are chosen from the classes jdtls compiled (a test that is itself changed, and the tests that depend
+on a changed class, directly or not), with no Maven or Gradle; nothing is run. JUnit 3, 4, 5 and TestNG tests are
+recognised, `infinitest.filters` at the root of the project leaves tests out (`exclude .*IT`), its groups lines are
+ignored. A file that does not compile is refused (`testing-compilation-failed`): run `gabier diagnostics` on it. What it
+does not see: a constant the compiler inlined and a test reads through a static import, a class used through
+reflection or injection, an implementation reached only through its interface; the ArchUnit tests are always listed. A
+change that affects no test prints `no affected tests`. See `gabier help affected-tests`.
+
 ### A new file for a new type
 
 Words: create a file, new class, new interface, new record, new enum, new Java file with its package, package-info

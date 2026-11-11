@@ -66,3 +66,4 @@ it decided, whatever the method, with the refusal `daemon-stopping` (a server er
 | `references`       | `file`, `line`, `column`, `includeDeclaration`                              | [references](commands/references.md)                       |
 | `actions`          | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`                  | [actions](commands/actions.md)                             |
 | `apply-action`     | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `title`, `dryRun` | [apply-action](commands/apply-action.md)                 |
+| `affected-tests`   | `files` (absolute paths, one per line)                                      | [affected-tests](commands/affected-tests.md)               |

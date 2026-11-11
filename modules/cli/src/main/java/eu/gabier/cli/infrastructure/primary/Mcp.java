@@ -28,7 +28,7 @@ final class Mcp implements Capability {
                 earlier). tools/list gives these tools, named as the operations, with the parameters of the operation as
                 their input schema: diagnostics, diagnostics-all, rename, rename-token, organize-imports, cleanup, extract-variable,
                 extract-method, extract-constant, extract-field, move-type-to-file, move, inline, create, references,
-                actions, apply-action and status. The commands start and stop are not tools: the server starts the
+                actions, apply-action, affected-tests and status. The commands start and stop are not tools: the server starts the
                 daemon of the launch project itself when the host connects, and an agent that stopped it would lose the
                 tools that need it.
                 The tool guide is added to them: it answers a task as gabier help --for does and asks no

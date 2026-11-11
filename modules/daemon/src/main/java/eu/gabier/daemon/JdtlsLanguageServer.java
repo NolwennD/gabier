@@ -22,6 +22,8 @@ import eu.gabier.editing.domain.TypeKind;
 import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.testing.domain.BuiltProject;
+import eu.gabier.testing.domain.ClassFolder;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -278,22 +280,101 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     @Override
     public synchronized List<DiagnosedFile> projectDiagnostics() {
         JdtlsSession session = ready();
-        JdtlsWatch watch = session.newWatch();
         try {
-            builds.awaitInitialized(session, watch);
-            takeInChangesOnDisk(session, watch);
-            builds.awaitFinished(session, watch);
+            afterTheBuild(session);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new JdtlsException("Interrupted while waiting for the diagnostics of the project", interrupted);
         }
 
+        return projectFilesWithProblems(session)
+                .map(published -> new DiagnosedFile(published.getKey(), domain(published.getValue())))
+                .toList();
+    }
+
+    /**
+     * Tells jdtls of the changes on disk and waits until its build is finished: what is read after it is the project as
+     * it is now.
+     *
+     * @return the watch of the wait, for the requests that follow
+     */
+    private JdtlsWatch afterTheBuild(JdtlsSession session) throws InterruptedException {
+        JdtlsWatch watch = session.newWatch();
+        builds.awaitInitialized(session, watch);
+        takeInChangesOnDisk(session, watch);
+        builds.awaitFinished(session, watch);
+
+        return watch;
+    }
+
+    /** What jdtls last published for the {@code .java} files of the projects it imported that have a problem. */
+    private Stream<Map.Entry<Path, List<org.eclipse.lsp4j.Diagnostic>>> projectFilesWithProblems(JdtlsSession session) {
         return diagnostics.published().entrySet().stream()
                 .filter(published -> !published.getValue().isEmpty())
                 .filter(published -> published.getKey().getFileName().toString().endsWith(".java"))
-                .filter(published -> session.projects().stream().anyMatch(published.getKey()::startsWith))
-                .map(published -> new DiagnosedFile(published.getKey(), domain(published.getValue())))
-                .toList();
+                .filter(published -> session.projects().stream().anyMatch(published.getKey()::startsWith));
+    }
+
+    /**
+     * What jdtls built: for each project it imported, the source folders and the folders it compiled them into
+     * ({@code java.project.getSettings}), the jars of the class path of the tests ({@code java.project.getClasspaths},
+     * scope {@code test}), and the Java files it published an error for. It is read once the changes on disk are told
+     * to jdtls and its build is finished, as {@link #projectDiagnostics()} is, so the classes are those of the files as
+     * they are now.
+     *
+     * <p>jdtls writes a class even for a file that does not compile (a stub whose faulty methods throw), so the files
+     * with an error are told apart from the errors it published, not from the classes. No {@code java.*} setting is
+     * needed: both commands answer for Eclipse, Maven and Gradle projects as they are.
+     *
+     * @throws LanguageServerException if jdtls is not ready
+     * @throws JdtlsException if jdtls dies, does not answer in time, fails the build or answers a shape that is not
+     *     the documented one
+     */
+    @Override
+    public synchronized BuiltProject built() {
+        JdtlsSession session = ready();
+        try {
+            JdtlsWatch watch = afterTheBuild(session);
+            List<ClassFolder> folders = new ArrayList<>();
+            Set<Path> classpath = new LinkedHashSet<>();
+            for (Path project : session.projects()) {
+                String uri = project.toUri().toString();
+                folders.addAll(JdtlsBuildAnswers.classFolders(ask(
+                        session,
+                        watch,
+                        "the settings of " + project + " (java.project.getSettings)",
+                        "java.project.getSettings",
+                        List.of(uri, JdtlsBuildAnswers.SETTINGS))));
+                classpath.addAll(JdtlsBuildAnswers.classpath(ask(
+                        session,
+                        watch,
+                        "the class path of " + project + " (java.project.getClasspaths)",
+                        "java.project.getClasspaths",
+                        List.of(uri, Map.of("scope", "test")))));
+            }
+            Set<Path> classFolders = folders.stream().map(ClassFolder::classes).collect(Collectors.toSet());
+            List<Path> libraries = classpath.stream()
+                    .filter(entry -> !classFolders.contains(entry))
+                    .toList();
+            List<Path> withErrors = projectFilesWithProblems(session)
+                    .filter(published -> published.getValue().stream()
+                            .anyMatch(found -> found.getSeverity() == DiagnosticSeverity.Error))
+                    .map(Map.Entry::getKey)
+                    .toList();
+
+            return new BuiltProject(folders.stream().distinct().toList(), libraries, withErrors);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException("Interrupted while waiting for the build of the project", interrupted);
+        }
+    }
+
+    private static @Nullable Object ask(
+            JdtlsSession session, JdtlsWatch watch, String what, String command, List<Object> arguments)
+            throws InterruptedException {
+        var params = new ExecuteCommandParams(command, arguments);
+
+        return watch.await(what, () -> session.server().getWorkspaceService().executeCommand(params));
     }
 
     /** What {@link #diagnostics(List)} asks of jdtls, as jdtls publishes it for each file, in the order given. */

@@ -6,6 +6,7 @@ import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FoundReferences;
 import eu.gabier.protocol.FoundReferences.Place;
+import eu.gabier.protocol.SelectedTests;
 import eu.gabier.protocol.TerminalText;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -97,6 +98,15 @@ public final class ResultText {
         return neutralised(IntStream.range(0, offered.actions().size())
                 .mapToObj(index -> line(index + 1, offered.actions().get(index)))
                 .toList());
+    }
+
+    /** One line per test class to run, as the daemon gave them; {@code no affected tests} when none is affected. */
+    public static List<String> lines(SelectedTests selected) {
+        if (selected.tests().isEmpty()) {
+            return List.of("no affected tests");
+        }
+
+        return neutralised(selected.tests());
     }
 
     /**

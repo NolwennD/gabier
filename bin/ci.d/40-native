@@ -38,7 +38,7 @@ import java.util.stream.Stream;
  * a method extracted under the name given, refusals), {@code extract-constant} (a dry run, a constant extracted under the
  * name given, refusals), {@code extract-field} (a dry run, a field extracted under the name given, refusals), {@code move-type-to-file} (a dry run, a type moved to a file of
  * its own, a refusal), {@code move} (a dry run that makes no folder, classes moved to a new package, refusals), {@code inline} (a dry run, a constant inlined, a refusal) and {@code create} (a dry run, a class
- * created, refusals), {@code references} (the uses of a type, the declaration apart, a symbol nothing uses, refusals), {@code actions} (the fixes of a range, none, as JSON, refusals) and {@code apply-action} (a dry run, an action applied by its title, refusals);
+ * created, refusals), {@code references} (the uses of a type, the declaration apart, a symbol nothing uses, refusals), {@code actions} (the fixes of a range, none, as JSON, refusals) and {@code apply-action} (a dry run, an action applied by its title, refusals); {@code affected-tests} (the tests of a changed class, as JSON, a file that is not Java, a missing file);
  * a request command with no daemon running starts {@code gabier-daemon} (found on the {@code PATH} or next to the cli;
  * not found, exiting at once), the next request uses it, and {@code stop} ends it. Runs in the current directory, the
  * checkout under verification. It starts and signals only the processes it started, by their handle, and the daemons
@@ -87,7 +87,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, help, the guide and a question to it, init-agent in a temporary project, mcp answering server/discover (with its instructions), tools/list and the guide tool over a pipe, then line by line against a daemon that holds a call: ping and status answered while it waits, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move and inline included, the daemon started on demand, start and start --wait)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move, inline and affected-tests included, the daemon started on demand, start and start --wait)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -682,6 +682,7 @@ public final class Native {
                 createWithTheFakeServer();
                 referencesWithTheFakeServer();
                 actionsWithTheFakeServer();
+                affectedTestsWithTheFakeServer();
                 fakeServedRefusesAFolderThatIsNotEmpty();
             } finally {
                 for (Process process : started) {
@@ -1835,6 +1836,51 @@ public final class Native {
                     "gabier apply-action applies the action of the title on disk");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after the actions");
+        }
+
+        /**
+         * {@code gabier affected-tests} against the daemon served by the fake language server: the shop of the project
+         * is compiled with javac, and the tests that a change to a class affects are the ones the classes say, with the
+         * filters of the project applied. The files are given relative to the directory the cli runs in.
+         */
+        private void affectedTestsWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("affected-project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            String greeter = "affected-project/src/main/java/shop/Greeter.java";
+
+            Run used = gabier("affected-tests", greeter);
+            expect(
+                    used.exit() == 0
+                            && used.err().isEmpty()
+                            && used.out().equals("shop.ArchitectureTest\nshop.FrenchGreeterTest\nshop.GreeterTest"),
+                    "gabier affected-tests lists the tests that use a class, the filtered one left out, one per line");
+
+            Run json = gabier("--json", "affected-tests", greeter);
+            expect(
+                    json.exit() == 0
+                            && json.out()
+                                    .equals("{\"tests\":[\"shop.ArchitectureTest\",\"shop.FrenchGreeterTest\","
+                                            + "\"shop.GreeterTest\"]}"),
+                    "gabier --json affected-tests gives the result as the daemon gave it");
+
+            Run notJava = gabier("affected-tests", "affected-project/README.md");
+            expect(
+                    notJava.exit() == 0 && notJava.err().isEmpty() && notJava.out().equals("no affected tests"),
+                    "a file that is not Java affects no test: no affected tests, exit 0");
+
+            Run missing = gabier("affected-tests", "affected-project/src/main/java/shop/Gone.java");
+            expect(
+                    missing.exit() == 2
+                            && missing.out().isEmpty()
+                            && missing.err().contains("(testing-file-missing; "),
+                    "a Java file that does not exist is refused as a problem object, exit 2");
+
+            gabier("stop");
+            expect(ends(process), "the daemon served by the fake stops after the affected tests");
         }
 
         /** A {@code gabier-daemon} in the folder: a script with this body, which the cli finds and launches. */

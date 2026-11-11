@@ -3,11 +3,15 @@ package eu.gabier.daemon;
 import eu.gabier.editing.domain.JavaLanguageServer;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.testing.domain.ProjectBuild;
 import java.io.IOException;
 import java.util.Optional;
 
-/** A language server that starts in the background as soon as it is created, and that can be asked where it is. */
-interface StartedLanguageServer extends JavaLanguageServer, AutoCloseable {
+/**
+ * A language server that starts in the background as soon as it is created, and that can be asked where it is. It
+ * compiles the project too: it is the build the selection of tests reads.
+ */
+interface StartedLanguageServer extends JavaLanguageServer, ProjectBuild, AutoCloseable {
 
     /** Where the start is: {@code STARTING}, then {@code READY} or {@code FAILED}. */
     JdtlsState state();

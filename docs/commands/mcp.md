@@ -53,13 +53,13 @@ is up does not wait for it.
 
 The operations of gabier that work on the code or report on it are **tools**, named as the operation: `diagnostics`,
 `diagnostics-all`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`,
-`extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions`, `apply-action` and `status`.
+`extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions`, `apply-action`, `affected-tests` and `status`.
 `start` and `stop` are operations of the daemon but not tools: the server starts the daemon itself when the host
 connects (below), and an agent that stopped it would lose the tools that need it. Each tool is generated from its descriptor in `eu.gabier.cli.domain.Operations`: its description is the summary and the
 notes of the operation, its input schema is its parameters (a text, a whole number, a position, `true` or `false`, a list of
 texts), all required. A **position is an integer counted from 1**, as on the command line; a list is a JSON array
 (`files` of `move`, `cleanUps` of `cleanup`). A parameter added to an operation shows in its tool with no other file
-edited. `diagnostics`, `diagnostics-all`, `references`, `actions` and `status` are annotated `readOnlyHint`. Starting the server asks no
+edited. `diagnostics`, `diagnostics-all`, `references`, `actions`, `affected-tests` and `status` are annotated `readOnlyHint`. Starting the server asks no
 daemon; its first handshake starts one (below).
 
 ## The project of a call

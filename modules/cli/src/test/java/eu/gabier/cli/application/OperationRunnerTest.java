@@ -22,6 +22,7 @@ import eu.gabier.protocol.FileDiagnostics.Severity;
 import eu.gabier.protocol.FoundReferences;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.Json;
+import eu.gabier.protocol.SelectedTests;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import java.math.BigDecimal;
 import java.nio.file.Path;
@@ -495,6 +496,10 @@ class OperationRunnerTest {
             case "actions" -> {
                 var offered = new CodeActions(List.of());
                 yield new KindAnswered(offered.toJson(), new OperationResult.Offered(offered));
+            }
+            case "affected-tests" -> {
+                var selected = new SelectedTests(List.of("demo.LedgerTest"));
+                yield new KindAnswered(selected.toJson(), new OperationResult.Selected(selected));
             }
             default -> new KindAnswered(CHANGED.toJson(), new OperationResult.Changed(CHANGED));
         };

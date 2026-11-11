@@ -99,6 +99,8 @@ class GuideQuestionsTest {
                         "The errors of the whole project, without a build"),
                 question("list references", "Where a symbol is used"),
                 question("new file", "A new file for a new type"),
+                question("which tests are affected by my change", "The tests that a change affects"),
+                question("select the tests to rerun", "The tests that a change affects"),
                 question("text blocks", "A string built from literals with `+` and line breaks"),
                 question("extract variable", "An expression used twice, or too long to read"),
                 question("inline variable", "A call that hides what it does"));

@@ -16,6 +16,7 @@ import eu.gabier.protocol.FoundReferences.Place;
 import eu.gabier.protocol.IdleStop;
 import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.SelectedTests;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -325,6 +326,27 @@ class ResultTextTest {
             var found = new FoundReferences(List.of(), List.of(new Place("/work/" + ESCAPE, 0, 0, "x = " + ESCAPE)));
 
             assertThat(ResultText.lines(found)).containsExactly("/work/" + ESCAPED + ":1:1: x = " + ESCAPED);
+        }
+    }
+
+    @Nested
+    class OfSelectedTests {
+
+        @Test
+        void saysThatNoTestIsAffected() {
+            assertThat(ResultText.lines(new SelectedTests(List.of()))).containsExactly("no affected tests");
+        }
+
+        @Test
+        void givesOneLineForEachTestInTheOrderOfTheAnswer() {
+            assertThat(ResultText.lines(new SelectedTests(List.of("demo.LedgerTest", "demo.app.BankTest$Nested"))))
+                    .containsExactly("demo.LedgerTest", "demo.app.BankTest$Nested");
+        }
+
+        @Test
+        void writesOutWhatATerminalWouldObeyInTheNameOfAClass() {
+            assertThat(ResultText.lines(new SelectedTests(List.of("demo." + ESCAPE))))
+                    .containsExactly("demo." + ESCAPED);
         }
     }
 

@@ -74,7 +74,7 @@ class HexagonalArchTest {
 
     /** The contexts whose domain another context may depend on, because it implements its ports. */
     private static final Map<String, List<String>> IMPLEMENTED_DOMAINS =
-            Map.of(DAEMON_PACKAGE, List.of(ROOT_PACKAGE + ".editing"));
+            Map.of(DAEMON_PACKAGE, List.of(ROOT_PACKAGE + ".editing", ROOT_PACKAGE + ".testing"));
 
     private static final String LSP4J_PACKAGE = "org.eclipse.lsp4j";
 
@@ -121,7 +121,7 @@ class HexagonalArchTest {
      * context. The {@code daemon} is not a business context: it is the composition root and the home of the adapters of
      * the real servers, so the rule applies to it too, except for the domains it implements, listed in {@link
      * #IMPLEMENTED_DOMAINS} (today the {@code editing} domain, whose port {@code JavaLanguageServer} the jdtls adapter
-     * implements). Empty when no domain is left to forbid.
+     * implements, and the {@code testing} domain, whose port {@code ProjectBuild} it implements). Empty when no domain is left to forbid.
      */
     private static Optional<ArchRule> notDependOnOtherDomains(String context, List<String> allContexts) {
         List<String> implemented = IMPLEMENTED_DOMAINS.getOrDefault(context, List.of());

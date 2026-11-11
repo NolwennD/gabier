@@ -24,6 +24,7 @@ import eu.gabier.protocol.FoundReferences;
 import eu.gabier.protocol.FoundReferences.Place;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.Json;
+import eu.gabier.protocol.SelectedTests;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -255,6 +256,19 @@ class CallingToolsTest {
             assertThat(content(answer))
                     .isEqualTo("declaration:\n/work/A.java:3:5: void run() {\nreferences:\n/work/B.java:10:9: run();");
             assertThat(at(answer, "result", "structuredContent")).isEqualTo(Json.parse(found.toJson()));
+        }
+
+        @Test
+        void listsTheTestsAChangeAffects() {
+            var selected = new SelectedTests(List.of("demo.LedgerTest", "demo.app.BankTest"));
+            var daemon = new StubDaemon().answering(selected.toJson());
+
+            var answer = exchange(daemon, modernCall("affected-tests", """
+                {"files":["/work/Ledger.java"]}\
+                """)).getFirst();
+
+            assertThat(content(answer)).isEqualTo("demo.LedgerTest\ndemo.app.BankTest");
+            assertThat(at(answer, "result", "structuredContent")).isEqualTo(Json.parse(selected.toJson()));
         }
 
         @Test

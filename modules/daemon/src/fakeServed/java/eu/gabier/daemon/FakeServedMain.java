@@ -21,6 +21,9 @@ import eu.gabier.editing.fixtures.Scenario;
 import eu.gabier.editing.fixtures.Scenarios;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.testing.domain.BuiltProject;
+import eu.gabier.testing.fixtures.AffectedTestsCases;
+import eu.gabier.testing.fixtures.CompiledProject;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -34,7 +37,8 @@ import java.util.stream.Stream;
  * {@link Main} (same sockets, same methods), with the fake of the core scripted by the diagnostics and rename scenarios
  * in place of a jdtls. Its only argument is the folder of the project the scenarios play on: it writes their files
  * there, so the folder is new or empty, and a folder that holds anything is refused (its files would be overwritten). A
- * rename writes the files of that folder, as the real one does.
+ * rename writes the files of that folder, as the real one does. The tests of a small shop are written there too and
+ * compiled with javac, for the selection of the tests that a change affects ({@link #building}).
  *
  * <p>It is its own distribution ({@code :daemon:installFakeServed}), never part of the one a user installs: the fake is
  * test code, and nothing a client sends can switch a daemon to it.
@@ -56,8 +60,25 @@ public final class FakeServedMain {
             return;
         }
 
+        var server = serving(root);
+        var built = building(root);
+
         System.exit(
-                Main.serve(System.getenv(), Path.of("").toAbsolutePath(), System.out, new Served(root, serving(root))));
+                Main.serve(System.getenv(), Path.of("").toAbsolutePath(), System.out, new Served(root, server, built)));
+    }
+
+    /**
+     * Writes the shop of the selection of tests in the folder, with its filters, and compiles it with javac in the place
+     * of the language server, as the build of the project the fake serves: the classes are in {@code bin} and {@code
+     * test-bin}, the jar of the test frameworks in {@code lib}.
+     */
+    static BuiltProject building(Path folder) throws IOException {
+        var root = folder.toAbsolutePath().normalize();
+        for (var file : AffectedTestsCases.otherFiles().entrySet()) {
+            Files.writeString(root.resolve(file.getKey()), file.getValue());
+        }
+
+        return CompiledProject.of(root, AffectedTestsCases.mainSources(), AffectedTestsCases.testSources());
     }
 
     /**
@@ -148,7 +169,7 @@ public final class FakeServedMain {
     }
 
     /** The project of the fake: always ready, nothing to end. */
-    private record Served(Path root, FakeJavaLanguageServer server) implements ServedProject {
+    private record Served(Path root, FakeJavaLanguageServer server, BuiltProject built) implements ServedProject {
 
         @Override
         public JdtlsState state() {
@@ -178,6 +199,11 @@ public final class FakeServedMain {
         @Override
         public List<DiagnosedFile> projectDiagnostics() {
             return server.projectDiagnostics();
+        }
+
+        @Override
+        public BuiltProject built() {
+            return built;
         }
 
         @Override

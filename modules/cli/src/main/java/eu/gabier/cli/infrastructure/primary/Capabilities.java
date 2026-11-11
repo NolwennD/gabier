@@ -25,6 +25,7 @@ final class Capabilities {
             new References(),
             new Actions(),
             new ApplyAction(),
+            new AffectedTests(),
             new Start(),
             new Status(),
             new Stop(),

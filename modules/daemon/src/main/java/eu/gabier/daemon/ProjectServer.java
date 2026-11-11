@@ -14,6 +14,7 @@ import eu.gabier.editing.domain.ReferenceLocations;
 import eu.gabier.editing.domain.TypeKind;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.testing.domain.BuiltProject;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -132,6 +133,11 @@ final class ProjectServer implements ServedProject {
     @Override
     public List<DiagnosedFile> projectDiagnostics() {
         return ready().projectDiagnostics();
+    }
+
+    @Override
+    public BuiltProject built() {
+        return ready().built();
     }
 
     @Override

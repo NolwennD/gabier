@@ -186,7 +186,7 @@ class ToolsTest {
         }
 
         @ParameterizedTest
-        @ValueSource(strings = {"diagnostics", "references", "actions", "status"})
+        @ValueSource(strings = {"diagnostics", "references", "actions", "affected-tests", "status"})
         void marksTheToolsThatWriteNothingAsReadOnly(String name) {
             assertThat(tool(served, name).get("annotations")).isEqualTo(Map.of("readOnlyHint", true));
         }

@@ -5,11 +5,12 @@ import eu.gabier.protocol.CodeActions;
 import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FoundReferences;
+import eu.gabier.protocol.SelectedTests;
 
 /**
  * What an operation answered, decoded into the type of {@code protocol} that holds it. The kind of an operation is
- * fixed: the ones that change files give {@link Changed}, and {@code diagnostics}, {@code references}, {@code actions}
- * and {@code status} each their own.
+ * fixed: the ones that change files give {@link Changed}, and {@code diagnostics}, {@code references}, {@code actions},
+ * {@code affected-tests} and {@code status} each their own.
  */
 public sealed interface OperationResult {
 
@@ -40,6 +41,13 @@ public sealed interface OperationResult {
      * @param found the places
      */
     record Referenced(FoundReferences found) implements OperationResult {}
+
+    /**
+     * The tests that a change affects.
+     *
+     * @param selected the binary names of the test classes
+     */
+    record Selected(SelectedTests selected) implements OperationResult {}
 
     /**
      * What the language server offers on a range.

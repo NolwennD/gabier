@@ -23,6 +23,8 @@ import eu.gabier.protocol.ProtocolVersion;
 import eu.gabier.protocol.RpcResponse;
 import eu.gabier.protocol.UserId;
 import eu.gabier.shared.error.domain.ErrorStatus;
+import eu.gabier.testing.fixtures.AffectedTestsCases;
+import eu.gabier.testing.fixtures.CompiledProject;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -1069,6 +1071,25 @@ class DaemonServerTest {
             try (var client = connect(socket())) {
                 assertThat(client.ask(referencesRequest(ledger, "4", "0", false)))
                         .contains("\"key\":\"language-server-no-such-symbol\"");
+            }
+        }
+
+        @Test
+        void affectedTestsAnswersTheTestsThatDependOnAChangedFileAndWritesNothingOutsideTheProject()
+                throws IOException {
+            serving();
+            var built =
+                    CompiledProject.of(directory, AffectedTestsCases.mainSources(), AffectedTestsCases.testSources());
+            project.building(() -> built);
+            var greeter = directory.resolve("src/main/java/shop/Greeter.java");
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask("""
+                    {"jsonrpc":"2.0","id":3,"method":"affected-tests","params":{"files":"%s"}}
+                    """.formatted(greeter))).isEqualTo("""
+                        {"jsonrpc":"2.0","id":3,"result":{"tests":["shop.ArchitectureTest","shop.FrenchGreeterTest",\
+                        "shop.GreeterIT","shop.GreeterTest"]}}\
+                        """);
             }
         }
 

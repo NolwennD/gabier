@@ -14,6 +14,8 @@ import eu.gabier.editing.domain.ReferenceLocations;
 import eu.gabier.editing.domain.TypeKind;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.testing.domain.BuiltProject;
+import eu.gabier.testing.domain.ProjectBuild;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -47,10 +49,20 @@ final class ScriptedProject implements ServedProject {
     private volatile Optional<JdtlsProgress> progress = Optional.empty();
     private volatile Requests requests = Requests.ARE_ANSWERED;
     private volatile boolean interrupted;
+    private volatile ProjectBuild build = () -> {
+        throw new AssertionError("The project has no build scripted: call building(...)");
+    };
 
     ScriptedProject(Path root, JavaLanguageServer server) {
         this.root = root;
         this.server = server;
+    }
+
+    /** The build the project reports: what the test hands it, as the build of the language server would. */
+    ScriptedProject building(ProjectBuild build) {
+        this.build = build;
+
+        return this;
     }
 
     ScriptedProject in(JdtlsState state) {
@@ -176,6 +188,11 @@ final class ScriptedProject implements ServedProject {
     @Override
     public List<DiagnosedFile> projectDiagnostics() {
         return server.projectDiagnostics();
+    }
+
+    @Override
+    public BuiltProject built() {
+        return build.built();
     }
 
     @Override

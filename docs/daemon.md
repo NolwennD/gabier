@@ -1,10 +1,10 @@
 # The daemon
 
-One daemon runs per project. `gabier diagnostics`, `gabier rename`, `gabier organize-imports`, `gabier cleanup`, `gabier extract-variable`, `gabier extract-method`, `gabier extract-constant`, `gabier extract-field`, `gabier move-type-to-file`, `gabier move`, `gabier inline`, `gabier create`, `gabier references`, `gabier actions`, `gabier apply-action` and `gabier start` **start it when nothing answers on the socket**, so an
+One daemon runs per project. `gabier diagnostics`, `gabier rename`, `gabier organize-imports`, `gabier cleanup`, `gabier extract-variable`, `gabier extract-method`, `gabier extract-constant`, `gabier extract-field`, `gabier move-type-to-file`, `gabier move`, `gabier inline`, `gabier create`, `gabier references`, `gabier actions`, `gabier apply-action`, `gabier affected-tests` and `gabier start` **start it when nothing answers on the socket**, so an
 agent runs them in a project folder and gets the answer; `gabier status` and `gabier stop` never start one (see [status and stop](commands/status-and-stop.md)).
 It can also be started by hand, with `gabier-daemon` from the installed distribution (`./gradlew :daemon:installDist`,
 then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until `gabier stop`, a SIGTERM, or the delay with no client below; it
-answers `status`, `start`, `stop`, `diagnostics`, `diagnostics-all`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions` and `apply-action`, and nothing else yet.
+answers `status`, `start`, `stop`, `diagnostics`, `diagnostics-all`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions`, `apply-action` and `affected-tests`, and nothing else yet.
 
 **Installing both by name.** `mise run install` builds the native cli and the daemon of the checkout it is run in,
 **copies** them into `~/.local/share/gabier/<version>` (`<version>` is the one `gabier --version` prints; the folder is
@@ -97,6 +97,7 @@ another job; a first run under a heavier load took 105 s to be ready, and `04-11
 | import | jdtls imports the project: for a Gradle project it starts a Gradle daemon and runs the build (compile of `build-logic`, evaluation of the settings, configuration of every module, the model of each); this is nearly all of the wait, and its `language/status` messages (`70% Starting Java Language Server - Configure project :core`) name the task | about 54 s |
 | ready | `ServiceReady`, then the list of the projects jdtls imported | about 0.1 s |
 | diagnostics | `diagnostics`: the file is opened, jdtls publishes, and the daemon waits for jdtls to be quiet for 5 seconds. `diagnostics-all`: no file is opened; the daemon waits for jdtls to register the files it watches (the end of its initialization, which publishes the problems of the whole workspace), tells it of the changes on disk, asks for an incremental build, and waits 1 second in which nothing is published | 7 to 9 s for one file; 1.2 s for the whole project (532 files) once jdtls is started, 50 s for the first call right after the start of the daemon |
+| affected-tests | `affected-tests`: jdtls is told of the files on disk, asked for an incremental build, and awaited; then the daemon reads the class folders and the jars of the test classpath | 1 to 3 s on a small project once jdtls is started (about 1.1 s after the first call), plus the reading of the class files |
 
 so the first `gabier diagnostics` of a session answers after about a minute (69 s in the measure, 112 s in the heavier run), the same call warm
 after 6 to 9 s (the 5 seconds of quiet are in it), and a command that does not wait for the diagnostics (`rename`,

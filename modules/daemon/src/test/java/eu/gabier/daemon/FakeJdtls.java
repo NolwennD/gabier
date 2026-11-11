@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionParams;
 import org.eclipse.lsp4j.Command;
@@ -158,6 +159,8 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private CompletableFuture<Object> buildAnswer = CompletableFuture.completedFuture(null);
     private final List<Boolean> buildRequests = new CopyOnWriteArrayList<>();
     private volatile Runnable onBuild = () -> {};
+    private final Map<String, Function<String, Object>> projectCommandAnswers = new ConcurrentHashMap<>();
+    private final List<String> projectCommands = new CopyOnWriteArrayList<>();
     private CompletableFuture<Object> sourcePathsAnswer = new CompletableFuture<>();
     private final AtomicInteger sourcePathRequests = new AtomicInteger();
     private final List<List<String>> registeredWatchers = new ArrayList<>();
@@ -435,6 +438,21 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                 .map(folder -> Map.of("path", folder.toString(), "projectName", "project"))
                 .toList();
         return sourcePathsAnswers(CompletableFuture.completedFuture(Map.of("status", true, "data", data)));
+    }
+
+    /**
+     * The answer to a command of jdtls that is asked for one project ({@code java.project.getSettings}, {@code
+     * java.project.getClasspaths}): the URI of the project, its first argument, tells which. The answer is serialized
+     * as jdtls does, so the adapter reads the generic JSON values it reads from the real one.
+     */
+    FakeJdtls answersForEachProject(String command, Function<String, Object> answer) {
+        this.projectCommandAnswers.put(command, answer);
+        return this;
+    }
+
+    /** The commands of a project received, each with its arguments as JSON, in the order they came. */
+    List<String> projectCommandsReceived() {
+        return projectCommands;
     }
 
     /** The number of {@code java.project.listSourcePaths} commands received. */
@@ -955,6 +973,13 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                     if (params.getCommand().equals("java.project.listSourcePaths")) {
                         sourcePathRequests.incrementAndGet();
                         return sourcePathsAnswer;
+                    }
+                    var forTheProject = projectCommandAnswers.get(params.getCommand());
+                    if (forTheProject != null) {
+                        commands.add(params.getCommand());
+                        projectCommands.add(params.getCommand() + " " + params.getArguments());
+                        String uri = ((JsonElement) params.getArguments().getFirst()).getAsString();
+                        return CompletableFuture.completedFuture(forTheProject.apply(uri));
                     }
                     commands.add(params.getCommand());
                     int asked = projectRequests.getAndIncrement();

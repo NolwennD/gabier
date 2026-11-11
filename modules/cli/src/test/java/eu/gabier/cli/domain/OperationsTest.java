@@ -34,7 +34,8 @@ class OperationsTest {
                         "create",
                         "references",
                         "actions",
-                        "apply-action");
+                        "apply-action",
+                        "affected-tests");
     }
 
     @Test

@@ -266,6 +266,10 @@ final class ToolCalls {
                 answer(ResultText.lines(referenced.found()), referenced.found().toJson());
             case OperationResult.Offered offered ->
                 answer(ResultText.lines(offered.offered()), offered.offered().toJson());
+            case OperationResult.Selected selected ->
+                answer(
+                        ResultText.lines(selected.selected()),
+                        selected.selected().toJson());
             case OperationResult.Changed changed ->
                 answer(
                         ResultText.report(changed.changed(), dryRun, true),

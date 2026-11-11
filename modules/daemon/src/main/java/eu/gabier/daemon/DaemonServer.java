@@ -23,6 +23,8 @@ import eu.gabier.protocol.IdleStop;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.ProtocolVersion;
 import eu.gabier.shared.generation.ExcludeFromGeneratedCodeCoverage;
+import eu.gabier.testing.application.AffectedTests;
+import eu.gabier.testing.infrastructure.secondary.NioProjectFiles;
 import java.io.IOException;
 import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
@@ -100,7 +102,8 @@ final class DaemonServer implements AutoCloseable {
                                 new CreatePackageInfo(project, new NioFileStore())),
                         new CodeActionsMethod(new ListCodeActions(project)),
                         new ApplyCodeActionMethod(new ApplyCodeAction(project, new NioFileStore())),
-                        new ReferencesMethod(new FindReferences(project, new NioFileStore()))),
+                        new ReferencesMethod(new FindReferences(project, new NioFileStore())),
+                        new AffectedTestsMethod(new AffectedTests(project, new NioProjectFiles(), project.root()))),
                 line -> log.accept(line));
     }
 

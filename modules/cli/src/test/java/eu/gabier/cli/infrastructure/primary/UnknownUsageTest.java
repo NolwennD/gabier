@@ -28,7 +28,8 @@ class UnknownUsageTest extends CliTest {
                         createWithoutAFileAndAKind(),
                         referencesWithoutAFileAndOnePosition(),
                         actionsWithoutAFileAndTwoPositions(),
-                        applyActionWithoutAFileTwoPositionsAndATitle())
+                        applyActionWithoutAFileTwoPositionsAndATitle(),
+                        affectedTestsWithoutAFile())
                 .flatMap(List::stream);
     }
 
@@ -126,6 +127,10 @@ class UnknownUsageTest extends CliTest {
                 List.of("actions", "A.java", "3:4"),
                 List.of("actions", "A.java", "3:4", "3:9", "3:10"),
                 List.of("actions", "--dry-run", "A.java", "3:4", "3:9"));
+    }
+
+    private static List<List<String>> affectedTestsWithoutAFile() {
+        return List.of(List.of("affected-tests"), List.of("affected-tests", "--dry-run", "A.java"));
     }
 
     private static List<List<String>> applyActionWithoutAFileTwoPositionsAndATitle() {

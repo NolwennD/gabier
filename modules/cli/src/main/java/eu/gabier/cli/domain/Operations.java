@@ -417,6 +417,41 @@ public final class Operations {
                     Parameter.string("title", "the title of the action, as the actions of the same range list it"),
                     DRY_RUN));
 
+    public static final Operation AFFECTED_TESTS = new Operation(
+            "affected-tests",
+            "the tests to run again after a change to Java files, with no build tool",
+            """
+            Nothing is written and nothing is run: the answer is the list of the test classes to run, as the binary\
+             names of their classes (app.GreeterTest, app.Outer$InnerTest), one per test, in the order of the names;\
+             a change that affects no test answers an empty list.
+            A changed test class is affected itself. A changed class that the project's own tests depend on, directly\
+             or through other classes, affects those tests: the dependencies are read in the classes the language\
+             server compiled, so the files are told to it first and the call waits for its build, whatever the build\
+             tool of the project (Maven, Gradle or none). JUnit 3, 4 and 5 and TestNG tests are recognised. The tests\
+             that load classes by themselves (ArchUnit) are always listed when a Java file changed. The file\
+             infinitest.filters at the root of the project leaves tests out: its include and exclude lines are regular\
+             expressions on the whole class name (exclude .*IT leaves out the integration tests); its groups lines are\
+             not read.
+            A file that is not a Java source (a pom.xml, a readme) is left out and does not refuse the call.\
+             What the selection does not see: a constant that the compiler inlined and a test reads through a static\
+             import, a class used through reflection or injection, a class linked to a test only through an interface that it implements.
+            A Java file that does not compile is refused, with its name: the language server writes a class for it all\
+             the same, which is not the class of its text, so the tests it affects cannot be told. One refused file\
+             refuses the whole call.\
+            """,
+            List.of(
+                    "testing-compilation-failed: a file given has an error the language server reported; the problem"
+                            + " names the files, and diagnostics tells what",
+                    "testing-file-missing: a Java file given does not exist (a deleted file is refused too)",
+                    "testing-not-in-a-source-folder: a Java file given is under no source folder of the project",
+                    "testing-invalid-test-filter: a pattern of infinitest.filters is not a regular expression; the"
+                            + " problem gives the file, the line and the pattern",
+                    "testing-read-failed: a class file, a jar or the file of filters could not be read (a class"
+                            + " compiled for a Java newer than the daemon's is not read)",
+                    Refusals.REQUEST_FAILED,
+                    Refusals.NOT_READY),
+            List.of(Parameter.paths("files", "the Java files that changed, absolute paths in the project")));
+
     private Operations() {}
 
     /** Every operation of the daemon, in the order of the table of {@code docs/protocol.md}. */
@@ -441,7 +476,8 @@ public final class Operations {
                 CREATE,
                 REFERENCES,
                 ACTIONS,
-                APPLY_ACTION);
+                APPLY_ACTION,
+                AFFECTED_TESTS);
     }
 
     /** An extraction of a selection into something named: the four commands share their parameters and their refusals. */
