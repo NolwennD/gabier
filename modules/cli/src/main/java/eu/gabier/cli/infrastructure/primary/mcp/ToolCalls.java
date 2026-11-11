@@ -78,11 +78,11 @@ final class ToolCalls {
      *
      * @param operation the operation
      * @param run what asks the daemon
-     * @param file the file as the call gave it, for the text of {@code diagnostics}
+     * @param files the files as the call gave them, for the text of {@code diagnostics}
      * @param dryRun whether the call asked to write nothing
      * @param project the folder of the project whose daemon is asked
      */
-    record Waiting(Operation operation, Supplier<OperationResult> run, String file, boolean dryRun, Path project)
+    record Waiting(Operation operation, Supplier<OperationResult> run, List<String> files, boolean dryRun, Path project)
             implements Prepared {
 
         /** Whether the daemon is asked: {@code status} asks a daemon that runs, and starts none, so it never waits. */
@@ -108,12 +108,12 @@ final class ToolCalls {
         var operation = tools.find(name).orElseThrow(() -> McpFailure.invalidParams("Unknown tool: " + name));
         var arguments = arguments(params);
         var values = given(arguments);
-        var file = arguments.get("file") instanceof String given ? given : "";
+        var files = filesOf(arguments);
         var dryRun = Boolean.TRUE.equals(values.get("dryRun"));
         try {
             var prepared = operations.prepare(operation, values);
 
-            return new Waiting(operation, prepared.run(), file, dryRun, prepared.project());
+            return new Waiting(operation, prepared.run(), files, dryRun, prepared.project());
         } catch (RuntimeException invalid) {
             return new Done(refused(operation, invalid));
         }
@@ -126,7 +126,7 @@ final class ToolCalls {
      */
     String complete(Waiting waiting) {
         try {
-            return success(waiting.run().get(), waiting.file(), waiting.dryRun());
+            return success(waiting.run().get(), waiting.files(), waiting.dryRun());
         } catch (RuntimeException | Error failure) {
             return refused(waiting.operation(), failure);
         }
@@ -218,6 +218,18 @@ final class ToolCalls {
         return Map.of();
     }
 
+    /** The files of the call as it names them, which are the texts of its {@code files}: none for a call that has no list. */
+    private static List<String> filesOf(Map<String, @Nullable Object> arguments) {
+        if (arguments.get("files") instanceof List<?> given) {
+            return given.stream()
+                    .filter(String.class::isInstance)
+                    .map(String.class::cast)
+                    .toList();
+        }
+
+        return List.of();
+    }
+
     /** The arguments that are given: one that is null is not. */
     private static Map<String, Object> given(Map<String, @Nullable Object> arguments) {
         var given = new LinkedHashMap<String, Object>();
@@ -230,12 +242,12 @@ final class ToolCalls {
         return given;
     }
 
-    private static String success(OperationResult result, String file, boolean dryRun) {
+    private static String success(OperationResult result, List<String> files, boolean dryRun) {
         return switch (result) {
             case OperationResult.Reported reported ->
                 answer(ResultText.lines(reported.status()), reported.status().toJson());
             case OperationResult.Diagnosed diagnosed ->
-                answer(problemsOf(file, diagnosed), diagnosed.diagnostics().toJson());
+                answer(problemsOf(files, diagnosed), diagnosed.diagnostics().toJson());
             case OperationResult.Referenced referenced ->
                 answer(ResultText.lines(referenced.found()), referenced.found().toJson());
             case OperationResult.Offered offered ->
@@ -248,11 +260,11 @@ final class ToolCalls {
     }
 
     /**
-     * The problems of the file as the command line prints them, which are none for a file with no problem: a text block
+     * The problems of the files as the command line prints them, which are none for files with no problem: a text block
      * with nothing in it is what hosts and the Claude API reject, so the call says {@code no problems}.
      */
-    private static List<String> problemsOf(String file, OperationResult.Diagnosed diagnosed) {
-        var lines = ResultText.lines(file, diagnosed.diagnostics());
+    private static List<String> problemsOf(List<String> files, OperationResult.Diagnosed diagnosed) {
+        var lines = ResultText.lines(files, diagnosed.diagnostics());
 
         return lines.isEmpty() ? List.of(NO_PROBLEMS) : lines;
     }

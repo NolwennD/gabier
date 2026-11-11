@@ -97,6 +97,21 @@ class ArgumentsTest {
     }
 
     @Test
+    void atLeastOneKeepsEveryOperandAndRefusesNoneAndTheDryRunAsAUsageError() {
+        assertThat(Arguments.of(List.of("diagnostics", "A.java", "B.java"))
+                        .atLeastOne()
+                        .operands())
+                .containsExactly("A.java", "B.java");
+        assertThatThrownBy(() -> Arguments.of(List.of("diagnostics")).atLeastOne())
+                .isInstanceOf(UsageException.class);
+        assertThatThrownBy(() -> Arguments.of(List.of("diagnostics", "--dry-run", "A.java"))
+                        .atLeastOne())
+                .isInstanceOf(UsageException.class)
+                .satisfies(failure -> assertThat(((GeneratorException) failure).parameters())
+                        .containsEntry("arguments", "diagnostics --dry-run A.java"));
+    }
+
+    @Test
     void withoutAnOptionTakesOnlyThatOptionOutOfTheOperands() {
         var arguments = Arguments.of(List.of("references", "--include-declaration", "A.java", "3:4"));
 

@@ -41,7 +41,7 @@ documentation of Claude Code, <https://code.claude.com/docs/en/mcp>.)
 The handshake carries `instructions`, in `server/discover` (revision 2026-07-28) and in the result of `initialize` (revision
 2025-11-25 and before): the resource `mcp-instructions.md` of the cli, what an agent must know to use the tools. Use them
 instead of editing Java as text, count positions from 1, try a change that crosses files with `dryRun` set to true,
-call `diagnostics` after a change, and `organize-imports` after adding or removing a usage. A test keeps every tool the text
+call `diagnostics` after a change, once with all the files that changed, and `organize-imports` after adding or removing a usage. A test keeps every tool the text
 names in step with `tools/list`.
 
 The first `server/discover` or `initialize` also **starts the daemon in the background**, as `gabier start` does (it answers
@@ -165,7 +165,7 @@ runs the operation with the one entry point of the application (`OperationRunner
 result is:
 
 - `content`: one text block, **the text the command line prints** for the same case (the `dry run, nothing written` line, the
-  warnings, the files and the diff; `file:line:column: severity: message` for `diagnostics`, with the file as given; the
+  warnings, the files and the diff; `file:line:column: severity: message` for `diagnostics`, with each file as given in `files`; the
   places of `references`; the numbered `actions`; the line of `status`), so an agent reads the same words in both. An
   operation that changes files says `nothing to change` when the daemon changed nothing (`organize-imports` and `cleanup` do
   the same on the command line). The one difference is a file with no problem: `diagnostics` says `no problems`, where the

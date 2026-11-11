@@ -47,12 +47,23 @@ class FakeJavaLanguageServerTest {
     void answersTheDiagnosticsOfAScenario() {
         server.scripted(Scenarios.CLEAN_FILE).scripted(Scenarios.FILE_WITH_AN_ERROR);
 
-        assertThat(server.diagnostics(MAIN)).isEmpty();
-        assertThat(server.diagnostics(BROKEN))
+        assertThat(server.diagnostics(List.of(MAIN)).getFirst()).isEmpty();
+        assertThat(server.diagnostics(List.of(BROKEN)).getFirst())
                 .containsExactly(new Diagnostic(
                         Diagnostic.Severity.ERROR,
                         new Position(4, 15),
                         "Type mismatch: cannot convert from String to int"));
+    }
+
+    @Test
+    void answersTheDiagnosticsOfSeveralFilesInTheOrderGiven() {
+        server.scripted(Scenarios.CLEAN_FILE).scripted(Scenarios.FILE_WITH_AN_ERROR);
+
+        var answers = server.diagnostics(List.of(BROKEN, MAIN));
+
+        assertThat(answers).hasSize(2);
+        assertThat(answers.get(0)).hasSize(1);
+        assertThat(answers.get(1)).isEmpty();
     }
 
     @Test
@@ -421,10 +432,11 @@ class FakeJavaLanguageServerTest {
                 .isThrownBy(() -> server.rename(GREETER, new Position(4, 0), "anything"))
                 .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NO_SUCH_SYMBOL));
         assertThatExceptionOfType(LanguageServerException.class)
-                .isThrownBy(() -> server.diagnostics(MAIN))
+                .isThrownBy(() -> server.diagnostics(List.of(MAIN)).getFirst())
                 .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
         assertThatExceptionOfType(LanguageServerException.class)
-                .isThrownBy(() -> server.diagnostics(Path.of("/outside/Elsewhere.java")))
+                .isThrownBy(() -> server.diagnostics(List.of(Path.of("/outside/Elsewhere.java")))
+                        .getFirst())
                 .satisfies(exception -> {
                     assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT);
                     assertThat(exception.parameters()).containsEntry("file", "/outside/Elsewhere.java");
@@ -435,7 +447,8 @@ class FakeJavaLanguageServerTest {
     void recognizesARequestWhateverTheSpellingOfItsPath() {
         server.scripted(Scenarios.CLEAN_FILE);
 
-        assertThat(server.diagnostics(ROOT.resolve("src/main/../main/java/demo/./Main.java")))
+        assertThat(server.diagnostics(List.of(ROOT.resolve("src/main/../main/java/demo/./Main.java")))
+                        .getFirst())
                 .isEmpty();
     }
 
@@ -447,15 +460,17 @@ class FakeJavaLanguageServerTest {
                 .isThrownBy(() -> server.rename(GREETER, new Position(6, 15), "another"))
                 .withMessageContaining("not scripted")
                 .withMessageContaining("another");
-        assertThatExceptionOfType(AssertionError.class).isThrownBy(() -> server.diagnostics(MAIN));
+        assertThatExceptionOfType(AssertionError.class)
+                .isThrownBy(() -> server.diagnostics(List.of(MAIN)).getFirst());
     }
 
     @Test
     void remembersEveryRequestInOrderTheUnscriptedOnesIncluded() {
         server.scripted(Scenarios.CLEAN_FILE);
 
-        server.diagnostics(MAIN);
-        assertThatExceptionOfType(AssertionError.class).isThrownBy(() -> server.diagnostics(GREETER));
+        server.diagnostics(List.of(MAIN)).getFirst();
+        assertThatExceptionOfType(AssertionError.class)
+                .isThrownBy(() -> server.diagnostics(List.of(GREETER)).getFirst());
 
         assertThat(server.asked()).containsExactly(new Request.Diagnostics(MAIN), new Request.Diagnostics(GREETER));
     }
@@ -473,7 +488,7 @@ class FakeJavaLanguageServerTest {
         server.scripted(Scenarios.CLEAN_FILE);
 
         assertThatExceptionOfType(AssertionError.class)
-                .isThrownBy(() -> server.diagnostics(GREETER))
+                .isThrownBy(() -> server.diagnostics(List.of(GREETER)).getFirst())
                 .withMessageContaining(MAIN.toString());
     }
 

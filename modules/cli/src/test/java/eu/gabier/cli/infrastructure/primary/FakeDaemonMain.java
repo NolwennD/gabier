@@ -27,7 +27,7 @@ import java.util.Optional;
 public final class FakeDaemonMain {
 
     private static final long LIFETIME_MILLIS = 60_000;
-    private static final String NO_DIAGNOSTICS = "{\"diagnostics\":[]}";
+    private static final String NO_DIAGNOSTICS = "{\"files\":[]}";
     private static final String NOTHING_CHANGED =
             "{\"created\":[],\"renamed\":[],\"deleted\":[],\"modified\":[],\"diff\":\"\"}";
 

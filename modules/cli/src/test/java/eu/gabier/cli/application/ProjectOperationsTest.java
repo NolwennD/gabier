@@ -11,7 +11,7 @@ import eu.gabier.cli.domain.Operations;
 import eu.gabier.cli.domain.Parameter;
 import eu.gabier.cli.domain.Projects;
 import eu.gabier.protocol.DaemonStatus;
-import eu.gabier.protocol.FileDiagnostics;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.Json;
 import eu.gabier.shared.error.domain.GeneratorException;
@@ -35,19 +35,19 @@ class ProjectOperationsTest {
 
     @Test
     void runsInTheProjectOfTheFileItNames() {
-        var prepared = operations.prepare(Operations.DIAGNOSTICS, Map.of("file", TREE + "/src/A.java"));
+        var prepared = operations.prepare(Operations.DIAGNOSTICS, Map.of("files", List.of(TREE + "/src/A.java")));
 
         prepared.run().get();
 
         assertThat(prepared.project()).isEqualTo(TREE);
-        assertThat(tree.asked).containsExactly(Map.of("file", TREE + "/src/A.java"));
+        assertThat(tree.asked).containsExactly(Map.of("files", TREE + "/src/A.java"));
         assertThat(main.asked).isEmpty();
     }
 
     @Test
     void runsInTheLaunchedProjectForAFileOfIt() {
         operations
-                .prepare(Operations.DIAGNOSTICS, Map.of("file", MAIN + "/src/A.java"))
+                .prepare(Operations.DIAGNOSTICS, Map.of("files", List.of(MAIN + "/src/A.java")))
                 .run()
                 .get();
 
@@ -80,11 +80,12 @@ class ProjectOperationsTest {
 
     @Test
     void refusesARelativePathAndSaysToGiveAnAbsoluteOne() {
-        var refused = catchThrowable(() -> operations.prepare(Operations.DIAGNOSTICS, Map.of("file", "src/A.java")));
+        var refused = catchThrowable(
+                () -> operations.prepare(Operations.DIAGNOSTICS, Map.of("files", List.of("src/A.java"))));
 
         assertThat(refused)
                 .isInstanceOf(GeneratorException.class)
-                .hasMessage("The value file of the operation diagnostics must be an absolute path: "
+                .hasMessage("The value files of the operation diagnostics must be an absolute path: "
                         + "the folder the call is made from is not known");
     }
 
@@ -102,19 +103,19 @@ class ProjectOperationsTest {
 
     @Test
     void refusesWhatIsNoPathAtAll() {
-        var refused =
-                catchThrowable(() -> operations.prepare(Operations.DIAGNOSTICS, Map.of("file", "/work/A\0.java")));
+        var refused = catchThrowable(
+                () -> operations.prepare(Operations.DIAGNOSTICS, Map.of("files", List.of("/work/A\0.java"))));
 
         assertThat(refused).isInstanceOf(GeneratorException.class).hasMessageContaining("must be an absolute path");
     }
 
     @Test
     void checksTheValuesAsTheRunnerDoesBeforeItLooksForAProject() {
-        var empty = catchThrowable(() -> operations.prepare(Operations.DIAGNOSTICS, Map.of("file", "")));
-        var unknown = catchThrowable(
-                () -> operations.prepare(Operations.DIAGNOSTICS, Map.of("file", "/work/A.java", "verbose", true)));
+        var empty = catchThrowable(() -> operations.prepare(Operations.DIAGNOSTICS, Map.of("files", List.of(""))));
+        var unknown = catchThrowable(() ->
+                operations.prepare(Operations.DIAGNOSTICS, Map.of("files", List.of("/work/A.java"), "verbose", true)));
 
-        assertThat(empty).hasMessage("The value file of the operation diagnostics must not be empty");
+        assertThat(empty).hasMessage("The value files of the operation diagnostics must not have an empty element");
         assertThat(unknown).hasMessage("The operation diagnostics takes no value named verbose");
     }
 
@@ -181,7 +182,7 @@ class ProjectOperationsTest {
         public DaemonReply ask(String method, Map<String, String> params) {
             asked.add(params);
 
-            return reply(new FileDiagnostics(List.of()).toJson());
+            return reply(new DiagnosedFiles(List.of()).toJson());
         }
 
         @Override

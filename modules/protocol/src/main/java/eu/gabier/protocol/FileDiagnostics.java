@@ -9,14 +9,17 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The result of the {@code diagnostics} method: the problems a language server reports in a file, none when it is
- * clean. Positions are 0-based, as in the domain; showing them from 1 is the business of the client.
+ * The problems a language server reports in one file, none when it is clean: one element of the result of the {@code
+ * diagnostics} method ({@link DiagnosedFiles}). Positions are 0-based, as in the domain; showing them from 1 is the
+ * business of the client.
  *
+ * @param file the file, as the client named it in its request
  * @param diagnostics the problems, in the order the server gave them
  */
-public record FileDiagnostics(List<Diagnosis> diagnostics) {
+public record FileDiagnostics(String file, List<Diagnosis> diagnostics) {
 
     public FileDiagnostics {
+        Assert.notBlank("file", file);
         Assert.field("diagnostics", diagnostics).notNull().noNullElement();
 
         diagnostics = List.copyOf(diagnostics);
@@ -59,23 +62,31 @@ public record FileDiagnostics(List<Diagnosis> diagnostics) {
         }
     }
 
-    /** The result as JSON, the members in a stable order. */
-    public String toJson() {
-        return diagnostics.stream().map(Diagnosis::toJson).collect(Collectors.joining(",", "{\"diagnostics\":[", "]}"));
+    /** The file as JSON, the members in a stable order. */
+    String toJson() {
+        return diagnostics.stream()
+                .map(Diagnosis::toJson)
+                .collect(Collectors.joining(",", "{\"file\":" + Json.quote(file) + ",\"diagnostics\":[", "]}"));
     }
 
     /**
-     * Reads the result of a {@code diagnostics} response.
+     * Reads the element of a {@code diagnostics} response that is about one file.
      *
      * @throws InvalidResponseException when a member is missing or has the wrong type
      */
-    public static FileDiagnostics of(Map<String, @Nullable Object> result) {
-        if (!(result.get("diagnostics") instanceof List<?> elements)) {
-            throw invalid("The diagnostics have no list of problems");
+    static FileDiagnostics of(@Nullable Object element) {
+        if (!(element instanceof Map<?, ?> members)) {
+            throw invalid("A file of the diagnostics is not an object");
+        }
+        if (!(members.get("file") instanceof String file) || file.isBlank()) {
+            throw invalid("A file of the diagnostics has no name");
+        }
+        if (!(members.get("diagnostics") instanceof List<?> elements)) {
+            throw invalid("The diagnostics of " + file + " have no list of problems");
         }
 
         return new FileDiagnostics(
-                elements.stream().map(FileDiagnostics::diagnosis).toList());
+                file, elements.stream().map(FileDiagnostics::diagnosis).toList());
     }
 
     private static Diagnosis diagnosis(@Nullable Object element) {

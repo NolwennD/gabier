@@ -124,8 +124,8 @@ final class ProjectServer implements ServedProject {
     }
 
     @Override
-    public List<Diagnostic> diagnostics(Path file) {
-        return ready().diagnostics(file);
+    public List<List<Diagnostic>> diagnostics(List<Path> files) {
+        return ready().diagnostics(files);
     }
 
     @Override

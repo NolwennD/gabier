@@ -23,6 +23,7 @@ import eu.gabier.shared.error.domain.MissingMandatoryValueException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Stream;
@@ -302,7 +303,9 @@ class RenameTest {
         void reportsNoErrorOnTheProjectOnceThePackageIsRenamedInTheMainAndInTheTestSources() throws IOException {
             renameInTheMainAndInTheTestSources();
 
-            assertThat(new Diagnose(server).diagnose(path("src/test/java/demo/shop/GreeterTest.java")))
+            assertThat(new Diagnose(server)
+                            .diagnose(List.of(path("src/test/java/demo/shop/GreeterTest.java")))
+                            .getFirst())
                     .extracting(Diagnostic::severity)
                     .containsExactly(Diagnostic.Severity.WARNING);
         }

@@ -158,8 +158,8 @@ class ProjectServerTest {
         }
 
         @Override
-        public List<Diagnostic> diagnostics(Path file) {
-            return List.of(WARNING);
+        public List<List<Diagnostic>> diagnostics(List<Path> files) {
+            return files.stream().map(file -> List.of(WARNING)).toList();
         }
 
         @Override
@@ -307,7 +307,7 @@ class ProjectServerTest {
 
             held.finish(null);
             project.warmUp();
-            project.diagnostics(FILE);
+            project.diagnostics(List.of(FILE));
 
             assertThat(starter.starts).hasValue(1);
             assertThat(project.state()).isEqualTo(JdtlsState.READY);
@@ -343,7 +343,7 @@ class ProjectServerTest {
 
         @Test
         void theFirstRequestStartsJdtlsAndGetsItsAnswer() {
-            assertThat(project.diagnostics(FILE)).containsExactly(ScriptedServer.WARNING);
+            assertThat(project.diagnostics(List.of(FILE))).containsExactly(List.of(ScriptedServer.WARNING));
 
             assertThat(starter.starts).hasValue(1);
             assertThat(project.state()).isEqualTo(JdtlsState.READY);
@@ -459,8 +459,8 @@ class ProjectServerTest {
 
         @Test
         void keepsItForTheNextRequests() {
-            project.diagnostics(FILE);
-            project.diagnostics(FILE);
+            project.diagnostics(List.of(FILE));
+            project.diagnostics(List.of(FILE));
             project.rename(FILE, new Position(0, 0), "Other");
             project.organizeImports(FILE);
             project.cleanUp(FILE, List.of(CleanUp.ADD_OVERRIDE));
@@ -482,7 +482,7 @@ class ProjectServerTest {
             var held = starter.willStart(ScriptedServer.held());
             var doing = new JdtlsProgress(JdtlsProgress.Phase.IMPORTING, "Build", Duration.ofSeconds(4));
             held.doing(doing);
-            var request = CompletableFuture.supplyAsync(() -> project.diagnostics(FILE), REQUESTS);
+            var request = CompletableFuture.supplyAsync(() -> project.diagnostics(List.of(FILE)), REQUESTS);
             awaitUntil(() -> held.waiting.get() == 1, "the request to wait for the start");
 
             assertThat(project.jdtlsProgress()).contains(doing);
@@ -493,9 +493,9 @@ class ProjectServerTest {
         @Test
         void startsItOnceWhateverTheNumberOfRequestsAtTheSameTime() throws Exception {
             var held = starter.willStart(ScriptedServer.held());
-            var requests = new ArrayList<CompletableFuture<List<Diagnostic>>>();
+            var requests = new ArrayList<CompletableFuture<List<List<Diagnostic>>>>();
             for (var request = 0; request < 20; request++) {
-                requests.add(CompletableFuture.supplyAsync(() -> project.diagnostics(FILE), REQUESTS));
+                requests.add(CompletableFuture.supplyAsync(() -> project.diagnostics(List.of(FILE)), REQUESTS));
             }
 
             awaitUntil(() -> held.waiting.get() == 20, "the twenty requests to wait for the start");
@@ -504,7 +504,8 @@ class ProjectServerTest {
             held.finish(null);
 
             for (var request : requests) {
-                assertThat(request.orTimeout(30, TimeUnit.SECONDS).join()).containsExactly(ScriptedServer.WARNING);
+                assertThat(request.orTimeout(30, TimeUnit.SECONDS).join())
+                        .containsExactly(List.of(ScriptedServer.WARNING));
             }
             assertThat(starter.starts).hasValue(1);
             assertThat(project.state()).isEqualTo(JdtlsState.READY);
@@ -513,7 +514,7 @@ class ProjectServerTest {
         @Test
         void saysItIsStartingToWhoeverAsksWhileTheFirstRequestWaits() throws Exception {
             var held = starter.willStart(ScriptedServer.held());
-            var request = CompletableFuture.supplyAsync(() -> project.diagnostics(FILE), REQUESTS);
+            var request = CompletableFuture.supplyAsync(() -> project.diagnostics(List.of(FILE)), REQUESTS);
 
             awaitUntil(() -> project.state() == JdtlsState.STARTING, "the state to be starting");
             assertThat(request).isNotDone();
@@ -529,7 +530,7 @@ class ProjectServerTest {
             var interrupted = new CompletableFuture<Boolean>();
             var waiter = Thread.ofPlatform().start(() -> {
                 try {
-                    project.diagnostics(FILE);
+                    project.diagnostics(List.of(FILE));
                 } catch (RuntimeException thrown) {
                     failure.complete(thrown);
                 }
@@ -553,7 +554,7 @@ class ProjectServerTest {
         void aStartThatFailsIsAProblemObjectThatSaysWhy() {
             starter.willStart(ScriptedServer.failing("Timed out after 300 s (jdtls is given 300 s)"));
 
-            var failure = catchThrowableOfType(JdtlsStartException.class, () -> project.diagnostics(FILE));
+            var failure = catchThrowableOfType(JdtlsStartException.class, () -> project.diagnostics(List.of(FILE)));
 
             assertThat(failure.key().get()).isEqualTo("jdtls-start-failed");
             assertThat(failure.status()).isEqualTo(ErrorStatus.INTERNAL_SERVER_ERROR);
@@ -567,9 +568,9 @@ class ProjectServerTest {
         @Test
         void theNextRequestStartsItAgain() {
             starter.willStart(ScriptedServer.failing("no launcher"));
-            assertThatThrownBy(() -> project.diagnostics(FILE)).isInstanceOf(JdtlsStartException.class);
+            assertThatThrownBy(() -> project.diagnostics(List.of(FILE))).isInstanceOf(JdtlsStartException.class);
 
-            assertThat(project.diagnostics(FILE)).containsExactly(ScriptedServer.WARNING);
+            assertThat(project.diagnostics(List.of(FILE))).containsExactly(List.of(ScriptedServer.WARNING));
 
             assertThat(starter.starts).hasValue(2);
             assertThat(project.state()).isEqualTo(JdtlsState.READY);
@@ -578,13 +579,13 @@ class ProjectServerTest {
         @Test
         void aJdtlsThatDiedWhileReadyIsFailedAndTheNextRequestEndsItAndStartsAnother() {
             var first = starter.willStart(new ScriptedServer());
-            project.diagnostics(FILE);
+            project.diagnostics(List.of(FILE));
 
             first.dies();
 
             assertThat(project.state()).isEqualTo(JdtlsState.FAILED);
             assertThat(project.jdtlsFailure()).contains("it was killed");
-            assertThat(project.diagnostics(FILE)).containsExactly(ScriptedServer.WARNING);
+            assertThat(project.diagnostics(List.of(FILE))).containsExactly(List.of(ScriptedServer.WARNING));
             assertThat(starter.starts).hasValue(2);
             assertThat(first.closes).hasValue(1);
             assertThat(project.state()).isEqualTo(JdtlsState.READY);
@@ -594,11 +595,11 @@ class ProjectServerTest {
         @Test
         void startsAnotherJdtlsEvenWhenEndingTheDeadOneFails() {
             var first = starter.willStart(new ScriptedServer());
-            project.diagnostics(FILE);
+            project.diagnostics(List.of(FILE));
             first.dies();
             first.failsToClose(new IOException("cannot delete the data folder"));
 
-            assertThat(project.diagnostics(FILE)).containsExactly(ScriptedServer.WARNING);
+            assertThat(project.diagnostics(List.of(FILE))).containsExactly(List.of(ScriptedServer.WARNING));
 
             assertThat(starter.starts).hasValue(2);
             assertThat(log)
@@ -609,13 +610,13 @@ class ProjectServerTest {
         @Test
         void startsAnotherJdtlsEvenWhenEndingTheDeadOneIsInterruptedAndKeepsTheInterruption() {
             var first = starter.willStart(new ScriptedServer());
-            project.diagnostics(FILE);
+            project.diagnostics(List.of(FILE));
             first.dies();
             first.failsToClose(new InterruptedException("stop"));
 
             try {
                 // The other jdtls is started, then the request that was interrupted stops waiting for it.
-                assertThatThrownBy(() -> project.diagnostics(FILE))
+                assertThatThrownBy(() -> project.diagnostics(List.of(FILE)))
                         .isInstanceOf(JdtlsException.class)
                         .hasMessageContaining("Interrupted while waiting for jdtls to start");
                 assertThat(Thread.currentThread().isInterrupted()).isTrue();
@@ -628,9 +629,9 @@ class ProjectServerTest {
         @Test
         void everyRequestThatWaitedForTheStartGetsItsFailure() throws Exception {
             var held = starter.willStart(ScriptedServer.held());
-            var requests = new ArrayList<CompletableFuture<List<Diagnostic>>>();
+            var requests = new ArrayList<CompletableFuture<List<List<Diagnostic>>>>();
             for (var request = 0; request < 5; request++) {
-                requests.add(CompletableFuture.supplyAsync(() -> project.diagnostics(FILE), REQUESTS));
+                requests.add(CompletableFuture.supplyAsync(() -> project.diagnostics(List.of(FILE)), REQUESTS));
             }
             awaitUntil(() -> held.waiting.get() == 5, "the five requests to wait for the start");
 
@@ -651,7 +652,7 @@ class ProjectServerTest {
 
         @Test
         void endsTheServerThatIsReadyOnce() throws Exception {
-            project.diagnostics(FILE);
+            project.diagnostics(List.of(FILE));
 
             project.close();
             project.close();
@@ -662,7 +663,7 @@ class ProjectServerTest {
         @Test
         void endsTheStartInProgressAndTheRequestsThatWaitForIt() throws Exception {
             var held = starter.willStart(ScriptedServer.held());
-            var request = CompletableFuture.supplyAsync(() -> project.diagnostics(FILE), REQUESTS);
+            var request = CompletableFuture.supplyAsync(() -> project.diagnostics(List.of(FILE)), REQUESTS);
             awaitUntil(() -> held.waiting.get() == 1, "the request to wait for the start");
 
             project.close();
@@ -675,7 +676,7 @@ class ProjectServerTest {
         void startsNothingOnceClosed() throws Exception {
             project.close();
 
-            assertThatThrownBy(() -> project.diagnostics(FILE))
+            assertThatThrownBy(() -> project.diagnostics(List.of(FILE)))
                     .isInstanceOfSatisfying(
                             LanguageServerException.class,
                             refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
@@ -700,7 +701,7 @@ class ProjectServerTest {
             var served = served(Map.of());
 
             assertThat(served.state()).isEqualTo(JdtlsState.NOT_STARTED);
-            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+            assertThatThrownBy(() -> served.diagnostics(List.of(directory.resolve("A.java"))))
                     .isInstanceOf(JdtlsStartException.class)
                     .hasMessageContaining("jdtls did not start")
                     .hasMessageContaining("no jdtls found");
@@ -711,7 +712,7 @@ class ProjectServerTest {
         void saysTheLauncherIsMissingWhenTheVariableIsBlank() {
             var served = served(Map.of("GABIER_JDTLS", " "));
 
-            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+            assertThatThrownBy(() -> served.diagnostics(List.of(directory.resolve("A.java"))))
                     .hasMessageContaining("no jdtls found");
         }
 
@@ -720,7 +721,7 @@ class ProjectServerTest {
             var served = served(
                     Map.of("GABIER_JDTLS", directory.resolve("no-such-jdtls").toString()));
 
-            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+            assertThatThrownBy(() -> served.diagnostics(List.of(directory.resolve("A.java"))))
                     .isInstanceOf(JdtlsStartException.class)
                     .hasMessageContaining("no-such-jdtls");
         }
@@ -734,7 +735,7 @@ class ProjectServerTest {
             Files.setPosixFilePermissions(launcher, PosixFilePermissions.fromString("rwx------"));
             var served = served(Map.of("GABIER_JDTLS", launcher.toString()));
 
-            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+            assertThatThrownBy(() -> served.diagnostics(List.of(directory.resolve("A.java"))))
                     .isInstanceOf(JdtlsStartException.class)
                     .hasMessageContaining("jdtls did not start")
                     .hasMessageContaining("jdtls exited with code 3");
@@ -760,7 +761,7 @@ class ProjectServerTest {
             var served =
                     served(Map.of("GABIER_JDTLS", recordingLauncher(arguments).toString()));
 
-            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+            assertThatThrownBy(() -> served.diagnostics(List.of(directory.resolve("A.java"))))
                     .isInstanceOf(JdtlsStartException.class);
 
             assertThat(Files.readString(arguments))
@@ -778,7 +779,7 @@ class ProjectServerTest {
             Files.setPosixFilePermissions(launcher, PosixFilePermissions.fromString("rwx------"));
             var served = served(Map.of("GABIER_JDTLS", launcher.toString()));
 
-            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+            assertThatThrownBy(() -> served.diagnostics(List.of(directory.resolve("A.java"))))
                     .isInstanceOf(JdtlsStartException.class);
 
             assertThat(Files.readString(arguments)).doesNotContain("sharedIndexLocation");
@@ -794,7 +795,7 @@ class ProjectServerTest {
             var served = served(
                     Map.of("GABIER_JDTLS", recordingLauncher(arguments).toString(), "GABIER_CACHE", cache.toString()));
 
-            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+            assertThatThrownBy(() -> served.diagnostics(List.of(directory.resolve("A.java"))))
                     .isInstanceOf(JdtlsStartException.class);
 
             assertThat(Files.readString(arguments))
@@ -821,7 +822,7 @@ class ProjectServerTest {
             installedLauncher(arguments);
             var served = served(Map.of());
 
-            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+            assertThatThrownBy(() -> served.diagnostics(List.of(directory.resolve("A.java"))))
                     .isInstanceOf(JdtlsStartException.class)
                     .hasMessageContaining("jdtls exited with code 3");
 
@@ -836,7 +837,7 @@ class ProjectServerTest {
             var served = served(
                     Map.of("GABIER_JDTLS", recordingLauncher(chosenArguments).toString()));
 
-            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+            assertThatThrownBy(() -> served.diagnostics(List.of(directory.resolve("A.java"))))
                     .isInstanceOf(JdtlsStartException.class);
 
             assertThat(chosenArguments).exists();
@@ -847,11 +848,11 @@ class ProjectServerTest {
         void findsAJdtlsInstalledAfterTheServerWasMadeAtTheNextRequest() throws IOException {
             var arguments = directory.resolve("arguments");
             var served = served(Map.of());
-            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+            assertThatThrownBy(() -> served.diagnostics(List.of(directory.resolve("A.java"))))
                     .hasMessageContaining("no jdtls found");
 
             installedLauncher(arguments);
-            assertThatThrownBy(() -> served.diagnostics(directory.resolve("A.java")))
+            assertThatThrownBy(() -> served.diagnostics(List.of(directory.resolve("A.java"))))
                     .hasMessageContaining("jdtls exited with code 3");
 
             assertThat(arguments).exists();

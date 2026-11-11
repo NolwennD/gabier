@@ -2,26 +2,36 @@ package eu.gabier.cli.infrastructure.primary;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FileDiagnostics;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 class DiagnosticsTest extends CliTest {
 
     private static final String ERRORS = """
-        {"diagnostics":[\
+        {"files":[{"file":"/project/Broken.java","diagnostics":[\
         {"severity":"error","line":4,"column":15,"message":"Type mismatch: cannot convert from String to int"},\
-        {"severity":"warning","line":0,"column":0,"message":"A warning"}]}\
+        {"severity":"warning","line":0,"column":0,"message":"A warning"}]}]}\
         """;
-    private static final String CLEAN = "{\"diagnostics\":[]}";
+    private static final String CLEAN = "{\"files\":[{\"file\":\"/project/Main.java\",\"diagnostics\":[]}]}";
 
-    private static String request(Path file) {
+    private static final String TWO_FILES = """
+        {"files":[\
+        {"file":"/project/B.java","diagnostics":[{"severity":"error","line":1,"column":2,"message":"in b"}]},\
+        {"file":"/project/Clean.java","diagnostics":[]},\
+        {"file":"/project/A.java","diagnostics":[{"severity":"warning","line":0,"column":0,"message":"in a"}]}]}\
+        """;
+
+    private static String request(Path... files) {
         return """
-            {"jsonrpc":"2.0","id":1,"method":"diagnostics","params":{"file":"%s"}}\
-            """.formatted(file);
+            {"jsonrpc":"2.0","id":1,"method":"diagnostics","params":{"files":"%s"}}\
+            """.formatted(Stream.of(files).map(Path::toString).collect(Collectors.joining("\\n")));
     }
 
     @Test
@@ -45,15 +55,16 @@ class DiagnosticsTest extends CliTest {
 
             assertThat(out()).isEmpty();
             assertThat(err())
-                    .contains("The value file of the operation diagnostics must not be empty")
+                    .contains("The value files of the operation diagnostics must not have an empty element")
                     .contains("operation-invalid-values");
             assertThat(daemon.requests()).isEmpty();
         }
     }
 
     private static String resultOf(String message) {
-        return new FileDiagnostics(
-                        List.of(new FileDiagnostics.Diagnosis(FileDiagnostics.Severity.ERROR, 0, 0, message)))
+        return new DiagnosedFiles(List.of(new FileDiagnostics(
+                        "/project/A.java",
+                        List.of(new FileDiagnostics.Diagnosis(FileDiagnostics.Severity.ERROR, 0, 0, message)))))
                 .toJson();
     }
 
@@ -162,6 +173,60 @@ class DiagnosticsTest extends CliTest {
 
             assertThat(out()).isEqualTo(CLEAN + System.lineSeparator());
             assertThat(daemon.requests()).hasSize(1);
+        }
+    }
+
+    @Test
+    void asksSeveralFilesInOneRequestAndPrintsTheProblemsOfEachInTheOrderGivenWithTheFileAsTyped() throws IOException {
+        try (var daemon = daemonAnswering(TWO_FILES)) {
+            assertThat(runWithSocket("diagnostics", "src/B.java", "/project/Clean.java", "./A.java"))
+                    .isZero();
+
+            assertThat(out().lines()).containsExactly("src/B.java:2:3: error: in b", "./A.java:1:1: warning: in a");
+            assertThat(err()).isEmpty();
+            assertThat(daemon.requests())
+                    .containsExactly(request(
+                            Path.of("src/B.java").toAbsolutePath(),
+                            Path.of("/project/Clean.java"),
+                            Path.of("./A.java").toAbsolutePath()));
+        }
+    }
+
+    @Test
+    void givesTheResultOfSeveralFilesAsJsonAsTheDaemonGaveIt() throws IOException {
+        try (var daemon = daemonAnswering(TWO_FILES)) {
+            assertThat(runWithSocket(
+                            "--json", "diagnostics", "/project/B.java", "/project/Clean.java", "/project/A.java"))
+                    .isZero();
+
+            assertThat(out()).isEqualTo(TWO_FILES + System.lineSeparator());
+            assertThat(daemon.requests()).hasSize(1);
+        }
+    }
+
+    @Test
+    void refusesNoFileAndTheDryRunOptionItDoesNotHaveAsAUsageError() throws IOException {
+        try (var daemon = daemonAnswering(CLEAN)) {
+            assertThat(runWithSocket("diagnostics")).isEqualTo(2);
+            assertThat(err()).contains("usage-error");
+            err.reset();
+            assertThat(runWithSocket("diagnostics", "--dry-run", "/project/Main.java"))
+                    .isEqualTo(2);
+            assertThat(err()).contains("usage-error");
+
+            assertThat(daemon.requests()).isEmpty();
+        }
+    }
+
+    @Test
+    void refusesAFileNameWithALineBreakAsAUsageErrorBecauseTheDaemonTakesTheFilesOneToALine() throws IOException {
+        try (var daemon = daemonAnswering(CLEAN)) {
+            assertThat(runWithSocket("diagnostics", "/project/A.java", "/project/B\n.java"))
+                    .isEqualTo(2);
+            assertThat(runWithSocket("diagnostics", "/project/C\r.java")).isEqualTo(2);
+
+            assertThat(err()).contains("usage-error");
+            assertThat(daemon.requests()).isEmpty();
         }
     }
 }

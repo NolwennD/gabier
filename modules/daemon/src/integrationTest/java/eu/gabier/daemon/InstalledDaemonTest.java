@@ -2,10 +2,12 @@ package eu.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import eu.gabier.editing.fixtures.Scenario;
 import eu.gabier.editing.fixtures.Scenario.Answer;
 import eu.gabier.editing.fixtures.Scenarios;
 import eu.gabier.protocol.ChangedFiles;
 import eu.gabier.protocol.DaemonStatus;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.RpcResponse;
@@ -27,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -179,10 +182,18 @@ class InstalledDaemonTest {
         return project;
     }
 
+    private static String diagnosticsOf(Path project, List<Scenario> scenarios) {
+        var files = scenarios.stream()
+                .map(scenario -> project.resolve(scenario.request().file()).toString())
+                .collect(Collectors.joining("\\n"));
+
+        return "{\"files\":\"%s\"}".formatted(files);
+    }
+
     private static String diagnosticsOf(Path project) {
         var file = project.resolve(Scenarios.FILE_WITH_AN_ERROR.request().file());
 
-        return "{\"file\":\"%s\"}".formatted(file);
+        return "{\"files\":\"%s\"}".formatted(file);
     }
 
     @Test
@@ -197,7 +208,9 @@ class InstalledDaemonTest {
             var answer = RpcResponse.parse(daemon.ask("diagnostics", diagnosticsOf(project)));
             daemon.remember();
             assertThat(answer).as("the answer: %s", answer).isInstanceOf(RpcResponse.Success.class);
-            var found = FileDiagnostics.of(((RpcResponse.Success) answer).result());
+            var found = DiagnosedFiles.of(((RpcResponse.Success) answer).result())
+                    .files()
+                    .getFirst();
             var expected = ((Answer.Diagnosed) Scenarios.FILE_WITH_AN_ERROR.answer())
                     .diagnostics()
                     .getFirst();
@@ -208,6 +221,27 @@ class InstalledDaemonTest {
             assertThat(error.column()).isEqualTo(expected.position().column());
             assertThat(error.message()).isEqualTo(expected.message());
             System.out.println("the daemon answered: " + error);
+
+            var scenarios = List.of(Scenarios.FILE_WITH_A_WARNING, Scenarios.CLEAN_FILE, Scenarios.FILE_WITH_AN_ERROR);
+            var several = RpcResponse.parse(daemon.ask("diagnostics", diagnosticsOf(project, scenarios)));
+            assertThat(several).as("the answer: %s", several).isInstanceOf(RpcResponse.Success.class);
+            var diagnosed = DiagnosedFiles.of(((RpcResponse.Success) several).result());
+            System.out.println("the daemon answered for several files: " + diagnosed.toJson());
+            assertThat(diagnosed.files()).hasSize(3);
+            for (var index = 0; index < scenarios.size(); index++) {
+                var wanted = ((Answer.Diagnosed) scenarios.get(index).answer()).diagnostics();
+                var asked =
+                        project.resolve(scenarios.get(index).request().file()).toString();
+                assertThat(diagnosed.files().get(index).file()).isEqualTo(asked);
+                assertThat(diagnosed.files().get(index).diagnostics())
+                        .as("the severity and the position of the diagnostics of %s", asked)
+                        .extracting(shown -> shown.severity().name() + " " + shown.line() + ":" + shown.column())
+                        .containsExactlyElementsOf(wanted.stream()
+                                .map(problem -> problem.severity().name() + " "
+                                        + problem.position().line() + ":"
+                                        + problem.position().column())
+                                .toList());
+            }
 
             assertThat(daemon.status().jdtls()).isEqualTo(JdtlsState.READY);
 
@@ -285,7 +319,9 @@ class InstalledDaemonTest {
             daemon.remember();
 
             assertThat(answer).as("the answer: %s", answer).isInstanceOf(RpcResponse.Success.class);
-            assertThat(FileDiagnostics.of(((RpcResponse.Success) answer).result())
+            assertThat(DiagnosedFiles.of(((RpcResponse.Success) answer).result())
+                            .files()
+                            .getFirst()
                             .diagnostics())
                     .hasSize(1);
             System.out.println("the daemon found the pinned jdtls by itself: " + installed);

@@ -7,7 +7,7 @@ import eu.gabier.cli.domain.Parameter;
 import eu.gabier.protocol.ChangedFiles;
 import eu.gabier.protocol.CodeActions;
 import eu.gabier.protocol.DaemonStatus;
-import eu.gabier.protocol.FileDiagnostics;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FoundReferences;
 import eu.gabier.shared.error.domain.GeneratorException;
 import java.math.BigDecimal;
@@ -76,7 +76,7 @@ public final class OperationRunner {
 
         return switch (kind) {
             case REPORTED -> new OperationResult.Reported(DaemonStatus.of(result));
-            case DIAGNOSED -> new OperationResult.Diagnosed(FileDiagnostics.of(result));
+            case DIAGNOSED -> new OperationResult.Diagnosed(DiagnosedFiles.of(result));
             case REFERENCED -> new OperationResult.Referenced(FoundReferences.of(result));
             case OFFERED -> new OperationResult.Offered(CodeActions.of(result));
             case CHANGED -> new OperationResult.Changed(ChangedFiles.of(result));

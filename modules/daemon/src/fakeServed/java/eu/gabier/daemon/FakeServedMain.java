@@ -168,8 +168,8 @@ public final class FakeServedMain {
         }
 
         @Override
-        public List<Diagnostic> diagnostics(Path file) {
-            return server.diagnostics(file);
+        public List<List<Diagnostic>> diagnostics(List<Path> files) {
+            return server.diagnostics(files);
         }
 
         @Override

@@ -73,10 +73,11 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
     // A scenario never pairs a request with an answer of the other kind (see its constructor): the casts hold.
 
     @Override
-    public List<Diagnostic> diagnostics(Path file) {
-        Request request = new Request.Diagnostics(file).resolvedIn(root);
-
-        return ((Answer.Diagnosed) answerTo(request)).diagnostics();
+    public List<List<Diagnostic>> diagnostics(List<Path> files) {
+        return files.stream()
+                .map(file -> new Request.Diagnostics(file).resolvedIn(root))
+                .map(request -> ((Answer.Diagnosed) answerTo(request)).diagnostics())
+                .toList();
     }
 
     @Override

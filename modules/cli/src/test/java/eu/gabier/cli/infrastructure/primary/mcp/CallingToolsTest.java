@@ -16,6 +16,7 @@ import eu.gabier.protocol.ChangedFiles;
 import eu.gabier.protocol.CodeActions;
 import eu.gabier.protocol.CodeActions.Action;
 import eu.gabier.protocol.DaemonStatus;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FileDiagnostics.Diagnosis;
 import eu.gabier.protocol.FileDiagnostics.Severity;
@@ -67,10 +68,11 @@ class CallingToolsTest {
 
         @Test
         void givesTheTextOfTheResultInContentAndTheResultOfTheDaemonInStructuredContent() {
-            var diagnostics = new FileDiagnostics(List.of(new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch")));
+            var diagnostics = new DiagnosedFiles(List.of(new FileDiagnostics(
+                    "/work/src/Broken.java", List.of(new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch")))));
             var daemon = new StubDaemon().answering(diagnostics.toJson());
 
-            var answer = exchange(daemon, modernCall("diagnostics", "{\"file\":\"/work/src/Broken.java\"}"))
+            var answer = exchange(daemon, modernCall("diagnostics", "{\"files\":[\"/work/src/Broken.java\"]}"))
                     .getFirst();
 
             assertThat(at(answer, "result", "content"))
@@ -80,15 +82,15 @@ class CallingToolsTest {
             assertThat(at(answer, "result", "isError")).isEqualTo(false);
             assertThat(daemon.asked())
                     .containsExactly(
-                            new StubDaemon.Asked("diagnostics", Map.of("file", "/work/src/Broken.java"), false));
+                            new StubDaemon.Asked("diagnostics", Map.of("files", "/work/src/Broken.java"), false));
         }
 
         @Test
         void saysThereAreNoProblemsForAFileWithNoneWhereTheCommandLinePrintsNothing() {
-            var clean = new FileDiagnostics(List.of());
+            var clean = new DiagnosedFiles(List.of(new FileDiagnostics("/work/src/Clean.java", List.of())));
             var daemon = new StubDaemon().answering(clean.toJson());
 
-            var answer = exchange(daemon, modernCall("diagnostics", "{\"file\":\"/work/src/Clean.java\"}"))
+            var answer = exchange(daemon, modernCall("diagnostics", "{\"files\":[\"/work/src/Clean.java\"]}"))
                     .getFirst();
 
             assertThat(content(answer)).isEqualTo("no problems");
@@ -321,7 +323,7 @@ class CallingToolsTest {
         void givesNoPointerToARefusalThatOtherWaysDoNotHelp() {
             var daemon = new StubDaemon().failing(refusal("editing-invalid-range"));
 
-            var answer = exchange(daemon, modernCall("diagnostics", "{\"file\":\"/work/A.java\"}"))
+            var answer = exchange(daemon, modernCall("diagnostics", "{\"files\":[\"/work/A.java\"]}"))
                     .getFirst();
 
             assertThat(at(answer, "result", "isError")).isEqualTo(true);
@@ -339,8 +341,8 @@ class CallingToolsTest {
             var answers = exchange(
                     daemon,
                     modernCall("rename", "{\"file\":\"/work/A.java\"}"),
-                    modernCall("diagnostics", "{\"file\":\"/work/A.java\",\"verbose\":true}"),
-                    modernCall("diagnostics", "{\"file\":7}"),
+                    modernCall("diagnostics", "{\"files\":[\"/work/A.java\"],\"verbose\":true}"),
+                    modernCall("diagnostics", "{\"files\":7}"),
                     modernCall("rename", """
                         {"file":"/work/A.java","line":0,"column":1,"newName":"a","dryRun":false}\
                         """));
@@ -356,7 +358,7 @@ class CallingToolsTest {
             assertThat(at(answers.get(1), "result", "structuredContent", "parameters"))
                     .isEqualTo(Map.of("operation", "diagnostics", "parameter", "verbose"));
             assertThat(at(answers.get(2), "result", "structuredContent", "detail"))
-                    .isEqualTo("The value file of the operation diagnostics must be a text");
+                    .isEqualTo("The value files of the operation diagnostics must be a list of texts");
             assertThat(at(answers.get(3), "result", "structuredContent", "detail"))
                     .isEqualTo("The value line of the operation rename must be a position, from 1");
             assertThat(daemon.asked()).isEmpty();
@@ -368,7 +370,7 @@ class CallingToolsTest {
 
             var answers = exchange(
                     daemon,
-                    modernCall("diagnostics", "{\"file\":\"\"}"),
+                    modernCall("diagnostics", "{\"files\":[\"\"]}"),
                     modernCall("move", "{\"files\":[\"/work/A.java\",\"\"],\"package\":\"demo\",\"dryRun\":false}"));
 
             assertThat(answers).hasSize(2).allSatisfy(answer -> {
@@ -376,7 +378,7 @@ class CallingToolsTest {
                 assertThat(at(answer, "result", "structuredContent", "key")).isEqualTo("operation-invalid-values");
             });
             assertThat(at(answers.get(0), "result", "structuredContent", "detail"))
-                    .isEqualTo("The value file of the operation diagnostics must not be empty");
+                    .isEqualTo("The value files of the operation diagnostics must not have an empty element");
             assertThat(at(answers.get(1), "result", "structuredContent", "detail"))
                     .isEqualTo("The value files of the operation move must not have an empty element");
             assertThat(daemon.asked()).isEmpty();
@@ -390,7 +392,7 @@ class CallingToolsTest {
             var answers = exchange(
                     daemon,
                     new PrintStream(log, true, StandardCharsets.UTF_8),
-                    modernCall("1", "diagnostics", "{\"file\":\"/work/A.java\"}"),
+                    modernCall("1", "diagnostics", "{\"files\":[\"/work/A.java\"]}"),
                     McpExchange.modern("2", "ping"));
 
             assertThat(answers).hasSize(2);
@@ -409,7 +411,7 @@ class CallingToolsTest {
         void tellsADaemonThatCannotBeReachedAsAFailedCallWithoutItsInternals() {
             var daemon = new StubDaemon().failing(new IllegalStateException("socket /secret/path broke"));
 
-            var answer = exchange(daemon, modernCall("diagnostics", "{\"file\":\"/work/A.java\"}"))
+            var answer = exchange(daemon, modernCall("diagnostics", "{\"files\":[\"/work/A.java\"]}"))
                     .getFirst();
 
             assertThat(at(answer, "result", "isError")).isEqualTo(true);
@@ -426,7 +428,7 @@ class CallingToolsTest {
             var answer = exchange(
                             daemon,
                             new PrintStream(log, true, StandardCharsets.UTF_8),
-                            modernCall("diagnostics", "{\"file\":\"/work/A.java\"}"))
+                            modernCall("diagnostics", "{\"files\":[\"/work/A.java\"]}"))
                     .getFirst();
 
             assertThat(log.toString(StandardCharsets.UTF_8))
@@ -445,7 +447,7 @@ class CallingToolsTest {
             exchange(
                     daemon,
                     new PrintStream(log, true, StandardCharsets.UTF_8),
-                    modernCall("diagnostics", "{\"file\":\"/work/A.java\"}"),
+                    modernCall("diagnostics", "{\"files\":[\"/work/A.java\"]}"),
                     modernCall("diagnostics", "{}"));
 
             assertThat(log.toString(StandardCharsets.UTF_8)).isEmpty();
@@ -456,7 +458,9 @@ class CallingToolsTest {
             var daemon = new StubDaemon().failing(new IllegalStateException("boom"));
 
             var answers = exchange(
-                    daemon, modernCall("diagnostics", "{\"file\":\"/work/A.java\"}"), McpExchange.modern("2", "ping"));
+                    daemon,
+                    modernCall("diagnostics", "{\"files\":[\"/work/A.java\"]}"),
+                    McpExchange.modern("2", "ping"));
 
             assertThat(answers).hasSize(2);
             assertThat(answers)

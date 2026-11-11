@@ -344,6 +344,18 @@ class InitAgentTest extends CliTest {
     }
 
     @Test
+    void aLineThatOpensWithOneOrTwoBackticksIsNotAFence() throws IOException {
+        init("snippet");
+        var block = read(fileOf("snippet"));
+        var lines = "`code` opens this line\n``code`` and this one\n";
+        Files.writeString(fileOf("snippet"), lines + block.replace("\n" + END, "\nStale.\n" + END));
+
+        assertThat(init("snippet")).isZero();
+
+        assertThat(read(fileOf("snippet"))).isEqualTo(lines + block);
+    }
+
+    @Test
     void aLineIndentedByFourSpacesDoesNotOpenAFence() throws IOException {
         init("snippet");
         var block = read(fileOf("snippet"));
@@ -543,7 +555,7 @@ class InitAgentTest extends CliTest {
                 .contains("`gabier rename`")
                 .contains("`gabier extract-method`")
                 .contains("and `gabier create`, not by editing every occurrence.")
-                .contains("`gabier diagnostics <file>`")
+                .contains("`gabier diagnostics <file>...`")
                 .doesNotContain("`gabier start`")
                 .doesNotContain("`gabier stop`")
                 .contains("Try a change with `--dry-run` first")

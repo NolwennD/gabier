@@ -9,7 +9,8 @@ Gabier changes Java through the language server of the project. Use its tools in
   project. Every line and column is counted from 1, as an editor shows them.
 - Try a change that crosses files with dryRun set to true: it answers the change and writes nothing. Call it again with
   dryRun false to write.
-- After a change, call `diagnostics` on the files that changed, and `organize-imports` after adding or removing a usage.
+- After a change, call `diagnostics` once with all the files that changed, and `organize-imports` after adding or
+  removing a usage.
 - To fix an error, or to rewrite code, list what the language server offers on a range with `actions`, then apply one by its
   title with `apply-action`. `references` lists where a symbol is used.
 - The server starts the daemon when it connects, and jdtls imports the project meanwhile. The first call that asks the

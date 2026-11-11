@@ -6,6 +6,7 @@ import eu.gabier.editing.application.Diagnose;
 import eu.gabier.editing.fixtures.FakeJavaLanguageServer;
 import eu.gabier.editing.fixtures.Scenario;
 import eu.gabier.editing.fixtures.Scenarios;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FileDiagnostics.Diagnosis;
 import eu.gabier.protocol.FileDiagnostics.Severity;
@@ -13,6 +14,8 @@ import eu.gabier.protocol.RpcResponse;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -31,24 +34,33 @@ class DiagnosticsMethodTest {
         return new RequestHandler(List.of(new DiagnosticsMethod(new Diagnose(server))));
     }
 
-    private String ask(RequestHandler handler, Path file) {
+    private String ask(RequestHandler handler, Path... files) {
+        var lines = Stream.of(files).map(Path::toString).collect(Collectors.joining("\\n"));
+
         return handler.handle("""
-            {"jsonrpc":"2.0","id":1,"method":"diagnostics","params":{"file":"%s"}}\
-            """.formatted(file)).line();
+            {"jsonrpc":"2.0","id":1,"method":"diagnostics","params":{"files":"%s"}}\
+            """.formatted(lines)).line();
+    }
+
+    private DiagnosedFiles diagnosedBy(String line) {
+        return DiagnosedFiles.of(((RpcResponse.Success) RpcResponse.parse(line)).result());
     }
 
     private FileDiagnostics diagnosticsOf(Scenario scenario) {
-        var line = ask(handler(scenario), project.resolve(scenario.request().file()));
+        var file = project.resolve(scenario.request().file());
+        var diagnosed = diagnosedBy(ask(handler(scenario), file));
 
-        return FileDiagnostics.of(((RpcResponse.Success) RpcResponse.parse(line)).result());
+        assertThat(diagnosed.files()).extracting(FileDiagnostics::file).containsExactly(file.toString());
+
+        return diagnosed.files().getFirst();
     }
 
     @Test
-    void isNamedDiagnosticsAndTakesTheFile() {
+    void isNamedDiagnosticsAndTakesTheFiles() {
         var method = new DiagnosticsMethod(new Diagnose(new FakeJavaLanguageServer(project)));
 
         assertThat(method.name()).isEqualTo("diagnostics");
-        assertThat(method.parameters()).containsExactly("file");
+        assertThat(method.parameters()).containsExactly("files");
     }
 
     @Test
@@ -71,7 +83,11 @@ class DiagnosticsMethodTest {
                 handler(Scenarios.CLEAN_FILE),
                 project.resolve(Scenarios.CLEAN_FILE.request().file()));
 
-        assertThat(line).isEqualTo("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"diagnostics\":[]}}");
+        assertThat(line)
+                .isEqualTo(
+                        "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"files\":[{\"file\":\"%s\",\"diagnostics\":[]}]}}"
+                                .formatted(project.resolve(
+                                        Scenarios.CLEAN_FILE.request().file())));
     }
 
     @Test
@@ -79,7 +95,7 @@ class DiagnosticsMethodTest {
         var handler = handler(Scenarios.CLEAN_FILE);
 
         handler.handle("""
-            {"jsonrpc":"2.0","id":1,"method":"diagnostics","params":{"file":"%s"}}\
+            {"jsonrpc":"2.0","id":1,"method":"diagnostics","params":{"files":"%s"}}\
             """.formatted(
                                 project.resolve(Scenarios.CLEAN_FILE.request().file())))
                 .afterReply()
@@ -113,6 +129,50 @@ class DiagnosticsMethodTest {
     }
 
     @Test
+    void severalFilesAreAnsweredInTheOrderGivenEachWithItsOwnProblemsAndNamedAsGiven() {
+        var clean = project.resolve(Scenarios.CLEAN_FILE.request().file());
+        var broken = project.resolve(Scenarios.FILE_WITH_AN_ERROR.request().file());
+
+        var diagnosed =
+                diagnosedBy(ask(handler(Scenarios.CLEAN_FILE, Scenarios.FILE_WITH_AN_ERROR), broken, clean, broken));
+
+        assertThat(diagnosed.files())
+                .extracting(FileDiagnostics::file)
+                .containsExactly(broken.toString(), clean.toString(), broken.toString());
+        assertThat(diagnosed.files().get(0).diagnostics()).hasSize(1);
+        assertThat(diagnosed.files().get(1).diagnostics()).isEmpty();
+        assertThat(diagnosed.files().get(2)).isEqualTo(diagnosed.files().get(0));
+    }
+
+    @Test
+    void oneFileOutsideTheProjectRefusesTheWholeCallWithTheProblemOfThatFile() {
+        var clean = project.resolve(Scenarios.CLEAN_FILE.request().file());
+        var outside = project.resolve(
+                Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT.request().file());
+
+        var line = ask(handler(Scenarios.CLEAN_FILE, Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT), clean, outside);
+
+        var failure = (RpcResponse.Failure) RpcResponse.parse(line);
+        assertThat(failure.problem().key()).isEqualTo("language-server-file-outside-project");
+        assertThat(failure.problem().parameters())
+                .containsEntry("file", outside.normalize().toString());
+    }
+
+    @Test
+    void noFileAtAllAndABlankFileAreRefusedAsInvalidParameters() {
+        for (var files : List.of("", "a\\n\\nb", " ")) {
+            var line =
+                    handler(Scenarios.CLEAN_FILE).handle("""
+                        {"jsonrpc":"2.0","id":1,"method":"diagnostics","params":{"files":"%s"}}\
+                        """.formatted(files)).line();
+
+            var failure = (RpcResponse.Failure) RpcResponse.parse(line);
+            assertThat(failure.problem().key()).as(files).isEqualTo("invalid-parameter");
+            assertThat(failure.problem().parameters()).containsEntry("parameter", "files");
+        }
+    }
+
+    @Test
     void aRequestWithoutTheFileIsRefusedBeforeTheMethodIsCalled() {
         var line = handler(Scenarios.CLEAN_FILE)
                 .handle("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"diagnostics\"}")
@@ -120,19 +180,19 @@ class DiagnosticsMethodTest {
 
         var failure = (RpcResponse.Failure) RpcResponse.parse(line);
         assertThat(failure.problem().key()).isEqualTo("missing-parameter");
-        assertThat(failure.problem().parameters()).containsEntry("parameter", "file");
+        assertThat(failure.problem().parameters()).containsEntry("parameter", "files");
     }
 
     @Test
     void aFileThatIsNotAPathIsRefusedAsABadRequest() {
         var line = handler(Scenarios.CLEAN_FILE).handle("""
-            {"jsonrpc":"2.0","id":1,"method":"diagnostics","params":{"file":"a\\u0000b"}}\
+            {"jsonrpc":"2.0","id":1,"method":"diagnostics","params":{"files":"a\\u0000b"}}\
             """).line();
 
         var failure = (RpcResponse.Failure) RpcResponse.parse(line);
         assertThat(line).contains("\"code\":-32602");
         assertThat(failure.problem().key()).isEqualTo("invalid-parameter");
         assertThat(failure.problem().category()).isEqualTo(ErrorStatus.BAD_REQUEST);
-        assertThat(failure.problem().parameters()).containsEntry("parameter", "file");
+        assertThat(failure.problem().parameters()).containsEntry("parameter", "files");
     }
 }

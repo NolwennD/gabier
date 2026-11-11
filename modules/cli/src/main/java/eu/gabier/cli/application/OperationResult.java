@@ -3,7 +3,7 @@ package eu.gabier.cli.application;
 import eu.gabier.protocol.ChangedFiles;
 import eu.gabier.protocol.CodeActions;
 import eu.gabier.protocol.DaemonStatus;
-import eu.gabier.protocol.FileDiagnostics;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FoundReferences;
 
 /**
@@ -28,11 +28,11 @@ public sealed interface OperationResult {
     record Reported(DaemonStatus status) implements OperationResult {}
 
     /**
-     * The problems of a file.
+     * The problems of the files asked for.
      *
-     * @param diagnostics the problems
+     * @param diagnostics the problems of each file
      */
-    record Diagnosed(FileDiagnostics diagnostics) implements OperationResult {}
+    record Diagnosed(DiagnosedFiles diagnostics) implements OperationResult {}
 
     /**
      * The places a symbol is used.

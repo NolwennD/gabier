@@ -14,7 +14,7 @@ import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.request;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import eu.gabier.protocol.DaemonStatus;
-import eu.gabier.protocol.FileDiagnostics;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.Json;
 import eu.gabier.protocol.ProtocolVersion;
@@ -173,7 +173,7 @@ class McpServerTest {
             var warmedUp = new AtomicBoolean();
             var warmedUpWhenAsked = new CopyOnWriteArrayList<Boolean>();
             var daemon = new StubDaemon()
-                    .answering(new FileDiagnostics(List.of()).toJson())
+                    .answering(new DiagnosedFiles(List.of()).toJson())
                     .whenAsked(() -> warmedUpWhenAsked.add(warmedUp.get()));
             var warmUp = WarmUp.inBackground(
                     () -> {
@@ -185,7 +185,7 @@ class McpServerTest {
             var answers = CompletableFuture.supplyAsync(() -> exchange(
                     McpExchange.serverOf(daemon, warmUp),
                     modern("1", "server/discover"),
-                    modernCall("diagnostics", "{\"file\":\"/work/A.java\"}")));
+                    modernCall("diagnostics", "{\"files\":[\"/work/A.java\"]}")));
             Thread.sleep(200);
             go.countDown();
 
@@ -222,7 +222,7 @@ class McpServerTest {
 
         @Test
         void answersTheCallWhenTheWarmUpEndedWithAnErrorOfTheProcess() throws Exception {
-            var daemon = new StubDaemon().answering(new FileDiagnostics(List.of()).toJson());
+            var daemon = new StubDaemon().answering(new DiagnosedFiles(List.of()).toJson());
             var warmUp = WarmUp.inBackground(
                     () -> {
                         throw new NoClassDefFoundError("java/lang/ProcessBuilder");
@@ -232,7 +232,7 @@ class McpServerTest {
             var answers = exchange(
                     McpExchange.serverOf(daemon, warmUp),
                     modern("1", "server/discover"),
-                    modernCall("2", "diagnostics", "{\"file\":\"/work/A.java\"}"));
+                    modernCall("2", "diagnostics", "{\"files\":[\"/work/A.java\"]}"));
 
             assertThat(answers).hasSize(2);
             assertThat(answers)

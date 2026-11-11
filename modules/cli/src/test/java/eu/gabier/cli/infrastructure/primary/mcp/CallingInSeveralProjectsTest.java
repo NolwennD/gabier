@@ -7,7 +7,7 @@ import static eu.gabier.cli.infrastructure.primary.mcp.McpExchange.modernCall;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import eu.gabier.protocol.DaemonStatus;
-import eu.gabier.protocol.FileDiagnostics;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
@@ -24,7 +24,7 @@ class CallingInSeveralProjectsTest {
 
     private static final Path CLONE = Path.of("/work/clone");
     private static final Path WORKTREE = Path.of("/work/clone/trees/tree");
-    private static final String CLEAN = new FileDiagnostics(List.of()).toJson();
+    private static final String CLEAN = new DiagnosedFiles(List.of()).toJson();
 
     private final StubDaemon inClone = new StubDaemon().answering(CLEAN);
     private final StubDaemon inWorktree = new StubDaemon().answering(CLEAN);
@@ -32,7 +32,7 @@ class CallingInSeveralProjectsTest {
             FakeProjects.launchedIn(CLONE, inClone).and(WORKTREE, inWorktree);
 
     private static String diagnose(String id, String file) {
-        return modernCall(id, "diagnostics", "{\"file\":\"" + file + "\"}");
+        return modernCall(id, "diagnostics", "{\"files\":[\"" + file + "\"]}");
     }
 
     private static String statusOf(String phase, String task) {
@@ -58,9 +58,9 @@ class CallingInSeveralProjectsTest {
         assertThat(answers).hasSize(2);
         assertThat(inWorktree.asked())
                 .containsExactly(new StubDaemon.Asked(
-                        "diagnostics", Map.of("file", "/work/clone/trees/tree/src/A.java"), false));
+                        "diagnostics", Map.of("files", "/work/clone/trees/tree/src/A.java"), false));
         assertThat(inClone.asked())
-                .containsExactly(new StubDaemon.Asked("diagnostics", Map.of("file", "/work/clone/src/B.java"), false));
+                .containsExactly(new StubDaemon.Asked("diagnostics", Map.of("files", "/work/clone/src/B.java"), false));
     }
 
     @Test
@@ -98,7 +98,7 @@ class CallingInSeveralProjectsTest {
 
         assertThat(at(answers.getFirst(), "result", "isError")).isEqualTo(true);
         assertThat(at(answers.getFirst(), "result", "structuredContent", "detail"))
-                .isEqualTo("The value file of the operation diagnostics must be an absolute path: "
+                .isEqualTo("The value files of the operation diagnostics must be an absolute path: "
                         + "the folder the call is made from is not known");
         assertThat(inClone.asked()).isEmpty();
         assertThat(inWorktree.asked()).isEmpty();
@@ -143,7 +143,8 @@ class CallingInSeveralProjectsTest {
 
         try (var session = new McpSession(McpExchange.serverOf(
                 FakeProjects.launchedIn(CLONE, cloneDaemon).and(WORKTREE, worktreeDaemon), time))) {
-            session.send(modernCall("1", "diagnostics", "{\"file\":\"/work/clone/trees/tree/A.java\"}", "\"token\""));
+            session.send(
+                    modernCall("1", "diagnostics", "{\"files\":[\"/work/clone/trees/tree/A.java\"]}", "\"token\""));
             worktreeDaemon.awaitAsked();
             time.advance(Duration.ofSeconds(5));
             time.tick();

@@ -31,14 +31,16 @@ class DiagnoseTest {
     void givesNothingForACleanFile() {
         server.scripted(Scenarios.CLEAN_FILE);
 
-        assertThat(diagnose.diagnose(fileOf(Scenarios.CLEAN_FILE))).isEmpty();
+        assertThat(diagnose.diagnose(List.of(fileOf(Scenarios.CLEAN_FILE))).getFirst())
+                .isEmpty();
     }
 
     @Test
     void givesTheDiagnosticsOfTheServerAsTheyAre() {
         server.scripted(Scenarios.FILE_WITH_AN_ERROR);
 
-        List<Diagnostic> diagnostics = diagnose.diagnose(fileOf(Scenarios.FILE_WITH_AN_ERROR));
+        List<Diagnostic> diagnostics =
+                diagnose.diagnose(List.of(fileOf(Scenarios.FILE_WITH_AN_ERROR))).getFirst();
 
         assertThat(diagnostics)
                 .containsExactly(new Diagnostic(
@@ -51,9 +53,35 @@ class DiagnoseTest {
     void asksTheServerOnceAboutTheFile() {
         server.scripted(Scenarios.CLEAN_FILE);
 
-        diagnose.diagnose(fileOf(Scenarios.CLEAN_FILE));
+        diagnose.diagnose(List.of(fileOf(Scenarios.CLEAN_FILE))).getFirst();
 
         assertThat(server.asked()).containsExactly(new Request.Diagnostics(fileOf(Scenarios.CLEAN_FILE)));
+    }
+
+    @Test
+    void givesOneListPerFileInTheOrderGivenWithASingleRequestToTheServer() {
+        server.scripted(Scenarios.CLEAN_FILE).scripted(Scenarios.FILE_WITH_AN_ERROR);
+        var clean = fileOf(Scenarios.CLEAN_FILE);
+        var broken = fileOf(Scenarios.FILE_WITH_AN_ERROR);
+
+        var answers = diagnose.diagnose(List.of(broken, clean, broken));
+
+        assertThat(answers).hasSize(3);
+        assertThat(answers.get(0)).hasSize(1);
+        assertThat(answers.get(1)).isEmpty();
+        assertThat(answers.get(2)).isEqualTo(answers.get(0));
+    }
+
+    @Test
+    void refusesTheWholeCallWhenOneFileIsOutsideTheProject() {
+        server.scripted(Scenarios.CLEAN_FILE).scripted(Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT);
+        var clean = fileOf(Scenarios.CLEAN_FILE);
+        var outside = fileOf(Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT);
+
+        assertThatExceptionOfType(LanguageServerException.class)
+                .isThrownBy(() -> diagnose.diagnose(List.of(clean, outside)))
+                .satisfies(exception ->
+                        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
     }
 
     @Test
@@ -61,7 +89,8 @@ class DiagnoseTest {
         server.scripted(Scenarios.DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS);
 
         assertThatExceptionOfType(LanguageServerException.class)
-                .isThrownBy(() -> diagnose.diagnose(fileOf(Scenarios.DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS)))
+                .isThrownBy(() -> diagnose.diagnose(List.of(fileOf(Scenarios.DIAGNOSTICS_WHILE_THE_SERVER_IMPORTS)))
+                        .getFirst())
                 .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_READY))
                 .withMessage("The language server is still importing the project: try again later");
     }
@@ -72,7 +101,7 @@ class DiagnoseTest {
         Path outside = fileOf(Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT);
 
         assertThatExceptionOfType(LanguageServerException.class)
-                .isThrownBy(() -> diagnose.diagnose(outside))
+                .isThrownBy(() -> diagnose.diagnose(List.of(outside)).getFirst())
                 .satisfies(
                         exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT))
                 .withMessage("The file /outside/Elsewhere.java is not in the project of the language server");
@@ -84,7 +113,7 @@ class DiagnoseTest {
         Path missing = fileOf(Scenarios.DIAGNOSTICS_OF_A_MISSING_FILE);
 
         assertThatExceptionOfType(LanguageServerException.class)
-                .isThrownBy(() -> diagnose.diagnose(missing))
+                .isThrownBy(() -> diagnose.diagnose(List.of(missing)).getFirst())
                 .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.FILE_MISSING))
                 .withMessage("The file " + missing + " does not exist");
     }
@@ -95,7 +124,7 @@ class DiagnoseTest {
         Path folder = fileOf(Scenarios.DIAGNOSTICS_OF_A_FOLDER);
 
         assertThatExceptionOfType(LanguageServerException.class)
-                .isThrownBy(() -> diagnose.diagnose(folder))
+                .isThrownBy(() -> diagnose.diagnose(List.of(folder)).getFirst())
                 .satisfies(exception -> assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_A_FILE))
                 .withMessage(folder + " is not a file");
     }
@@ -108,9 +137,16 @@ class DiagnoseTest {
     }
 
     @Test
-    void rejectsAMissingFile() {
+    void rejectsMissingFiles() {
         assertThatExceptionOfType(MissingMandatoryValueException.class)
                 .isThrownBy(() -> diagnose.diagnose(null))
-                .satisfies(exception -> assertThat(exception.field()).isEqualTo("file"));
+                .satisfies(exception -> assertThat(exception.field()).isEqualTo("files"));
+    }
+
+    @Test
+    void rejectsNoFileAtAll() {
+        assertThatExceptionOfType(MissingMandatoryValueException.class)
+                .isThrownBy(() -> diagnose.diagnose(List.of()))
+                .satisfies(exception -> assertThat(exception.field()).isEqualTo("files"));
     }
 }

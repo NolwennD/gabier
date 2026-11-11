@@ -18,15 +18,15 @@ public final class Diagnose {
     }
 
     /**
-     * Asks the language server for the diagnostics of a file.
+     * Asks the language server for the diagnostics of files, in one request.
      *
-     * @return the diagnostics of the file, none when it is clean
-     * @throws eu.gabier.editing.domain.LanguageServerException if the server declines: it is not ready, or the
-     *     file is not in its project
+     * @return one list of diagnostics per file, in the order given, none for a file that is clean
+     * @throws eu.gabier.editing.domain.LanguageServerException if the server declines: it is not ready, or one of the
+     *     files is not in its project (the whole call is refused)
      */
-    public List<Diagnostic> diagnose(Path file) {
-        Assert.notNull("file", file);
+    public List<List<Diagnostic>> diagnose(List<Path> files) {
+        Assert.field("files", files).notNull().notEmpty().noNullElement();
 
-        return server.diagnostics(file);
+        return server.diagnostics(files);
     }
 }

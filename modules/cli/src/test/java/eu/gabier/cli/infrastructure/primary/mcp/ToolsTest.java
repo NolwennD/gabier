@@ -101,7 +101,8 @@ class ToolsTest {
 
         @Test
         void describesATooWithNoNotesByItsSummaryAlone() {
-            assertThat(tool(served, "diagnostics").get("description")).isEqualTo(Operations.DIAGNOSTICS.summary());
+            assertThat(tool(served, "extract-variable").get("description"))
+                    .isEqualTo(Operations.EXTRACT_VARIABLE.summary());
         }
 
         @Test

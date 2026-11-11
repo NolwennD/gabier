@@ -360,11 +360,11 @@ public final class Native {
                         "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"guide\","
                                 + "\"arguments\":{\"task\":\"  \"}," + meta + "}}",
                         "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"diagnostics\","
-                                + "\"arguments\":{\"file\":\"/nowhere/A.java\"}," + meta + "}}",
+                                + "\"arguments\":{\"files\":[\"/nowhere/A.java\"]}," + meta + "}}",
                         "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"diagnostics\","
-                                + "\"arguments\":{\"file\":\"\"}," + meta + "}}",
+                                + "\"arguments\":{\"files\":[\"\"]}," + meta + "}}",
                         "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"diagnostics\","
-                                + "\"arguments\":{\"file\":\"src/A.java\"}," + meta + "}}")
+                                + "\"arguments\":{\"files\":[\"src/A.java\"]}," + meta + "}}")
                 + "\n";
         Run run = runBinaryReading(binary, directory, List.of(), input, "mcp");
         List<String> answers = run.out().lines().toList();
@@ -388,7 +388,7 @@ public final class Native {
                 && asked.contains("\"key\":\"daemon-start-failed\"")
                 && empty.contains("\"isError\":true")
                 && empty.contains("\"key\":\"operation-invalid-values\"")
-                && empty.contains("must not be empty")
+                && empty.contains("must not have an empty element")
                 && relative.contains("\"isError\":true")
                 && relative.contains("\"key\":\"operation-invalid-values\"")
                 && relative.contains("must be an absolute path");
@@ -471,7 +471,7 @@ public final class Native {
             });
             var stdin = process.getOutputStream();
             stdin.write(("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"diagnostics\","
-                            + "\"arguments\":{\"file\":\"/work/A.java\"}," + meta + "}}\n"
+                            + "\"arguments\":{\"files\":[\"/work/A.java\"]}," + meta + "}}\n"
                             + "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}\n"
                             + "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"status\","
                             + "\"arguments\":{}," + meta + "}}\n")
@@ -528,7 +528,7 @@ public final class Native {
                         if (!asksStatus) {
                             release.await();
                         }
-                        String result = asksStatus ? status : "{\"diagnostics\":[]}";
+                        String result = asksStatus ? status : "{\"files\":[]}";
                         String response = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":" + result + "}\n";
                         client.write(ByteBuffer.wrap(response.getBytes(StandardCharsets.UTF_8)));
                     } catch (IOException | InterruptedException gone) {
@@ -926,9 +926,19 @@ public final class Native {
             expect(
                     json.exit() == 0
                             && json.out()
-                                    .equals("{\"diagnostics\":[{\"severity\":\"error\",\"line\":4,\"column\":15,"
-                                            + "\"message\":\"" + message + "\"}]}"),
+                                    .equals("{\"files\":[{\"file\":\"" + directory.resolve(broken)
+                                            + "\",\"diagnostics\":[{\"severity\":\"error\",\"line\":4,\"column\":15,"
+                                            + "\"message\":\"" + message + "\"}]}]}"),
                     "gabier --json diagnostics gives the result with the positions from 0");
+            String sloppy = "project/src/main/java/demo/Sloppy.java";
+            Run several = gabier("diagnostics", sloppy, "project/src/main/java/demo/Main.java", broken);
+            expect(
+                    several.exit() == 0
+                            && several.err().isEmpty()
+                            && several.out()
+                                    .equals(sloppy + ":5:13: warning: The value of the local variable unused is not used\n"
+                                            + broken + ":5:16: error: " + message),
+                    "gabier diagnostics of several files prints the problems of each in the order given, in one call");
             Run outside = gabier("diagnostics", "outside/Elsewhere.java");
             expect(
                     outside.exit() == 2

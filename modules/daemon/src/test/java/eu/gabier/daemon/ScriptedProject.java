@@ -141,7 +141,7 @@ final class ScriptedProject implements ServedProject {
     }
 
     @Override
-    public List<Diagnostic> diagnostics(Path file) {
+    public List<List<Diagnostic>> diagnostics(List<Path> files) {
         try {
             switch (requests) {
                 case WAIT_FOR_THE_CLOSE -> {
@@ -160,7 +160,7 @@ final class ScriptedProject implements ServedProject {
             Thread.currentThread().interrupt();
             throw new JdtlsException("interrupted", stopped);
         }
-        return server.diagnostics(file);
+        return server.diagnostics(files);
     }
 
     @Override

@@ -981,7 +981,7 @@ references`.
 
 Words: see or show the errors, compile errors, warnings, does this file compile, problems of a file, without a build
 
-Ask: `gabier diagnostics <file>`.
+Ask: `gabier diagnostics <file>...`, with every file the change touched in one call.
 
 Output, one line per problem, `file:line:column: severity: message`:
 
@@ -990,7 +990,8 @@ src/main/java/demo/Main.java:7:9: error: Missing cannot be resolved to a type
 src/main/java/demo/Main.java:8:21: error: Type mismatch: cannot convert from String to int
 ```
 
-Limits: it reads one file at a time, so run it on every file a change crossed into. A file with problems still gives
+Limits: the files are asked together, so jdtls is waited for once, and the problems come in the order the files were
+given. One file it refuses (outside the project, missing) refuses the whole call. A file with problems still gives
 exit code 0. For the fix of an error, see "A compiler error that jdtls has a fix for". See `gabier help diagnostics`.
 
 ### A new file for a new type

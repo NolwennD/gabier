@@ -16,12 +16,15 @@ import java.util.Optional;
 public interface JavaLanguageServer {
 
     /**
-     * The problems of a source file, as the server sees the project.
+     * The problems of source files, as the server sees the project, asked together: what a request costs is the wait for
+     * the server to be quiet, which the files share.
      *
-     * @return the diagnostics, none when the file is clean
-     * @throws LanguageServerException if the server is not ready or the file is not a file of its project (outside it, missing or a folder)
+     * @return one list of diagnostics per file, in the order given (none for a file that is clean), the same list for a
+     *     file that is given twice
+     * @throws LanguageServerException if the server is not ready or one of the files is not a file of its project
+     *     (outside it, missing or a folder): the whole call is refused
      */
-    List<Diagnostic> diagnostics(Path file);
+    List<List<Diagnostic>> diagnostics(List<Path> files);
 
     /**
      * What renaming the symbol at a position to a new name changes, in the whole project.

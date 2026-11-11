@@ -349,7 +349,7 @@ class MainTest {
             var daemon = start();
 
             var refusal = ask("""
-                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"%s"}}
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"files":"%s"}}
                 """.formatted(directory.resolve("File.java")));
 
             assertThat(refusal)
@@ -373,7 +373,7 @@ class MainTest {
             var daemon = start(() -> run(environment, PASSING), socketPath());
 
             assertThat(ask("""
-                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"%s"}}
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"files":"%s"}}
                 """.formatted(directory.resolve("File.java"))))
                     .contains("\"key\":\"jdtls-start-failed\"")
                     .contains("jdtls exited with code 3");
@@ -398,7 +398,7 @@ class MainTest {
             var daemon = start(() -> run(environment, PASSING), socketPath());
 
             ask("""
-                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"%s"}}
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"files":"%s"}}
                 """.formatted(directory.resolve("File.java")));
             ask(STOP);
 

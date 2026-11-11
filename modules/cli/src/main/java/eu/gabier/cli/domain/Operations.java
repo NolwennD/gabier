@@ -55,10 +55,15 @@ public final class Operations {
 
     public static final Operation DIAGNOSTICS = new Operation(
             "diagnostics",
-            "the errors and warnings of a Java file, without a build",
-            "",
+            "the errors and warnings of Java files, without a build",
+            """
+            The files are asked of the language server together, which waits for it to be quiet once for all of them:
+            ask several files in one call rather than one call each. The result has one element per file, in the order
+            given, with the problems of that file, none when it is clean. One file the language server refuses (outside
+            the project, missing, a folder) refuses the whole call: no file is answered.\
+            """,
             List.of(Refusals.FILE_OUTSIDE_PROJECT, Refusals.FILE_MISSING, Refusals.NOT_A_FILE, Refusals.NOT_READY),
-            List.of(FILE));
+            List.of(Parameter.paths("files", "the Java files, absolute paths in the project")));
 
     public static final Operation RENAME = new Operation(
             "rename",

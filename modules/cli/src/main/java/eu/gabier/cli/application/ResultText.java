@@ -3,7 +3,7 @@ package eu.gabier.cli.application;
 import eu.gabier.protocol.ChangedFiles;
 import eu.gabier.protocol.CodeActions;
 import eu.gabier.protocol.DaemonStatus;
-import eu.gabier.protocol.FileDiagnostics;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FoundReferences;
 import eu.gabier.protocol.FoundReferences.Place;
 import eu.gabier.protocol.TerminalText;
@@ -42,15 +42,23 @@ public final class ResultText {
     }
 
     /**
-     * One line per problem, {@code file:line:column: severity: message}; nothing for a file with no problem.
+     * One line per problem, {@code file:line:column: severity: message}, the files in the order given and the problems of
+     * each in the order the server gave them; nothing for a file with no problem.
      *
-     * @param file the file as the user gave it
+     * @param files the files as the user gave them, in the order of the request: the element of the result at the same
+     *     index is the one of that file (an element beyond them is shown under the name the result gives it)
      */
-    public static List<String> lines(String file, FileDiagnostics diagnostics) {
-        return neutralised(diagnostics.diagnostics().stream()
-                .map(diagnosis -> file + ":" + (diagnosis.line() + 1) + ":" + (diagnosis.column() + 1) + ": "
-                        + diagnosis.severity().text() + ": " + diagnosis.message())
-                .toList());
+    public static List<String> lines(List<String> files, DiagnosedFiles diagnosed) {
+        var lines = new ArrayList<String>();
+        for (int index = 0; index < diagnosed.files().size(); index++) {
+            var element = diagnosed.files().get(index);
+            var file = index < files.size() ? files.get(index) : element.file();
+            element.diagnostics()
+                    .forEach(diagnosis -> lines.add(file + ":" + (diagnosis.line() + 1) + ":" + (diagnosis.column() + 1)
+                            + ": " + diagnosis.severity().text() + ": " + diagnosis.message()));
+        }
+
+        return neutralised(lines);
     }
 
     /**

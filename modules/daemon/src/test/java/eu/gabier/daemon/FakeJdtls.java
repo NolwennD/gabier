@@ -126,6 +126,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private Duration pauseBetweenPublications = Duration.ZERO;
     private final List<Opened> opened = new CopyOnWriteArrayList<>();
     private final List<String> closed = new CopyOnWriteArrayList<>();
+    private final List<String> documentEvents = new CopyOnWriteArrayList<>();
     private CompletableFuture<Either3<org.eclipse.lsp4j.Range, PrepareRenameResult, PrepareRenameDefaultBehavior>>
             prepareRenameAnswer = new CompletableFuture<>();
     private CompletableFuture<WorkspaceEdit> renameAnswer = new CompletableFuture<>();
@@ -652,6 +653,16 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         return List.copyOf(closed);
     }
 
+    /**
+     * The documents opened and closed, in the order it happened ({@code open <file>}, {@code close <file>}), once there
+     * are as many closed as expected: what shows whether files were asked together or one after the other.
+     */
+    List<String> documentEvents(int expectedClosed) throws InterruptedException {
+        closed(expectedClosed);
+
+        return List.copyOf(documentEvents);
+    }
+
     List<String> commands() {
         return commands;
     }
@@ -781,6 +792,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                     String uri = params.getTextDocument().getUri();
                     received.add("didOpen " + named(uri));
                     opened.add(new Opened(uri, params.getTextDocument().getText()));
+                    documentEvents.add("open " + named(uri));
                     var stages = publicationsOnOpen.getOrDefault(uri, List.of());
                     for (int stage = 0; stage < stages.size(); stage++) {
                         if (stage > 0) {
@@ -870,6 +882,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                 @Override
                 public void didClose(DidCloseTextDocumentParams params) {
                     closed.add(params.getTextDocument().getUri());
+                    documentEvents.add("close " + named(params.getTextDocument().getUri()));
                 }
 
                 @Override

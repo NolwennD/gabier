@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import eu.gabier.cli.Gabier;
 import eu.gabier.cli.domain.Operations;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FileDiagnostics.Diagnosis;
 import eu.gabier.protocol.FileDiagnostics.Severity;
@@ -86,9 +87,11 @@ class CallingAToolTest extends CliTest {
 
     @Test
     void diagnosticsSaysWhatTheCommandLinePrintsAndGivesTheResultOfTheDaemon() throws IOException {
-        var diagnostics = new FileDiagnostics(List.of(
-                new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch"),
-                new Diagnosis(Severity.WARNING, 0, 0, "Careful")));
+        var diagnostics = new DiagnosedFiles(List.of(new FileDiagnostics(
+                "/project/Broken.java",
+                List.of(
+                        new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch"),
+                        new Diagnosis(Severity.WARNING, 0, 0, "Careful")))));
         try (var daemon = daemonAnswering(diagnostics.toJson())) {
             assertThat(runWithSocket("diagnostics", "/project/Broken.java")).isZero();
             var printed = printed(out());
@@ -97,7 +100,7 @@ class CallingAToolTest extends CliTest {
                     .isZero();
             var json = printed(out());
 
-            var result = result(mcp(call("diagnostics", "{\"file\":\"/project/Broken.java\"}"))
+            var result = result(mcp(call("diagnostics", "{\"files\":[\"/project/Broken.java\"]}"))
                     .getFirst());
 
             assertThat(text(result)).isEqualTo(printed);
@@ -191,8 +194,8 @@ class CallingAToolTest extends CliTest {
 
         var answers = mcp(
                 environment,
-                call("diagnostics", "{\"file\":\"/project/Main.java\"}"),
-                call("diagnostics", "{\"file\":\"/project/Main.java\"}"));
+                call("diagnostics", "{\"files\":[\"/project/Main.java\"]}"),
+                call("diagnostics", "{\"files\":[\"/project/Main.java\"]}"));
 
         assertThat(answers).hasSize(2).allSatisfy(answer -> {
             var result = result(answer);
@@ -212,12 +215,12 @@ class CallingAToolTest extends CliTest {
 
         var answers = mcp(
                 environment,
-                call("diagnostics", "{\"file\":\"/project/Main.java\"}"),
-                call("diagnostics", "{\"file\":\"/project/Other.java\"}"));
+                call("diagnostics", "{\"files\":[\"/project/Main.java\"]}"),
+                call("diagnostics", "{\"files\":[\"/project/Other.java\"]}"));
 
         assertThat(answers).hasSize(2).allSatisfy(answer -> {
             assertThat(result(answer).get("isError")).isEqualTo(false);
-            assertThat(result(answer).get("structuredContent")).isEqualTo(Map.of("diagnostics", List.of()));
+            assertThat(result(answer).get("structuredContent")).isEqualTo(Map.of("files", List.of()));
         });
         assertThat(Files.readAllLines(directory.resolve("gabier.sock.log"))).hasSize(1);
         assertThat(err()).isEmpty();

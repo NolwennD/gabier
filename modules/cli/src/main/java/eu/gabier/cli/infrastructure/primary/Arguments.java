@@ -70,6 +70,18 @@ record Arguments(List<String> all, List<String> operands) {
     }
 
     /**
+     * These words when there is at least one operand and none is {@code --dry-run}, which a command with no dry run
+     * refuses; else the usage error. For a command that takes a list of files and nothing else.
+     */
+    Arguments atLeastOne() {
+        if (operands.isEmpty() || operands.contains(DRY_RUN)) {
+            throw UsageException.unsupportedArguments(all);
+        }
+
+        return this;
+    }
+
+    /**
      * The operands once {@code --dry-run} is taken out, when there are at least that many; else the usage error. For a
      * command that takes a list of files and then a last operand.
      */

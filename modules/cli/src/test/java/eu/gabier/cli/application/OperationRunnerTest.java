@@ -15,6 +15,7 @@ import eu.gabier.cli.domain.Parameter.Type;
 import eu.gabier.protocol.ChangedFiles;
 import eu.gabier.protocol.CodeActions;
 import eu.gabier.protocol.DaemonStatus;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FileDiagnostics.Diagnosis;
 import eu.gabier.protocol.FileDiagnostics.Severity;
@@ -50,11 +51,11 @@ class OperationRunnerTest {
 
         @Test
         void asksTheMethodOfTheOperationWithTheValuesAsTexts() {
-            daemon.answers(new FileDiagnostics(List.of()).toJson());
+            daemon.answers(new DiagnosedFiles(List.of()).toJson());
 
-            runner.run(Operations.DIAGNOSTICS, Map.of("file", "/project/Broken.java"));
+            runner.run(Operations.DIAGNOSTICS, Map.of("files", List.of("/project/Broken.java")));
 
-            assertThat(daemon.asked).containsExactly(new Asked("diagnostics", Map.of("file", "/project/Broken.java")));
+            assertThat(daemon.asked).containsExactly(new Asked("diagnostics", Map.of("files", "/project/Broken.java")));
         }
 
         @Test
@@ -140,7 +141,7 @@ class OperationRunnerTest {
 
         @Test
         void leavesOutAnOptionalValueThatIsNotGiven() {
-            daemon.answers(new FileDiagnostics(List.of()).toJson());
+            daemon.answers(new DiagnosedFiles(List.of()).toJson());
             var optional = new Operation(
                     "diagnostics",
                     "the problems of a file",
@@ -164,7 +165,7 @@ class OperationRunnerTest {
                     ErrorStatus.BAD_REQUEST);
             daemon.refuses(refusal);
 
-            assertThatThrownBy(() -> runner.run(Operations.DIAGNOSTICS, Map.of("file", "/project/A.java")))
+            assertThatThrownBy(() -> runner.run(Operations.DIAGNOSTICS, Map.of("files", List.of("/project/A.java"))))
                     .isSameAs(refusal);
         }
     }
@@ -183,11 +184,18 @@ class OperationRunnerTest {
         }
 
         @Test
-        void givesTheProblemsOfAFileForDiagnostics() {
-            var diagnostics = new FileDiagnostics(List.of(new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch")));
+        void givesTheProblemsOfTheFilesForDiagnosticsAndSendsThemOneToALine() {
+            var diagnostics = new DiagnosedFiles(List.of(
+                    new FileDiagnostics(
+                            "/project/A.java", List.of(new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch"))),
+                    new FileDiagnostics("/project/B.java", List.of())));
             daemon.answers(diagnostics.toJson());
 
-            var result = runner.run(Operations.DIAGNOSTICS, Map.of("file", "/project/A.java"));
+            var result =
+                    runner.run(Operations.DIAGNOSTICS, Map.of("files", List.of("/project/A.java", "/project/B.java")));
+
+            assertThat(daemon.asked)
+                    .containsExactly(new Asked("diagnostics", Map.of("files", "/project/A.java\n/project/B.java")));
 
             assertThat(result).isEqualTo(new OperationResult.Diagnosed(diagnostics));
         }
@@ -375,28 +383,29 @@ class OperationRunnerTest {
 
         @Test
         void refusesAnEmptyPathSinceAFrontEndThatMadeItAbsoluteWouldHaveSentItsWorkingDirectory() {
-            assertThatThrownBy(() -> runner.run(Operations.DIAGNOSTICS, Map.of("file", "")))
+            assertThatThrownBy(
+                            () -> runner.run(Operations.CREATE, Map.of("file", "", "kind", "class", "dryRun", false)))
                     .isInstanceOf(InvalidValuesException.class)
-                    .hasMessage("The value file of the operation diagnostics must not be empty");
+                    .hasMessage("The value file of the operation create must not be empty");
         }
 
         @Test
         void refusesAPathThatIsNotATextAsAnyOtherText() {
-            assertThatThrownBy(() -> runner.run(Operations.DIAGNOSTICS, Map.of("file", 7)))
+            assertThatThrownBy(() -> runner.run(Operations.CREATE, Map.of("file", 7, "kind", "class", "dryRun", false)))
                     .isInstanceOf(InvalidValuesException.class)
-                    .hasMessage("The value file of the operation diagnostics must be a text");
+                    .hasMessage("The value file of the operation create must be a text");
         }
 
         @Test
         void checksTheValuesWhenItPreparesACallAndAsksTheDaemonOnlyWhenTheCallRuns() {
-            daemon.answers(new FileDiagnostics(List.of()).toJson());
+            daemon.answers(new DiagnosedFiles(List.of()).toJson());
 
-            var wrong = catchThrowable(() -> runner.prepare(Operations.DIAGNOSTICS, Map.of("file", "")));
-            var prepared = runner.prepare(Operations.DIAGNOSTICS, Map.of("file", "/project/A.java"));
+            var wrong = catchThrowable(() -> runner.prepare(Operations.DIAGNOSTICS, Map.of("files", List.of(""))));
+            var prepared = runner.prepare(Operations.DIAGNOSTICS, Map.of("files", List.of("/project/A.java")));
 
             assertThat(wrong).isInstanceOf(InvalidValuesException.class);
             assertThat(daemon.asked).isEmpty();
-            assertThat(prepared.get()).isEqualTo(new OperationResult.Diagnosed(new FileDiagnostics(List.of())));
+            assertThat(prepared.get()).isEqualTo(new OperationResult.Diagnosed(new DiagnosedFiles(List.of())));
             assertThat(daemon.asked).hasSize(1);
         }
 
@@ -475,7 +484,8 @@ class OperationRunnerTest {
     private static KindAnswered kindAnswered(Operation operation) {
         return switch (operation.method()) {
             case "diagnostics" -> {
-                var diagnostics = new FileDiagnostics(List.of(new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch")));
+                var diagnostics = new DiagnosedFiles(List.of(new FileDiagnostics(
+                        "/project/A.java", List.of(new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch")))));
                 yield new KindAnswered(diagnostics.toJson(), new OperationResult.Diagnosed(diagnostics));
             }
             case "references" -> {

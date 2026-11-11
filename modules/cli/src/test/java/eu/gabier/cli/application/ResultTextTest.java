@@ -7,6 +7,7 @@ import eu.gabier.protocol.ChangedFiles.Moved;
 import eu.gabier.protocol.CodeActions;
 import eu.gabier.protocol.CodeActions.Action;
 import eu.gabier.protocol.DaemonStatus;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FileDiagnostics.Diagnosis;
 import eu.gabier.protocol.FileDiagnostics.Severity;
@@ -221,29 +222,60 @@ class ResultTextTest {
     @Nested
     class OfDiagnostics {
 
+        private static DiagnosedFiles diagnosed(FileDiagnostics... files) {
+            return new DiagnosedFiles(List.of(files));
+        }
+
         @Test
         void saysNothingForAFileWithNoProblem() {
-            assertThat(ResultText.lines("Clean.java", new FileDiagnostics(List.of())))
+            assertThat(ResultText.lines(
+                            List.of("Clean.java"), diagnosed(new FileDiagnostics("/p/Clean.java", List.of()))))
                     .isEmpty();
         }
 
         @Test
         void givesOneLineForEachProblemWithTheFileAsGivenAndThePositionFromOne() {
-            var diagnostics = new FileDiagnostics(List.of(
-                    new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch"),
-                    new Diagnosis(Severity.WARNING, 0, 0, "Unused import")));
+            var diagnostics = diagnosed(new FileDiagnostics(
+                    "/p/src/Broken.java",
+                    List.of(
+                            new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch"),
+                            new Diagnosis(Severity.WARNING, 0, 0, "Unused import"))));
 
-            assertThat(ResultText.lines("src/Broken.java", diagnostics))
+            assertThat(ResultText.lines(List.of("src/Broken.java"), diagnostics))
                     .containsExactly(
                             "src/Broken.java:5:16: error: Type mismatch",
                             "src/Broken.java:1:1: warning: Unused import");
         }
 
         @Test
-        void writesOutWhatATerminalWouldObeyInTheFileAndInTheMessage() {
-            var diagnostics = new FileDiagnostics(List.of(new Diagnosis(Severity.ERROR, 0, 0, "bad " + ESCAPE)));
+        void givesTheProblemsOfEachFileInTheOrderGivenWithTheFileAsTypedForTheElementAtTheSameIndex() {
+            var diagnostics = diagnosed(
+                    new FileDiagnostics("/p/B.java", List.of(new Diagnosis(Severity.ERROR, 1, 2, "in b"))),
+                    new FileDiagnostics("/p/Clean.java", List.of()),
+                    new FileDiagnostics("/p/B.java", List.of(new Diagnosis(Severity.ERROR, 1, 2, "in b"))),
+                    new FileDiagnostics("/p/A.java", List.of(new Diagnosis(Severity.HINT, 0, 0, "in a"))));
 
-            assertThat(ResultText.lines("src/" + ESCAPE + ".java", diagnostics))
+            assertThat(ResultText.lines(List.of("./B.java", "Clean.java", "B.java", "a/../A.java"), diagnostics))
+                    .containsExactly(
+                            "./B.java:2:3: error: in b", "B.java:2:3: error: in b", "a/../A.java:1:1: hint: in a");
+        }
+
+        @Test
+        void showsAnElementTheRequestHadNoNameForUnderTheNameTheResultGivesIt() {
+            var diagnostics = diagnosed(
+                    new FileDiagnostics("/p/A.java", List.of(new Diagnosis(Severity.ERROR, 0, 0, "a"))),
+                    new FileDiagnostics("/p/B.java", List.of(new Diagnosis(Severity.ERROR, 0, 0, "b"))));
+
+            assertThat(ResultText.lines(List.of("A.java"), diagnostics))
+                    .containsExactly("A.java:1:1: error: a", "/p/B.java:1:1: error: b");
+        }
+
+        @Test
+        void writesOutWhatATerminalWouldObeyInTheFileAndInTheMessage() {
+            var diagnostics = diagnosed(
+                    new FileDiagnostics("/p/a.java", List.of(new Diagnosis(Severity.ERROR, 0, 0, "bad " + ESCAPE))));
+
+            assertThat(ResultText.lines(List.of("src/" + ESCAPE + ".java"), diagnostics))
                     .containsExactly("src/" + ESCAPED + ".java:1:1: error: bad " + ESCAPED);
         }
     }

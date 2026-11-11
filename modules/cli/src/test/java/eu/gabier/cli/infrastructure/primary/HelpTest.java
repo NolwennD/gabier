@@ -70,7 +70,7 @@ class HelpTest extends CliTest {
         assertThat(out())
                 .contains("gabier help <command>")
                 .contains("diagnostics ")
-                .contains("the errors and warnings of a Java file");
+                .contains("the errors and warnings of Java files");
     }
 
     @Test

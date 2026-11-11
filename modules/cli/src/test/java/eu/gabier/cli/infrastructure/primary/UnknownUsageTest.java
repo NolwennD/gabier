@@ -14,7 +14,7 @@ class UnknownUsageTest extends CliTest {
     static Stream<List<String>> commandLines() {
         return Stream.of(
                         wordsOfACommandThatDoNotMatchItsUsage(),
-                        diagnosticsWithoutExactlyOneFile(),
+                        diagnosticsWithoutAFile(),
                         renamesThatNameNeitherAPositionNorAnIdentifierCompletely(),
                         organizeImportsWithoutExactlyOneFile(),
                         cleanupWithoutAFileAndACleanUp(),
@@ -45,8 +45,8 @@ class UnknownUsageTest extends CliTest {
         return List.of(List.of("status", "stop"), List.of("diagnostics", "--dry-run", "A.java"));
     }
 
-    private static List<List<String>> diagnosticsWithoutExactlyOneFile() {
-        return List.of(List.of("diagnostics"), List.of("diagnostics", "A.java", "B.java"));
+    private static List<List<String>> diagnosticsWithoutAFile() {
+        return List.of(List.of("diagnostics"));
     }
 
     private static List<List<String>> renamesThatNameNeitherAPositionNorAnIdentifierCompletely() {

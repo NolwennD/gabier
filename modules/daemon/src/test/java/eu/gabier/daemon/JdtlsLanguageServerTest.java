@@ -295,11 +295,43 @@ class JdtlsLanguageServerTest {
             try (var server = started()) {
                 var answers = server.diagnostics(List.of(clean, broken));
 
-                assertThat(answers.keySet()).containsExactly(clean, broken);
-                assertThat(answers.get(clean)).isEmpty();
-                assertThat(answers.get(broken)).hasSize(1);
+                assertThat(answers).hasSize(2);
+                assertThat(answers.get(0)).isEmpty();
+                assertThat(answers.get(1)).hasSize(1);
                 assertThat(fake.opened()).hasSize(2);
                 assertThat(fake.closed(2)).hasSize(2);
+            }
+        }
+
+        @Test
+        void asksSeveralFilesTogetherSoThatTheyShareTheWaitForJdtlsToBeQuiet() throws Exception {
+            fake.publishesOnOpen(clean, List.of()).publishesOnOpen(broken, List.of());
+
+            try (var server = started()) {
+                server.diagnostics(List.of(clean, broken));
+
+                // One wait: both files are open when it ends, and only then closed. One wait each would close the
+                // first before the second is opened.
+                assertThat(fake.documentEvents(2))
+                        .containsExactly(
+                                "open Clean.java", "open Broken.java", "close Clean.java", "close Broken.java");
+            }
+        }
+
+        @Test
+        void answersAFileGivenTwiceTwiceAndOpensItOnce() throws Exception {
+            fake.publishesOnOpen(broken, List.of(lsp(0, 0, DiagnosticSeverity.Error, "m")))
+                    .publishesOnOpen(clean, List.of());
+
+            try (var server = started()) {
+                var answers = server.diagnostics(
+                        List.of(broken, clean, root.resolve("src/main/../main/java/demo/./Broken.java")));
+
+                assertThat(answers).hasSize(3);
+                assertThat(answers.get(0)).hasSize(1);
+                assertThat(answers.get(1)).isEmpty();
+                assertThat(answers.get(2)).isEqualTo(answers.get(0));
+                assertThat(fake.opened()).hasSize(2);
             }
         }
 

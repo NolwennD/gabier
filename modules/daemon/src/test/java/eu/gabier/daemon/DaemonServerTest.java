@@ -10,6 +10,7 @@ import eu.gabier.editing.fixtures.FakeJavaLanguageServer;
 import eu.gabier.editing.fixtures.PackageMoveScenarios;
 import eu.gabier.editing.fixtures.Scenarios;
 import eu.gabier.protocol.DaemonStatus;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FileDiagnostics;
 import eu.gabier.protocol.FileDiagnostics.Diagnosis;
 import eu.gabier.protocol.FileDiagnostics.Severity;
@@ -507,9 +508,11 @@ class DaemonServerTest {
             try (var client = connect(socket())) {
                 var answer = RpcResponse.parse(client.ask(diagnosticsRequest(broken)));
 
-                assertThat(FileDiagnostics.of(((RpcResponse.Success) answer).result()))
-                        .isEqualTo(new FileDiagnostics(List.of(new Diagnosis(
-                                Severity.ERROR, 4, 15, "Type mismatch: cannot convert from String to int"))));
+                assertThat(DiagnosedFiles.of(((RpcResponse.Success) answer).result()))
+                        .isEqualTo(new DiagnosedFiles(List.of(new FileDiagnostics(
+                                broken.toString(),
+                                List.of(new Diagnosis(
+                                        Severity.ERROR, 4, 15, "Type mismatch: cannot convert from String to int"))))));
                 assertThat(client.ask(diagnosticsRequest(outside)))
                         .contains("\"key\":\"language-server-file-outside-project\"");
                 assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
@@ -1074,7 +1077,7 @@ class DaemonServerTest {
 
         private static String diagnosticsRequest(Path file) {
             return """
-                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"%s"}}
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"files":"%s"}}
                 """.formatted(file);
         }
 
@@ -1249,7 +1252,7 @@ class DaemonServerTest {
 
         private String diagnosticsRequest() {
             return """
-                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"%s"}}
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"files":"%s"}}
                 """.formatted(directory.resolve("src/main/java/demo/Broken.java"));
         }
 
@@ -1496,7 +1499,7 @@ class DaemonServerTest {
 
         private String diagnosticsRequest() {
             return """
-                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"file":"%s"}}
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"files":"%s"}}
                 """.formatted(directory.resolve("src/main/java/demo/Broken.java"));
         }
 

@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.SequencedMap;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -212,28 +211,33 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         return ready().projects();
     }
 
-    @Override
-    public List<Diagnostic> diagnostics(Path file) {
-        return diagnostics(List.of(file)).sequencedValues().getFirst();
+    /**
+     * The diagnostics of one file: the call of one file of {@link #diagnostics(List)}.
+     *
+     * @throws LanguageServerException if jdtls is not ready or the file is not in its project
+     * @throws JdtlsException if jdtls dies or does not answer in time
+     */
+    List<Diagnostic> diagnostics(Path file) {
+        return diagnostics(List.of(file)).getFirst();
     }
 
     /**
      * The diagnostics of several files with one wait for jdtls to be quiet: the cost of a request is that wait, so a
-     * caller that has many files asks them together.
+     * caller that has many files asks them together. Each file is opened once, whatever the number of times it is
+     * given, and a file given twice is answered twice.
      *
-     * @return the diagnostics of each file, by its normalized absolute path, in the order given
+     * @return the diagnostics of each file, in the order given
      * @throws LanguageServerException if jdtls is not ready or one of the files is not in its project (nothing is
      *     opened then)
      * @throws JdtlsException if jdtls dies or does not answer in time
      */
-    synchronized SequencedMap<Path, List<Diagnostic>> diagnostics(List<Path> files) {
-        SequencedMap<Path, List<Diagnostic>> answers = new LinkedHashMap<>();
-        published(files).forEach((file, found) -> answers.put(file, domain(found)));
-        return answers;
+    @Override
+    public synchronized List<List<Diagnostic>> diagnostics(List<Path> files) {
+        return published(files).stream().map(JdtlsLanguageServer::domain).toList();
     }
 
-    /** What {@link #diagnostics(List)} asks of jdtls, as jdtls publishes it. */
-    private synchronized SequencedMap<Path, List<org.eclipse.lsp4j.Diagnostic>> published(List<Path> files) {
+    /** What {@link #diagnostics(List)} asks of jdtls, as jdtls publishes it for each file, in the order given. */
+    private synchronized List<List<org.eclipse.lsp4j.Diagnostic>> published(List<Path> files) {
         JdtlsSession session = ready();
         Map<Path, String> texts = new LinkedHashMap<>();
         for (Path file : files) {
@@ -253,9 +257,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         } finally {
             close(session, texts.keySet());
         }
-        SequencedMap<Path, List<org.eclipse.lsp4j.Diagnostic>> answers = new LinkedHashMap<>();
-        texts.keySet().forEach(file -> answers.put(file, diagnostics.latest(file)));
-        return answers;
+        return files.stream().map(file -> diagnostics.latest(normalized(file))).toList();
     }
 
     /**
@@ -1109,7 +1111,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     private List<CodeAction> offered(Path file, Range range) {
         Path path = normalized(file);
         var asked = lsp(range);
-        List<org.eclipse.lsp4j.Diagnostic> problems = published(List.of(path)).sequencedValues().getFirst().stream()
+        List<org.eclipse.lsp4j.Diagnostic> problems = published(List.of(path)).getFirst().stream()
                 .filter(problem -> touches(problem.getRange(), asked))
                 .toList();
         JdtlsSession session = ready();

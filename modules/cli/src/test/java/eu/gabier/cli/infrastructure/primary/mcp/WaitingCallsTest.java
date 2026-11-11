@@ -11,7 +11,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import eu.gabier.protocol.DaemonStatus;
-import eu.gabier.protocol.FileDiagnostics;
+import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
@@ -35,8 +35,8 @@ import org.junit.jupiter.api.Test;
  */
 class WaitingCallsTest {
 
-    private static final String CLEAN = new FileDiagnostics(List.of()).toJson();
-    private static final String DIAGNOSE = "{\"file\":\"/work/A.java\"}";
+    private static final String CLEAN = new DiagnosedFiles(List.of()).toJson();
+    private static final String DIAGNOSE = "{\"files\":[\"/work/A.java\"]}";
 
     /** A daemon whose jdtls is importing the project, as it says it while a request waits for it. */
     private static final String IMPORTING = new DaemonStatus(

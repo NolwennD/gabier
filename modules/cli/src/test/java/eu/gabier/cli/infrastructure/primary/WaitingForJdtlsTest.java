@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 class WaitingForJdtlsTest extends CliTest {
 
     private static final Duration QUICK = Duration.ofMillis(100);
-    private static final String DIAGNOSTICS = "{\"diagnostics\":[]}";
+    private static final String DIAGNOSTICS = "{\"files\":[]}";
 
     private static String status(String jdtls) {
         return """
