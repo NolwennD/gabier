@@ -42,6 +42,7 @@ class ProblemsTest {
                 "language-server-not-extractable",
                 "language-server-not-movable",
                 "language-server-invalid-name",
+                "language-server-request-failed",
                 "editing-no-such-code-action",
                 "editing-unknown-clean-up"
             })

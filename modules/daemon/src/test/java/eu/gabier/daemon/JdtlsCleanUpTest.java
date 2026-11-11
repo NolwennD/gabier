@@ -276,8 +276,9 @@ class JdtlsCleanUpTest {
 
         try (var server = started()) {
             assertThatThrownBy(() -> server.cleanUp(banner, List.of(CleanUp.ADD_OVERRIDE)))
-                    .isInstanceOf(JdtlsException.class)
-                    .hasMessageContaining("waiting for the clean-ups of " + banner)
+                    .isInstanceOfSatisfying(
+                            LanguageServerException.class,
+                            refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED))
                     .hasMessageContaining("Internal error");
 
             assertThat(actionsOf(configurations(2).getLast())).isEmpty();

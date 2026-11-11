@@ -67,6 +67,8 @@ command can answer, and the help of the command (`gabier help inline`) lists the
 - `language-server-file-missing`: the path is under the project and no file is there.
 - `language-server-not-a-file`: the path is a folder.
 - `editing-stale-edit`: the change cannot be applied to the files as they are.
+- `language-server-request-failed`: the language server failed on the request with an error of its own, which the
+  problem relays (its code and its message; the cause is in the log of the daemon, see [the daemon](../daemon.md)).
 - `language-server-not-ready`: the Java language server is not ready.
 - `usage-error`: the arguments are not those of the command.
 - `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.

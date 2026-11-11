@@ -170,7 +170,7 @@ class GuideTest {
     void aRecordComponentSaysWhatJdtlsDoesWithACompactConstructor() {
         var section = sectionOf("### Rename a component of a record");
 
-        assertThat(section).contains("compact constructor").contains("internal-server-error");
+        assertThat(section).contains("compact constructor").contains("language-server-request-failed");
     }
 
     @Test

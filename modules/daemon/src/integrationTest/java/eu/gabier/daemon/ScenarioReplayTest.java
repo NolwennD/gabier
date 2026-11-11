@@ -302,14 +302,18 @@ class ScenarioReplayTest {
                             .assertThat(refusal.key())
                             .as("%s: the key of the refusal", scenario.name())
                             .isEqualTo(expected.key());
-                    differences
-                            .assertThat(refusal.parameters())
-                            .as("%s: the parameters of the refusal", scenario.name())
-                            .isEqualTo(expected.parameters());
-                    differences
-                            .assertThat(refusal.getMessage())
-                            .as("%s: the message of the refusal", scenario.name())
-                            .isEqualTo(expected.getMessage());
+                    // What jdtls says of a request it failed on (its code, its words) is its own: only the key is
+                    // compared.
+                    if (refused.key() != LanguageServerErrorKey.REQUEST_FAILED) {
+                        differences
+                                .assertThat(refusal.parameters())
+                                .as("%s: the parameters of the refusal", scenario.name())
+                                .isEqualTo(expected.parameters());
+                        differences
+                                .assertThat(refusal.getMessage())
+                                .as("%s: the message of the refusal", scenario.name())
+                                .isEqualTo(expected.getMessage());
+                    }
                 }
             }
         }

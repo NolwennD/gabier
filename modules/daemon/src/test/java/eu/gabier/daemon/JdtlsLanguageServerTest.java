@@ -8,6 +8,7 @@ import static eu.gabier.daemon.FakeOnlyReasons.NOTHING_IS_THE_ONLY_ANSWER;
 import static eu.gabier.daemon.FakeOnlyReasons.NO_ANSWER_IN_TIME;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
 
 import com.google.gson.JsonPrimitive;
 import eu.gabier.editing.domain.ChangeSet;
@@ -1178,6 +1179,32 @@ class JdtlsLanguageServerTest {
             }
         }
 
+        @Test
+        void refusesWithWhatJdtlsSaysWhenItAnswersAnInternalErrorAndKeepsItsDataAsTheCause() throws Exception {
+            var data = "java.lang.NullPointerException: element is null";
+            var error = new ResponseErrorException(
+                    new ResponseError(ResponseErrorCode.InternalError, "Internal error.", data));
+            fake.prepareRenameAnswers(renamable()).renameAnswers(CompletableFuture.failedFuture(error));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.rename(greeter, new Position(1, 10), "hello"))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED);
+                            assertThat(refusal.parameters()).containsOnly(entry("code", "-32603"));
+                            assertThat(refusal)
+                                    .hasMessage("The language server failed on the request, with its error -32603:"
+                                            + " Internal error.");
+                            assertThat(refusal.getCause())
+                                    .isInstanceOfSatisfying(
+                                            ResponseErrorException.class,
+                                            cause -> assertThat(cause.getResponseError()
+                                                            .getData()
+                                                            .toString())
+                                                    .contains(data));
+                        });
+            }
+        }
+
         @FakeOnly(reason = JDTLS_FAILS)
         @Test
         void saysWhatWentWrongWhenJdtlsFailsInsteadOfDeclining() throws Exception {
@@ -1187,8 +1214,9 @@ class JdtlsLanguageServerTest {
 
             try (var server = started()) {
                 assertThatThrownBy(() -> server.rename(greeter, new Position(1, 10), "hello"))
-                        .isInstanceOf(JdtlsException.class)
-                        .hasMessageContaining("waiting for the rename of the symbol at")
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED))
                         .hasMessageContaining("Internal error");
             }
         }
@@ -1757,8 +1785,9 @@ class JdtlsLanguageServerTest {
 
             try (var server = started()) {
                 assertThatThrownBy(() -> server.organizeImports(greeter))
-                        .isInstanceOf(JdtlsException.class)
-                        .hasMessageContaining("waiting for the organization of the imports of " + greeter)
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED))
                         .hasMessageContaining("Internal error");
             }
         }
@@ -2273,8 +2302,9 @@ class JdtlsLanguageServerTest {
 
             try (var server = started()) {
                 assertThatThrownBy(() -> server.extractVariable(greeter, selection, "text"))
-                        .isInstanceOf(JdtlsException.class)
-                        .hasMessageContaining("waiting for the extraction of the expression at")
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED))
                         .hasMessageContaining("Internal error");
             }
         }
@@ -3614,8 +3644,9 @@ class JdtlsLanguageServerTest {
 
             try (var server = started()) {
                 assertThatThrownBy(() -> server.moveTypeToFile(shapes, inCircle))
-                        .isInstanceOf(JdtlsException.class)
-                        .hasMessageContaining("waiting for the move of the type at Position[line=3, column=24]")
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED))
                         .hasMessageContaining("Internal error");
             }
         }
@@ -3916,8 +3947,9 @@ class JdtlsLanguageServerTest {
 
             try (var server = started()) {
                 assertThatThrownBy(() -> server.inline(prices, onTheConstant))
-                        .isInstanceOf(JdtlsException.class)
-                        .hasMessageContaining("waiting for the inlining of the symbol at Position[line=3, column=21]")
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED))
                         .hasMessageContaining("Internal error");
             }
         }
@@ -4156,8 +4188,9 @@ class JdtlsLanguageServerTest {
 
             try (var server = started()) {
                 assertThatThrownBy(() -> server.codeActions(offers, onTheType))
-                        .isInstanceOf(JdtlsException.class)
-                        .hasMessageContaining("waiting for the code actions on")
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED))
                         .hasMessageContaining("Internal error");
             }
         }
@@ -4350,8 +4383,9 @@ class JdtlsLanguageServerTest {
 
             try (var server = started()) {
                 assertThatThrownBy(() -> server.codeActionEdit(offers, onTheType, importList()))
-                        .isInstanceOf(JdtlsException.class)
-                        .hasMessageContaining("waiting for the edit of the action \"Import 'List' (java.util)\"")
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED))
                         .hasMessageContaining("Internal error");
             }
         }
@@ -4597,8 +4631,9 @@ class JdtlsLanguageServerTest {
 
             try (var server = started()) {
                 assertThatThrownBy(() -> server.createType(widget, TypeKind.CLASS))
-                        .isInstanceOf(JdtlsException.class)
-                        .hasMessageContaining("waiting for the snippet of a class for " + widget)
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED))
                         .hasMessageContaining("Internal error");
                 assertThat(fake.closed(1)).containsExactly(widget.toUri().toString());
             }
@@ -5004,8 +5039,9 @@ class JdtlsLanguageServerTest {
 
             try (var server = started()) {
                 assertThatThrownBy(() -> server.references(ledger, new Position(3, 8), false))
-                        .isInstanceOf(JdtlsException.class)
-                        .hasMessageContaining("waiting for the references of the symbol at")
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED))
                         .hasMessageContaining("Internal error");
             }
         }

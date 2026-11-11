@@ -8,7 +8,8 @@ final class FakeOnlyReasons {
             "the thread that waits is interrupted by the test, which no request to a real jdtls does";
     static final String JDTLS_DIED = "a real jdtls does not die, or fail to start, on demand";
     static final String JDTLS_FAILS =
-            "a real jdtls declines or answers; a response error that is neither cannot be provoked";
+            "a real jdtls declines, answers, or fails with its internal error (the replay of a record component shows"
+                    + " it); any other failure cannot be provoked";
     static final String MALFORMED_ANSWER =
             "a real jdtls answers what its handlers build; an answer that lacks a part of it, or edits another file,"
                     + " cannot be provoked";

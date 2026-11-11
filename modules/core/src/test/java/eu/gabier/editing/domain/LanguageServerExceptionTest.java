@@ -31,6 +31,7 @@ class LanguageServerExceptionTest {
                         "language-server-not-movable",
                         "language-server-not-movable-to-package",
                         "language-server-not-ready",
+                        "language-server-request-failed",
                         "language-server-unresolved-imports");
     }
 
@@ -42,6 +43,28 @@ class LanguageServerExceptionTest {
         assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
         assertThat(exception.parameters()).isEmpty();
         assertThat(exception).hasMessage("The language server is still importing the project: try again later");
+    }
+
+    @Test
+    void saysThatTheServerFailedOnTheRequestWithItsCodeAndItsMessage() {
+        LanguageServerException exception = LanguageServerException.requestFailed(-32603, "Internal error.");
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters()).isEqualTo(Map.of("code", "-32603"));
+        assertThat(exception)
+                .hasMessage("The language server failed on the request, with its error -32603: Internal error.");
+        assertThat(exception).hasNoCause();
+    }
+
+    @Test
+    void keepsWhatTheServerFailedWithAsTheCauseOfItsFailure() {
+        var failure = new IllegalStateException("what the server answered");
+
+        LanguageServerException exception = LanguageServerException.requestFailed(-32603, "Internal error.", failure);
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED);
+        assertThat(exception).hasCause(failure);
     }
 
     @Test

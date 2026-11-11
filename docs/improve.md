@@ -125,14 +125,17 @@ record Mark(String caption, int rank) {
 ```
 
 Limits: jdtls 1.63.0 fails on a record that has a compact constructor (`Mark { ... }`) or an explicit canonical
-constructor (`Mark(String label, int rank) { this.label = label; ... }`): the answer is `internal-server-error`, with
-nothing renamed, and the fix is upstream (Eclipse bug 566507 describes the rename of a component). Without a
-constructor of that kind it renamed the header, the uses in the body and the calls of the accessor. Look at the
+constructor (`Mark(String label, int rank) { this.label = label; ... }`): the answer is the refusal
+`language-server-request-failed` (jdtls's response error -32603 and its message), with nothing renamed, and the fix is
+upstream (Eclipse bug 566507 describes the rename of a component). Without a constructor of that kind it renamed the
+header, the calls of the accessor and `this.label`, and the uses by simple name in the body for most names. Look at the
 accessor in the example: an explicit accessor `label()` became `getCaption()`, which is no longer the accessor of the
-component, so rename it back to `caption()` by hand. Other cases are reported to leave a use by simple name unrenamed
-and the file no longer compiling (we did not reproduce it here): run `gabier diagnostics` on every file of the record.
-A position on a call of the accessor (`mark.label()`) is declined. For a record with a constructor that fails, edit the
-header, the constructor and the uses by hand, then `gabier diagnostics`.
+component, so rename it back to `caption()` by hand. For some names jdtls leaves the uses by simple name in the body
+unrenamed (seen with a component named `file`, `net`, `time` or `regex`; the same for a field of a class named
+`file`, so it is not about records) and the file no longer compiles: run `gabier diagnostics` on every file of the
+record. A position on a call of the accessor (`mark.label()`) is refused as `language-server-no-such-symbol` (jdtls
+declines to prepare the rename). For a record with a constructor that fails, edit the header, the constructor and the
+uses by hand, then `gabier diagnostics`.
 
 ### The package of one source set
 

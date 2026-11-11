@@ -15,6 +15,9 @@ public final class Refusals {
             "language-server-not-extractable: the selection is not an expression or statements that can be extracted,"
                     + " and jdtls does not say why";
     public static final String NOT_READY = "language-server-not-ready: the Java language server is not ready";
+    public static final String REQUEST_FAILED =
+            "language-server-request-failed: the language server failed on the request with an error of its own, which"
+                    + " the problem relays (its code and its message)";
     public static final String STALE_EDIT_OF_A_FILE =
             "editing-stale-edit: the change cannot be applied to the file as it is";
     public static final String STALE_EDIT_OF_FILES =

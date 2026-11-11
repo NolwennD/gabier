@@ -1,5 +1,6 @@
 package eu.gabier.daemon;
 
+import eu.gabier.editing.domain.LanguageServerException;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
@@ -8,6 +9,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
+import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -88,8 +90,13 @@ final class JdtlsWatch {
         throw stopped(what, null);
     }
 
-    /** Explains why the wait cannot go on: the status Error, the exit of jdtls (its code first), or else the cause. */
-    private JdtlsException stopped(String what, @Nullable Throwable cause) throws InterruptedException {
+    /**
+     * Explains why the wait cannot go on: the status Error, the exit of jdtls (its code first), or else the cause. A
+     * cause that is an internal error jdtls answered (a handler of its threw, as the one of the rename of a record
+     * component does) is relayed as a refusal, with its code and its message and its data kept as the cause: it is what
+     * jdtls says of this request, and it is the same for every request.
+     */
+    private RuntimeException stopped(String what, @Nullable Throwable cause) throws InterruptedException {
         if (failure.state() == Future.State.SUCCESS) {
             return new JdtlsException(
                     failure.resultNow() + ", after " + seconds(elapsed()) + ", while waiting for " + what);
@@ -99,6 +106,13 @@ final class JdtlsWatch {
             return new JdtlsException("jdtls exited with code " + jdtls.exitValue() + " after " + seconds(elapsed())
                     + ", while waiting for " + what);
         } catch (TimeoutException | ExecutionException e) {
+            if (cause instanceof ResponseErrorException error && JdtlsRequests.isInternalError(error)) {
+                return LanguageServerException.requestFailed(
+                        error.getResponseError().getCode(),
+                        error.getResponseError().getMessage(),
+                        error);
+            }
+
             return new JdtlsException(
                     "Failed after " + seconds(elapsed()) + " waiting for " + what + ": " + cause, cause);
         }

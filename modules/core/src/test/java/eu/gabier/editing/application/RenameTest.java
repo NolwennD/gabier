@@ -13,6 +13,7 @@ import eu.gabier.editing.domain.EditingException;
 import eu.gabier.editing.domain.LanguageServerErrorKey;
 import eu.gabier.editing.domain.LanguageServerException;
 import eu.gabier.editing.domain.Position;
+import eu.gabier.editing.fixtures.FailedRenameScenarios;
 import eu.gabier.editing.fixtures.FakeJavaLanguageServer;
 import eu.gabier.editing.fixtures.PackageRenameScenarios;
 import eu.gabier.editing.fixtures.Scenario;
@@ -471,6 +472,14 @@ class RenameTest {
                     Scenarios.RENAME_TO_AN_INVALID_NAME,
                     LanguageServerErrorKey.INVALID_NAME,
                     "\"1st\" is not a valid name for the symbol at 6:15 in {root}/" + GREETER);
+        }
+
+        @Test
+        void relaysTheFailureOfTheServerOnARecordComponentAndWritesNothing() throws IOException {
+            assertRefused(
+                    FailedRenameScenarios.RENAME_A_COMPONENT_OF_A_RECORD_WITH_A_COMPACT_CONSTRUCTOR,
+                    LanguageServerErrorKey.REQUEST_FAILED,
+                    "The language server failed on the request, with its error -32603: Internal error.");
         }
 
         @Test

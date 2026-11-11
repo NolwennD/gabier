@@ -30,6 +30,11 @@ final class JdtlsRequests {
         });
     }
 
+    /** Whether jdtls answered with the response error {@code InternalError}: a handler of its threw. */
+    static boolean isInternalError(ResponseErrorException error) {
+        return error.getResponseError().getCode() == ResponseErrorCode.InternalError.getValue();
+    }
+
     static boolean declines(Throwable failure) {
         return failure instanceof ResponseErrorException error
                 && error.getResponseError().getCode() == ResponseErrorCode.InvalidRequest.getValue();

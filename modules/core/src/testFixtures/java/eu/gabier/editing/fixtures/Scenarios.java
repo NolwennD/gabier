@@ -1968,7 +1968,7 @@ public final class Scenarios {
 
     /**
      * Every scenario of the catalogue, those of {@link PackageMoveScenarios}, {@link PackageRenameScenarios}, {@link
-     * CleanUpScenarios} and {@link CodeActionScenarios} included.
+     * CleanUpScenarios}, {@link CodeActionScenarios} and {@link FailedRenameScenarios} included.
      */
     public static List<Scenario> all() {
         return Stream.of(
@@ -1976,7 +1976,8 @@ public final class Scenarios {
                         PackageMoveScenarios.all(),
                         PackageRenameScenarios.all(),
                         CleanUpScenarios.all(),
-                        CodeActionScenarios.all())
+                        CodeActionScenarios.all(),
+                        FailedRenameScenarios.all())
                 .flatMap(List::stream)
                 .toList();
     }

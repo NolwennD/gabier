@@ -23,6 +23,7 @@ public final class Problems {
             "language-server-not-inlinable",
             "language-server-not-movable",
             "language-server-not-movable-to-package",
+            "language-server-request-failed",
             "language-server-unresolved-imports",
             "editing-ambiguous-code-action",
             "editing-no-such-code-action",

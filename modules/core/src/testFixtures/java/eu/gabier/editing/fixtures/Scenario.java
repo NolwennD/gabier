@@ -107,6 +107,11 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
         }
     }
 
+    /** The failure of the server on any request: the details are the code of its error and its message. */
+    private static LanguageServerException requestFailed(List<String> details) {
+        return LanguageServerException.requestFailed(Integer.parseInt(details.get(0)), details.get(1));
+    }
+
     private static void require(boolean fits, String answer, Request request) {
         if (!fits) {
             throw new IllegalArgumentException("A " + answer + " answer does not fit the request " + request);
@@ -159,6 +164,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
@@ -194,6 +200,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
@@ -235,6 +242,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
@@ -271,6 +279,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
@@ -308,6 +317,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
@@ -345,6 +355,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
@@ -382,6 +393,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
@@ -419,6 +431,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
@@ -455,6 +468,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
@@ -506,6 +520,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file());
                     case FILE_MISSING -> LanguageServerException.fileMissing(file());
                     case NOT_A_FILE -> LanguageServerException.notAFile(file());
@@ -554,6 +569,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
@@ -589,6 +605,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
@@ -625,6 +642,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
@@ -662,6 +680,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case FILE_MISSING -> LanguageServerException.fileMissing(file);
                     case NOT_A_FILE -> LanguageServerException.notAFile(file);
@@ -698,6 +717,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case NOT_CREATABLE -> LanguageServerException.notCreatable(file, kind);
                     case FILE_MISSING,
@@ -733,6 +753,7 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
                 return switch (key) {
                     case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
                     case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
                     case NOT_CREATABLE -> LanguageServerException.notCreatablePackageInfo(file);
                     case FILE_MISSING,

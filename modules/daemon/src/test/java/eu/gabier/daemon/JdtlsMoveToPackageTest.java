@@ -464,8 +464,10 @@ class JdtlsMoveToPackageTest {
 
         try (var server = started()) {
             assertThatThrownBy(() -> server.moveToPackage(List.of(invoice), ARCHIVE))
-                    .isInstanceOf(JdtlsException.class)
-                    .hasMessageContaining("waiting for the move of 1 file to the package demo.archive");
+                    .isInstanceOfSatisfying(
+                            LanguageServerException.class,
+                            refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED))
+                    .hasMessageContaining("Internal error");
 
             assertThat(archive).doesNotExist();
             assertThat(eventsOfWatchedFiles()).contains("Deleted " + archive);

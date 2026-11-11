@@ -517,22 +517,23 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
 
     /**
      * The answer, noting for {@link FakeOnlyGuard} when it is a failure that a real jdtls cannot produce on demand: a
-     * request that never gets an answer, or a failure other than the refusal {@code InvalidRequest}, which jdtls gives
-     * and the replay shows.
+     * request that never gets an answer, or a failure other than the response errors {@code InvalidRequest} (a refusal)
+     * and {@code InternalError} (a handler of jdtls threw), which jdtls gives and the replay shows.
      */
     private static <T> CompletableFuture<T> scripted(String request, CompletableFuture<T> answer) {
         if (!answer.isDone()) {
             FakeOnlyGuard.failureScripted(request + " is never answered");
-        } else if (answer.isCompletedExceptionally() && !isInvalidRequest(answer.exceptionNow())) {
+        } else if (answer.isCompletedExceptionally() && !isAnErrorJdtlsAnswers(answer.exceptionNow())) {
             FakeOnlyGuard.failureScripted(request + " fails with " + answer.exceptionNow());
         }
 
         return answer;
     }
 
-    private static boolean isInvalidRequest(Throwable failure) {
-        return failure instanceof ResponseErrorException refusal
-                && refusal.getResponseError().getCode() == ResponseErrorCode.InvalidRequest.getValue();
+    private static boolean isAnErrorJdtlsAnswers(Throwable failure) {
+        return failure instanceof ResponseErrorException error
+                && List.of(ResponseErrorCode.InvalidRequest.getValue(), ResponseErrorCode.InternalError.getValue())
+                        .contains(error.getResponseError().getCode());
     }
 
     /** What {@code java.project.getAll} answers, in turn; the last answer is repeated. */

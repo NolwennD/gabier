@@ -76,7 +76,17 @@ public final class Operations {
             language-server-empty-package. Sub-packages keep their names, and the same package in another source set
             (the tests) is a rename of its own. A package that exists, or a name that is not a package name, is
             refused as language-server-invalid-name. module-info.java, string literals and build files are not
-            changed: edit them as text.\
+            changed: edit them as text.
+
+            A failure of jdtls is relayed, not guessed in advance: when it answers an internal error of its own the
+            refusal is language-server-request-failed, with its code and its message, and nothing is written. jdtls
+            1.63.0 fails so on a component of a record that has a compact constructor or an explicit canonical
+            constructor. Without one it renames the component, its accessor calls and this.name, and may leave a use
+            by simple name in the body of the record (seen for a component named file, and for a field of a class
+            named file), which no longer compiles: check the files of the record for errors. A position on a
+            call of the accessor is refused as language-server-no-such-symbol; with an explicit accessor
+            (public String label()) jdtls renames it as a getter (label() becomes getCaption()). For these, edit the
+            record by hand (Eclipse bug 566507).\
             """,
             List.of(
                     "language-server-no-such-symbol: no symbol at the position",
@@ -87,6 +97,7 @@ public final class Operations {
                     Refusals.FILE_MISSING,
                     Refusals.NOT_A_FILE,
                     Refusals.STALE_EDIT_OF_FILES,
+                    Refusals.REQUEST_FAILED,
                     Refusals.NOT_READY),
             List.of(FILE, LINE, COLUMN, NEW_NAME, DRY_RUN));
 
@@ -101,6 +112,7 @@ public final class Operations {
                     Refusals.FILE_MISSING,
                     Refusals.NOT_A_FILE,
                     Refusals.STALE_EDIT_OF_FILES,
+                    Refusals.REQUEST_FAILED,
                     Refusals.NOT_READY),
             List.of(
                     FILE,
@@ -121,6 +133,7 @@ public final class Operations {
                     Refusals.FILE_MISSING,
                     Refusals.NOT_A_FILE,
                     Refusals.STALE_EDIT_OF_A_FILE,
+                    Refusals.REQUEST_FAILED,
                     Refusals.NOT_READY),
             List.of(FILE, DRY_RUN));
 
@@ -148,6 +161,7 @@ public final class Operations {
                     Refusals.FILE_MISSING,
                     Refusals.NOT_A_FILE,
                     Refusals.STALE_EDIT_OF_A_FILE,
+                    Refusals.REQUEST_FAILED,
                     Refusals.NOT_READY),
             List.of(
                     FILE,
@@ -194,6 +208,7 @@ public final class Operations {
                     Refusals.NOT_A_FILE,
                     "editing-file-exists: the file to create appeared since the language server answered",
                     Refusals.STALE_EDIT_OF_FILES,
+                    Refusals.REQUEST_FAILED,
                     Refusals.NOT_READY),
             List.of(FILE, LINE, COLUMN, DRY_RUN));
 
@@ -227,6 +242,7 @@ public final class Operations {
                     Refusals.NOT_A_FILE,
                     "editing-file-exists: a file to create appeared since the language server answered",
                     Refusals.STALE_EDIT_OF_FILES,
+                    Refusals.REQUEST_FAILED,
                     Refusals.NOT_READY),
             List.of(
                     Parameter.paths("files", "the Java files to move, absolute paths"),
@@ -250,6 +266,7 @@ public final class Operations {
                     Refusals.FILE_MISSING,
                     Refusals.NOT_A_FILE,
                     Refusals.STALE_EDIT_OF_FILES,
+                    Refusals.REQUEST_FAILED,
                     Refusals.NOT_READY),
             List.of(FILE, LINE, COLUMN, DRY_RUN));
 
@@ -278,6 +295,7 @@ public final class Operations {
                             + " type",
                     Refusals.FILE_OUTSIDE_PROJECT,
                     "invalid-parameter: the kind is not class, interface, record, enum or package",
+                    Refusals.REQUEST_FAILED,
                     Refusals.NOT_READY),
             List.of(
                     FILE,
@@ -310,6 +328,7 @@ public final class Operations {
                     Refusals.FILE_OUTSIDE_PROJECT,
                     Refusals.FILE_MISSING,
                     Refusals.NOT_A_FILE,
+                    Refusals.REQUEST_FAILED,
                     Refusals.NOT_READY),
             List.of(
                     FILE,
@@ -346,6 +365,7 @@ public final class Operations {
                     Refusals.FILE_OUTSIDE_PROJECT,
                     Refusals.FILE_MISSING,
                     Refusals.NOT_A_FILE,
+                    Refusals.REQUEST_FAILED,
                     Refusals.NOT_READY),
             onARange());
 
@@ -373,6 +393,7 @@ public final class Operations {
                     Refusals.FILE_MISSING,
                     Refusals.NOT_A_FILE,
                     Refusals.STALE_EDIT_OF_FILES,
+                    Refusals.REQUEST_FAILED,
                     Refusals.NOT_READY),
             onARange(
                     Parameter.string("title", "the title of the action, as the actions of the same range list it"),
@@ -417,6 +438,7 @@ public final class Operations {
                         Refusals.FILE_MISSING,
                         Refusals.NOT_A_FILE,
                         Refusals.STALE_EDIT_OF_A_FILE,
+                        Refusals.REQUEST_FAILED,
                         Refusals.NOT_READY),
                 onARange(NAME, DRY_RUN));
     }

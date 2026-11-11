@@ -18,6 +18,7 @@ public enum LanguageServerErrorKey implements ErrorKey {
     NOT_MOVABLE("language-server-not-movable"),
     NOT_MOVABLE_TO_PACKAGE("language-server-not-movable-to-package"),
     NOT_READY("language-server-not-ready"),
+    REQUEST_FAILED("language-server-request-failed"),
     UNRESOLVED_IMPORTS("language-server-unresolved-imports");
 
     private final String key;

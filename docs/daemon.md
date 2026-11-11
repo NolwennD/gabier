@@ -58,8 +58,8 @@ generic `internal-server-error`, with no description (the exception may hold a p
 cause to its log, `<socket>.log`, with the method of the request: a line `request <method> failed: <type>: <message>`, then
 a line `caused by <type>: <message>` for each cause, and, for an error that jdtls answered (`ResponseErrorException`), its
 response error code and the data of its answer, one line of the log per line of it (jdtls puts the stack trace of its own
-failure there). A refusal that carries a cause (a file that could not be written) is
-logged the same way; a refusal with no cause says everything in its answer and is not. The parameters of the request (the
+failure there). A refusal that carries a cause (a file that could not be written, an internal error that jdtls answered:
+`language-server-request-failed`) is logged the same way; a refusal with no cause says everything in its answer and is not. The parameters of the request (the
 file, the position, the name) and the text of the files are never written, only the words of the exceptions, with control
 characters written as escapes like the lines of jdtls.
 

@@ -17,7 +17,7 @@ run, nothing written` for a dry run. With `--json`, the result is
 the daemon names them (absolute, normalized) and the diff exact. In text, the paths and the diff are neutralised as in
 [Text in a terminal](../cli.md#text-in-a-terminal), so a tab shows as `\u0009` and a backslash as two. A refusal is the
 problem object, exit code 2: no symbol at the position (`language-server-no-such-symbol`), a name the server declines
-(`language-server-invalid-name`), a package with no class of its own at the position (`language-server-empty-package`), a file outside the project, a server that is not ready, an identifier that is not in
+(`language-server-invalid-name`), a package with no class of its own at the position (`language-server-empty-package`), a failure of jdtls on the rename (`language-server-request-failed`, see [Components of a record](#components-of-a-record)), a file outside the project, a server that is not ready, an identifier that is not in
 the file (`editing-token-not-found`), and a change set that cannot be applied to the files as they are
 (`editing-stale-edit` and the other `editing-` keys): in every case nothing is written. A rename is asked of jdtls after
 it was told of what changed on disk since its last request, so a second rename sees the files the first one wrote.
@@ -66,6 +66,33 @@ text edit: `module-info.java` (`exports`, `opens`), string literals and comments
 The daemon's methods are `rename` (parameters `file`, `line`, `column`, `newName`, `dryRun`) and `rename-token`
 (`file`, `token`, `newName`, `dryRun`); `dryRun` is `true` or `false`, and line and column are numbers from 0.
 
+## Components of a record
+
+jdtls (1.63.0) does not rename a component of a record the way it renames a field, and gabier does not check the record
+first: it asks jdtls, and relays what jdtls does. The fork of jdtls of `RenameSupport` has no case for a record
+component, and the redirection that JDT UI has for it (Eclipse bug
+[566507](https://bugs.eclipse.org/bugs/show_bug.cgi?id=566507)) was not ported to it. What was seen, on the component
+`label` of `record Mark(String label, int rank)`:
+
+- with a **compact constructor** (`Mark { ... }`), or an **explicit canonical constructor** (`Mark(String label, int
+  rank) { this.label = label; ... }`), jdtls fails: its response error -32603 ("Internal error"; its data is the stack
+  trace of a `NullPointerException` of the rename of a local variable, which it takes the parameter of the constructor
+  for). The answer is the refusal `language-server-request-failed`, with the code and the message of jdtls, and nothing is
+  written (the stack trace is in the log of the daemon, see [the daemon](../daemon.md));
+- **without** one of them (a plain record, or one with an extra constructor of another signature), jdtls renames the
+  component in the header, its accessor calls (`mark.label()` in the other files) and `this.label`, and the uses of
+  `label` by its simple name in the body of the record, for most names. For some names it leaves those uses by simple name
+  as they were, and the record no longer compiles (seen with a component named `file`, `net`, `time` and `regex`; a field of
+  a class named `file` does the same, so it is not about records): run `gabier diagnostics` on the files of the record
+  after a rename. Nothing tells from outside when it happens;
+- a position on a **call of the accessor** (`mark.label()`) is declined by jdtls (`prepareRename`), so it is refused as
+  `language-server-no-such-symbol`: put the position on the component in the header;
+- with an **explicit accessor** (`public String label() { ... }`), jdtls renames the accessor as a getter: `label()`
+  becomes `getCaption()`, which is no longer the accessor of the component, and gabier says nothing of it. Rename it back
+  by hand.
+
+For a record whose rename fails, edit the header, the constructor and the uses by hand, then run `gabier diagnostics`.
+
 ## Refusals
 
 A refusal is the problem object on the standard error, exit code 2, and nothing is written. These are the keys the
@@ -81,6 +108,8 @@ command can answer, and the help of the command (`gabier help rename`) lists the
 - `language-server-file-missing`: the path is under the project and no file is there.
 - `language-server-not-a-file`: the path is a folder.
 - `editing-stale-edit`: the change cannot be applied to the files as they are.
+- `language-server-request-failed`: the language server failed on the request with an error of its own, which the
+  problem relays (its code and its message; the cause is in the log of the daemon, see [the daemon](../daemon.md)).
 - `language-server-not-ready`: the Java language server is not ready.
 - `usage-error`: the arguments are not those of the command.
 - `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.

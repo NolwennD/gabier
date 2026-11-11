@@ -286,7 +286,9 @@ class ScenariosTest {
                         "code-actions-of-a-file-outside-the-project",
                         "apply-the-import-of-a-type",
                         "apply-a-rewrite-of-a-concatenation",
-                        "apply-an-action-that-is-a-command");
+                        "apply-an-action-that-is-a-command",
+                        "rename-a-component-of-a-record-with-a-compact-constructor",
+                        "rename-a-component-of-a-record-with-an-explicit-canonical-constructor");
     }
 
     @Test
@@ -438,7 +440,9 @@ class ScenariosTest {
                         LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
                         LanguageServerErrorKey.INVALID_NAME,
                         LanguageServerErrorKey.NO_SUCH_SYMBOL,
-                        LanguageServerErrorKey.NOT_READY);
+                        LanguageServerErrorKey.NOT_READY,
+                        LanguageServerErrorKey.REQUEST_FAILED,
+                        LanguageServerErrorKey.REQUEST_FAILED);
     }
 
     @Test

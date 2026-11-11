@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Every refusal of a language server, as the port {@link JavaLanguageServer} reports it: the adapter of a real server
@@ -26,6 +27,26 @@ public final class LanguageServerException extends GeneratorException {
     public static LanguageServerException notReady() {
         return new LanguageServerException(GeneratorException.badRequest(LanguageServerErrorKey.NOT_READY)
                 .message("The language server is still importing the project: try again later"));
+    }
+
+    /**
+     * The server failed on the request, with an error of its own that is not a refusal (for jdtls, the response error
+     * {@code -32603}, "Internal error", which it gives when a handler throws). What the server says is relayed, as it
+     * is; the data of its answer, where it puts the cause, is in the {@code cause}.
+     *
+     * @param code the code of the error the server answered
+     * @param message the message of the error, as the server wrote it
+     */
+    public static LanguageServerException requestFailed(int code, String message) {
+        return requestFailed(code, message, null);
+    }
+
+    /** The same, with what the server failed with as the cause, for the log of the daemon. */
+    public static LanguageServerException requestFailed(int code, String message, @Nullable Throwable cause) {
+        return new LanguageServerException(GeneratorException.badRequest(LanguageServerErrorKey.REQUEST_FAILED)
+                .message("The language server failed on the request, with its error " + code + ": " + message)
+                .addParameter("code", String.valueOf(code))
+                .cause(cause));
     }
 
     /** There is nothing to act on at the position. */

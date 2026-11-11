@@ -2,7 +2,10 @@ package eu.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
 
+import eu.gabier.editing.domain.LanguageServerErrorKey;
+import eu.gabier.editing.domain.LanguageServerException;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -10,6 +13,9 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
+import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
+import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -118,6 +124,46 @@ class JdtlsWatchTest {
                 .hasMessageContaining("the answer to initialize")
                 .hasMessageContaining("bad request")
                 .hasRootCauseInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void anInternalErrorOfJdtlsIsARefusalThatSaysItsCodeAndItsMessageWhateverIsAwaited() throws Exception {
+        var watch = new JdtlsWatch(running(), failure, LONG);
+        var error = internalError("Internal error.");
+
+        assertThatThrownBy(() -> watch.await("the move of 2 files", () -> CompletableFuture.failedFuture(error)))
+                .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                    assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.REQUEST_FAILED);
+                    assertThat(refusal.parameters()).containsOnly(entry("code", "-32603"));
+                    assertThat(refusal)
+                            .hasMessage("The language server failed on the request, with its error -32603: Internal"
+                                    + " error.");
+                    assertThat(refusal).hasCause(error);
+                });
+    }
+
+    @Test
+    void aResponseErrorOfAnotherCodeStaysAFailureOfTheAdapter() throws Exception {
+        var watch = new JdtlsWatch(running(), failure, LONG);
+        var error = new ResponseErrorException(new ResponseError(ResponseErrorCode.MethodNotFound, "no such", null));
+
+        assertThatThrownBy(() -> watch.await("the move of 2 files", () -> CompletableFuture.failedFuture(error)))
+                .isInstanceOf(JdtlsException.class)
+                .hasMessageContaining("the move of 2 files");
+    }
+
+    @Test
+    void anInternalErrorThatJdtlsGaveByDyingIsReportedAsItsExit() throws Exception {
+        var watch = new JdtlsWatch(exitingWith(6), failure, LONG);
+
+        assertThatThrownBy(() -> watch.await(
+                        "the move of 2 files", () -> CompletableFuture.failedFuture(internalError("Internal error."))))
+                .isInstanceOf(JdtlsException.class)
+                .hasMessageContaining("jdtls exited with code 6");
+    }
+
+    private static ResponseErrorException internalError(String message) {
+        return new ResponseErrorException(new ResponseError(ResponseErrorCode.InternalError, message, null));
     }
 
     @Test

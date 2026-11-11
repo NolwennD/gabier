@@ -121,6 +121,8 @@ command can answer, and the help of the command (`gabier help move`) lists them:
 - `language-server-not-a-file`: the path is a folder.
 - `editing-file-exists`: a file to create appeared since the language server answered.
 - `editing-stale-edit`: the change cannot be applied to the files as they are.
+- `language-server-request-failed`: the language server failed on the request with an error of its own, which the
+  problem relays (its code and its message; the cause is in the log of the daemon, see [the daemon](../daemon.md)).
 - `language-server-not-ready`: the Java language server is not ready.
 - `usage-error`: the arguments are not those of the command: fewer than a file and a package, or a file name with a line
   break.

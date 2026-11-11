@@ -77,6 +77,7 @@ class CommandTest {
                         "language-server-file-missing",
                         "language-server-not-a-file",
                         "editing-stale-edit",
+                        "language-server-request-failed",
                         "language-server-not-ready",
                         "usage-error",
                         "daemon-start-failed",

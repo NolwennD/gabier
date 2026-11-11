@@ -18,7 +18,8 @@ import org.junit.jupiter.api.extension.ExtensionContext;
  *
  * <p>What it does not see: an answer that is a value of the wrong shape (an edit that is null or has no message, an
  * edit of another file), and the death of the process. A refusal that a real jdtls gives (a response error {@code
- * InvalidRequest}) is not a failure of the fake, it is what the replay shows. The tests of those cases are labelled by
+ * InvalidRequest}), and the failure it gives when a handler of its throws (a response error {@code InternalError}), are
+ * not a failure of the fake, they are what the replay shows. The tests of those cases are labelled by
  * hand and nothing finds one that is not.
  *
  * <p>A class that uses {@link FakeJdtls} has it declared with {@code @ExtendWith(FakeOnlyGuard.class)}; {@code
