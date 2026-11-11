@@ -2104,7 +2104,7 @@ public final class Scenarios {
                 PackageRenameScenarios.RENAME_A_PACKAGE_THEN_THE_SAME_PACKAGE_OF_THE_TESTS);
     }
 
-    /** The project with the two files that have something to report, so that their scenarios share one project. */
+    /** The project with a stub of the null-marked annotation, for the scenarios of a {@code package-info.java}. */
     private static Map<Path, String> withNullMarked() {
         Map<Path, String> files = new HashMap<>(PROJECT);
         files.put(NULL_MARKED, NULL_MARKED_SOURCE);
@@ -2112,6 +2112,7 @@ public final class Scenarios {
         return files;
     }
 
+    /** The project with the two files that have something to report, so that their scenarios share one project. */
     private static Map<Path, String> withProblems() {
         Map<Path, String> files = new HashMap<>(PROJECT);
         files.put(BROKEN, BROKEN_SOURCE);
