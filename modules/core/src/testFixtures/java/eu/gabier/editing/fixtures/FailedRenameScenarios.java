@@ -14,7 +14,7 @@ import java.util.Map;
  *
  * <p>jdtls fails with the response error {@code -32603}, "Internal error", whose data is the stack trace of a {@code
  * NullPointerException}, when it renames the component of a record that has a compact constructor and the one of a
- * record that has an explicit canonical constructor (checked on the real jdtls): the fork of jdtls of {@code
+ * record that has an explicit canonical constructor, and when it renames the name of a module (checked on the real jdtls): the fork of jdtls of {@code
  * RenameSupport} has no case for a record component, and takes the parameter of such a constructor for a local
  * variable. The adapter relays the failure as a refusal with the key {@code REQUEST_FAILED}, whatever the request; the
  * replay compares the key, not the code or the words of jdtls.
@@ -68,12 +68,33 @@ public final class FailedRenameScenarios {
             new Request.Rename(CANON, new Position(2, 27), "caption"),
             new Answer.Refused(LanguageServerErrorKey.REQUEST_FAILED, INTERNAL_ERROR));
 
+    private static final Path MODULE_INFO = Path.of("src/main/java/module-info.java");
+
+    /**
+     * {@code demo.records} in {@code module demo.records {}}: jdtls fails on the name of a module (the same code and
+     * message, with a {@code NullPointerException} whose element is null), since its rename has no case for it.
+     */
+    public static final Scenario RENAME_THE_NAME_OF_A_MODULE = new Scenario(
+            "rename-the-name-of-a-module",
+            Map.of(MODULE_INFO, """
+                module demo.records {
+                    exports demo;
+                }
+                """, MARK, """
+                package demo;
+
+                public record Mark(String label, int rank) {}
+                """),
+            new Request.Rename(MODULE_INFO, new Position(0, 7), "demo.renamed"),
+            new Answer.Refused(LanguageServerErrorKey.REQUEST_FAILED, INTERNAL_ERROR));
+
     private FailedRenameScenarios() {}
 
     /** Every scenario of this class, in the order they are declared. */
     public static List<Scenario> all() {
         return List.of(
                 RENAME_A_COMPONENT_OF_A_RECORD_WITH_A_COMPACT_CONSTRUCTOR,
-                RENAME_A_COMPONENT_OF_A_RECORD_WITH_AN_EXPLICIT_CANONICAL_CONSTRUCTOR);
+                RENAME_A_COMPONENT_OF_A_RECORD_WITH_AN_EXPLICIT_CANONICAL_CONSTRUCTOR,
+                RENAME_THE_NAME_OF_A_MODULE);
     }
 }

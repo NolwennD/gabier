@@ -483,6 +483,14 @@ class RenameTest {
         }
 
         @Test
+        void relaysTheFailureOfTheServerOnTheNameOfAModuleAndWritesNothing() throws IOException {
+            assertRefused(
+                    FailedRenameScenarios.RENAME_THE_NAME_OF_A_MODULE,
+                    LanguageServerErrorKey.REQUEST_FAILED,
+                    "The language server failed on the request, with its error -32603: Internal error.");
+        }
+
+        @Test
         void reportsAFileOutsideTheProject() throws IOException {
             assertRefused(
                     Scenarios.RENAME_OUTSIDE_THE_PROJECT,

@@ -903,8 +903,10 @@ String welcome(String name) {
 and the call in `Main.java` is now `greeter.welcome("world")`: the files that refer to the name are rewritten too.
 
 Limits: the position must be on a symbol (`language-server-no-such-symbol` otherwise). Text that is not code (a string
-literal, a build file, `module-info.java`) is not renamed. A record component and a package have their own entries:
-"Rename a component of a record" and "The package of one source set". See `gabier help rename`.
+literal, a build file, `module-info.java`) is not renamed, and the name of a module in its `module` line is refused as
+`language-server-request-failed` (jdtls fails on it): edit that line, and the `requires` that name it, as text. A record
+component and a package have their own entries: "Rename a component of a record" and "The package of one source set".
+See `gabier help rename`.
 
 ### Imports that are missing, unused or out of order
 

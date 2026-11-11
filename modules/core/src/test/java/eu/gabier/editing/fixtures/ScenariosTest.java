@@ -288,7 +288,8 @@ class ScenariosTest {
                         "apply-a-rewrite-of-a-concatenation",
                         "apply-an-action-that-is-a-command",
                         "rename-a-component-of-a-record-with-a-compact-constructor",
-                        "rename-a-component-of-a-record-with-an-explicit-canonical-constructor");
+                        "rename-a-component-of-a-record-with-an-explicit-canonical-constructor",
+                        "rename-the-name-of-a-module");
     }
 
     @Test
@@ -441,6 +442,7 @@ class ScenariosTest {
                         LanguageServerErrorKey.INVALID_NAME,
                         LanguageServerErrorKey.NO_SUCH_SYMBOL,
                         LanguageServerErrorKey.NOT_READY,
+                        LanguageServerErrorKey.REQUEST_FAILED,
                         LanguageServerErrorKey.REQUEST_FAILED,
                         LanguageServerErrorKey.REQUEST_FAILED);
     }

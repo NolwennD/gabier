@@ -73,6 +73,15 @@ class OperationsTest {
     }
 
     @Test
+    void tellsThatRenamingTheNameOfAModuleIsATextEdit() {
+        assertThat(Operations.RENAME.notes().replaceAll("\\s+", " "))
+                .contains("the name of a module in a module-info.java")
+                .contains("edit the module line and the requires that name the module as text");
+        assertThat(Operations.RENAME.refusals())
+                .anyMatch(refusal -> refusal.startsWith("language-server-request-failed"));
+    }
+
+    @Test
     void speaksOfNoWordOfTheCommandLineWhereAnotherFrontEndReadsIt() {
         var described = List.of(Operations.START, Operations.RENAME, Operations.RENAME_TOKEN, Operations.CLEANUP);
 

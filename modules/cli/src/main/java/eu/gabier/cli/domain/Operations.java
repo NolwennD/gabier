@@ -80,13 +80,15 @@ public final class Operations {
 
             A failure of jdtls is relayed, not guessed in advance: when it answers an internal error of its own the
             refusal is language-server-request-failed, with its code and its message, and nothing is written. jdtls
-            1.63.0 fails so on a component of a record that has a compact constructor or an explicit canonical
-            constructor. Without one it renames the component, its accessor calls and this.name, and may leave a use
-            by simple name in the body of the record (seen for a component named file, and for a field of a class
-            named file), which no longer compiles: check the files of the record for errors. A position on a
-            call of the accessor is refused as language-server-no-such-symbol; with an explicit accessor
-            (public String label()) jdtls renames it as a getter (label() becomes getCaption()). For these, edit the
-            record by hand (Eclipse bug 566507).\
+            1.63.0 fails so on the name of a module in a module-info.java (a position on its first segment; a later
+            segment is refused as language-server-no-such-symbol): edit the module line and the requires that name
+            the module as text. It fails so too on a component of a record that has a compact constructor or an
+            explicit canonical constructor: edit the record by hand (Eclipse bug 566507). Without such a
+            constructor it renames the component, its accessor calls and this.name, and may leave a use by simple
+            name in the body of the record (seen for a component named file, and for a field of a class named file),
+            which no longer compiles: check the files of the record for errors. A position on a call of the accessor
+            is refused as language-server-no-such-symbol; with an explicit accessor (public String label()) jdtls
+            renames it as a getter (label() becomes getCaption()).\
             """,
             List.of(
                     "language-server-no-such-symbol: no symbol at the position",

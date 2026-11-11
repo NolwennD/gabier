@@ -63,6 +63,12 @@ to the segment and has nothing to change there. The refusal names that package a
 package of the file, put the position on its last segment and give its whole new name. What stays a
 text edit: `module-info.java` (`exports`, `opens`), string literals and comments, and build files.
 
+The name of a module (`demo.records` in `module demo.records {`, in `module-info.java`) is not renamed by jdtls 1.63.0:
+it fails with an internal error of its own (a `NullPointerException` on a missing element, response error -32603), and
+the refusal is `language-server-request-failed`, with nothing written. Edit the `module` line of the descriptor, and
+the `requires` of the other descriptors that name the module, as text; a position on a later segment of the name is
+refused as `language-server-no-such-symbol`.
+
 The daemon's methods are `rename` (parameters `file`, `line`, `column`, `newName`, `dryRun`) and `rename-token`
 (`file`, `token`, `newName`, `dryRun`); `dryRun` is `true` or `false`, and line and column are numbers from 0.
 
