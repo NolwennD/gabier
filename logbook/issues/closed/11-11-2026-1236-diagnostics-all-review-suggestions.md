@@ -27,4 +27,6 @@ all five points are about. `diagnostics --all` now answers from what jdtls publi
 no file and opening none, so a file deleted during the call, a file that is not UTF-8, a symbolic link, an unreadable
 folder and the memory held by the texts no longer reach it; the cost on a large project is a function of the number of
 problems jdtls published, measured on this checkout (532 files) at 1.2 s once jdtls is started
-(`docs/commands/diagnostics.md`). Fixing commit: the one of the ticket 1259 (hash filled in by the supervisor).
+(`docs/commands/diagnostics.md`). Fixing commit: the one of the ticket 1259 cf70052.
+
+Tokens: none of its own, closed in the commit of the ticket 1259 (see its resolution).
