@@ -17,10 +17,10 @@ public final class DiagnoseProject {
     }
 
     /**
-     * Asks the language server for the diagnostics of the whole project, in one request: the server decides which files
-     * are the project's.
+     * Asks the language server for the diagnostics of the whole project, in one request: the server says which files
+     * have a problem.
      *
-     * @return one element per file, in the order of the paths, with no diagnostics for a file that is clean
+     * @return one element per file that has a problem, in the order of the paths
      * @throws eu.gabier.editing.domain.LanguageServerException if the server is not ready
      */
     public List<DiagnosedFile> diagnose() {

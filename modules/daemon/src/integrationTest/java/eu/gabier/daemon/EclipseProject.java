@@ -41,9 +41,14 @@ final class EclipseProject {
         </classpath>
         """;
 
-    /** The test sources, marked as such: only for a project that has them, as a source folder that is not there is an error. */
+    /**
+     * The test sources, marked as such: only for a project that has them, as a source folder that is not there is an
+     * error. They have an output folder of their own: jdtls refuses to build a project whose test sources share the
+     * output of the main ones ("must have a separate output folder"), and publishes that error for the project instead
+     * of the problems of its files.
+     */
     private static final String TESTS = """
-          <classpathentry kind="src" path="src/test/java">
+          <classpathentry kind="src" path="src/test/java" output="test-bin">
             <attributes><attribute name="test" value="true"/></attributes>
           </classpathentry>
         """;

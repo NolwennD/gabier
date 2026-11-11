@@ -7,10 +7,10 @@ import java.util.Map;
 
 /**
  * {@code diagnostics-all}: the problems the language server reports in every Java file of the project, with no
- * parameter. The language server chooses the files (the source folders it knows of the project, the tests and the other
- * source sets included), and the result is the one of {@code diagnostics}: one element per file, named by its absolute
- * path, in the order of the paths, with an empty list for a file that is clean. The refusal is the one of a server that
- * is not ready, as the problem object it is.
+ * parameter. The answer is what the language server published once it built the project, so it holds the files that
+ * have a problem (the tests and the other source sets included) and not the clean ones; the result is the one of {@code
+ * diagnostics}: one element per file, named by its absolute path, in the order of the paths. The refusals are the ones
+ * of a server that is not ready or that fails the build, as the problem object each is.
  */
 record DiagnosticsAllMethod(DiagnoseProject diagnose) implements DaemonMethod {
 

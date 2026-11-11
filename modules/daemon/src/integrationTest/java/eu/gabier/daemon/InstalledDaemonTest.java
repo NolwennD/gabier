@@ -243,6 +243,15 @@ class InstalledDaemonTest {
                                 .toList());
             }
 
+            var brokenTest = project.resolve("src/test/java/demo/BrokenTest.java");
+            Files.writeString(brokenTest, """
+                package demo;
+
+                class BrokenTest {
+                    int broken = "not a number";
+                }
+                """);
+
             var whole = RpcResponse.parse(daemon.ask("diagnostics-all", "{}"));
             assertThat(whole).as("the answer: %s", whole).isInstanceOf(RpcResponse.Success.class);
             var wholeProject = DiagnosedFiles.of(((RpcResponse.Success) whole).result());
@@ -251,11 +260,12 @@ class InstalledDaemonTest {
                     .toString();
             assertThat(wholeProject.files())
                     .extracting(FileDiagnostics::file)
-                    .as("every Java file of the project, the tests included, in the order of the paths")
-                    .contains(
-                            broken,
-                            project.resolve("src/test/java/demo/LedgerTest.java")
-                                    .toString())
+                    .as("the Java files of the project that have a problem, the tests included, in the order of"
+                            + " the paths, the clean ones left out, a file created on disk since the start"
+                            + " included")
+                    .contains(broken, brokenTest.toString())
+                    .doesNotContain(project.resolve("src/test/java/demo/LedgerTest.java")
+                            .toString())
                     .allMatch(file -> file.startsWith(project.toString()))
                     .isSorted();
             assertThat(wholeProject.files().stream()

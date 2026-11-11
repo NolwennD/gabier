@@ -32,7 +32,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
   until it is ready and ends its process tree on close (`JdtlsWatch`, `JdtlsClient`, `JdtlsLauncher`).
   `JdtlsLanguageServer` implements the port `JavaLanguageServer` on top of it (with `Diagnostics`, the store of what
   jdtls publishes, and `QuietWait`): it starts jdtls in the background and answers "not ready" until the start is over;
-  it implements `diagnostics`, `projectDiagnostics` (the `.java` files under the source folders of `java.project.listSourcePaths`, asked as `diagnostics` asks files), `rename`, `organizeImports` (the code action `source.organizeImports`, resolved when
+  it implements `diagnostics`, `projectDiagnostics` (what jdtls published for the `.java` files of the project, files nobody opened included, read after the changes on disk are told, `java/buildWorkspace` is answered and 1 second passes with no publication: the class `Builds`, and the first call waits for jdtls to register the files it watches), `rename`, `organizeImports` (the code action `source.organizeImports`, resolved when
   jdtls does not give its edit; `WorkspaceEdits` turns the `WorkspaceEdit` of jdtls, as `documentChanges` or as `changes`,
   into a change set; `JdtlsRequests` tells a request jdtls declines from one that fails) and `extractVariable` (jdtls
   cannot take the name: `java/getRefactorEdit`, from the interface `JdtlsServer`, gives the edit with a name of its own and
@@ -109,7 +109,7 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
     setting a file no longer gives goes back to the default of jdtls. The small cases
     of the adapter's answers are scenarios too: not ready while jdtls imports (`diagnostics-while-the-server-imports`, asked
     before the import is over), a file without a diagnostic and a file with an error (`diagnostics-of-a-clean-file`,
-    `diagnostics-of-a-file-with-an-error`), every file of the project, the tests included (`diagnostics-of-the-whole-project`), a file outside the project (`diagnostics-of-a-file-outside-the-project`), the
+    `diagnostics-of-a-file-with-an-error`), every file of the project that has a problem, the tests included (`diagnostics-of-the-whole-project`, and `diagnostics-of-the-whole-project-after-edits`), a file outside the project (`diagnostics-of-a-file-outside-the-project`), the
     imports removed or refused (`organize-imports-*`); an organization that loses no code, asked a second time, takes less
     than the five seconds of the diagnostics. jdtls is not made to import this repository: that it works on gabier is
     proven by using gabier on gabier (`.claude/rules/dogfooding.md`). How to add one: `.claude/skills/add-scenario/SKILL.md`.

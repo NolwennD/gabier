@@ -794,17 +794,19 @@ class ScenariosTest {
     }
 
     @Test
-    void answersEveryJavaFileOfTheProjectOnceAndNoOtherInTheOrderOfThePaths() {
+    void answersOnlyJavaFilesOfTheProjectThatHaveAProblemOnceEachInTheOrderOfThePaths() {
         for (Scenario scenario : answeredWith(Answer.ProjectDiagnosed.class)) {
-            List<Path> answered = ((Answer.ProjectDiagnosed) scenario.answer())
-                    .files().stream().map(DiagnosedFile::file).toList();
+            var answered = ((Answer.ProjectDiagnosed) scenario.answer()).files();
+            List<Path> paths = answered.stream().map(DiagnosedFile::file).toList();
 
+            assertThat(paths).as(scenario.name()).isSorted().doesNotHaveDuplicates();
+            assertThat(scenario.files().keySet()).as(scenario.name()).containsAll(paths);
+            assertThat(paths)
+                    .as(scenario.name())
+                    .allSatisfy(file -> assertThat(file.toString()).endsWith(".java"));
             assertThat(answered)
                     .as(scenario.name())
-                    .containsExactlyElementsOf(scenario.files().keySet().stream()
-                            .filter(file -> file.toString().endsWith(".java"))
-                            .sorted()
-                            .toList());
+                    .allSatisfy(file -> assertThat(file.diagnostics()).isNotEmpty());
         }
     }
 

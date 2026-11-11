@@ -6,6 +6,11 @@ final class FakeOnlyReasons {
     static final String NO_ANSWER_IN_TIME = "a real jdtls answers in time, and no request makes it late on demand";
     static final String INTERRUPTED_WHILE_WAITING =
             "the thread that waits is interrupted by the test, which no request to a real jdtls does";
+    static final String A_BUILD_THAT_LASTS =
+            "a real jdtls builds as long as the project takes: no request makes a build last as long as a test needs";
+    static final String A_START_THAT_LASTS =
+            "a real jdtls registers the files it watches when its initialization ends: no request makes it later than"
+                    + " a test needs";
     static final String JDTLS_DIED = "a real jdtls does not die, or fail to start, on demand";
     static final String JDTLS_FAILS =
             "a real jdtls declines, answers, or fails with its internal error (the replay of a record component shows"

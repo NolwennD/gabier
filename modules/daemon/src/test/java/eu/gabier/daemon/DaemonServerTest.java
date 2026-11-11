@@ -545,7 +545,7 @@ class DaemonServerTest {
         }
 
         @Test
-        void diagnosticsAllAnswersTheProblemsOfEveryFileOfTheProject() throws IOException {
+        void diagnosticsAllAnswersTheFilesThatHaveAProblemAndNotTheCleanOne() throws IOException {
             serving();
             var broken = directory.resolve("src/main/java/demo/Broken.java");
             var clean = directory.resolve("src/main/java/demo/Clean.java");
@@ -558,7 +558,8 @@ class DaemonServerTest {
                 assertThat(DiagnosedFiles.of(((RpcResponse.Success) answer).result())
                                 .files())
                         .extracting(FileDiagnostics::file)
-                        .contains(broken.toString(), clean.toString());
+                        .contains(broken.toString())
+                        .doesNotContain(clean.toString());
                 assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
             }
         }

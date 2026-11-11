@@ -950,14 +950,13 @@ public final class Native {
                                             demo + "Broken.java:5:16: error: ",
                                             demo + "shop/Sloppy.java:5:13: warning: ",
                                             project + "/src/test/java/demo/BrokenTest.java:5:16: error:")),
-                    "gabier diagnostics --all prints the problems of every file of the project by absolute path,"
-                            + " the clean one printing nothing");
+                    "gabier diagnostics --all prints the problems of every file of the project by absolute path");
             Run allJson = gabier("--json", "diagnostics", "--all");
             expect(
                     allJson.exit() == 0
                             && allJson.out().startsWith("{\"files\":[{\"file\":\"" + demo + "Broken.java\"")
-                            && allJson.out().contains("\"file\":\"" + demo + "Clean.java\",\"diagnostics\":[]"),
-                    "gabier --json diagnostics --all gives every file of the project, the clean one with an empty list");
+                            && !allJson.out().contains("Clean.java"),
+                    "gabier --json diagnostics --all gives the files that have a problem, and not the clean one");
             Run outside = gabier("diagnostics", "outside/Elsewhere.java");
             expect(
                     outside.exit() == 2

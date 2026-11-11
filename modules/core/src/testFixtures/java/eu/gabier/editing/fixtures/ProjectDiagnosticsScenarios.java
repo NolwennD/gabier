@@ -8,6 +8,7 @@ import eu.gabier.editing.domain.Position;
 import eu.gabier.editing.fixtures.Scenario.Answer;
 import eu.gabier.editing.fixtures.Scenario.Request;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -15,13 +16,12 @@ import java.util.Map;
  * The contract scenarios of the diagnostics of the whole project, kept apart from {@link Scenarios}: they are part of
  * its catalogue ({@link Scenarios#all()}) and are replayed like the others.
  *
- * <p>The adapter chooses the files from what jdtls knows of the project: the source folders of every project it
- * imported ({@code java.project.listSourcePaths}), the test sources and the other source sets included, and the files
- * {@code .java} under them. It then asks the diagnostics of those files together, as it does for files that are
- * named. The project has a clean class, a class with an error and a class with a warning in a package of its own, in
- * the main sources, and a test class with an error: the answer holds the four files, the clean one with no problem,
- * and the severity and the position of each problem. The text of a message is jdtls's own and is not compared, so the
- * scenario holds none.
+ * <p>The adapter answers from what jdtls publishes for the project once it has built it, the files that are not open
+ * included, with no file opened and none walked: it asks for the build and takes what was published. The project has a
+ * clean class, a class with an error and a class with a warning in a package of its own, in the main sources, and a test
+ * class with an error: the answer holds the three files that have a problem, in the order of the paths, with the
+ * severity and the position of each problem, and not the clean one. The text of a message is jdtls's own and is not
+ * compared, so the scenario holds none.
  */
 public final class ProjectDiagnosticsScenarios {
 
@@ -69,8 +69,8 @@ public final class ProjectDiagnosticsScenarios {
             """);
 
     /**
-     * Every Java file of the project, the tests included, in the order of the paths: the clean one answered with no
-     * problem, an error in the main sources, a warning in a package, and an error in the test sources.
+     * Every Java file of the project that has a problem, the tests included, in the order of the paths: an error in the
+     * main sources, a warning in a package, and an error in the test sources; the clean class is not listed.
      */
     public static final Scenario DIAGNOSTICS_OF_THE_WHOLE_PROJECT = new Scenario(
             "diagnostics-of-the-whole-project",
@@ -78,11 +78,32 @@ public final class ProjectDiagnosticsScenarios {
             new Request.ProjectDiagnostics(),
             new Answer.ProjectDiagnosed(List.of(
                     new DiagnosedFile(BROKEN, List.of(problem(Severity.ERROR, 4, 15))),
-                    new DiagnosedFile(CLEAN, List.of()),
                     new DiagnosedFile(SLOPPY, List.of(problem(Severity.WARNING, 4, 12))),
                     new DiagnosedFile(BROKEN_TEST, List.of(problem(Severity.ERROR, 4, 15))))));
 
-    /** The project is still being imported: the server cannot say which files it has. */
+    /**
+     * The files of {@link #PROJECT} after an agent fixed {@code Broken} and broke {@code Clean} on disk: the error of the
+     * first is gone and the second has one, the warning and the error of the tests are as they were.
+     */
+    public static final Scenario DIAGNOSTICS_OF_THE_WHOLE_PROJECT_AFTER_TWO_EDITS = new Scenario(
+            "diagnostics-of-the-whole-project-after-two-edits",
+            edited(),
+            new Request.ProjectDiagnostics(),
+            new Answer.ProjectDiagnosed(List.of(
+                    new DiagnosedFile(CLEAN, List.of(problem(Severity.ERROR, 4, 15))),
+                    new DiagnosedFile(SLOPPY, List.of(problem(Severity.WARNING, 4, 12))),
+                    new DiagnosedFile(BROKEN_TEST, List.of(problem(Severity.ERROR, 4, 15))))));
+
+    /**
+     * An error fixed and another one made on disk between two requests: jdtls is told of the edits, builds, and the
+     * answer is the one of the new text, not what it published before.
+     */
+    public static final Sequel DIAGNOSTICS_OF_THE_WHOLE_PROJECT_AFTER_EDITS = new Sequel(
+            "diagnostics-of-the-whole-project-after-edits",
+            DIAGNOSTICS_OF_THE_WHOLE_PROJECT,
+            DIAGNOSTICS_OF_THE_WHOLE_PROJECT_AFTER_TWO_EDITS);
+
+    /** The project is still being imported: the server has not built it, so it cannot say which files have a problem. */
     public static final Scenario DIAGNOSTICS_OF_THE_WHOLE_PROJECT_WHILE_THE_SERVER_IMPORTS = new Scenario(
             "diagnostics-of-the-whole-project-while-the-server-imports",
             PROJECT,
@@ -94,6 +115,14 @@ public final class ProjectDiagnosticsScenarios {
     /** Every scenario of the diagnostics of the whole project. */
     public static List<Scenario> all() {
         return List.of(DIAGNOSTICS_OF_THE_WHOLE_PROJECT, DIAGNOSTICS_OF_THE_WHOLE_PROJECT_WHILE_THE_SERVER_IMPORTS);
+    }
+
+    private static Map<Path, String> edited() {
+        Map<Path, String> files = new HashMap<>(PROJECT);
+        files.put(BROKEN, PROJECT.get(BROKEN).replace("\"forty-two\"", "42"));
+        files.put(CLEAN, PROJECT.get(CLEAN).replace("return 1;", "return \"one\";"));
+
+        return files;
     }
 
     /** A problem at a position; the message is jdtls's own and is not compared, so none is held. */

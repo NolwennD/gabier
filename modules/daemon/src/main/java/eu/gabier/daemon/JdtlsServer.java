@@ -36,6 +36,15 @@ interface JdtlsServer extends LanguageServer {
     CompletableFuture<RefactorEdit> move(MoveParams params);
 
     /**
+     * Builds the workspace: the incremental build, which compiles what changed since the last one, so it waits for a
+     * build that is running and answers only once the build is over, the problems of the files that changed published.
+     * A full rebuild (cleaning first) is asked with {@code true}; the answer is the status of the build, which the
+     * adapter does not read (jdtls answers null for the incremental one).
+     */
+    @JsonRequest("java/buildWorkspace")
+    CompletableFuture<Object> buildWorkspace(boolean forceRebuild);
+
+    /**
      * What is asked of {@code java/move}, which jdtls reads by the kind of the move: one request type for every kind
      * (LSP4J maps a method name once), so a field is null for the kinds that do not read it, and Gson leaves it out.
      *

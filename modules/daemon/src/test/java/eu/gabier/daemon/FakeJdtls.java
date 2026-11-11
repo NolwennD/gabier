@@ -155,9 +155,13 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private CompletableFuture<Either<List<CompletionItem>, CompletionList>> completionAnswer =
             new CompletableFuture<>();
     private final List<CompletionParams> completionRequests = new CopyOnWriteArrayList<>();
+    private CompletableFuture<Object> buildAnswer = CompletableFuture.completedFuture(null);
+    private final List<Boolean> buildRequests = new CopyOnWriteArrayList<>();
+    private volatile Runnable onBuild = () -> {};
     private CompletableFuture<Object> sourcePathsAnswer = new CompletableFuture<>();
     private final AtomicInteger sourcePathRequests = new AtomicInteger();
     private final List<List<String>> registeredWatchers = new ArrayList<>();
+    private volatile boolean watchersHeldBack;
     private final List<DidChangeWatchedFilesParams> watched = new CopyOnWriteArrayList<>();
 
     private volatile Process process;
@@ -386,6 +390,36 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     }
 
     /**
+     * The answer to {@code java/buildWorkspace}, whatever the request: the answer jdtls gives once the build is over
+     * (null for the incremental one, which is the default), or a future a test completes when the build ends, or a
+     * failed one.
+     */
+    FakeJdtls buildAnswers(CompletableFuture<Object> answer) {
+        this.buildAnswer = scripted("buildWorkspace", answer);
+        return this;
+    }
+
+    /** What happens when a {@code java/buildWorkspace} request arrives, before it is answered: the build publishes. */
+    FakeJdtls onBuild(Runnable action) {
+        this.onBuild = action;
+        return this;
+    }
+
+    /** The {@code java/buildWorkspace} requests received, in order, each with whether it forces a rebuild. */
+    List<Boolean> buildRequests() {
+        return buildRequests;
+    }
+
+    /**
+     * Publishes the diagnostics of a file now, as jdtls does for a file nobody opened, once a build has run. The server
+     * must be started: the publication goes to the client.
+     */
+    FakeJdtls publishes(Path file, List<Diagnostic> diagnostics) {
+        client.publishDiagnostics(new PublishDiagnosticsParams(file.toUri().toString(), diagnostics));
+        return this;
+    }
+
+    /**
      * The answer to {@code java.project.listSourcePaths}: what jdtls gives, a result whose {@code data} lists the
      * source folders ({@code path}), then anything a test wants to script (null, another shape, a failed future).
      * Unscripted, the command never gets an answer.
@@ -473,6 +507,36 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     FakeJdtls registersWatchersFor(String... globs) {
         registeredWatchers.add(List.of(globs));
         return this;
+    }
+
+    /**
+     * The registrations of {@link #registersWatchersFor} are not sent when jdtls is ready, but when {@link
+     * #registersTheHeldBackWatchers} says so: a jdtls that registers what it watches late in its initialization.
+     */
+    FakeJdtls holdsBackTheWatchers() {
+        watchersHeldBack = true;
+        return this;
+    }
+
+    /** Sends the registrations that {@link #holdsBackTheWatchers} held back. */
+    void registersTheHeldBackWatchers() {
+        registerWatchers();
+    }
+
+    private void registerWatchers() {
+        for (int registration = 0; registration < registeredWatchers.size(); registration++) {
+            var watchers = new JsonArray();
+            for (String glob : registeredWatchers.get(registration)) {
+                var watcher = new JsonObject();
+                watcher.addProperty("globPattern", glob);
+                watchers.add(watcher);
+            }
+            var options = new JsonObject();
+            options.add("watchers", watchers);
+            client.registerCapability(new RegistrationParams(
+                            List.of(new Registration("watchers-" + registration, METHOD, options))))
+                    .join();
+        }
     }
 
     /** The deletions of {@code workspace/didChangeWatchedFiles} are not acknowledged by a publication of diagnostics. */
@@ -704,7 +768,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
             if (!publishesOnInitialized.isEmpty()) {
                 client.publishDiagnostics(new PublishDiagnosticsParams(publishesOnInitialized, List.of()));
             }
-            if (registeredWatchers.isEmpty()) {
+            if (registeredWatchers.isEmpty() || watchersHeldBack) {
                 sendStatus();
             } else {
                 // The answer to a registration arrives on the thread that is handling this notification.
@@ -722,22 +786,6 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
             }
         }
 
-        private void registerWatchers() {
-            for (int registration = 0; registration < registeredWatchers.size(); registration++) {
-                var watchers = new JsonArray();
-                for (String glob : registeredWatchers.get(registration)) {
-                    var watcher = new JsonObject();
-                    watcher.addProperty("globPattern", glob);
-                    watchers.add(watcher);
-                }
-                var options = new JsonObject();
-                options.add("watchers", watchers);
-                client.registerCapability(new RegistrationParams(
-                                List.of(new Registration("watchers-" + registration, METHOD, options))))
-                        .join();
-            }
-        }
-
         @Override
         public CompletableFuture<RefactorEdit> getRefactorEdit(RefactorEditParams params) {
             received.add("getRefactorEdit "
@@ -751,6 +799,14 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
             received.add("cleanup " + named(params.getUri()));
             cleanupRequests.add(params);
             return cleanupAnswer;
+        }
+
+        @Override
+        public CompletableFuture<Object> buildWorkspace(boolean forceRebuild) {
+            received.add("buildWorkspace");
+            buildRequests.add(forceRebuild);
+            onBuild.run();
+            return buildAnswer;
         }
 
         @Override

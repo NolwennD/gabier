@@ -8,7 +8,8 @@ import java.util.List;
  * A source file and the problems a language server reports in it.
  *
  * @param file the file, as an absolute path
- * @param diagnostics what the server reports, in its order, none for a file that is clean
+ * @param diagnostics what the server reports, in its order, none for a file that is clean (a file asked for by name is
+ *     answered clean; the files of a whole-project call are the ones with a problem)
  */
 public record DiagnosedFile(Path file, List<Diagnostic> diagnostics) {
 

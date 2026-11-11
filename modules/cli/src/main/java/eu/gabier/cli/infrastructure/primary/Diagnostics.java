@@ -16,8 +16,9 @@ import java.util.stream.IntStream;
  * {@code --json}, the result as the daemon gave it. The daemon gets the absolute paths, not cleaned, one to a line, so a
  * file name with a line break is a usage error, and asks the language server for all the files at once. The line is
  * neutralised as the text of a problem is ({@link TerminalText}): the message quotes source text and the file is typed,
- * and neither may drive the terminal or split the line. With {@code --all} no file is given: the language server
- * chooses the files of the project, and each is shown as the daemon names it, by its absolute path.
+ * and neither may drive the terminal or split the line. With {@code --all} no file is given: the answer is the files of
+ * the project that the language server reports a problem for, and each is shown as the daemon names it, by its absolute
+ * path.
  */
 final class Diagnostics implements Capability {
 

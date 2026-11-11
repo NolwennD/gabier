@@ -1,8 +1,6 @@
 # The whole-project diagnostics holds on edge cases of the file walk
 
 Opened: 11-11-2026 12:36
-On hold: findings of the review of `diagnostics --all` (PR 46) that break no `Done when` point and no use met yet; lifted
-when a project shows one of them (a symlinked source folder is the likeliest).
 
 The review of the ticket `diagnostics-can-cover-the-whole-project` found cases of the walk of the source folders that
 `JdtlsLanguageServer` (`projectDiagnostics`, `javaFilesOfTheProject`, `published`, `textInProject`) does not settle or
@@ -20,3 +18,13 @@ Done when:
   `UncheckedIOException`; a test covers it.
 - The cost on a large project (all the texts held in memory, every `didOpen` sent before the wait) is measured on a
   project of thousands of files and stated in the page, or bounded; the choice is written in the resolution.
+
+## Resolution
+
+Closed with none of its points done, because none applies any more: the ticket `diagnostics-all-uses-the-jdtls-stream`
+(11-11-2026-1259) removed the walk of the source folders, the reading of the texts and the opening of every file, which
+all five points are about. `diagnostics --all` now answers from what jdtls published (`Diagnostics.published`), reading
+no file and opening none, so a file deleted during the call, a file that is not UTF-8, a symbolic link, an unreadable
+folder and the memory held by the texts no longer reach it; the cost on a large project is a function of the number of
+problems jdtls published, measured on this checkout (532 files) at 1.2 s once jdtls is started
+(`docs/commands/diagnostics.md`). Fixing commit: the one of the ticket 1259 (hash filled in by the supervisor).

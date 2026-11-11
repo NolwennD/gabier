@@ -497,7 +497,8 @@ class FakeJavaLanguageServerTest {
 
         assertThat(server.projectDiagnostics())
                 .extracting(DiagnosedFile::file)
-                .contains(ROOT.resolve("src/main/java/demo/Clean.java"));
+                .contains(ROOT.resolve("src/main/java/demo/Broken.java"))
+                .doesNotContain(ROOT.resolve("src/main/java/demo/Clean.java"));
         assertThat(server.asked()).containsExactly(new Request.ProjectDiagnostics());
     }
 

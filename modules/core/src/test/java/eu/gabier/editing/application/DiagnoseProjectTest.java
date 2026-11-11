@@ -25,7 +25,7 @@ class DiagnoseProjectTest {
     private final DiagnoseProject diagnose = new DiagnoseProject(server);
 
     @Test
-    void givesEveryFileOfTheProjectWithItsProblemsTheTestsIncluded() {
+    void givesEveryFileOfTheProjectThatHasAProblemTheTestsIncludedAndNotTheCleanOne() {
         server.scripted(ProjectDiagnosticsScenarios.DIAGNOSTICS_OF_THE_WHOLE_PROJECT);
 
         List<DiagnosedFile> files = diagnose.diagnose();
@@ -34,17 +34,15 @@ class DiagnoseProjectTest {
                 .extracting(DiagnosedFile::file)
                 .containsExactly(
                         ROOT.resolve("src/main/java/demo/Broken.java"),
-                        ROOT.resolve("src/main/java/demo/Clean.java"),
                         ROOT.resolve("src/main/java/demo/shop/Sloppy.java"),
                         ROOT.resolve("src/test/java/demo/BrokenTest.java"));
         assertThat(files.get(0).diagnostics())
                 .extracting(Diagnostic::severity, Diagnostic::position)
                 .containsExactly(tuple(Diagnostic.Severity.ERROR, new Position(4, 15)));
-        assertThat(files.get(1).diagnostics()).isEmpty();
-        assertThat(files.get(2).diagnostics())
+        assertThat(files.get(1).diagnostics())
                 .extracting(Diagnostic::severity)
                 .containsExactly(Diagnostic.Severity.WARNING);
-        assertThat(files.get(3).diagnostics())
+        assertThat(files.get(2).diagnostics())
                 .extracting(Diagnostic::severity)
                 .containsExactly(Diagnostic.Severity.ERROR);
     }

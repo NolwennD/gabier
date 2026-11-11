@@ -1014,11 +1014,12 @@ Output, as for a file, one line per problem, each file named by its absolute pat
 /work/demo/src/test/java/demo/BrokenTest.java:5:16: error: Type mismatch: cannot convert from int to String
 ```
 
-Limits: the files are the `.java` files under the source folders that jdtls lists for the project, the test sources
-and any other source set the build declares included, whatever their names, read from the disk, so a file created
-since the import is one of them. The files of a source folder that is not under the folders of the project, and what is
-not a `.java` file, are left out and do not refuse the call. A clean project prints nothing, and the exit code is 0
-whatever the problems. jdtls is waited for once, as for several files named in one call. See `gabier help diagnostics`.
+Limits: the files are the `.java` files of the project that jdtls published a problem for once it built the project,
+the test sources and any other source set included; no file is opened, so the time does not depend on their number. A
+file with no problem is not listed, and a clean project prints nothing; the exit code is 0 whatever the problems. Files
+changed on disk are told to jdtls and its build is waited for before the answer, then one second in which it publishes
+nothing. The first call waits for jdtls to have finished starting. What is not a `.java` file of the project is left
+out and does not refuse the call. See `gabier help diagnostics`.
 
 ### A new file for a new type
 

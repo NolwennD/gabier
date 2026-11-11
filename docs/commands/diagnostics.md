@@ -27,20 +27,33 @@ mcp` serves it as the tool `diagnostics` with `files` as an array.
 
 ## The whole project
 
-`gabier diagnostics --all` takes **no file**: it gives the problems of every Java file of the project the daemon serves,
-in the format above, in text and with `--json`, and a project with no problem prints nothing, as a clean file does. The
-language server chooses the files, nothing is guessed from the folders: they are the `.java` files under the **source
-folders that jdtls lists for the project** (`java.project.listSourcePaths`: the main sources, the test sources and any
-other source set the build declares, whatever their names), found by walking those folders on the disk, so a file
-created since jdtls imported the project is one of them. With `--json` the result has one element per file, the clean
-ones with an empty list; they are in the **order of the paths**, and the text names each file by the **absolute path**
-the daemon gives it, where the form with files shows the file as typed. All the files are asked together, so the wait
-for the language server to be quiet is paid once. A file the language server cannot answer for **does not refuse the
-call**, as it does when a file is named: the files of a source folder that is not under a folder of the project
-(a build that declares another directory as sources) are left out, and so are what is not a `.java` file and a folder
-named like one. The only refusal is a language server that is not ready (`language-server-not-ready`). A file, or
-`--dry-run`, next to `--all` is a usage error. The daemon method is `diagnostics-all`, with no parameter, and `gabier
-mcp` serves it as the tool `diagnostics-all`, with no argument.
+`gabier diagnostics --all` takes **no file**: it gives the problems of the Java files of the project the daemon serves,
+in the format above, in text and with `--json`, and a project with no problem prints nothing, as a clean file does.
+The answer is what the language server **published** about the project once it has built it: jdtls compiles the project
+incrementally and publishes the problems of every file it builds, the files nobody opened included (checked on the real
+jdtls with Gradle, with Maven and with no build tool), so no file is opened, none is read and the time does not grow with
+the number of files. The files are the `.java` files under a folder of the project that jdtls published a problem for,
+the test sources and any other source set included, and nothing is guessed from the folders. A file with no problem is
+**not in the answer**, with `--json` as in text: the result has one element per file that has a problem, in the **order
+of the paths**, and `{"files":[]}` for a project with none (the form with files answers a clean file with an empty
+list, because it names the file). Each file is named by the **absolute path** the daemon gives it, where the form with
+files shows the file as typed. A pom.xml, a file of another directory or anything that is not a `.java` file of the
+project is left out and does not refuse the call.
+
+Before it answers, the daemon waits for jdtls to have **finished starting**, which the first call after the start does
+(jdtls registers the files it wants watched near the end of its initialization, just before it publishes the problems
+of the whole workspace for the first time, and what it answers before that, for a large project, says nothing of the
+problems), tells it of the files created, changed or deleted on disk since the last call, asks it for an incremental
+build (`java/buildWorkspace`) and waits for the answer, which comes once the build that was running, and the one the
+changes call for, are over: **a build that is still running is waited for, not taken for a clean project**, and an edit
+made on disk is answered as it is now. The publications of a build are not ordered with that answer, so the daemon then
+waits **1 second** in which nothing is published; it is the whole wait of a call once jdtls is started, where the form
+with files waits for jdtls to be quiet for 5 seconds. On this checkout (532 Java files, Gradle) the first call, made
+right after the start of the daemon, answered after 50 seconds (the start and the import of the project included; opening
+every file took 151 seconds), and the next ones after 1.2 seconds. The refusals are a language server that is not ready (`language-server-not-ready`) and one that fails the build with an error
+of its own (`language-server-request-failed`). A file, or `--dry-run`, next to `--all` is a usage error. The daemon
+method is `diagnostics-all`, with no parameter, and `gabier mcp` serves it as the tool `diagnostics-all`, with no
+argument.
 
 ```text
 $ gabier diagnostics src/main/java/demo/Broken.java
@@ -63,6 +76,8 @@ the help of the command (`gabier help diagnostics`) lists them:
 - `language-server-file-missing`: the path is under the project and no file is there.
 - `language-server-not-a-file`: the path is a folder.
 - `language-server-not-ready`: the Java language server is not ready.
+- `language-server-request-failed`: with `--all`, the language server failed the build with an error of its own, which the
+  problem relays (its code and its message).
 - `usage-error`: the arguments are not those of the command.
 - `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.
 - `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.

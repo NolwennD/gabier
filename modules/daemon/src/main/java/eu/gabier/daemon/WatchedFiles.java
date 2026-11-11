@@ -81,6 +81,14 @@ final class WatchedFiles {
         registrations.put(registration.getId(), watchers);
     }
 
+    /**
+     * True once jdtls has registered a watcher. It does so near the end of its initialization, shortly before the
+     * first publication of the problems of the whole workspace (checked on the real jdtls).
+     */
+    synchronized boolean registered() {
+        return !registrations.isEmpty();
+    }
+
     synchronized void unregister(Unregistration unregistration) {
         registrations.remove(unregistration.getId());
     }

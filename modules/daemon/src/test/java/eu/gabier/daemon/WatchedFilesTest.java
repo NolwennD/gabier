@@ -198,6 +198,25 @@ class WatchedFilesTest {
     }
 
     @Test
+    void isRegisteredOnceJdtlsHasAskedForAFileToBeWatchedAndNotBefore() {
+        var files = WatchedFiles.of(root);
+
+        assertThat(files.registered()).isFalse();
+
+        files.register(new Registration("1", "workspace/symbol", "options"));
+
+        assertThat(files.registered()).isFalse();
+
+        files.register(registration("2", glob("**/*.java")));
+
+        assertThat(files.registered()).isTrue();
+
+        files.unregister(new Unregistration("2", METHOD));
+
+        assertThat(files.registered()).isFalse();
+    }
+
+    @Test
     void forgetsTheWatchersOfAnUnregistration() throws IOException {
         var files = WatchedFiles.of(root);
         files.register(registration("1", glob("**/*.java")));

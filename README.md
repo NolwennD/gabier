@@ -224,7 +224,7 @@ positions counted from 1 and `dryRun` in place of `--dry-run`.
 ## Capabilities
 
 - [`gabier diagnostics <file>...`](docs/commands/diagnostics.md): the errors and warnings of Java files, without a build;
-  `gabier diagnostics --all` those of every Java file of the project.
+  `gabier diagnostics --all` the Java files of the project that have a problem, as jdtls published them.
 - [`gabier rename`](docs/commands/rename.md): rename a symbol, and everything that refers to it, in every file.
 - [`gabier organize-imports <file>`](docs/commands/organize-imports.md): add the missing imports, remove the unused
   ones and order the rest as the project does (its `.settings` or `.vscode` preferences).

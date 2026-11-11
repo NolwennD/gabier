@@ -42,14 +42,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionContext;
@@ -130,7 +128,12 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     /** What a name starts with: the label of an anonymous class does not ({@code {...}}). */
     private static final Pattern STARTS_AS_A_NAME = Pattern.compile("^\\p{javaJavaIdentifierStart}");
 
+    /** What jdtls publishes, kept per file: read by every request that wants the problems of files. */
     private final Diagnostics diagnostics;
+
+    /** The signal that jdtls has finished building: read by every request that wants the problems as they are now. */
+    private final Builds builds;
+
     private final Duration quiet;
     private final CompletableFuture<JdtlsSession> starting;
     private final StartProgress progress;
@@ -146,11 +149,13 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
 
     private JdtlsLanguageServer(
             Diagnostics diagnostics,
+            Builds builds,
             Duration quiet,
             CompletableFuture<JdtlsSession> starting,
             StartProgress progress,
             Thread starter) {
         this.diagnostics = diagnostics;
+        this.builds = builds;
         this.quiet = quiet;
         this.starting = starting;
         this.progress = progress;
@@ -165,6 +170,17 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * @param log receives a line for what happens (see {@link JdtlsSession#start})
      */
     static JdtlsLanguageServer start(JdtlsStarter jdtls, JdtlsSettings settings, Duration quiet, Consumer<String> log) {
+        return start(jdtls, settings, quiet, Builds.SETTLE, log);
+    }
+
+    /**
+     * As {@link #start(JdtlsStarter, JdtlsSettings, Duration, Consumer)}.
+     *
+     * @param settle how long nothing may be published after the build of the project before its diagnostics are taken as
+     *     final ({@link Builds})
+     */
+    static JdtlsLanguageServer start(
+            JdtlsStarter jdtls, JdtlsSettings settings, Duration quiet, Duration settle, Consumer<String> log) {
         var diagnostics = new Diagnostics();
         var starting = new CompletableFuture<JdtlsSession>();
         var progress = new StartProgress();
@@ -179,7 +195,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             }
         });
         starter.start();
-        return new JdtlsLanguageServer(diagnostics, quiet, starting, progress, starter);
+        return new JdtlsLanguageServer(
+                diagnostics, new Builds(diagnostics, settle), quiet, starting, progress, starter);
     }
 
     @Override
@@ -243,61 +260,40 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     }
 
     /**
-     * The diagnostics of every Java file of the project. The files are those under the source folders that jdtls lists
-     * for the projects it imported ({@code java.project.listSourcePaths}: the main sources, the test sources and every
-     * other source set, whatever their names, as the build declared them), found by walking the folders, so a file that
-     * jdtls does not know yet (created since the import) is one of them. Their diagnostics are asked together, as for
-     * {@link #diagnostics(List)}.
+     * The problems jdtls has published for the Java files of the project, once it has built it: no file is opened and
+     * none is read, so the time does not grow with the number of files. jdtls publishes the problems of the whole
+     * workspace as its builds go, the files that are not open included (checked on the real jdtls, with Gradle, Maven
+     * and no build tool), and the daemon keeps the last publication of each file ({@link Diagnostics#published}). The
+     * answer is read once the changes on disk are told to jdtls and its build is finished ({@link Builds}), so a file
+     * edited since the last request is answered as it is now, and a build that is running is waited for, not taken for
+     * a clean project.
      *
-     * <p>A source folder that is not under a folder jdtls imported (a build that declares a folder of another
-     * directory as sources) holds files that the adapter refuses to answer for, as it does for a file given by hand
-     * ({@code file-outside-project}); here they are left out, as are the files that are not regular files with the
-     * extension {@code .java} (a resource kept among the sources, a link to a folder). jdtls is not asked whether a
-     * file is excluded from a source folder by the build: it opens it like any other.
+     * <p>The files are those jdtls published a problem for that are {@code .java} files under a folder of a project it
+     * imported (a jar, a {@code pom.xml} or a file of another directory is left out), in the order of the paths: a clean
+     * file is not in the answer, since jdtls says nothing of a file that never had a problem.
      *
      * @throws LanguageServerException if jdtls is not ready
-     * @throws JdtlsException if jdtls dies, does not answer in time or answers what the adapter cannot read
+     * @throws JdtlsException if jdtls dies, does not answer in time or fails the build
      */
     @Override
     public synchronized List<DiagnosedFile> projectDiagnostics() {
         JdtlsSession session = ready();
-        List<Path> files = javaFilesOfTheProject(session);
-        if (files.isEmpty()) {
-            return List.of();
-        }
-        var found = published(files);
-
-        return IntStream.range(0, files.size())
-                .mapToObj(index -> new DiagnosedFile(files.get(index), domain(found.get(index))))
-                .toList();
-    }
-
-    /** The {@code .java} files under the source folders of the project, each once, in the order of the paths. */
-    private List<Path> javaFilesOfTheProject(JdtlsSession session) {
-        List<Path> folders;
         JdtlsWatch watch = session.newWatch();
         try {
-            prepare(session, watch);
-            folders = sourceFolders(session, watch);
+            builds.awaitInitialized(session, watch);
+            takeInChangesOnDisk(session, watch);
+            builds.awaitFinished(session, watch);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            throw new JdtlsException("Interrupted while waiting for the source folders of the project", interrupted);
-        }
-        Set<Path> files = new TreeSet<>();
-        for (Path folder : folders) {
-            if (session.projects().stream().noneMatch(folder::startsWith) || !Files.isDirectory(folder)) {
-                continue;
-            }
-            try (Stream<Path> found = Files.walk(folder)) {
-                found.filter(file -> file.getFileName().toString().endsWith(".java") && Files.isRegularFile(file))
-                        .map(JdtlsLanguageServer::normalized)
-                        .forEach(files::add);
-            } catch (IOException failure) {
-                throw new UncheckedIOException(failure);
-            }
+            throw new JdtlsException("Interrupted while waiting for the diagnostics of the project", interrupted);
         }
 
-        return List.copyOf(files);
+        return diagnostics.published().entrySet().stream()
+                .filter(published -> !published.getValue().isEmpty())
+                .filter(published -> published.getKey().getFileName().toString().endsWith(".java"))
+                .filter(published -> session.projects().stream().anyMatch(published.getKey()::startsWith))
+                .map(published -> new DiagnosedFile(published.getKey(), domain(published.getValue())))
+                .toList();
     }
 
     /** What {@link #diagnostics(List)} asks of jdtls, as jdtls publishes it for each file, in the order given. */

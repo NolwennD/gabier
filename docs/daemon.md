@@ -96,7 +96,7 @@ another job; a first run under a heavier load took 105 s to be ready, and `04-11
 | launch | the daemon opens the data folder and starts the jdtls process; jdtls starts its JVM and its OSGi runtime, up to its first `language/status` (`Init...`) | about 6 s |
 | import | jdtls imports the project: for a Gradle project it starts a Gradle daemon and runs the build (compile of `build-logic`, evaluation of the settings, configuration of every module, the model of each); this is nearly all of the wait, and its `language/status` messages (`70% Starting Java Language Server - Configure project :core`) name the task | about 54 s |
 | ready | `ServiceReady`, then the list of the projects jdtls imported | about 0.1 s |
-| diagnostics | `diagnostics` and `diagnostics-all` only: the file (every file of the project, for the second) is opened, jdtls publishes, and the daemon waits for jdtls to be quiet for 5 seconds | 7 to 9 s for one file |
+| diagnostics | `diagnostics`: the file is opened, jdtls publishes, and the daemon waits for jdtls to be quiet for 5 seconds. `diagnostics-all`: no file is opened; the daemon waits for jdtls to register the files it watches (the end of its initialization, which publishes the problems of the whole workspace), tells it of the changes on disk, asks for an incremental build, and waits 1 second in which nothing is published | 7 to 9 s for one file; 1.2 s for the whole project (532 files) once jdtls is started, 50 s for the first call right after the start of the daemon |
 
 so the first `gabier diagnostics` of a session answers after about a minute (69 s in the measure, 112 s in the heavier run), the same call warm
 after 6 to 9 s (the 5 seconds of quiet are in it), and a command that does not wait for the diagnostics (`rename`,

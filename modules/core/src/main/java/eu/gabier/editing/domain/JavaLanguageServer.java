@@ -27,13 +27,14 @@ public interface JavaLanguageServer {
     List<List<Diagnostic>> diagnostics(List<Path> files);
 
     /**
-     * The problems of every Java file of the project, as the server sees it: the files are chosen by what the server
-     * knows of the project (its source folders, whatever their names and however many source sets there are, the test
-     * sources included), not by a layout the caller guesses. A file the server cannot answer for (outside the folders of
-     * its project, gone since it was listed) is left out of the answer, not a reason to refuse the call.
+     * The problems of every Java file of the project, as the server reports them once it has built the project: the
+     * files are the ones the server knows to have a problem, in whatever source set they are, the test sources
+     * included, not a layout the caller guesses. No file is sent to the server, so the time of the call does not grow
+     * with the number of files. A file the server does not report is not in the answer, and neither is one outside
+     * the folders of its project.
      *
-     * @return one element per file, in the order of the paths, none for a project that has no Java file; the diagnostics
-     *     of a file that is clean are empty
+     * @return one element per file that has at least one problem, in the order of the paths: none for a project with no
+     *     problem
      * @throws LanguageServerException if the server is not ready
      */
     List<DiagnosedFile> projectDiagnostics();

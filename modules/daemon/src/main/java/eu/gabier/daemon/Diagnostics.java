@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.LongSupplier;
 import org.eclipse.lsp4j.Diagnostic;
@@ -87,6 +88,18 @@ final class Diagnostics {
      */
     synchronized List<Diagnostic> latest(Path file) {
         return latest.getOrDefault(file, List.of());
+    }
+
+    /**
+     * What jdtls published last about every file it published for, whether the daemon opened the file or not: jdtls
+     * publishes the problems of the whole workspace as its builds go (checked on the real jdtls, with Gradle, Maven and
+     * no build tool), and an empty list for a file whose problems are gone. A publication for a URI that is not a
+     * {@code file:} one is not kept. Any method of the daemon may read it; {@link #latest} is the same for one file.
+     *
+     * @return a copy, in the order of the paths: what the daemon keeps afterwards does not change it
+     */
+    synchronized Map<Path, List<Diagnostic>> published() {
+        return new TreeMap<>(latest);
     }
 
     /**

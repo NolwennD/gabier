@@ -49,6 +49,7 @@ class SequelsTest {
                 .containsExactly(
                         "rename-after-a-rename",
                         "diagnostics-after-an-edit",
+                        "diagnostics-of-the-whole-project-after-edits",
                         "organize-imports-after-a-setting-is-removed",
                         "rename-a-package-then-the-same-package-of-the-tests");
     }
@@ -145,5 +146,29 @@ class SequelsTest {
                         .split("\n", -1)[at.line()]
                         .substring(at.column()))
                 .startsWith("true");
+    }
+
+    @Test
+    void editsTwoFilesBetweenTheTwoDiagnosticsOfTheWholeProjectAndAnswersForTheNewText() {
+        Sequel sequel = named("diagnostics-of-the-whole-project-after-edits");
+        var before = ((Answer.ProjectDiagnosed) sequel.first().answer()).files();
+        var after = ((Answer.ProjectDiagnosed) sequel.second().answer()).files();
+
+        assertThat(sequel.second().request()).isEqualTo(sequel.first().request());
+        assertThat(sequel.second().files().keySet())
+                .isEqualTo(sequel.first().files().keySet());
+        assertThat(sequel.first().files().keySet().stream()
+                        .filter(path -> !sequel.first()
+                                .files()
+                                .get(path)
+                                .equals(sequel.second().files().get(path))))
+                .containsExactlyInAnyOrder(
+                        Path.of("src/main/java/demo/Broken.java"), Path.of("src/main/java/demo/Clean.java"));
+        assertThat(before)
+                .extracting(file -> file.file().getFileName().toString())
+                .containsExactly("Broken.java", "Sloppy.java", "BrokenTest.java");
+        assertThat(after)
+                .extracting(file -> file.file().getFileName().toString())
+                .containsExactly("Clean.java", "Sloppy.java", "BrokenTest.java");
     }
 }

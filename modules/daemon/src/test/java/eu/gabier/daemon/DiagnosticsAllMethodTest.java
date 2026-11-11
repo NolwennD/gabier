@@ -57,13 +57,11 @@ class DiagnosticsAllMethodTest {
                 .extracting(FileDiagnostics::file)
                 .containsExactly(
                         project.resolve("src/main/java/demo/Broken.java").toString(),
-                        project.resolve("src/main/java/demo/Clean.java").toString(),
                         project.resolve("src/main/java/demo/shop/Sloppy.java").toString(),
                         project.resolve("src/test/java/demo/BrokenTest.java").toString());
         assertThat(diagnosed.files().get(0).diagnostics()).containsExactly(new Diagnosis(Severity.ERROR, 4, 15, ""));
-        assertThat(diagnosed.files().get(1).diagnostics()).isEmpty();
-        assertThat(diagnosed.files().get(2).diagnostics()).containsExactly(new Diagnosis(Severity.WARNING, 4, 12, ""));
-        assertThat(diagnosed.files().get(3).diagnostics()).containsExactly(new Diagnosis(Severity.ERROR, 4, 15, ""));
+        assertThat(diagnosed.files().get(1).diagnostics()).containsExactly(new Diagnosis(Severity.WARNING, 4, 12, ""));
+        assertThat(diagnosed.files().get(2).diagnostics()).containsExactly(new Diagnosis(Severity.ERROR, 4, 15, ""));
     }
 
     @Test

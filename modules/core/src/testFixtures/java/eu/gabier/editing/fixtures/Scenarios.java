@@ -2101,6 +2101,7 @@ public final class Scenarios {
         return List.of(
                 RENAME_AFTER_A_RENAME,
                 DIAGNOSTICS_AFTER_AN_EDIT,
+                ProjectDiagnosticsScenarios.DIAGNOSTICS_OF_THE_WHOLE_PROJECT_AFTER_EDITS,
                 ORGANIZE_IMPORTS_AFTER_A_SETTING_IS_REMOVED,
                 PackageRenameScenarios.RENAME_A_PACKAGE_THEN_THE_SAME_PACKAGE_OF_THE_TESTS);
     }

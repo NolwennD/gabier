@@ -215,6 +215,11 @@ final class JdtlsSession implements AutoCloseable {
         return watched.changes();
     }
 
+    /** True once jdtls has asked to have files watched, which it does late in its initialization ({@link WatchedFiles}). */
+    boolean watchersRegistered() {
+        return watched.registered();
+    }
+
     /** Tells jdtls of changes on disk, as it asked to be. A notification: the answer to it is not a message. */
     void tell(List<FileEvent> changes) {
         log.accept("jdtls told of the changes on disk: " + changes);

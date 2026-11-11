@@ -69,15 +69,16 @@ public final class Operations {
             "diagnostics-all",
             "the errors and warnings of every Java file of the project, without a build",
             """
-            The language server chooses the files: every .java file under the source folders it knows for the project,
-            the test sources and the other source sets included, found on disk, so a file created since the import is
-            one of them. The result is the one of diagnostics, with one element per file in the order of the paths, the
-            files that are clean included with no problem. What the language server cannot answer for is left out and
-            does not refuse the call: the files of a source folder that is not under the folders of the project, a
-            folder named like a Java file, and whatever is not a .java file. The call waits for the language server to
-            be quiet once, as diagnostics does.\
+            The answer is what the language server published about the project once it has built it, with no file
+            opened: every .java file of the project that has a problem, the test sources and the other source sets
+            included, whatever the number of files. The result is the one of diagnostics, with one element per file in
+            the order of the paths; a file that is clean is not in it, and a project with no problem answers nothing.
+            Files created or changed on disk since the last call are told to the language server first, and the call
+            waits for its build to be over, so a build that is running is not taken for a clean project. What is not a
+            .java file of the project (a pom.xml, a file of another directory) is left out and does not refuse the
+            call.\
             """,
-            List.of(Refusals.NOT_READY),
+            List.of(Refusals.REQUEST_FAILED, Refusals.NOT_READY),
             List.of());
 
     public static final Operation RENAME = new Operation(

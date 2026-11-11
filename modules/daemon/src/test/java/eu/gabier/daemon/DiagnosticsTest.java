@@ -200,6 +200,28 @@ class DiagnosticsTest {
         assertThat(diagnostics.quietFor()).isEqualTo(Duration.ofSeconds(5));
     }
 
+    @Test
+    void whatWasPublishedForEveryFileIsReadInTheOrderOfThePathsWhetherOrNotTheFileWasOpened() {
+        diagnostics.publish(publicationOf(OTHER, error(1, "In B")));
+        diagnostics.publish(publicationOf(FILE, error(2, "In A")));
+        diagnostics.publish(publicationOf(FILE));
+        diagnostics.publish(new PublishDiagnosticsParams("jdt://contents/java.base/String.class", List.of()));
+
+        assertThat(diagnostics.published()).containsOnlyKeys(FILE, OTHER);
+        assertThat(diagnostics.published().get(FILE)).isEmpty();
+        assertThat(diagnostics.published().keySet()).containsExactly(FILE, OTHER);
+    }
+
+    @Test
+    void whatWasPublishedIsACopyThatLaterPublicationsDoNotChange() {
+        diagnostics.publish(publicationOf(FILE, error(2, "In A")));
+        var before = diagnostics.published();
+
+        diagnostics.publish(publicationOf(OTHER, error(1, "In B")));
+
+        assertThat(before).containsOnlyKeys(FILE);
+    }
+
     private static Diagnostic error(int line, String message) {
         return diagnostic(line, DiagnosticSeverity.Error, message);
     }
