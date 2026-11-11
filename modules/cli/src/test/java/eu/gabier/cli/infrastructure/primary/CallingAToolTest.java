@@ -112,6 +112,36 @@ class CallingAToolTest extends CliTest {
     }
 
     @Test
+    void diagnosticsAllAsksNoFileSaysWhatTheCommandLinePrintsAndSendsTheSameRequest() throws IOException {
+        var diagnostics = new DiagnosedFiles(List.of(
+                new FileDiagnostics(
+                        "/project/Broken.java", List.of(new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch"))),
+                new FileDiagnostics("/project/Clean.java", List.of())));
+        try (var daemon = daemonAnswering(diagnostics.toJson())) {
+            assertThat(runWithSocket("diagnostics", "--all")).isZero();
+            var printed = printed(out());
+
+            var result = result(mcp(call("diagnostics-all", "{}")).getFirst());
+
+            assertThat(text(result)).isEqualTo(printed).isEqualTo("/project/Broken.java:5:16: error: Type mismatch");
+            assertThat(result.get("structuredContent")).isEqualTo(Json.parse(diagnostics.toJson()));
+            assertThat(result.get("isError")).isEqualTo(false);
+            assertThat(daemon.requests()).hasSize(2);
+            assertThat(daemon.requests().get(1)).isEqualTo(daemon.requests().get(0));
+        }
+    }
+
+    @Test
+    void diagnosticsAllSaysThereAreNoProblemsForAProjectThatHasNone() throws IOException {
+        try (var daemon = daemonAnswering(new DiagnosedFiles(List.of()).toJson())) {
+            var result = result(mcp(call("diagnostics-all", "{}")).getFirst());
+
+            assertThat(text(result)).isEqualTo("no problems");
+            assertThat(daemon.requests()).hasSize(1);
+        }
+    }
+
+    @Test
     void renameWithADryRunSaysWhatTheCommandLinePrintsAndSendsTheSameRequest() throws IOException {
         try (var daemon = daemonAnswering(MODIFIED.toJson())) {
             assertThat(runWithSocket("rename", "--dry-run", "/project/Greeter.java", "6:19", "welcome"))

@@ -998,6 +998,27 @@ src/main/java/demo/Main.java:8:21: error: Type mismatch: cannot convert from Str
 Limits: the files are asked together, so jdtls is waited for once, and the problems come in the order the files were
 given. One file it refuses (outside the project, missing) refuses the whole call. A file with problems still gives
 exit code 0. For the fix of an error, see "A compiler error that jdtls has a fix for". See `gabier help diagnostics`.
+For every file of the project, see "The errors of the whole project, without a build".
+
+### The errors of the whole project, without a build
+
+Words: see all the errors of the project, every error, the whole project, every Java file, project-wide, no build
+
+Ask: `gabier diagnostics --all`, with no file to name. For the files a change touched, see "The errors of a file,
+without a build".
+
+Output, as for a file, one line per problem, each file named by its absolute path, in the order of the paths:
+
+```text
+/work/demo/src/main/java/demo/Broken.java:5:16: error: Type mismatch: cannot convert from String to int
+/work/demo/src/test/java/demo/BrokenTest.java:5:16: error: Type mismatch: cannot convert from int to String
+```
+
+Limits: the files are the `.java` files under the source folders that jdtls lists for the project, the test sources
+and any other source set the build declares included, whatever their names, read from the disk, so a file created
+since the import is one of them. The files of a source folder that is not under the folders of the project, and what is
+not a `.java` file, are left out and do not refuse the call. A clean project prints nothing, and the exit code is 0
+whatever the problems. jdtls is waited for once, as for several files named in one call. See `gabier help diagnostics`.
 
 ### A new file for a new type
 

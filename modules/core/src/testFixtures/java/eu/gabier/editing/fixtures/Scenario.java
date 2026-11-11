@@ -2,6 +2,7 @@ package eu.gabier.editing.fixtures;
 
 import eu.gabier.editing.domain.ChangeSet;
 import eu.gabier.editing.domain.CleanUp;
+import eu.gabier.editing.domain.DiagnosedFile;
 import eu.gabier.editing.domain.Diagnostic;
 import eu.gabier.editing.domain.FileChange;
 import eu.gabier.editing.domain.FileChange.CreateFile;
@@ -76,6 +77,8 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
     private static void check(Request request, Answer answer) {
         switch (answer) {
             case Answer.Diagnosed _ -> require(request instanceof Request.Diagnostics, "diagnosed", request);
+            case Answer.ProjectDiagnosed _ ->
+                require(request instanceof Request.ProjectDiagnostics, "project diagnosed", request);
             case Answer.Renamed _ -> require(request instanceof Request.Rename, "renamed", request);
             case Answer.Extracted _ ->
                 require(
@@ -180,6 +183,48 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             NOT_APPLICABLE,
                             NOT_CREATABLE ->
                         throw new IllegalArgumentException("A request for diagnostics cannot get " + key);
+                };
+            }
+        }
+
+        /**
+         * The diagnostics of every Java file of the project: no file is named, the server knows which are the
+         * project's. {@link #file()} is the root of the project, which is what the request is about.
+         */
+        record ProjectDiagnostics() implements Request {
+
+            @Override
+            public Path file() {
+                return Path.of("");
+            }
+
+            @Override
+            public ProjectDiagnostics resolvedIn(Path root) {
+                return this;
+            }
+
+            /** The only refusals are a server that is not ready and a server that fails on the request. */
+            @Override
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
+                return switch (key) {
+                    case NOT_READY -> LanguageServerException.notReady();
+                    case REQUEST_FAILED -> requestFailed(details);
+                    case FILE_OUTSIDE_PROJECT,
+                            FILE_MISSING,
+                            NOT_A_FILE,
+                            EMPTY_PACKAGE,
+                            NO_SUCH_SYMBOL,
+                            INVALID_NAME,
+                            NOT_EXTRACTABLE,
+                            NOT_INLINABLE,
+                            NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
+                            AMBIGUOUS_IMPORTS,
+                            UNRESOLVED_IMPORTS,
+                            NOT_APPLICABLE,
+                            NOT_CREATABLE ->
+                        throw new IllegalArgumentException(
+                                "A request for the diagnostics of the project cannot get " + key);
                 };
             }
         }
@@ -827,6 +872,31 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
             @Override
             public Diagnosed resolvedIn(Path root) {
                 return this;
+            }
+        }
+
+        /**
+         * The diagnostics of every Java file of the project, a file that is clean included with none: which files are
+         * answered is part of the answer. A replay compares the files and, for each, the severity and the position of
+         * its diagnostics.
+         */
+        record ProjectDiagnosed(List<DiagnosedFile> files) implements Answer {
+
+            public ProjectDiagnosed {
+                Assert.field("files", files).notNull().noNullElement();
+                files = List.copyOf(files);
+            }
+
+            @Override
+            public Comparison comparison() {
+                return Comparison.SEVERITY_AND_POSITION;
+            }
+
+            @Override
+            public ProjectDiagnosed resolvedIn(Path root) {
+                return new ProjectDiagnosed(files.stream()
+                        .map(file -> new DiagnosedFile(Scenario.resolve(root, file.file()), file.diagnostics()))
+                        .toList());
             }
         }
 

@@ -45,7 +45,7 @@ record DiagnosticsMethod(Diagnose diagnose) implements DaemonMethod {
         return Outcome.of(new DiagnosedFiles(diagnosed).toJson());
     }
 
-    private static List<Diagnosis> diagnoses(List<Diagnostic> diagnostics) {
+    static List<Diagnosis> diagnoses(List<Diagnostic> diagnostics) {
         return diagnostics.stream()
                 .map(diagnostic -> new Diagnosis(
                         Severity.valueOf(diagnostic.severity().name()),

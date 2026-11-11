@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import eu.gabier.editing.domain.ChangeSet;
 import eu.gabier.editing.domain.CleanUp;
+import eu.gabier.editing.domain.DiagnosedFile;
 import eu.gabier.editing.domain.Diagnostic;
 import eu.gabier.editing.domain.FileChange;
 import eu.gabier.editing.domain.FileChange.CreateFile;
@@ -24,6 +25,7 @@ import eu.gabier.editing.domain.ReferenceLocations;
 import eu.gabier.editing.domain.TextEdit;
 import eu.gabier.editing.domain.TypeKind;
 import eu.gabier.editing.fixtures.Scenario.Answer;
+import eu.gabier.editing.fixtures.Scenario.Comparison;
 import eu.gabier.editing.fixtures.Scenario.Request;
 import eu.gabier.shared.error.domain.MissingMandatoryValueException;
 import java.io.IOException;
@@ -611,6 +613,46 @@ class ScenarioTest {
                 .isEqualTo(new Request.Inline(Path.of("/project/src/A.java"), POSITION));
         assertThat(new Request.CreateType(FILE, TypeKind.ENUM).resolvedIn(ROOT))
                 .isEqualTo(new Request.CreateType(Path.of("/project/src/A.java"), TypeKind.ENUM));
+    }
+
+    @Test
+    void theRequestForTheWholeProjectIsAboutTheRootAndKeepsItsPlaceUnderAnyRoot() {
+        var request = new Request.ProjectDiagnostics();
+
+        assertThat(request.file()).isEqualTo(Path.of(""));
+        assertThat(request.resolvedIn(ROOT)).isEqualTo(new Request.ProjectDiagnostics());
+        assertThat(ROOT.resolve(request.file()).normalize()).isEqualTo(ROOT);
+    }
+
+    @Test
+    void theRequestForTheWholeProjectOnlyGetsAServerThatIsNotReadyOrFails() {
+        var request = new Request.ProjectDiagnostics();
+
+        assertThat(request.refusal(LanguageServerErrorKey.NOT_READY).key()).isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(request.refusal(LanguageServerErrorKey.REQUEST_FAILED, List.of("-32603", "Internal error."))
+                        .key())
+                .isEqualTo(LanguageServerErrorKey.REQUEST_FAILED);
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> request.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+    }
+
+    @Test
+    void theAnswerForTheWholeProjectPutsItsFilesUnderTheRootAndIsComparedBySeverityAndPosition() {
+        var answer = new Answer.ProjectDiagnosed(List.of(new DiagnosedFile(FILE, List.of())));
+
+        assertThat(answer.resolvedIn(ROOT))
+                .isEqualTo(new Answer.ProjectDiagnosed(
+                        List.of(new DiagnosedFile(Path.of("/project/src/A.java"), List.of()))));
+        assertThat(answer.comparison()).isEqualTo(Comparison.SEVERITY_AND_POSITION);
+    }
+
+    @Test
+    void anAnswerForTheWholeProjectFitsOnlyTheRequestForIt() {
+        var answer = new Answer.ProjectDiagnosed(List.of());
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(new Request.Diagnostics(FILE), answer));
+        assertThat(scenario(new Request.ProjectDiagnostics(), answer).answer()).isEqualTo(answer);
     }
 
     @Test

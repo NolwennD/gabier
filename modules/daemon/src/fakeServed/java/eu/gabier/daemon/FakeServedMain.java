@@ -2,6 +2,7 @@ package eu.gabier.daemon;
 
 import eu.gabier.editing.domain.ChangeSet;
 import eu.gabier.editing.domain.CleanUp;
+import eu.gabier.editing.domain.DiagnosedFile;
 import eu.gabier.editing.domain.Diagnostic;
 import eu.gabier.editing.domain.OfferedAction;
 import eu.gabier.editing.domain.OfferedActions;
@@ -15,6 +16,7 @@ import eu.gabier.editing.fixtures.CodeActionScenarios;
 import eu.gabier.editing.fixtures.FakeJavaLanguageServer;
 import eu.gabier.editing.fixtures.PackageMoveScenarios;
 import eu.gabier.editing.fixtures.PackageRenameScenarios;
+import eu.gabier.editing.fixtures.ProjectDiagnosticsScenarios;
 import eu.gabier.editing.fixtures.Scenario;
 import eu.gabier.editing.fixtures.Scenarios;
 import eu.gabier.protocol.JdtlsProgress;
@@ -70,6 +72,7 @@ public final class FakeServedMain {
                 Scenarios.FILE_WITH_AN_ERROR,
                 Scenarios.FILE_WITH_A_WARNING,
                 Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT,
+                ProjectDiagnosticsScenarios.DIAGNOSTICS_OF_THE_WHOLE_PROJECT,
                 Scenarios.RENAME_METHOD,
                 Scenarios.RENAME_TYPE,
                 Scenarios.RENAME_WHERE_THERE_IS_NO_SYMBOL,
@@ -170,6 +173,11 @@ public final class FakeServedMain {
         @Override
         public List<List<Diagnostic>> diagnostics(List<Path> files) {
             return server.diagnostics(files);
+        }
+
+        @Override
+        public List<DiagnosedFile> projectDiagnostics() {
+            return server.projectDiagnostics();
         }
 
         @Override

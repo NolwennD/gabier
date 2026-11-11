@@ -2,6 +2,7 @@ package eu.gabier.daemon;
 
 import eu.gabier.editing.domain.ChangeSet;
 import eu.gabier.editing.domain.CleanUp;
+import eu.gabier.editing.domain.DiagnosedFile;
 import eu.gabier.editing.domain.Diagnostic;
 import eu.gabier.editing.domain.LanguageServerException;
 import eu.gabier.editing.domain.OfferedAction;
@@ -126,6 +127,11 @@ final class ProjectServer implements ServedProject {
     @Override
     public List<List<Diagnostic>> diagnostics(List<Path> files) {
         return ready().diagnostics(files);
+    }
+
+    @Override
+    public List<DiagnosedFile> projectDiagnostics() {
+        return ready().projectDiagnostics();
     }
 
     @Override

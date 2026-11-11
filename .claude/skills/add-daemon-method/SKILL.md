@@ -69,7 +69,7 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      are the models) and the **refusals** of the method, `<key>: <meaning>`, in the order `gabier help` lists them. A
      refusal that more than one operation answers is a constant of `Refusals` (the file, the language server and the
      stale edit ones), not a copy; a parameter that more than one shares is one of `Parameters`. An operation that can be
-     asked in two ways is two operations (`RENAME`, `RENAME_TOKEN`). A key of the method that says the language server
+     asked in two ways is two operations (`RENAME`, `RENAME_TOKEN`; `DIAGNOSTICS`, `DIAGNOSTICS_ALL`, the second with no parameter). A key of the method that says the language server
      declined the operation (`language-server-not-...`) goes into `DECLINED_OPERATIONS` of `Problems` (`eu.gabier.cli.application`), so that its
      refusal ends with the pointer to `gabier help <name>`, on the command line and in the failed call of the MCP tool.
      The MCP server (`gabier mcp`) builds its tool from this descriptor, not from the command line, and calls it

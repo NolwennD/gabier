@@ -8,6 +8,7 @@ import eu.gabier.editing.fixtures.CleanUpScenarios;
 import eu.gabier.editing.fixtures.CodeActionScenarios;
 import eu.gabier.editing.fixtures.FakeJavaLanguageServer;
 import eu.gabier.editing.fixtures.PackageMoveScenarios;
+import eu.gabier.editing.fixtures.ProjectDiagnosticsScenarios;
 import eu.gabier.editing.fixtures.Scenarios;
 import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.DiagnosedFiles;
@@ -97,6 +98,7 @@ class DaemonServerTest {
                 new FakeJavaLanguageServer(directory)
                         .scripted(Scenarios.FILE_WITH_AN_ERROR)
                         .scripted(Scenarios.DIAGNOSTICS_OUTSIDE_THE_PROJECT)
+                        .scripted(ProjectDiagnosticsScenarios.DIAGNOSTICS_OF_THE_WHOLE_PROJECT)
                         .scripted(Scenarios.RENAME_METHOD)
                         .scripted(Scenarios.RENAME_WHERE_THERE_IS_NO_SYMBOL)
                         .scripted(Scenarios.ORGANIZE_IMPORTS)
@@ -538,6 +540,25 @@ class DaemonServerTest {
                                         Severity.ERROR, 4, 15, "Type mismatch: cannot convert from String to int"))))));
                 assertThat(client.ask(diagnosticsRequest(outside)))
                         .contains("\"key\":\"language-server-file-outside-project\"");
+                assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
+            }
+        }
+
+        @Test
+        void diagnosticsAllAnswersTheProblemsOfEveryFileOfTheProject() throws IOException {
+            serving();
+            var broken = directory.resolve("src/main/java/demo/Broken.java");
+            var clean = directory.resolve("src/main/java/demo/Clean.java");
+
+            try (var client = connect(socket())) {
+                var answer = RpcResponse.parse(client.ask("""
+                    {"jsonrpc":"2.0","id":3,"method":"diagnostics-all"}
+                    """));
+
+                assertThat(DiagnosedFiles.of(((RpcResponse.Success) answer).result())
+                                .files())
+                        .extracting(FileDiagnostics::file)
+                        .contains(broken.toString(), clean.toString());
                 assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
             }
         }

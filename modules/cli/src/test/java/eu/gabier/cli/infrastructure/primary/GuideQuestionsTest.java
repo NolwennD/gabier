@@ -93,6 +93,10 @@ class GuideQuestionsTest {
                 // The name of the task as an agent knows it, in two words (the review of 04-11-2026).
                 question("organize imports", "Imports that are missing, unused or out of order"),
                 question("show errors", "The errors of a file, without a build"),
+                question("see all the errors of the project", "The errors of the whole project, without a build"),
+                question(
+                        "list every error in every Java file of the whole project",
+                        "The errors of the whole project, without a build"),
                 question("list references", "Where a symbol is used"),
                 question("new file", "A new file for a new type"),
                 question("text blocks", "A string built from literals with `+` and line breaks"),

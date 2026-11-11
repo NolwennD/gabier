@@ -65,6 +65,21 @@ public final class Operations {
             List.of(Refusals.FILE_OUTSIDE_PROJECT, Refusals.FILE_MISSING, Refusals.NOT_A_FILE, Refusals.NOT_READY),
             List.of(Parameter.paths("files", "the Java files, absolute paths in the project")));
 
+    public static final Operation DIAGNOSTICS_ALL = new Operation(
+            "diagnostics-all",
+            "the errors and warnings of every Java file of the project, without a build",
+            """
+            The language server chooses the files: every .java file under the source folders it knows for the project,
+            the test sources and the other source sets included, found on disk, so a file created since the import is
+            one of them. The result is the one of diagnostics, with one element per file in the order of the paths, the
+            files that are clean included with no problem. What the language server cannot answer for is left out and
+            does not refuse the call: the files of a source folder that is not under the folders of the project, a
+            folder named like a Java file, and whatever is not a .java file. The call waits for the language server to
+            be quiet once, as diagnostics does.\
+            """,
+            List.of(Refusals.NOT_READY),
+            List.of());
+
     public static final Operation RENAME = new Operation(
             "rename",
             "rename a symbol, and everything that refers to it, in every file",
@@ -410,6 +425,7 @@ public final class Operations {
                 START,
                 STOP,
                 DIAGNOSTICS,
+                DIAGNOSTICS_ALL,
                 RENAME,
                 RENAME_TOKEN,
                 ORGANIZE_IMPORTS,

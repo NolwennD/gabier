@@ -50,6 +50,7 @@ it decided, whatever the method, with the refusal `daemon-stopping` (a server er
 | `start`            | none (starts jdtls in the background, answers the result of `status`)      | [start](commands/start.md)                                 |
 | `stop`             | none                                                                        | [stop](commands/status-and-stop.md)                        |
 | `diagnostics`      | `files`                                                                     | [diagnostics](commands/diagnostics.md)                     |
+| `diagnostics-all`  | none (the language server chooses the files)                                | [diagnostics](commands/diagnostics.md)                     |
 | `rename`           | `file`, `line`, `column`, `newName`, `dryRun`                               | [rename](commands/rename.md)                               |
 | `rename-token`     | `file`, `token`, `newName`, `dryRun`                                        | [rename](commands/rename.md)                               |
 | `organize-imports` | `file`, `dryRun`                                                            | [organize-imports](commands/organize-imports.md)           |

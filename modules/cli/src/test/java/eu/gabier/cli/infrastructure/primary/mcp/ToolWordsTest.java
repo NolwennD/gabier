@@ -53,6 +53,12 @@ class ToolWordsTest {
     }
 
     @Test
+    void turnsTheFormOfACommandThatAsksForTheWholeProjectIntoItsTool() {
+        assertThat(ToolWords.of("Ask: `gabier diagnostics --all`, or `gabier diagnostics <file>...`.", tools))
+                .isEqualTo("Ask: `diagnostics-all`, or `diagnostics <file>...`.");
+    }
+
+    @Test
     void leavesAnOptionAloneThatIsGivenAValueOrIsPartOfAWord() {
         var text = "gabier help --for=\"a task\", a--b, x--y-z";
 

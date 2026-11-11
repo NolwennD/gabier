@@ -27,6 +27,18 @@ public interface JavaLanguageServer {
     List<List<Diagnostic>> diagnostics(List<Path> files);
 
     /**
+     * The problems of every Java file of the project, as the server sees it: the files are chosen by what the server
+     * knows of the project (its source folders, whatever their names and however many source sets there are, the test
+     * sources included), not by a layout the caller guesses. A file the server cannot answer for (outside the folders of
+     * its project, gone since it was listed) is left out of the answer, not a reason to refuse the call.
+     *
+     * @return one element per file, in the order of the paths, none for a project that has no Java file; the diagnostics
+     *     of a file that is clean are empty
+     * @throws LanguageServerException if the server is not ready
+     */
+    List<DiagnosedFile> projectDiagnostics();
+
+    /**
      * What renaming the symbol at a position to a new name changes, in the whole project.
      *
      * @return the change set to apply, which may create, edit and move files

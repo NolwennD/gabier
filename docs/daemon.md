@@ -4,7 +4,7 @@ One daemon runs per project. `gabier diagnostics`, `gabier rename`, `gabier orga
 agent runs them in a project folder and gets the answer; `gabier status` and `gabier stop` never start one (see [status and stop](commands/status-and-stop.md)).
 It can also be started by hand, with `gabier-daemon` from the installed distribution (`./gradlew :daemon:installDist`,
 then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until `gabier stop`, a SIGTERM, or the delay with no client below; it
-answers `status`, `start`, `stop`, `diagnostics`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions` and `apply-action`, and nothing else yet.
+answers `status`, `start`, `stop`, `diagnostics`, `diagnostics-all`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions` and `apply-action`, and nothing else yet.
 
 **Installing both by name.** `mise run install` builds the native cli and the daemon of the checkout it is run in,
 **copies** them into `~/.local/share/gabier/<version>` (`<version>` is the one `gabier --version` prints; the folder is
@@ -96,7 +96,7 @@ another job; a first run under a heavier load took 105 s to be ready, and `04-11
 | launch | the daemon opens the data folder and starts the jdtls process; jdtls starts its JVM and its OSGi runtime, up to its first `language/status` (`Init...`) | about 6 s |
 | import | jdtls imports the project: for a Gradle project it starts a Gradle daemon and runs the build (compile of `build-logic`, evaluation of the settings, configuration of every module, the model of each); this is nearly all of the wait, and its `language/status` messages (`70% Starting Java Language Server - Configure project :core`) name the task | about 54 s |
 | ready | `ServiceReady`, then the list of the projects jdtls imported | about 0.1 s |
-| diagnostics | `diagnostics` only: the file is opened, jdtls publishes, and the daemon waits for jdtls to be quiet for 5 seconds | 7 to 9 s |
+| diagnostics | `diagnostics` and `diagnostics-all` only: the file (every file of the project, for the second) is opened, jdtls publishes, and the daemon waits for jdtls to be quiet for 5 seconds | 7 to 9 s for one file |
 
 so the first `gabier diagnostics` of a session answers after about a minute (69 s in the measure, 112 s in the heavier run), the same call warm
 after 6 to 9 s (the 5 seconds of quiet are in it), and a command that does not wait for the diagnostics (`rename`,

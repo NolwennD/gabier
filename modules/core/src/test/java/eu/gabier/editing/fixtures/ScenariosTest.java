@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import eu.gabier.editing.domain.ChangeApplier;
 import eu.gabier.editing.domain.CleanUp;
+import eu.gabier.editing.domain.DiagnosedFile;
 import eu.gabier.editing.domain.Diagnostic;
 import eu.gabier.editing.domain.FileChange;
 import eu.gabier.editing.domain.FileChange.EditFile;
@@ -289,7 +290,9 @@ class ScenariosTest {
                         "apply-an-action-that-is-a-command",
                         "rename-a-component-of-a-record-with-a-compact-constructor",
                         "rename-a-component-of-a-record-with-an-explicit-canonical-constructor",
-                        "rename-the-name-of-a-module");
+                        "rename-the-name-of-a-module",
+                        "diagnostics-of-the-whole-project",
+                        "diagnostics-of-the-whole-project-while-the-server-imports");
     }
 
     @Test
@@ -748,6 +751,9 @@ class ScenariosTest {
     @Test
     void asksAboutAFileOfTheProjectExceptWhenTheFileIsOutsideItMissingOrAFolder() {
         for (Scenario scenario : ALL) {
+            if (scenario.request() instanceof Request.ProjectDiagnostics) {
+                continue;
+            }
             Path file = scenario.request().file();
             Optional<LanguageServerErrorKey> refusal =
                     scenario.answer() instanceof Answer.Refused refused ? Optional.of(refused.key()) : Optional.empty();
@@ -783,6 +789,38 @@ class ScenariosTest {
             for (Diagnostic diagnostic : diagnostics) {
                 String line = lineOf(scenario, file, diagnostic.position().line());
                 assertThat(diagnostic.position().column()).as(scenario.name()).isLessThan(line.length());
+            }
+        }
+    }
+
+    @Test
+    void answersEveryJavaFileOfTheProjectOnceAndNoOtherInTheOrderOfThePaths() {
+        for (Scenario scenario : answeredWith(Answer.ProjectDiagnosed.class)) {
+            List<Path> answered = ((Answer.ProjectDiagnosed) scenario.answer())
+                    .files().stream().map(DiagnosedFile::file).toList();
+
+            assertThat(answered)
+                    .as(scenario.name())
+                    .containsExactlyElementsOf(scenario.files().keySet().stream()
+                            .filter(file -> file.toString().endsWith(".java"))
+                            .sorted()
+                            .toList());
+        }
+    }
+
+    @Test
+    void keepsTheDiagnosticsOfTheWholeProjectInsideTheirFiles() {
+        for (Scenario scenario : answeredWith(Answer.ProjectDiagnosed.class)) {
+            for (DiagnosedFile file : ((Answer.ProjectDiagnosed) scenario.answer()).files()) {
+                for (Diagnostic diagnostic : file.diagnostics()) {
+                    assertThat(diagnostic.position().column())
+                            .as(scenario.name() + " " + file.file())
+                            .isLessThan(lineOf(
+                                            scenario,
+                                            file.file(),
+                                            diagnostic.position().line())
+                                    .length());
+                }
             }
         }
     }

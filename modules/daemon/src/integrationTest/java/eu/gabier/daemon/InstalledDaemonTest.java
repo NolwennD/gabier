@@ -243,6 +243,29 @@ class InstalledDaemonTest {
                                 .toList());
             }
 
+            var whole = RpcResponse.parse(daemon.ask("diagnostics-all", "{}"));
+            assertThat(whole).as("the answer: %s", whole).isInstanceOf(RpcResponse.Success.class);
+            var wholeProject = DiagnosedFiles.of(((RpcResponse.Success) whole).result());
+            System.out.println("the daemon answered for the whole project: " + wholeProject.toJson());
+            var broken = project.resolve(Scenarios.FILE_WITH_AN_ERROR.request().file())
+                    .toString();
+            assertThat(wholeProject.files())
+                    .extracting(FileDiagnostics::file)
+                    .as("every Java file of the project, the tests included, in the order of the paths")
+                    .contains(
+                            broken,
+                            project.resolve("src/test/java/demo/LedgerTest.java")
+                                    .toString())
+                    .allMatch(file -> file.startsWith(project.toString()))
+                    .isSorted();
+            assertThat(wholeProject.files().stream()
+                            .filter(file -> file.file().equals(broken))
+                            .findFirst()
+                            .orElseThrow()
+                            .diagnostics())
+                    .extracting(shown -> shown.severity() + " " + shown.line() + ":" + shown.column())
+                    .containsExactly("ERROR 4:15");
+
             assertThat(daemon.status().jdtls()).isEqualTo(JdtlsState.READY);
 
             daemon.stop();

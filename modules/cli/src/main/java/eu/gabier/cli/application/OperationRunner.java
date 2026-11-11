@@ -95,7 +95,7 @@ public final class OperationRunner {
     private static Kind kindOf(Operation operation) {
         return switch (operation.method()) {
             case "status" -> Kind.REPORTED;
-            case "diagnostics" -> Kind.DIAGNOSED;
+            case "diagnostics", "diagnostics-all" -> Kind.DIAGNOSED;
             case "references" -> Kind.REFERENCED;
             case "actions" -> Kind.OFFERED;
             case "rename",

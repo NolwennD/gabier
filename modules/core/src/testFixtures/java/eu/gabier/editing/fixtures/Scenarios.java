@@ -1977,7 +1977,8 @@ public final class Scenarios {
                         PackageRenameScenarios.all(),
                         CleanUpScenarios.all(),
                         CodeActionScenarios.all(),
-                        FailedRenameScenarios.all())
+                        FailedRenameScenarios.all(),
+                        ProjectDiagnosticsScenarios.all())
                 .flatMap(List::stream)
                 .toList();
     }

@@ -6,7 +6,8 @@ clean or another branch does not break it; the cli starts the daemon of its own 
 
 - `gabier start` first thing in a session (it answers at once, `gabier start --wait` when jdtls is ready), so that jdtls
   imports the project while you read the ticket and the first real command is quick;
-- `gabier diagnostics <file>` to see the errors of a Java file instead of waiting for a build;
+- `gabier diagnostics <file>` to see the errors of a Java file instead of waiting for a build, and `gabier diagnostics
+  --all` for those of every Java file of the project (the tests included), with no list of files to build by hand;
 - `gabier rename <file> <line>:<column> <new-name>` (1-based position, or `--token`; `--dry-run` first on a rename that
   crosses files) instead of editing every occurrence by hand; on the name in a `package` line it renames the package,
   its files moved to the folder of the new name (whole new name; one source folder at a time: the same package of the

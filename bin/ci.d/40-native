@@ -939,6 +939,25 @@ public final class Native {
                                     .equals(sloppy + ":5:13: warning: The value of the local variable unused is not used\n"
                                             + broken + ":5:16: error: " + message),
                     "gabier diagnostics of several files prints the problems of each in the order given, in one call");
+            Run all = gabier("diagnostics", "--all");
+            String demo = project + "/src/main/java/demo/";
+            expect(
+                    all.exit() == 0
+                            && all.err().isEmpty()
+                            && all.out()
+                                    .equals(String.join(
+                                            "\n",
+                                            demo + "Broken.java:5:16: error: ",
+                                            demo + "shop/Sloppy.java:5:13: warning: ",
+                                            project + "/src/test/java/demo/BrokenTest.java:5:16: error:")),
+                    "gabier diagnostics --all prints the problems of every file of the project by absolute path,"
+                            + " the clean one printing nothing");
+            Run allJson = gabier("--json", "diagnostics", "--all");
+            expect(
+                    allJson.exit() == 0
+                            && allJson.out().startsWith("{\"files\":[{\"file\":\"" + demo + "Broken.java\"")
+                            && allJson.out().contains("\"file\":\"" + demo + "Clean.java\",\"diagnostics\":[]"),
+                    "gabier --json diagnostics --all gives every file of the project, the clean one with an empty list");
             Run outside = gabier("diagnostics", "outside/Elsewhere.java");
             expect(
                     outside.exit() == 2

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import eu.gabier.editing.domain.ChangeSet;
 import eu.gabier.editing.domain.CleanUp;
+import eu.gabier.editing.domain.DiagnosedFile;
 import eu.gabier.editing.domain.Diagnostic;
 import eu.gabier.editing.domain.FileChange;
 import eu.gabier.editing.domain.LanguageServerErrorKey;
@@ -160,6 +161,11 @@ class ProjectServerTest {
         @Override
         public List<List<Diagnostic>> diagnostics(List<Path> files) {
             return files.stream().map(file -> List.of(WARNING)).toList();
+        }
+
+        @Override
+        public List<DiagnosedFile> projectDiagnostics() {
+            return List.of(new DiagnosedFile(FILE, List.of(WARNING)));
         }
 
         @Override
@@ -355,6 +361,14 @@ class ProjectServerTest {
         }
 
         @Test
+        void theDiagnosticsOfTheWholeProjectStartItToo() {
+            assertThat(project.projectDiagnostics())
+                    .containsExactly(new DiagnosedFile(FILE, List.of(ScriptedServer.WARNING)));
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
         void aRenameStartsItToo() {
             assertThat(project.rename(FILE, new Position(0, 0), "Other")).isEqualTo(ScriptedServer.RENAMED);
 
@@ -473,6 +487,7 @@ class ProjectServerTest {
         void keepsItForTheNextRequests() {
             project.diagnostics(List.of(FILE));
             project.diagnostics(List.of(FILE));
+            project.projectDiagnostics();
             project.rename(FILE, new Position(0, 0), "Other");
             project.organizeImports(FILE);
             project.cleanUp(FILE, List.of(CleanUp.ADD_OVERRIDE));

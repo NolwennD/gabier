@@ -2,6 +2,7 @@ package eu.gabier.daemon;
 
 import eu.gabier.editing.domain.ChangeSet;
 import eu.gabier.editing.domain.CleanUp;
+import eu.gabier.editing.domain.DiagnosedFile;
 import eu.gabier.editing.domain.Diagnostic;
 import eu.gabier.editing.domain.JavaLanguageServer;
 import eu.gabier.editing.domain.OfferedAction;
@@ -170,6 +171,11 @@ final class ScriptedProject implements ServedProject {
             throw new JdtlsException("interrupted", stopped);
         }
         return server.diagnostics(files);
+    }
+
+    @Override
+    public List<DiagnosedFile> projectDiagnostics() {
+        return server.projectDiagnostics();
     }
 
     @Override

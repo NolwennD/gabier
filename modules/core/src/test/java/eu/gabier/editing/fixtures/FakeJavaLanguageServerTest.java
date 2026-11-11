@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import eu.gabier.editing.domain.ChangeSet;
 import eu.gabier.editing.domain.CleanUp;
+import eu.gabier.editing.domain.DiagnosedFile;
 import eu.gabier.editing.domain.Diagnostic;
 import eu.gabier.editing.domain.FileChange;
 import eu.gabier.editing.domain.LanguageServerErrorKey;
@@ -488,6 +489,25 @@ class FakeJavaLanguageServerTest {
                 .isThrownBy(() -> server.diagnostics(List.of(GREETER)).getFirst());
 
         assertThat(server.asked()).containsExactly(new Request.Diagnostics(MAIN), new Request.Diagnostics(GREETER));
+    }
+
+    @Test
+    void answersTheDiagnosticsOfTheWholeProjectWithTheFilesUnderItsRoot() {
+        server.scripted(ProjectDiagnosticsScenarios.DIAGNOSTICS_OF_THE_WHOLE_PROJECT);
+
+        assertThat(server.projectDiagnostics())
+                .extracting(DiagnosedFile::file)
+                .contains(ROOT.resolve("src/main/java/demo/Clean.java"));
+        assertThat(server.asked()).containsExactly(new Request.ProjectDiagnostics());
+    }
+
+    @Test
+    void failsOnTheDiagnosticsOfTheWholeProjectNoScenarioScripted() {
+        server.scripted(Scenarios.CLEAN_FILE);
+
+        assertThatExceptionOfType(AssertionError.class)
+                .isThrownBy(server::projectDiagnostics)
+                .withMessageContaining("not scripted");
     }
 
     @Test

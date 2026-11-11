@@ -2,6 +2,7 @@ package eu.gabier.editing.fixtures;
 
 import eu.gabier.editing.domain.ChangeSet;
 import eu.gabier.editing.domain.CleanUp;
+import eu.gabier.editing.domain.DiagnosedFile;
 import eu.gabier.editing.domain.Diagnostic;
 import eu.gabier.editing.domain.JavaLanguageServer;
 import eu.gabier.editing.domain.OfferedAction;
@@ -78,6 +79,13 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
                 .map(file -> new Request.Diagnostics(file).resolvedIn(root))
                 .map(request -> ((Answer.Diagnosed) answerTo(request)).diagnostics())
                 .toList();
+    }
+
+    @Override
+    public List<DiagnosedFile> projectDiagnostics() {
+        Request request = new Request.ProjectDiagnostics().resolvedIn(root);
+
+        return ((Answer.ProjectDiagnosed) answerTo(request)).files();
     }
 
     @Override

@@ -19,6 +19,7 @@ class OperationsTest {
                         "start",
                         "stop",
                         "diagnostics",
+                        "diagnostics-all",
                         "rename",
                         "rename-token",
                         "organize-imports",

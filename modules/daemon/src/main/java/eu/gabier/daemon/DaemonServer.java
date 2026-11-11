@@ -5,6 +5,7 @@ import eu.gabier.editing.application.CleanUpFile;
 import eu.gabier.editing.application.CreatePackageInfo;
 import eu.gabier.editing.application.CreateType;
 import eu.gabier.editing.application.Diagnose;
+import eu.gabier.editing.application.DiagnoseProject;
 import eu.gabier.editing.application.ExtractConstant;
 import eu.gabier.editing.application.ExtractField;
 import eu.gabier.editing.application.ExtractMethod;
@@ -82,6 +83,7 @@ final class DaemonServer implements AutoCloseable {
                         new StartMethod(project::warmUp, () -> status(nanoClock, startedAt, pid)),
                         new StopMethod(this::requestStop),
                         new DiagnosticsMethod(new Diagnose(project)),
+                        new DiagnosticsAllMethod(new DiagnoseProject(project)),
                         new RenameMethod(rename),
                         new RenameTokenMethod(rename),
                         new OrganizeImportsMethod(new OrganizeImports(project, new NioFileStore()), project.root()),

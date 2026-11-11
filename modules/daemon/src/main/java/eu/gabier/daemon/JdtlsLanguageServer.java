@@ -2,6 +2,7 @@ package eu.gabier.daemon;
 
 import eu.gabier.editing.domain.ChangeSet;
 import eu.gabier.editing.domain.CleanUp;
+import eu.gabier.editing.domain.DiagnosedFile;
 import eu.gabier.editing.domain.Diagnostic;
 import eu.gabier.editing.domain.Diagnostic.Severity;
 import eu.gabier.editing.domain.FileChange;
@@ -41,12 +42,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionContext;
@@ -237,6 +240,64 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     @Override
     public synchronized List<List<Diagnostic>> diagnostics(List<Path> files) {
         return published(files).stream().map(JdtlsLanguageServer::domain).toList();
+    }
+
+    /**
+     * The diagnostics of every Java file of the project. The files are those under the source folders that jdtls lists
+     * for the projects it imported ({@code java.project.listSourcePaths}: the main sources, the test sources and every
+     * other source set, whatever their names, as the build declared them), found by walking the folders, so a file that
+     * jdtls does not know yet (created since the import) is one of them. Their diagnostics are asked together, as for
+     * {@link #diagnostics(List)}.
+     *
+     * <p>A source folder that is not under a folder jdtls imported (a build that declares a folder of another
+     * directory as sources) holds files that the adapter refuses to answer for, as it does for a file given by hand
+     * ({@code file-outside-project}); here they are left out, as are the files that are not regular files with the
+     * extension {@code .java} (a resource kept among the sources, a link to a folder). jdtls is not asked whether a
+     * file is excluded from a source folder by the build: it opens it like any other.
+     *
+     * @throws LanguageServerException if jdtls is not ready
+     * @throws JdtlsException if jdtls dies, does not answer in time or answers what the adapter cannot read
+     */
+    @Override
+    public synchronized List<DiagnosedFile> projectDiagnostics() {
+        JdtlsSession session = ready();
+        List<Path> files = javaFilesOfTheProject(session);
+        if (files.isEmpty()) {
+            return List.of();
+        }
+        var found = published(files);
+
+        return IntStream.range(0, files.size())
+                .mapToObj(index -> new DiagnosedFile(files.get(index), domain(found.get(index))))
+                .toList();
+    }
+
+    /** The {@code .java} files under the source folders of the project, each once, in the order of the paths. */
+    private List<Path> javaFilesOfTheProject(JdtlsSession session) {
+        List<Path> folders;
+        JdtlsWatch watch = session.newWatch();
+        try {
+            prepare(session, watch);
+            folders = sourceFolders(session, watch);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException("Interrupted while waiting for the source folders of the project", interrupted);
+        }
+        Set<Path> files = new TreeSet<>();
+        for (Path folder : folders) {
+            if (session.projects().stream().noneMatch(folder::startsWith) || !Files.isDirectory(folder)) {
+                continue;
+            }
+            try (Stream<Path> found = Files.walk(folder)) {
+                found.filter(file -> file.getFileName().toString().endsWith(".java") && Files.isRegularFile(file))
+                        .map(JdtlsLanguageServer::normalized)
+                        .forEach(files::add);
+            } catch (IOException failure) {
+                throw new UncheckedIOException(failure);
+            }
+        }
+
+        return List.copyOf(files);
     }
 
     /** What {@link #diagnostics(List)} asks of jdtls, as jdtls publishes it for each file, in the order given. */

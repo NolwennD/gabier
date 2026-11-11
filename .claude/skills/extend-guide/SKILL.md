@@ -57,7 +57,7 @@ situation: its title is the situation, never the name of a tool. A situation met
    (`help guide`, `help --for=...`), and the binary is `modules/cli/build/native/nativeCompile/gabier`.
 6. **One entry serves the command line and MCP.** The `guide` tool of `gabier mcp` ranks the same sections
    (`AskTheGuide`) and writes them with the same text (`GuideText`) as `gabier help --for`, with `gabier <command>` turned
-   into the name of the tool, `gabier <command> --token` into `<command>-token` and each `--option` into the parameter
+   into the name of the tool, `gabier <command> --token` into `<command>-token`, `gabier <command> --all` into `<command>-all` and each `--option` into the parameter
    `option=true` (`ToolWords`, only for a command that is a tool). So an entry names its commands as
    `` `gabier <command> ...` `` and nothing else (no `gabier help ...` in an `Ask:` or `By hand:` line, where there is
    no tool to turn it into), and writes an option as a flag that is a boolean parameter of the tool

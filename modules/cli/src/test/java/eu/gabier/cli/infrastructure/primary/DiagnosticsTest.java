@@ -28,6 +28,17 @@ class DiagnosticsTest extends CliTest {
         {"file":"/project/A.java","diagnostics":[{"severity":"warning","line":0,"column":0,"message":"in a"}]}]}\
         """;
 
+    private static final String ALL_REQUEST = """
+        {"jsonrpc":"2.0","id":1,"method":"diagnostics-all"}\
+        """;
+
+    private static final String WHOLE_PROJECT = """
+        {"files":[\
+        {"file":"/project/src/main/java/A.java","diagnostics":[{"severity":"warning","line":0,"column":0,"message":"in a"}]},\
+        {"file":"/project/src/main/java/Clean.java","diagnostics":[]},\
+        {"file":"/project/src/test/java/BTest.java","diagnostics":[{"severity":"error","line":1,"column":2,"message":"in b"}]}]}\
+        """;
+
     private static String request(Path... files) {
         return """
             {"jsonrpc":"2.0","id":1,"method":"diagnostics","params":{"files":"%s"}}\
@@ -226,6 +237,58 @@ class DiagnosticsTest extends CliTest {
             assertThat(runWithSocket("diagnostics", "/project/C\r.java")).isEqualTo(2);
 
             assertThat(err()).contains("usage-error");
+            assertThat(daemon.requests()).isEmpty();
+        }
+    }
+
+    @Test
+    void withAllAsksForEveryFileOfTheProjectAndShowsEachByTheAbsolutePathTheDaemonNamesIt() throws IOException {
+        try (var daemon = daemonAnswering(WHOLE_PROJECT)) {
+            assertThat(runWithSocket("diagnostics", "--all")).isZero();
+
+            assertThat(out().lines())
+                    .containsExactly(
+                            "/project/src/main/java/A.java:1:1: warning: in a",
+                            "/project/src/test/java/BTest.java:2:3: error: in b");
+            assertThat(err()).isEmpty();
+            assertThat(daemon.requests()).containsExactly(ALL_REQUEST);
+        }
+    }
+
+    @Test
+    void withAllPrintsNothingForAProjectWithNoProblem() throws IOException {
+        try (var daemon = daemonAnswering(CLEAN)) {
+            assertThat(runWithSocket("diagnostics", "--all")).isZero();
+
+            assertThat(out()).isEmpty();
+            assertThat(err()).isEmpty();
+            assertThat(daemon.requests()).containsExactly(ALL_REQUEST);
+        }
+    }
+
+    @Test
+    void withAllGivesTheResultAsJsonAsTheDaemonGaveItWhereverTheOptionStands() throws IOException {
+        try (var daemon = daemonAnswering(WHOLE_PROJECT)) {
+            assertThat(runWithSocket("--json", "diagnostics", "--all")).isZero();
+            assertThat(out()).isEqualTo(WHOLE_PROJECT + System.lineSeparator());
+            out.reset();
+            assertThat(runWithSocket("diagnostics", "--all", "--json")).isZero();
+            assertThat(out()).isEqualTo(WHOLE_PROJECT + System.lineSeparator());
+
+            assertThat(daemon.requests()).containsExactly(ALL_REQUEST, ALL_REQUEST);
+        }
+    }
+
+    @Test
+    void refusesAFileOrTheDryRunOptionNextToAllAsAUsageError() throws IOException {
+        try (var daemon = daemonAnswering(CLEAN)) {
+            assertThat(runWithSocket("diagnostics", "--all", "/project/Main.java"))
+                    .isEqualTo(2);
+            assertThat(err()).contains("usage-error");
+            err.reset();
+            assertThat(runWithSocket("diagnostics", "--dry-run", "--all")).isEqualTo(2);
+            assertThat(err()).contains("usage-error");
+
             assertThat(daemon.requests()).isEmpty();
         }
     }

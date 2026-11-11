@@ -7,8 +7,8 @@ Change Java through a language server with `gabier`, not by editing text. `gabie
 - Rename, extract, move, inline or create with `gabier rename`, `gabier extract-method`, `gabier move`, `gabier inline`
   and `gabier create`, not by editing every occurrence.
 - Try a change with `--dry-run` first: it prints the change and writes nothing.
-- See the errors of the files you changed with `gabier diagnostics <file>...`, in one call, not with a build; fix them
-  with `gabier actions` and `gabier apply-action`.
+- See the errors of the files you changed with `gabier diagnostics <file>...`, in one call, not with a build, and those
+  of the whole project with `gabier diagnostics --all`; fix them with `gabier actions` and `gabier apply-action`.
 - After adding or removing a usage, run `gabier organize-imports <file>`.
 - A refusal says why; `gabier help <command>` gives the usage and the other ways. A text edit is the last resort.
 - At the end of the session, run `gabier stop`.

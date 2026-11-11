@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import eu.gabier.editing.domain.ChangeApplier;
 import eu.gabier.editing.domain.ChangeSet;
+import eu.gabier.editing.domain.DiagnosedFile;
 import eu.gabier.editing.domain.Diagnostic;
 import eu.gabier.editing.domain.Diagnostic.Severity;
 import eu.gabier.editing.domain.EditingException;
@@ -110,6 +111,7 @@ class ScenarioReplayTest {
     /** The requests the adapter implements. */
     private static boolean replayed(Scenario scenario) {
         return scenario.request() instanceof Request.Diagnostics
+                || scenario.request() instanceof Request.ProjectDiagnostics
                 || scenario.request() instanceof Request.Rename
                 || scenario.request() instanceof Request.OrganizeImports
                 || scenario.request() instanceof Request.CleanUpFile
@@ -241,6 +243,17 @@ class ScenarioReplayTest {
                         .as("%s: the severity and the position of the diagnostics jdtls answers", scenario.name())
                         .isEqualTo(located(diagnosed.diagnostics()));
             }
+            case Answer.ProjectDiagnosed project -> {
+                var answer = (List<?>) ask(server, request);
+                System.out.println(scenario.name() + ": jdtls answered " + answer);
+                // Which files are answered is part of the answer; the text of a message is the compiler's own.
+                differences
+                        .assertThat(locatedByFile(answer))
+                        .as(
+                                "%s: the files of the project and the severity and position of their diagnostics",
+                                scenario.name())
+                        .isEqualTo(locatedByFile(project.files()));
+            }
             case Answer.Changing changing -> {
                 Object asked =
                         changing instanceof Answer.Organized && !WAITING_FOR_THE_DIAGNOSTICS.contains(scenario.name())
@@ -329,6 +342,17 @@ class ScenarioReplayTest {
                 .toList();
     }
 
+    /** The files of an answer, in its order, each with what matters of its diagnostics. */
+    private static Map<Path, List<Located>> locatedByFile(List<?> files) {
+        Map<Path, List<Located>> found = new LinkedHashMap<>();
+        for (Object element : files) {
+            var file = (DiagnosedFile) element;
+            found.put(file.file(), located(file.diagnostics()));
+        }
+
+        return found;
+    }
+
     /** The change set of an answer that is one, or of one that may be none. */
     private static Optional<ChangeSet> changesIn(Object answer) {
         return answer instanceof Optional<?> optional
@@ -394,6 +418,7 @@ class ScenarioReplayTest {
     private static Object ask(JdtlsLanguageServer server, Request request) {
         return switch (request) {
             case Request.Diagnostics diagnostics -> server.diagnostics(diagnostics.file());
+            case Request.ProjectDiagnostics _ -> server.projectDiagnostics();
             case Request.Rename rename -> server.rename(rename.file(), rename.position(), rename.newName());
             case Request.OrganizeImports organize -> server.organizeImports(organize.file());
             case Request.CleanUpFile cleanUp -> server.cleanUp(cleanUp.file(), cleanUp.cleanUps());

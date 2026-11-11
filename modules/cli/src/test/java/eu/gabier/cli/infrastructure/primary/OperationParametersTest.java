@@ -45,7 +45,7 @@ class OperationParametersTest {
             Map.entry("<class|interface|record|enum|package>", List.of("kind")));
 
     /** The words of a usage line that choose a form of the command line or tune it, and are no parameter. */
-    private static final Set<String> COMMAND_LINE_ONLY = Set.of("--token", "--wait", "[--timeout=<seconds>]");
+    private static final Set<String> COMMAND_LINE_ONLY = Set.of("--token", "--all", "--wait", "[--timeout=<seconds>]");
 
     private static final Pattern BACKTICKED = Pattern.compile("`([^`]+)`");
 

@@ -483,7 +483,7 @@ class OperationRunnerTest {
 
     private static KindAnswered kindAnswered(Operation operation) {
         return switch (operation.method()) {
-            case "diagnostics" -> {
+            case "diagnostics", "diagnostics-all" -> {
                 var diagnostics = new DiagnosedFiles(List.of(new FileDiagnostics(
                         "/project/A.java", List.of(new Diagnosis(Severity.ERROR, 4, 15, "Type mismatch")))));
                 yield new KindAnswered(diagnostics.toJson(), new OperationResult.Diagnosed(diagnostics));
