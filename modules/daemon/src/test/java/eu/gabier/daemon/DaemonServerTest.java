@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -334,6 +335,28 @@ class DaemonServerTest {
 
     @Nested
     class Requests {
+
+        @Test
+        void writesToItsLogWhatAFailureOfARequestSaysWhileTheClientGetsTheInternalError() throws IOException {
+            project.whoseRequestsBreak();
+            var log = new CopyOnWriteArrayList<String>();
+            serve(open().loggingTo(log::add));
+
+            try (var client = connect(socket())) {
+                var answer = client.ask("""
+                    {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"files":"%s"}}
+                    """.formatted(directory.resolve("src/main/java/demo/Broken.java")));
+
+                assertThat(answer).contains("\"key\":\"internal-server-error\"").doesNotContain("jdtls broke");
+            }
+            assertThat(log)
+                    .singleElement()
+                    .satisfies(line -> assertThat(line)
+                            .contains("diagnostics")
+                            .contains("eu.gabier.daemon.JdtlsException")
+                            .contains("jdtls broke while it was asked for the diagnostics")
+                            .doesNotContain("Broken.java"));
+        }
 
         @Test
         void statusAnswersWithTheVersionThePidTheUptimeTheProjectAndWhereJdtlsIs() throws IOException {

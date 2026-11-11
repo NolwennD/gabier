@@ -38,6 +38,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
 /**
@@ -64,6 +65,7 @@ final class DaemonServer implements AutoCloseable {
     private Duration grace = DISCONNECT_GRACE;
     private Optional<IdleWatch> idle = Optional.empty();
     private IdleWatch.Pause pause = this::pauseUnlessStopping;
+    private volatile Consumer<String> log = line -> {};
 
     private DaemonServer(
             Path socket, ServerSocketChannel listener, LongSupplier nanoClock, long pid, ServedProject project) {
@@ -74,28 +76,30 @@ final class DaemonServer implements AutoCloseable {
         var startedAt = nanoClock.getAsLong();
         var rename = new Rename(project, new NioFileStore());
         // The method table: to add a method, add it here (.claude/skills/add-daemon-method/SKILL.md).
-        handler = new RequestHandler(List.of(
-                new StatusMethod(() -> status(nanoClock, startedAt, pid)),
-                new StartMethod(project::warmUp, () -> status(nanoClock, startedAt, pid)),
-                new StopMethod(this::requestStop),
-                new DiagnosticsMethod(new Diagnose(project)),
-                new RenameMethod(rename),
-                new RenameTokenMethod(rename),
-                new OrganizeImportsMethod(new OrganizeImports(project, new NioFileStore()), project.root()),
-                new CleanUpMethod(new CleanUpFile(project, new NioFileStore())),
-                new ExtractVariableMethod(new ExtractVariable(project, new NioFileStore())),
-                new ExtractMethodMethod(new ExtractMethod(project, new NioFileStore())),
-                new ExtractConstantMethod(new ExtractConstant(project, new NioFileStore())),
-                new ExtractFieldMethod(new ExtractField(project, new NioFileStore())),
-                new MoveTypeToFileMethod(new MoveTypeToFile(project, new NioFileStore())),
-                new MoveMethod(new MoveToPackage(project, new NioFileStore())),
-                new InlineMethod(new Inline(project, new NioFileStore())),
-                new CreateTypeMethod(
-                        new CreateType(project, new NioFileStore()),
-                        new CreatePackageInfo(project, new NioFileStore())),
-                new CodeActionsMethod(new ListCodeActions(project)),
-                new ApplyCodeActionMethod(new ApplyCodeAction(project, new NioFileStore())),
-                new ReferencesMethod(new FindReferences(project, new NioFileStore()))));
+        handler = new RequestHandler(
+                List.of(
+                        new StatusMethod(() -> status(nanoClock, startedAt, pid)),
+                        new StartMethod(project::warmUp, () -> status(nanoClock, startedAt, pid)),
+                        new StopMethod(this::requestStop),
+                        new DiagnosticsMethod(new Diagnose(project)),
+                        new RenameMethod(rename),
+                        new RenameTokenMethod(rename),
+                        new OrganizeImportsMethod(new OrganizeImports(project, new NioFileStore()), project.root()),
+                        new CleanUpMethod(new CleanUpFile(project, new NioFileStore())),
+                        new ExtractVariableMethod(new ExtractVariable(project, new NioFileStore())),
+                        new ExtractMethodMethod(new ExtractMethod(project, new NioFileStore())),
+                        new ExtractConstantMethod(new ExtractConstant(project, new NioFileStore())),
+                        new ExtractFieldMethod(new ExtractField(project, new NioFileStore())),
+                        new MoveTypeToFileMethod(new MoveTypeToFile(project, new NioFileStore())),
+                        new MoveMethod(new MoveToPackage(project, new NioFileStore())),
+                        new InlineMethod(new Inline(project, new NioFileStore())),
+                        new CreateTypeMethod(
+                                new CreateType(project, new NioFileStore()),
+                                new CreatePackageInfo(project, new NioFileStore())),
+                        new CodeActionsMethod(new ListCodeActions(project)),
+                        new ApplyCodeActionMethod(new ApplyCodeAction(project, new NioFileStore())),
+                        new ReferencesMethod(new FindReferences(project, new NioFileStore()))),
+                line -> log.accept(line));
     }
 
     /**
@@ -295,6 +299,16 @@ final class DaemonServer implements AutoCloseable {
      */
     DaemonServer stoppingWhenIdleFor(Duration delay) {
         idle = Optional.of(new IdleWatch(nanoClock, delay));
+
+        return this;
+    }
+
+    /**
+     * Where the daemon writes what it says of a request that failed ({@link FailureLog}); a daemon that is not told
+     * writes it nowhere.
+     */
+    DaemonServer loggingTo(Consumer<String> log) {
+        this.log = log;
 
         return this;
     }

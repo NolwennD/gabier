@@ -3,6 +3,7 @@ package eu.gabier.daemon;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 
+import com.google.gson.JsonPrimitive;
 import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.RpcResponse;
@@ -17,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
+import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -200,6 +203,99 @@ class RequestHandlerTest {
             handler.handle(request("1", "breaks"));
 
             assertThat(handler.handle(request("1", "status")).line()).contains("\"result\"");
+        }
+    }
+
+    @Nested
+    class Logging {
+
+        private final List<String> log = new ArrayList<>();
+
+        private final RequestHandler logging = new RequestHandler(
+                List.of(
+                        new Failing("breaks", null),
+                        new Failing(
+                                "refuses",
+                                GeneratorException.badRequest(RefusalKey.REFUSED)
+                                        .message("No, not this")),
+                        new Failing(
+                                "refuses-for-a-cause",
+                                GeneratorException.badRequest(RefusalKey.REFUSED)
+                                        .message("No, because")
+                                        .cause(new IllegalStateException("the cause of the refusal"))),
+                        new BreakingOnJdtls(),
+                        new BreakingOnAFile()),
+                log::add);
+
+        @Test
+        void saysTheMethodTheTypeAndTheMessageOfAFailureThatBecomesAnInternalError() {
+            logging.handle(request("3", "breaks"));
+
+            assertThat(log)
+                    .singleElement()
+                    .satisfies(line -> assertThat(line)
+                            .contains("breaks")
+                            .contains("java.lang.IllegalStateException")
+                            .contains("secret /home/someone/file"));
+        }
+
+        @Test
+        void followsTheCausesAndGivesTheCodeTheMessageAndTheDataOfAnErrorOfJdtls() {
+            logging.handle(request("4", "breaks-on-jdtls"));
+
+            assertThat(log).hasSizeGreaterThan(2);
+            assertThat(String.join("\n", log))
+                    .contains("breaks-on-jdtls")
+                    .contains("eu.gabier.daemon.JdtlsException")
+                    .contains("Failed after 1.0 seconds")
+                    .contains("org.eclipse.lsp4j.jsonrpc.ResponseErrorException")
+                    .contains("-32603")
+                    .contains("Internal error.")
+                    .contains("java.lang.NullPointerException: element is null")
+                    .contains("at org.eclipse.jdt.Rename.create(Rename.java:164)");
+        }
+
+        @Test
+        void putsEachLineOfWhatJdtlsSaysOnALineOfTheLogAndWritesOutWhatATerminalWouldObey() {
+            logging.handle(request("4", "breaks-on-jdtls"));
+
+            assertThat(log)
+                    .allSatisfy(line -> assertThat(line).doesNotContain("\n").doesNotContain("\u001b"));
+            assertThat(String.join("\n", log)).contains("\\u001b[2Jclear");
+        }
+
+        @Test
+        void leavesTheParametersOfTheRequestOutOfTheLog() {
+            logging.handle("""
+                {"jsonrpc":"2.0","id":5,"method":"breaks-on-a-file","params":{"file":"Secret.java"}}\
+                """);
+
+            assertThat(log).isNotEmpty().noneMatch(line -> line.contains("Secret.java"));
+        }
+
+        @Test
+        void saysNothingOfARefusalThatHasNoCause() {
+            logging.handle(request("2", "refuses"));
+            logging.handle(request("2", "nope"));
+            logging.handle("{not json");
+
+            assertThat(log).isEmpty();
+        }
+
+        @Test
+        void saysTheCauseOfARefusalThatHasOne() {
+            var line = logging.handle(request("2", "refuses-for-a-cause")).line();
+
+            assertThat(failure(line).problem().key()).isEqualTo("test-refused");
+            assertThat(String.join("\n", log)).contains("refuses-for-a-cause").contains("the cause of the refusal");
+        }
+
+        @Test
+        void answersTheSameWhetherOrNotItLogs() {
+            var silent = new RequestHandler(List.of(new Failing("breaks", null)));
+
+            assertThat(logging.handle(request("3", "breaks")).line())
+                    .isEqualTo(silent.handle(request("3", "breaks")).line());
         }
     }
 
@@ -456,6 +552,46 @@ class RequestHandlerTest {
             }
 
             throw refusal.build();
+        }
+    }
+
+    /** A method that fails as the adapter does when jdtls answers an internal error, with the data of its answer. */
+    private record BreakingOnJdtls() implements DaemonMethod {
+
+        @Override
+        public String name() {
+            return "breaks-on-jdtls";
+        }
+
+        @Override
+        public Outcome call(Map<String, String> params) {
+            var data = new JsonPrimitive("""
+                java.util.concurrent.CompletionException: java.lang.NullPointerException: element is null
+                \tat org.eclipse.jdt.Rename.create(Rename.java:164)
+                \u001b[2Jclear\
+                """);
+            var error = new ResponseErrorException(new ResponseError(-32603, "Internal error.", data));
+
+            throw new JdtlsException("Failed after 1.0 seconds waiting for the rename", error);
+        }
+    }
+
+    /** A method that takes the parameter {@code file} and fails whatever it is. */
+    private record BreakingOnAFile() implements DaemonMethod {
+
+        @Override
+        public String name() {
+            return "breaks-on-a-file";
+        }
+
+        @Override
+        public Set<String> parameters() {
+            return Set.of("file");
+        }
+
+        @Override
+        public Outcome call(Map<String, String> params) {
+            throw new IllegalStateException("something broke");
         }
     }
 }

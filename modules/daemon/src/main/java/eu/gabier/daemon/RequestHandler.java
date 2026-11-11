@@ -5,10 +5,12 @@ import eu.gabier.protocol.JsonRpc;
 import eu.gabier.protocol.MalformedJsonException;
 import eu.gabier.protocol.RpcRequest;
 import eu.gabier.protocol.UnknownMethodException;
+import eu.gabier.shared.error.domain.GeneratorException;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * Turns a line of the client into the line to answer, whatever the line is: a line that is not JSON, not a request, or
@@ -32,14 +34,21 @@ final class RequestHandler {
 
     private final Map<String, DaemonMethod> methods = new LinkedHashMap<>();
     private final Optional<RuntimeException> refusal;
+    private final Consumer<String> log;
 
     RequestHandler(Collection<DaemonMethod> methods) {
+        this(methods, line -> {});
+    }
+
+    RequestHandler(Collection<DaemonMethod> methods, Consumer<String> log) {
         methods.forEach(method -> this.methods.put(method.name(), method));
         refusal = Optional.empty();
+        this.log = log;
     }
 
     private RequestHandler(RuntimeException refusal) {
         this.refusal = Optional.of(refusal);
+        this.log = line -> {};
     }
 
     /** A handler that runs no method: every well-formed request is answered with this refusal. */
@@ -67,7 +76,7 @@ final class RequestHandler {
         return call(method, request);
     }
 
-    private static Reply call(DaemonMethod method, RpcRequest request) {
+    private Reply call(DaemonMethod method, RpcRequest request) {
         try {
             checkParameters(method, request.params());
             var outcome = method.call(request.params());
@@ -75,6 +84,9 @@ final class RequestHandler {
             return new Reply(JsonRpc.success(request.id(), outcome.resultJson()), outcome.afterReply());
         } catch (RuntimeException failure) {
             // Whatever a method throws, the client gets a problem object and the daemon goes on.
+            if (!(failure instanceof GeneratorException) || failure.getCause() != null) {
+                FailureLog.lines(request.method(), failure).forEach(log);
+            }
             return Reply.of(JsonRpc.failure(request.id(), failure));
         }
     }

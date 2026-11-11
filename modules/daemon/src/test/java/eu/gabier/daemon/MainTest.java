@@ -13,6 +13,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.io.UncheckedIOException;
 import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
 import java.nio.ByteBuffer;
@@ -258,6 +259,32 @@ class MainTest {
             var answer = RpcResponse.parse(ask(STATUS));
 
             return DaemonStatus.of(((RpcResponse.Success) answer).result());
+        }
+
+        @Test
+        void writesWhatAFailedRequestSaysToItsOutputWhichIsItsLog() throws Exception {
+            var project = new ScriptedProject(directory, null).whoseRequestsBreak();
+            var daemon = start(
+                    () -> {
+                        try {
+                            return Main.serve(
+                                    Map.of("GABIER_SOCKET", socketPath().toString()),
+                                    directory,
+                                    printStream(out),
+                                    project);
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    },
+                    socketPath());
+
+            ask("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"diagnostics\",\"params\":{\"files\":\"A.java\"}}\n");
+            ask(STOP);
+
+            daemon.orTimeout(10, TimeUnit.SECONDS).join();
+            assertThat(out())
+                    .contains("request diagnostics failed: eu.gabier.daemon.JdtlsException: jdtls broke")
+                    .doesNotContain("A.java");
         }
 
         @Test

@@ -53,6 +53,16 @@ connection ends (the daemon gives the clients 5 seconds to end, then cuts them).
 standard error of the daemon, prefixed with `jdtls:`, with control characters written as escapes like in the text of
 `gabier diagnostics`.
 
+**The cause of a failure is in the log.** A request that fails with an exception gabier does not know is answered with the
+generic `internal-server-error`, with no description (the exception may hold a path or a secret). The daemon writes the
+cause to its log, `<socket>.log`, with the method of the request: a line `request <method> failed: <type>: <message>`, then
+a line `caused by <type>: <message>` for each cause, and, for an error that jdtls answered (`ResponseErrorException`), its
+response error code and the data of its answer, one line of the log per line of it (jdtls puts the stack trace of its own
+failure there). A refusal that carries a cause (a file that could not be written) is
+logged the same way; a refusal with no cause says everything in its answer and is not. The parameters of the request (the
+file, the position, the name) and the text of the files are never written, only the words of the exceptions, with control
+characters written as escapes like the lines of jdtls.
+
 **Stopping when nobody uses it.** A daemon stops by itself, the way `gabier stop` stops it (jdtls and its workspace
 folder are ended and removed, the socket is given back), once **no client has been connected for 60 minutes**: the delay
 is `GABIER_IDLE_TIMEOUT`, in whole minutes, read when the daemon starts (`0` turns the rule off; anything else that is not a

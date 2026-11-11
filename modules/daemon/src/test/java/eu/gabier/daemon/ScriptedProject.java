@@ -30,7 +30,8 @@ final class ScriptedProject implements ServedProject {
     private enum Requests {
         ARE_ANSWERED,
         WAIT_FOR_THE_CLOSE,
-        NEVER_END
+        NEVER_END,
+        BREAK
     }
 
     private final Path root;
@@ -84,6 +85,13 @@ final class ScriptedProject implements ServedProject {
     /** A {@code diagnostics} request waits until {@link #release}, whatever the close. */
     ScriptedProject whoseRequestsNeverEnd() {
         requests = Requests.NEVER_END;
+
+        return this;
+    }
+
+    /** A {@code diagnostics} request fails with an exception that no refusal of gabier is. */
+    ScriptedProject whoseRequestsBreak() {
+        requests = Requests.BREAK;
 
         return this;
     }
@@ -154,6 +162,7 @@ final class ScriptedProject implements ServedProject {
                     waiting.countDown();
                     released.await();
                 }
+                case BREAK -> throw new JdtlsException("jdtls broke while it was asked for the diagnostics");
                 default -> {}
             }
         } catch (InterruptedException stopped) {

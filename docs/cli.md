@@ -32,7 +32,8 @@ The JSON object follows the data model of [RFC 9457](https://www.rfc-editor.org/
 without its HTTP side: `type` (a URI that is not meant to be resolved, `urn:gabier:error:<key>`), `title`, `detail`,
 and the extensions `key` and `parameters` (the machine-readable cause, as strings). It has no `status` member and
 no `application/problem+json` media type. `title` and `detail` are English text. An error that gabier does not
-know is reported as the generic `internal-server-error`, without its message, its cause or a stack trace.
+know is reported as the generic `internal-server-error`, without its message, its cause or a stack trace (the daemon writes
+its cause to its log, see [the daemon](daemon.md)).
 
 **Starting ahead of the first command.** `gabier start` starts the daemon of the project and jdtls and answers at once;
 `gabier start --wait [--timeout=<seconds>]` answers when jdtls is ready, writing where jdtls is on the standard error while
