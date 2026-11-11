@@ -81,6 +81,42 @@ public final class Operations {
             List.of(Refusals.REQUEST_FAILED, Refusals.NOT_READY),
             List.of());
 
+    public static final Operation WATCH = new Operation(
+            "watch",
+            "follow the errors and warnings of Java files as they change, until the connection is closed",
+            """
+            The answer is the one of diagnostics (one element per file, in the order given, a clean file included). The
+            daemon then writes, on the same connection and with no request, one notification (a JSON-RPC message with no
+            id) each time the problems of a file changed after the language server built the project: problems, with the
+            files whose list changed in the shape of the result of diagnostics (a file that became clean has an empty
+            list), notice, with a message for the person who reads (the daemon can no longer follow the disk and looks at
+            the files every second), and ended, with the problem that ends the subscription, after which nothing more is
+            written. The daemon follows the disk for the files that jdtls asked to have watched, while at least one client
+            watches, and reads the project once whatever the number of watchers. A client that reads slowly is told the
+            latest state, not every state: a file that breaks and is fixed between two of its reads is never shown. The
+            subscription ends when the connection does. A connection follows one thing: a second watch on it is refused.\
+            """,
+            List.of(
+                    Refusals.FILE_OUTSIDE_PROJECT,
+                    Refusals.FILE_MISSING,
+                    Refusals.NOT_A_FILE,
+                    Refusals.NOT_READY,
+                    "already-watching: the connection already follows something"),
+            List.of(Parameter.paths("files", "the Java files, absolute paths in the project")));
+
+    public static final Operation WATCH_ALL = new Operation(
+            "watch-all",
+            "follow the errors and warnings of every Java file of the project as they change",
+            """
+            As watch, for the whole project: the answer is the one of diagnostics-all (the files that have a problem), and
+            a notification names each file whose list of problems changed, a file that became clean included.\
+            """,
+            List.of(
+                    Refusals.REQUEST_FAILED,
+                    Refusals.NOT_READY,
+                    "already-watching: the connection already follows something"),
+            List.of());
+
     public static final Operation RENAME = new Operation(
             "rename",
             "rename a symbol, and everything that refers to it, in every file",
@@ -462,6 +498,8 @@ public final class Operations {
                 STOP,
                 DIAGNOSTICS,
                 DIAGNOSTICS_ALL,
+                WATCH,
+                WATCH_ALL,
                 RENAME,
                 RENAME_TOKEN,
                 ORGANIZE_IMPORTS,

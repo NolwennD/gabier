@@ -136,6 +136,11 @@ final class ProjectServer implements ServedProject {
     }
 
     @Override
+    public DiskChanges watchDisk() {
+        return ready().watchDisk();
+    }
+
+    @Override
     public BuiltProject built() {
         return ready().built();
     }

@@ -12,6 +12,7 @@ import eu.gabier.editing.domain.LanguageServerErrorKey;
 import eu.gabier.editing.domain.LanguageServerException;
 import eu.gabier.editing.domain.OfferedActions;
 import eu.gabier.editing.domain.Position;
+import eu.gabier.editing.domain.ProblemWatch;
 import eu.gabier.editing.domain.ReferenceLocations;
 import eu.gabier.editing.fixtures.Effect;
 import eu.gabier.editing.fixtures.PackageRenameScenarios;
@@ -21,6 +22,7 @@ import eu.gabier.editing.fixtures.Scenario.Request;
 import eu.gabier.editing.fixtures.Scenarios;
 import eu.gabier.editing.fixtures.Sequel;
 import eu.gabier.editing.infrastructure.secondary.NioFileStore;
+import eu.gabier.protocol.Problem;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,8 +36,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaFileObject;
 import javax.tools.ToolProvider;
@@ -60,7 +66,9 @@ import org.junit.jupiter.api.Test;
  * scenarios it leaves out. The answer that is a change set is compared by its effect ({@link #compareEffect}: the sources
  * once it is applied to a copy of the project, which must compile), a diagnostic by its severity and its position, the
  * places of a reference and the key of a refusal as they are; only the titles of the offered actions are compared as
- * jdtls words them. Whatever is asked, the sources of the project stay as they were ({@link #assertUntouched}).
+ * jdtls words them. Whatever is asked, the sources of the project stay as they were ({@link #assertUntouched}). The
+ * sequels of the problems of the project are also replayed through the feed that follows them ({@link
+ * #replayFollowing}), with the events of the system and no request.
  */
 class ScenarioReplayTest {
 
@@ -154,6 +162,7 @@ class ScenarioReplayTest {
                 }
                 for (Sequel sequel : sequels) {
                     replay(sequel, root, server, differences);
+                    replayFollowing(sequel, root, server, differences);
                 }
             }
         } finally {
@@ -189,6 +198,118 @@ class ScenarioReplayTest {
             throws IOException {
         replayAnswer(scenario, root, server, differences);
         assertUntouched(scenario, root, differences);
+    }
+
+    /**
+     * The same sequel for an agent that follows the problems of the project ({@code gabier diagnostics --watch}): a feed
+     * is started on the project as the first scenario writes it and is told its problems; the files change on disk as an
+     * agent changes them and the feed is told, with no request, the problems of the second scenario, which the watch of
+     * the client turns into the files that changed (an error that went away is a file with no problem); the files are put
+     * back and the feed is told the first again. Only the sequels of the problems of the whole project are followed. The
+     * feed follows the disk with the events of the system, so this is also the proof that jdtls is told of what changed
+     * with no request of the client.
+     */
+    private static void replayFollowing(
+            Sequel sequel, Path root, JdtlsLanguageServer server, SoftAssertions differences)
+            throws IOException, InterruptedException {
+        Scenario first = sequel.first().inside(root);
+        Scenario second = sequel.second().inside(root);
+        if (!(first.answer() instanceof Answer.ProjectDiagnosed before)
+                || !(second.answer() instanceof Answer.ProjectDiagnosed after)) {
+            return;
+        }
+        bringTo(root, first.files());
+        var states = new LinkedBlockingQueue<List<DiagnosedFile>>();
+        var feed = new ProblemFeed(server::projectDiagnostics, server::watchDisk);
+        try {
+            feed.subscribe(new Peer.Listener() {
+                @Override
+                public void offer(List<DiagnosedFile> state) {
+                    states.add(state);
+                }
+
+                @Override
+                public void say(String notice) {
+                    System.out.println(sequel.name() + ": the feed said: " + notice);
+                }
+
+                @Override
+                public void end(Problem reason) {
+                    differences.fail("%s: the feed ended: %s", sequel.name(), reason);
+                }
+            });
+            var started = awaitState(
+                    states, before.files(), sequel.name() + ": the problems the feed starts from", differences);
+            var watch = ProblemWatch.ofProject(started);
+
+            bringTo(root, second.files());
+            var edited =
+                    awaitState(states, after.files(), sequel.name() + ": the problems after the edit", differences);
+            differences
+                    .assertThat(locatedByFile(watch.changesIn(edited)))
+                    .as("%s: the files whose problems changed, a file that became clean included", sequel.name())
+                    .isEqualTo(changed(before.files(), after.files()));
+
+            bringTo(root, first.files());
+            var fixed = awaitState(
+                    states, before.files(), sequel.name() + ": the problems once the edit is undone", differences);
+            differences
+                    .assertThat(locatedByFile(watch.changesIn(fixed)))
+                    .as("%s: the files whose problems changed back", sequel.name())
+                    .isEqualTo(changed(after.files(), before.files()));
+        } finally {
+            feed.close();
+        }
+    }
+
+    /** The files whose problems are not the same in the two states, as the second has them: none when it has none. */
+    private static Map<Path, List<Located>> changed(List<DiagnosedFile> was, List<DiagnosedFile> now) {
+        var before = locatedByFile(was);
+        var after = locatedByFile(now);
+        Map<Path, List<Located>> changed = new LinkedHashMap<>();
+        for (Path file : new TreeSet<>(
+                Stream.concat(before.keySet().stream(), after.keySet().stream()).toList())) {
+            var then = before.getOrDefault(file, List.of());
+            var has = after.getOrDefault(file, List.of());
+            if (!then.equals(has)) {
+                changed.put(file, has);
+            }
+        }
+
+        return changed;
+    }
+
+    /**
+     * The state the feed tells once it is the expected one, within two minutes (it was told, with no request, after
+     * jdtls was told of the change and built); the last state it told, or none, when it never is: the difference is
+     * recorded.
+     */
+    private static List<DiagnosedFile> awaitState(
+            BlockingQueue<List<DiagnosedFile>> states,
+            List<DiagnosedFile> expected,
+            String what,
+            SoftAssertions differences)
+            throws InterruptedException {
+        var wanted = locatedByFile(expected);
+        var deadline = System.nanoTime() + Duration.ofMinutes(2).toNanos();
+        List<DiagnosedFile> last = List.of();
+        while (System.nanoTime() < deadline) {
+            var state = states.poll(1, TimeUnit.SECONDS);
+            if (state != null) {
+                last = state;
+                if (locatedByFile(state).equals(wanted)) {
+                    System.out.println(what + ": the feed told " + state);
+
+                    return state;
+                }
+            }
+        }
+        differences
+                .assertThat(locatedByFile(last))
+                .as("%s: the feed never told the expected state", what)
+                .isEqualTo(wanted);
+
+        return last;
     }
 
     /** Writes the files of the project, and deletes the sources that are not part of it. */

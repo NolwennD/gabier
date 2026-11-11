@@ -132,6 +132,46 @@ class WatchedFilesTest {
     }
 
     @Test
+    void watchesTheFilesThatAGlobMatchesWhateverTheKindOfChangeItAsksFor() throws IOException {
+        var files = watching(glob("**/*.java", 1));
+
+        assertThat(files.watches(greeter)).isTrue();
+        assertThat(files.watches(root.resolve("src/Greeter.txt"))).isFalse();
+    }
+
+    @Test
+    void watchesNothingBeforeJdtlsRegisteredItsWatchers() {
+        assertThat(WatchedFiles.of(root).watches(greeter)).isFalse();
+    }
+
+    @Test
+    void fingerprintsTheWatchedFilesSoThatItMovesWhenOneChangesAndNotWhenAnotherDoes() throws IOException {
+        var files = watching(glob("**/*.java"));
+        var before = files.fingerprint();
+
+        write("notes.txt", "a note\n");
+        assertThat(files.fingerprint()).isEqualTo(before);
+        rewrite(greeter, "class Greeter { int x; }\n", 5);
+        var after = files.fingerprint();
+
+        assertThat(after).isNotEqualTo(before);
+        assertThat(files.fingerprint()).isEqualTo(after);
+    }
+
+    @Test
+    void fingerprintsAFileThatIsCreatedAndOneThatIsDeleted() throws IOException {
+        var files = watching(glob("**/*.java"));
+        var before = files.fingerprint();
+
+        var created = write("src/Welcomer.java", "class Welcomer {}\n");
+        var withCreated = files.fingerprint();
+        Files.delete(created);
+
+        assertThat(withCreated).isNotEqualTo(before);
+        assertThat(files.fingerprint()).isEqualTo(before);
+    }
+
+    @Test
     void reportsAChangeBeforeJdtlsRegisteredItsWatchersOnceItHas() throws IOException {
         var files = WatchedFiles.of(root);
         rewrite(greeter, "class Greeter { int x; }\n", 5);

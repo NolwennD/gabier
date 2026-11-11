@@ -102,6 +102,11 @@ final class StubDaemon implements Daemon {
     }
 
     @Override
+    public Following follow(String method, Map<String, String> params) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
     public DaemonReply askRunning(String method, boolean awaitEnd) {
         asked.add(new Asked(method, Map.of(), true));
         if (method.equals("status")) {

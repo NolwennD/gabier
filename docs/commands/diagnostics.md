@@ -67,6 +67,45 @@ $ gabier diagnostics --all
 /work/demo/src/test/java/demo/BrokenTest.java:5:16: error: Type mismatch: cannot convert from int to String
 ```
 
+## Following the problems
+
+`gabier diagnostics --watch` does not end: it prints the problems **as they are** (as `--all` does, or as the form with
+files does when files are given, each file shown as typed, and the line `no problems` when there is none), then, after
+each edit made on disk, **the files whose problems changed**, each line as soon as it is known. A file that **became
+clean** is printed as `<file>: no problems`, so that an error that goes away is seen; a file that did not change is not
+printed again. With no file it follows the project, as `--all` reads it (the daemon method `watch-all`); with files it
+follows those files (the method `watch`, parameter `files`, the same refusals as `diagnostics`, an edit of another file
+changes nothing). A file, or `--dry-run`, with `--all` is a usage error as before; `--all --watch` is `--watch`.
+
+It is the same read as `diagnostics --all`, made again after each change: the daemon watches the files of the project
+that jdtls asked to be told of, tells jdtls what changed (it refreshes from the events a client sends, as the protocol
+expects), asks for the build and reads what jdtls published, then keeps the files whose list of problems differs from
+the one you were told. A read takes a second or two once jdtls is started, so a change is shown that long after the
+edit; two edits made within a read are shown by its next one, and **a file that breaks and is fixed between two reads is
+not shown**. When the daemon cannot follow the files of the project (the system lost events, or has no watch left for the
+folders), it prints `gabier: notice: ...` and goes on looking at the files every second.
+
+With `--json` it prints **one object per line**: the first is the result of the form that is not followed (the problems
+as they are, positions from 0), then one `{"files":[...]}` per change, a file that became clean with an empty
+`diagnostics`, and a notice as `{"notice":"..."}`. Each line is flushed as it is written, so a pipe sees it at once.
+
+The command ends when it is killed (Ctrl-C or SIGTERM: the process ends with the status of the signal and prints
+nothing, the daemon sees the connection close and stops reading the project for it if it was the only one); with the
+problem of the daemon, exit code 2, when the daemon ends the subscription (the language server cannot be read any more:
+`language-server-not-ready`, `language-server-request-failed`); and with `daemon-connection-failed`, exit code 1, when the
+daemon stops or goes away (`gabier stop`). A client that follows is a connected client: the daemon does not stop by
+itself for being idle while one runs ([the daemon](../daemon.md)). A second `watch` on one connection is refused with
+`already-watching`, which the cli, one watch to a connection, does not meet. `gabier mcp` serves no tool for it: a tool
+answers once, so the agent calls `diagnostics` after each edit. The protocol is in
+[A method that answers more than once](../protocol.md#a-method-that-answers-more-than-once).
+
+```text
+$ gabier diagnostics --watch
+/work/demo/src/main/java/demo/Broken.java:5:16: error: Type mismatch: cannot convert from String to int
+/work/demo/src/main/java/demo/Broken.java: no problems
+/work/demo/src/main/java/demo/Clean.java:5:16: error: Type mismatch: cannot convert from String to int
+```
+
 ## Refusals
 
 A refusal is the problem object on the standard error, exit code 2. These are the keys the command can answer, and
@@ -78,6 +117,9 @@ the help of the command (`gabier help diagnostics`) lists them:
 - `language-server-not-ready`: the Java language server is not ready.
 - `language-server-request-failed`: with `--all`, the language server failed the build with an error of its own, which the
   problem relays (its code and its message).
+- `already-watching`: with `--watch`, the connection already follows something. The cli follows once per connection, so it
+  does not meet it; a client of the protocol does.
 - `usage-error`: the arguments are not those of the command.
 - `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.
-- `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.
+- `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering; with `--watch`,
+  the daemon stopped while the command followed.

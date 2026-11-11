@@ -20,6 +20,7 @@ import eu.gabier.protocol.SelectedTests;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,48 @@ class ResultTextTest {
 
     private static final String ESCAPE = "\u001b[31m";
     private static final String ESCAPED = "\\u001b[31m";
+
+    @Nested
+    class OfFollowedProblems {
+
+        private final DiagnosedFiles told = new DiagnosedFiles(List.of(
+                new FileDiagnostics(
+                        "/work/A.java",
+                        List.of(
+                                new Diagnosis(Severity.ERROR, 4, 15, "bad"),
+                                new Diagnosis(Severity.WARNING, 0, 0, "careful"))),
+                new FileDiagnostics("/work/B.java", List.of())));
+
+        @Test
+        void saysEachProblemFromOneAndAFileThatIsCleanAsHavingNoProblem() {
+            assertThat(ResultText.followed(Map.of(), told))
+                    .containsExactly(
+                            "/work/A.java:5:16: error: bad",
+                            "/work/A.java:1:1: warning: careful",
+                            "/work/B.java: no problems");
+        }
+
+        @Test
+        void showsAFileAsTheUserTypedItWhenTheCommandKnowsItAndAsTheDaemonNamedItOtherwise() {
+            assertThat(ResultText.followed(Map.of("/work/B.java", "B.java"), told))
+                    .contains("B.java: no problems", "/work/A.java:1:1: warning: careful");
+        }
+
+        @Test
+        void neutralisesTheMessagesAndTheNames() {
+            var hostile = new DiagnosedFiles(List.of(
+                    new FileDiagnostics("/work/A.java", List.of(new Diagnosis(Severity.ERROR, 0, 0, "bad" + ESCAPE)))));
+
+            assertThat(ResultText.followed(Map.of(), hostile))
+                    .containsExactly("/work/A.java:1:1: error: bad" + ESCAPED);
+        }
+
+        @Test
+        void saysNothingForNoFile() {
+            assertThat(ResultText.followed(Map.of(), new DiagnosedFiles(List.of())))
+                    .isEmpty();
+        }
+    }
 
     @Nested
     class OfChangedFiles {

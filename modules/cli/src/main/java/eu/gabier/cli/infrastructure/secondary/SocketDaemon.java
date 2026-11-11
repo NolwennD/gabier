@@ -67,6 +67,16 @@ public final class SocketDaemon implements Daemon {
     }
 
     @Override
+    public Following follow(String method, Map<String, String> params) {
+        var launcher = DaemonLauncher.of(environment);
+        var socket = socket();
+
+        try (var notice = WaitNotice.during(socket, noticeDelay, err)) {
+            return askAgainIfItStopped(socket, () -> startFollowing(() -> launcher.connect(socket), method, params));
+        }
+    }
+
+    @Override
     public DaemonReply askRunning(String method, boolean awaitEnd) {
         var socket = socket();
 
@@ -135,8 +145,13 @@ public final class SocketDaemon implements Daemon {
      */
     private DaemonReply callAndAskAgainIfItStopped(
             Path socket, Supplier<DaemonClient> daemon, String method, Map<String, String> params) {
+        return askAgainIfItStopped(socket, () -> call(daemon, method, params, false));
+    }
+
+    /** What {@link #callAndAskAgainIfItStopped} does for any call: the attempt is made again once, as described there. */
+    private <T> T askAgainIfItStopped(Path socket, Supplier<T> attempt) {
         try {
-            return call(daemon, method, params, false);
+            return attempt.get();
         } catch (DaemonRefusal refusal) {
             if (!STOPPING.equals(refusal.key())) {
                 throw refusal;
@@ -146,7 +161,7 @@ public final class SocketDaemon implements Daemon {
             }
         }
         try {
-            return call(daemon, method, params, false);
+            return attempt.get();
         } catch (DaemonRefusal again) {
             throw STOPPING.equals(again.key()) ? stillStopping(again) : again;
         }
@@ -188,6 +203,23 @@ public final class SocketDaemon implements Daemon {
             }
 
             return new DaemonReply(((RpcResponse.Success) response).result());
+        }
+    }
+
+    /** Asks the method and keeps the connection, which the daemon goes on writing to; closed when the request fails. */
+    private static Following startFollowing(Supplier<DaemonClient> daemon, String method, Map<String, String> params) {
+        var client = daemon.get();
+        try {
+            var response = client.call(method, params);
+            if (response instanceof RpcResponse.Failure failure) {
+                throw refusal(failure.problem());
+            }
+
+            return new FollowedDaemon(client, new DaemonReply(((RpcResponse.Success) response).result()));
+        } catch (RuntimeException failure) {
+            client.close();
+
+            throw failure;
         }
     }
 

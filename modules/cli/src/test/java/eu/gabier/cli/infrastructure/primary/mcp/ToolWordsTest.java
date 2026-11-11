@@ -59,6 +59,12 @@ class ToolWordsTest {
     }
 
     @Test
+    void saysACommandThatKeepsRunningIsCalledAgainAfterEachEditBecauseNoToolFollows() {
+        assertThat(ToolWords.of("Ask: `gabier diagnostics --watch`, then `gabier diagnostics --all`.", tools))
+                .isEqualTo("Ask: `diagnostics again after each edit`, then `diagnostics-all`.");
+    }
+
+    @Test
     void leavesAnOptionAloneThatIsGivenAValueOrIsPartOfAWord() {
         var text = "gabier help --for=\"a task\", a--b, x--y-z";
 

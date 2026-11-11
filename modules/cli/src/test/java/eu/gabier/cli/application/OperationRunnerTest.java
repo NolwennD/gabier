@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import eu.gabier.cli.domain.Daemon;
+import eu.gabier.cli.domain.DaemonNotification;
 import eu.gabier.cli.domain.DaemonRefusal;
 import eu.gabier.cli.domain.DaemonReply;
 import eu.gabier.cli.domain.DaemonStart;
@@ -24,6 +25,7 @@ import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.Json;
 import eu.gabier.protocol.SelectedTests;
 import eu.gabier.shared.error.domain.ErrorStatus;
+import eu.gabier.shared.error.domain.GeneratorException;
 import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -168,6 +170,43 @@ class OperationRunnerTest {
 
             assertThatThrownBy(() -> runner.run(Operations.DIAGNOSTICS, Map.of("files", List.of("/project/A.java"))))
                     .isSameAs(refusal);
+        }
+    }
+
+    @Nested
+    class FollowingTheProblems {
+
+        @Test
+        void asksTheDaemonAndDecodesWhereTheProblemsStartAsThoseOfDiagnostics() {
+            daemon.answers("{\"files\":[]}");
+
+            var followed = runner.follow(Operations.WATCH, Map.of("files", List.of("/work/A.java")));
+
+            assertThat(followed.started().files()).isEmpty();
+            assertThat(daemon.asked).containsExactly(new Asked("watch", Map.of("files", "/work/A.java")));
+        }
+
+        @Test
+        void followsTheWholeProjectWithNoValue() {
+            daemon.answers("{\"files\":[]}");
+
+            runner.follow(Operations.WATCH_ALL, Map.of());
+
+            assertThat(daemon.asked).containsExactly(new Asked("watch-all", Map.of()));
+        }
+
+        @Test
+        void refusesAnOperationThatDoesNotFollowWithoutAskingTheDaemon() {
+            assertThatThrownBy(() -> runner.follow(Operations.DIAGNOSTICS, Map.of("files", List.of("/work/A.java"))))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("diagnostics is not run through follow");
+            assertThat(daemon.asked).isEmpty();
+        }
+
+        @Test
+        void checksTheValuesBeforeItAsksTheDaemon() {
+            assertThatThrownBy(() -> runner.follow(Operations.WATCH, Map.of())).isInstanceOf(GeneratorException.class);
+            assertThat(daemon.asked).isEmpty();
         }
     }
 
@@ -469,7 +508,7 @@ class OperationRunnerTest {
     }
 
     static Stream<Operation> operationsOfTheDaemonThatAskDoesNotServe() {
-        return Stream.of(Operations.START, Operations.STOP);
+        return Stream.of(Operations.START, Operations.STOP, Operations.WATCH, Operations.WATCH_ALL);
     }
 
     static Stream<Operation> operationsOfTheDaemonThatAskServes() {
@@ -553,6 +592,26 @@ class OperationRunnerTest {
         @SuppressWarnings("unchecked") // The answers of the tests are the JSON objects that the protocol types write.
         private static Map<String, @Nullable Object> members(@Nullable Object json) {
             return (Map<String, @Nullable Object>) json;
+        }
+
+        @Override
+        public Following follow(String method, Map<String, String> params) {
+            var reply = ask(method, params);
+
+            return new Following() {
+                @Override
+                public DaemonReply reply() {
+                    return reply;
+                }
+
+                @Override
+                public DaemonNotification next() {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public void close() {}
+            };
         }
 
         @Override

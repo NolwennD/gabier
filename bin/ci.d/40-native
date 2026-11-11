@@ -87,7 +87,7 @@ public final class Native {
         }
         if (args.length > 0 && args[0].equals("--describe")) {
             System.out.println("native cli, run alone in an empty directory (version, help, the guide and a question to it, init-agent in a temporary project, mcp answering server/discover (with its instructions), tools/list and the guide tool over a pipe, then line by line against a daemon that holds a call: ping and status answered while it waits, usage error as text and JSON),"
-                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move, inline and affected-tests included, the daemon started on demand, start and start --wait)");
+                    + " then against the real daemon (status, stop, no daemon, stale socket, second daemon, SIGTERM, diagnostics with no jdtls to start and with the fake language server, diagnostics --watch, rename, organize-imports, cleanup, extract-variable, extract-method, extract-constant, extract-field, move-type-to-file, move, inline and affected-tests included, the daemon started on demand, start and start --wait)");
             if (skip != null) {
                 System.out.println("skip: " + skip);
             }
@@ -669,6 +669,7 @@ public final class Native {
                 startsTheDaemonOnDemand();
                 startWithTheFakeServer();
                 diagnosticsWithTheFakeServer();
+                watchingWithTheFakeServer();
                 renameWithTheFakeServer();
                 organizeImportsWithTheFakeServer();
                 cleanupWithTheFakeServer();
@@ -966,6 +967,79 @@ public final class Native {
                     "a file outside the project is refused as a problem object, exit 2");
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops");
+        }
+
+        /**
+         * {@code gabier diagnostics --watch}, the native binary, against the daemon served by the fake language server: it
+         * prints the problems as they are, then, once the file {@code .gabier-fake-edit} appears in the project (the fake's
+         * way to edit the files on disk), the files whose problems changed, each line as it comes; SIGTERM ends it with
+         * nothing on the standard error; and it ends with the problem of a lost connection when the daemon stops.
+         */
+        private void watchingWithTheFakeServer() throws IOException, InterruptedException {
+            Path project = directory.resolve("watch-project");
+            Process process = startDaemon(fakeDaemon, project.toString());
+            if (process == null) {
+                failures++;
+                return;
+            }
+            String demo = project + "/src/main/java/demo/";
+            Path out = Files.createTempFile(directory, "watch-out", ".txt");
+            Path err = Files.createTempFile(directory, "watch-err", ".txt");
+            Process watching = startWatch(out, err);
+            expect(
+                    awaitText(out, demo + "Broken.java:5:16: error: "),
+                    "gabier diagnostics --watch prints the problems as they are, with the command still running");
+            expect(watching.isAlive(), "gabier diagnostics --watch keeps running after it printed them");
+            Files.writeString(project.resolve(".gabier-fake-edit"), "");
+            expect(
+                    awaitText(out, demo + "Broken.java: no problems")
+                            && awaitText(out, demo + "Clean.java:5:16: error: "),
+                    "gabier diagnostics --watch prints a file that became clean and a file that broke after an edit on disk");
+            watching.destroy(); // SIGTERM, to the process we started and to nothing else
+            expect(
+                    watching.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                            && watching.exitValue() == 143
+                            && Files.readString(err).isEmpty(),
+                    "gabier diagnostics --watch ends on SIGTERM with the status of the signal and nothing on the standard error");
+            Files.delete(project.resolve(".gabier-fake-edit"));
+            Path goneOut = Files.createTempFile(directory, "watch-gone-out", ".txt");
+            Path goneErr = Files.createTempFile(directory, "watch-gone-err", ".txt");
+            Process gone = startWatch(goneOut, goneErr);
+            expect(awaitText(goneOut, demo + "Broken.java:5:16: error: "), "a second watch starts on the same daemon");
+            gabier("stop");
+            expect(
+                    gone.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                            && gone.exitValue() == 1
+                            && Files.readString(goneErr).contains("daemon-connection-failed")
+                            && !Files.readString(goneErr).contains("\tat "),
+                    "gabier diagnostics --watch ends with a daemon-connection-failed problem, no stack trace, when the daemon stops");
+            expect(ends(process), "the daemon served by the fake stops");
+        }
+
+        /** Starts {@code gabier diagnostics --watch} in the background, its streams in these files. */
+        private Process startWatch(Path out, Path err) throws IOException {
+            ProcessBuilder builder =
+                    new ProcessBuilder(cli.toString(), "diagnostics", "--watch").directory(directory.toFile());
+            builder.environment().clear();
+            builder.environment().put("GABIER_SOCKET", socket.toString());
+            builder.redirectOutput(out.toFile()).redirectError(err.toFile());
+            Process process = builder.start();
+            started.add(process);
+
+            return process;
+        }
+
+        /** Whether the file holds the text within the time-out: what a command that keeps running printed. */
+        private static boolean awaitText(Path file, String text) throws IOException, InterruptedException {
+            for (int attempt = 0; attempt < TIMEOUT_SECONDS * 20; attempt++) {
+                if (Files.readString(file).contains(text)) {
+                    return true;
+                }
+                Thread.sleep(50);
+            }
+            System.out.println("not printed in time: " + text + " (printed: " + Files.readString(file) + ")");
+
+            return false;
         }
 
         /**

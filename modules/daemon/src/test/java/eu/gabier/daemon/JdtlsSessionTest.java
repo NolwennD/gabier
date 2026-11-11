@@ -751,4 +751,32 @@ class JdtlsSessionTest {
             assertThat(running).isDirectory();
         }
     }
+
+    @Nested
+    class WatchingTheDisk {
+
+        @TempDir
+        Path project;
+
+        @Test
+        void tellsAChangeInAFileJdtlsAskedToWatchAndNothingForAnotherFile() throws Exception {
+            fake.listsProjects(URI_A).registersWatchersFor("**/*.java");
+            var settings = new JdtlsSettings(
+                    project.toRealPath(),
+                    List.of(),
+                    LONG,
+                    Duration.ofMillis(20),
+                    Duration.ofSeconds(5),
+                    JdtlsWorkspace.temporary());
+
+            try (JdtlsSession session = JdtlsSession.start(fake, settings, log::add, published::add);
+                    DiskChanges disk = session.watchDisk()) {
+                Files.writeString(project.resolve("notes.txt"), "a note");
+                assertThat(disk.await(Duration.ofMillis(500))).isEqualTo(DiskChanges.Signal.QUIET);
+
+                Files.writeString(project.resolve("Greeter.java"), "class Greeter {}");
+                assertThat(disk.await(Duration.ofSeconds(10))).isEqualTo(DiskChanges.Signal.CHANGED);
+            }
+        }
+    }
 }

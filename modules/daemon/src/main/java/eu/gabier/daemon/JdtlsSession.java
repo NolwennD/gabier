@@ -215,6 +215,20 @@ final class JdtlsSession implements AutoCloseable {
         return watched.changes();
     }
 
+    /**
+     * Follows the disk of the project for the files jdtls asked to have watched, with the events of the system: what
+     * jdtls would have to be told of ({@link #changesOnDisk}) is known when it happens, not when it is looked for.
+     */
+    DiskChanges watchDisk() {
+        return new FolderWatch(
+                projectRoot(),
+                new NioFolderEvents(),
+                watched::fingerprint,
+                watched::watches,
+                FolderWatch.DEBOUNCE,
+                FolderWatch.POLL_PACE);
+    }
+
     /** True once jdtls has asked to have files watched, which it does late in its initialization ({@link WatchedFiles}). */
     boolean watchersRegistered() {
         return watched.registered();

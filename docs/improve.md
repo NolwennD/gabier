@@ -1021,6 +1021,27 @@ changed on disk are told to jdtls and its build is waited for before the answer,
 nothing. The first call waits for jdtls to have finished starting. What is not a `.java` file of the project is left
 out and does not refuse the call. See `gabier help diagnostics`.
 
+### The errors as I edit, as they change
+
+Words: follow the errors while I edit, watch the errors, errors as they appear, errors that go away, live errors
+
+Ask: `gabier diagnostics --watch`, with no file for the project or with the files to follow. It keeps running: start it
+in the background and read its output as it comes. A tool answers once, so the tools of the MCP server do not follow:
+there, call `diagnostics` with the files that changed after each edit, or `diagnostics-all`.
+
+Output, first the problems as they are, then after each edit the files whose problems changed, one line per problem as
+`gabier diagnostics` writes it, and for a file that became clean `file: no problems`:
+
+```text
+/work/demo/src/main/java/demo/Broken.java:5:16: error: Type mismatch: cannot convert from String to int
+/work/demo/src/main/java/demo/Broken.java: no problems
+```
+
+Limits: after an edit the project is read again, which takes a second or two on a small project and about ten seconds
+on a large one (the page of the command says what was measured); a file that breaks and is fixed between two of these
+reads is not shown. The command ends when it is killed, and with a problem when the daemon ends it or goes away. See
+"The errors of a file, without a build" and `gabier help diagnostics`.
+
 ### The tests that a change affects
 
 Words: affected tests, which tests are affected, tests to rerun, retest after a change, test selection

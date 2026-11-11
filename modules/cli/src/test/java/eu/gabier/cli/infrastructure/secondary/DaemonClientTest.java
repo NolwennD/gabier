@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import eu.gabier.cli.infrastructure.primary.ScriptedDaemon;
+import eu.gabier.protocol.JsonRpc;
+import eu.gabier.protocol.RpcNotification;
 import eu.gabier.protocol.RpcResponse;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import java.io.ByteArrayInputStream;
@@ -113,6 +115,32 @@ class DaemonClientTest {
             var client = new DaemonClient(new ByteArrayInputStream(new byte[0]), failingOutput(), () -> {});
 
             var failure = catchThrowableOfType(DaemonException.class, () -> client.call("status"));
+
+            assertThat(failure.key()).isEqualTo(DaemonErrorKey.DAEMON_CONNECTION_FAILED);
+        }
+    }
+
+    @Nested
+    class Next {
+
+        @Test
+        void readsWhatTheDaemonWritesNextAsAMessageOfTheDaemon() {
+            var client = client(JsonRpc.notice("the disk is polled") + "\n" + RESULT);
+
+            assertThat(client.next()).containsInstanceOf(RpcNotification.class);
+            assertThat(client.next()).containsInstanceOf(RpcResponse.class);
+        }
+
+        @Test
+        void saysNothingOnceTheDaemonHasClosedTheConnection() {
+            assertThat(client("").next()).isEmpty();
+        }
+
+        @Test
+        void failsWhenTheConnectionBreaks() {
+            var client = new DaemonClient(failingInput(), written, () -> {});
+
+            var failure = catchThrowableOfType(DaemonException.class, client::next);
 
             assertThat(failure.key()).isEqualTo(DaemonErrorKey.DAEMON_CONNECTION_FAILED);
         }

@@ -1713,6 +1713,27 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         }
     }
 
+    /**
+     * Follows the disk once jdtls has registered the files it wants watched, which it does late in its initialization:
+     * what is followed is what it asked for, and nothing else.
+     *
+     * @throws LanguageServerException if jdtls is not ready
+     * @throws JdtlsException if jdtls dies or does not register in time
+     */
+    @Override
+    public DiskChanges watchDisk() {
+        JdtlsSession session = ready();
+        try {
+            builds.awaitInitialized(session, session.newWatch());
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException(
+                    "Interrupted while waiting for jdtls to register the files it watches", interrupted);
+        }
+
+        return session.watchDisk();
+    }
+
     private JdtlsSession ready() {
         if (starting.state() == Future.State.RUNNING) {
             throw LanguageServerException.notReady();

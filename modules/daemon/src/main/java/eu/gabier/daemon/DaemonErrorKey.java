@@ -5,6 +5,7 @@ import eu.gabier.shared.error.domain.ErrorKey;
 /** The keys of the refusals of the daemon itself: its command line, its socket and the parameters of a request. */
 enum DaemonErrorKey implements ErrorKey {
     ALREADY_RUNNING("daemon-already-running"),
+    ALREADY_WATCHING("already-watching"),
     INVALID_PARAMETER("invalid-parameter"),
     JDTLS_START_FAILED("jdtls-start-failed"),
     LINE_TOO_LONG("line-too-long"),

@@ -120,6 +120,28 @@ final class WatchedFiles {
         return events;
     }
 
+    /**
+     * Whether a glob that jdtls registered matches the file, for any kind of change: the files whose change is worth
+     * reading the project again for. Nothing is watched while jdtls has registered no watcher.
+     */
+    synchronized boolean watches(Path file) {
+        return registrations.values().stream()
+                .flatMap(List::stream)
+                .anyMatch(watcher -> watcher.glob().matches(file));
+    }
+
+    /**
+     * What the watched files look like on disk now (their names, modification times and sizes): equal for two calls
+     * while none of them was created, changed or deleted. The disk is scanned, so it costs what {@link #changes} does,
+     * and it does not move what {@link #changes} reports.
+     */
+    synchronized Object fingerprint() {
+        Map<Path, Stamp> watched = scan(root);
+        watched.keySet().removeIf(file -> !watches(file));
+
+        return watched;
+    }
+
     private void add(List<FileEvent> events, Path file, FileChangeType type, int kind) {
         boolean watched = registrations.values().stream()
                 .flatMap(List::stream)

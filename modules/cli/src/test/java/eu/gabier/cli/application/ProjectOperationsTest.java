@@ -186,6 +186,11 @@ class ProjectOperationsTest {
         }
 
         @Override
+        public Following follow(String method, Map<String, String> params) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public DaemonReply askRunning(String method, boolean awaitEnd) {
             statusAsked = true;
             var status = new DaemonStatus("0.1", 4242, Duration.ofSeconds(1), Path.of("/work/tree"), JdtlsState.READY);

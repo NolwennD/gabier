@@ -167,6 +167,26 @@ class ConnectionTest {
     }
 
     @Test
+    void endsWhenTheClientIsGoneAndItsInputCannotBeClosedEither() {
+        var gone = new OutputStream() {
+            @Override
+            public void write(int b) throws IOException {
+                throw new IOException("Broken pipe");
+            }
+        };
+        var stuck = new ByteArrayInputStream(request(1, "stop").getBytes(StandardCharsets.UTF_8)) {
+            @Override
+            public void close() throws IOException {
+                throw new IOException("Already closed");
+            }
+        };
+
+        Connection.serve(stuck, gone, handler);
+
+        assertThat(stoppedBy).isEmpty();
+    }
+
+    @Test
     void endsWhenTheConnectionFailsWhileReading() {
         var resetting = new InputStream() {
             @Override

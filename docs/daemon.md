@@ -73,7 +73,8 @@ the end of the last connection (from the start of a daemon nobody has called yet
 any other command, even one that is refused, restarts it. The daemon does not read the messages of the MCP server of
 the cli (`ping` is answered by the cli itself), and the MCP server never stops the daemon when its host disconnects:
 the daemon is shared with the other sessions and the command line. A connection that stays open with no call counts
-as in use, so it keeps the daemon up. `gabier status` says the delay and the time left of it as it was when the call
+as in use, so it keeps the daemon up, and so does `gabier diagnostics --watch`, which stays connected for as long as it runs.
+`gabier status` says the delay and the time left of it as it was when the call
 arrived (the call itself restarts the delay when it ends), in the member `idle`, absent when the rule is off.
 
 A request that reaches the daemon after it decided to stop, in the instant before it closes its listener, is answered
@@ -105,6 +106,50 @@ after 6 to 9 s (the 5 seconds of quiet are in it), and a command that does not w
 build file jdtls can read is refused at once, and a small Eclipse or Maven project imports in seconds. A Gradle daemon
 that is still running from an earlier import shortens the import a great deal: a cold start of the daemon and of jdtls with
 one warm answered the first `diagnostics` in 32 s.
+
+**Following the files while a client watches.** `gabier diagnostics --watch` ([diagnostics](commands/diagnostics.md))
+makes the daemon look at the disk, and only while a client watches: the first watcher starts it, the last one leaving
+ends it (a thread `gabier-problems`, and the system's registrations, are given back; nothing runs when nobody
+watches). It asks the system to tell it of every change in the folders of the project: one registration per folder
+(inotify on Linux, through the `WatchService` of the JDK: a registration covers one folder and not what is below it, so
+every folder is registered, build folders included, and a folder created later when its creation is told; links are not
+followed, as the scan of the files of the project does not), and keeps the events that concern a file jdtls asked to have
+watched (its globs, which jdtls registers late in its initialization: the daemon waits for them first). Events that come
+close together, such as the files of a rename, are one change (**100 ms** without event), and a change counts only when
+the watched files no longer look as they did (their modification time and size), so jdtls writing its class files, or a
+file touched with no change, reads nothing again. A change is then told to jdtls, which builds, and the daemon reads the problems of
+the project as `diagnostics --all` does, **once for every client that watches**.
+
+Why the daemon follows the disk itself: jdtls refreshes the files from the `workspace/didChangeWatchedFiles` events its
+client sends, as the protocol expects of a client, and not from the disk. Its own refresh is a preference of the Eclipse
+workspace (`refresh.enabled`), which can only be set in a file of its data folder, whose monitor on Linux is a poll of 4
+seconds at the least, and which was slow when it was tried: 2 to 8 seconds on a small project and 7 to 23 seconds on this
+checkout, against 1.1 to 1.3 seconds and 12 to 16 seconds with the events the daemon sends.
+
+What it costs and how late it is, **measured on Linux** with jdtls 1.63.0, one machine shared with other jobs
+(**measurements, not guarantees**; the JDK on other systems polls slowly, about every ten seconds on macOS, and these
+delays are not those of such a system):
+
+| | small project (14 files) | this checkout (2578 files with its build folders) |
+| --- | --- | --- |
+| registering the folders | 24 ms | 205 ms (about 1 s for 2146 folders when the disk is cold) |
+| idle, nothing changed | no read, no CPU | no read, no CPU |
+| the daemon sees a change after the write | about 100 ms (the debounce) | 0.4 to 0.5 s |
+| the problem is shown after the write | 1.1 to 1.3 s | 12 to 16 s |
+
+The delay of the whole is the read of jdtls (a build, about 1 s on a small project, 11 to 15 s on this checkout after an
+edit): the daemon adds about half a second at most. A file that breaks and is fixed between two reads is not shown. The
+cost is one watch per folder against the system limit of the user (`fs.inotify.max_user_watches`, 240210 on the machine
+of the measure; a project with more folders than that cannot be followed this way). When the system refuses a
+registration or says that it lost events, the daemon does not stay blind: it gives the registrations back, writes
+**one** notice to every watcher (`gabier: notice: The system cannot follow the files of the project: they are looked at every
+second from now on`, the text is fixed), reads the project once more, and from then on compares the files that jdtls
+watches **every second**. A comparison is a walk of the project folders (**263 to 726 ms** on the 2578 files, 42 to 64 ms
+on a worktree without its build folders, 0.7 to 1.3 s on 43,000 files, measured at other moments of the machine), so on a large tree this
+fall-back uses a good part of a core for as long as a client watches, and does not read the project again unless a watched
+file changed. With the walk at that pace, the change is seen after 0.4 to 1.4 s and the problem is shown as late as with
+the events. A client that has a watch is a connected client: the daemon does not stop by itself for being idle while one
+runs.
 
 **Ahead of time.** `gabier start` pays this wait before the first command: it starts the daemon if none runs, asks it to
 start jdtls (nothing happens when jdtls is already starting or ready; a failed jdtls is started again), and answers at

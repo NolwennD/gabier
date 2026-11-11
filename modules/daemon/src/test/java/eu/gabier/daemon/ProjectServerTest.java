@@ -93,6 +93,7 @@ class ProjectServerTest {
                 List.of(new ClassFolder(Path.of("/work/demo/src"), Path.of("/work/demo/bin"))), List.of(), List.of());
         static final ReferenceLocations NO_REFERENCES = new ReferenceLocations(List.of(), List.of());
         static final OfferedActions OFFERED = new OfferedActions(List.of(new OfferedAction("quickfix", "Fix it")));
+        static final ScriptedDisk DISK = new ScriptedDisk();
         static final Diagnostic WARNING = new Diagnostic(Diagnostic.Severity.WARNING, new Position(1, 2), "unused");
 
         private final CountDownLatch released = new CountDownLatch(1);
@@ -170,6 +171,11 @@ class ProjectServerTest {
         @Override
         public List<DiagnosedFile> projectDiagnostics() {
             return List.of(new DiagnosedFile(FILE, List.of(WARNING)));
+        }
+
+        @Override
+        public DiskChanges watchDisk() {
+            return DISK;
         }
 
         @Override
@@ -373,6 +379,13 @@ class ProjectServerTest {
         void theDiagnosticsOfTheWholeProjectStartItToo() {
             assertThat(project.projectDiagnostics())
                     .containsExactly(new DiagnosedFile(FILE, List.of(ScriptedServer.WARNING)));
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
+        void followingTheDiskStartsItToo() {
+            assertThat(project.watchDisk()).isSameAs(ScriptedServer.DISK);
 
             assertThat(starter.starts).hasValue(1);
         }

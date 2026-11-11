@@ -29,8 +29,11 @@ final class Tools {
     private static final Set<String> WRITE_NOTHING =
             Set.of("status", "diagnostics", "diagnostics-all", "references", "actions", "affected-tests");
 
-    /** What a person asks the daemon for by the command line only: starting and stopping it is not a tool. */
-    private static final Set<String> NOT_TOOLS = Set.of("start", "stop");
+    /**
+     * What a person asks the daemon for by the command line only: starting and stopping it is not a tool, and a tool
+     * answers once, so following the problems, which the daemon tells as they come, is not one either.
+     */
+    private static final Set<String> NOT_TOOLS = Set.of("start", "stop", "watch", "watch-all");
 
     private static final String GUIDE_DESCRIPTION = """
         Ask which tool does a task on Java, in English, before editing the code by hand: it answers the one to three \

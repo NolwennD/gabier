@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -40,10 +41,18 @@ import java.util.stream.Stream;
  * rename writes the files of that folder, as the real one does. The tests of a small shop are written there too and
  * compiled with javac, for the selection of the tests that a change affects ({@link #building}).
  *
+ * <p>The disk of the project changes when a file named {@value #EDIT} appears in its folder: from then on the problems
+ * of the whole project are those of {@code DIAGNOSTICS_OF_THE_WHOLE_PROJECT_AFTER_TWO_EDITS} (an error fixed, another
+ * made), and a client that follows the disk is told so. It is how the {@code native} stage makes a change happen with no
+ * jdtls to edit files for.
+ *
  * <p>It is its own distribution ({@code :daemon:installFakeServed}), never part of the one a user installs: the fake is
  * test code, and nothing a client sends can switch a daemon to it.
  */
 public final class FakeServedMain {
+
+    /** The file whose appearance in the folder of the project is the edit of the files of the project. */
+    static final String EDIT = ".gabier-fake-edit";
 
     private FakeServedMain() {}
 
@@ -62,9 +71,11 @@ public final class FakeServedMain {
 
         var server = serving(root);
         var built = building(root);
+        var edited = new FakeJavaLanguageServer(root)
+                .scripted(ProjectDiagnosticsScenarios.DIAGNOSTICS_OF_THE_WHOLE_PROJECT_AFTER_TWO_EDITS);
 
-        System.exit(
-                Main.serve(System.getenv(), Path.of("").toAbsolutePath(), System.out, new Served(root, server, built)));
+        System.exit(Main.serve(
+                System.getenv(), Path.of("").toAbsolutePath(), System.out, new Served(root, server, edited, built)));
     }
 
     /**
@@ -169,7 +180,12 @@ public final class FakeServedMain {
     }
 
     /** The project of the fake: always ready, nothing to end. */
-    private record Served(Path root, FakeJavaLanguageServer server, BuiltProject built) implements ServedProject {
+    private record Served(Path root, FakeJavaLanguageServer server, FakeJavaLanguageServer edited, BuiltProject built)
+            implements ServedProject {
+
+        private boolean isEdited() {
+            return Files.exists(root.resolve(EDIT));
+        }
 
         @Override
         public JdtlsState state() {
@@ -198,7 +214,30 @@ public final class FakeServedMain {
 
         @Override
         public List<DiagnosedFile> projectDiagnostics() {
-            return server.projectDiagnostics();
+            return isEdited() ? edited.projectDiagnostics() : server.projectDiagnostics();
+        }
+
+        @Override
+        public DiskChanges watchDisk() {
+            return new DiskChanges() {
+                private boolean told = isEdited();
+
+                @Override
+                public Signal await(Duration timeout) throws InterruptedException {
+                    Thread.sleep(Math.min(timeout.toMillis(), 50));
+                    if (told || !isEdited()) {
+                        return Signal.QUIET;
+                    }
+                    told = true;
+
+                    return Signal.CHANGED;
+                }
+
+                @Override
+                public void close() {
+                    // The fake holds no registration.
+                }
+            };
         }
 
         @Override

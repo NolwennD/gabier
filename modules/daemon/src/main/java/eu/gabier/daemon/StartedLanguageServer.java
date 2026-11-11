@@ -23,6 +23,14 @@ interface StartedLanguageServer extends JavaLanguageServer, ProjectBuild, AutoCl
     Optional<String> failure();
 
     /**
+     * Follows the disk of the project, for the files that the server asked to have watched. Closing it gives back what
+     * it holds.
+     *
+     * @throws eu.gabier.editing.domain.LanguageServerException if the server is not ready
+     */
+    DiskChanges watchDisk();
+
+    /**
      * Waits until the start is over.
      *
      * @throws JdtlsException when the start failed (the message says why)

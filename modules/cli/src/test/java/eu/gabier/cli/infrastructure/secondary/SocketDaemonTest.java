@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import eu.gabier.cli.domain.DaemonRefusal;
 import eu.gabier.cli.infrastructure.primary.FakeDaemonScripts;
 import eu.gabier.cli.infrastructure.primary.ScriptedDaemon;
+import eu.gabier.cli.infrastructure.primary.ScriptedStreamingDaemon;
 import eu.gabier.protocol.JsonRpc;
 import eu.gabier.shared.error.domain.ErrorKey;
 import eu.gabier.shared.error.domain.ErrorStatus;
@@ -76,6 +77,67 @@ class SocketDaemonTest {
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
         } finally {
             Thread.interrupted();
+        }
+    }
+
+    @Test
+    void followingGivesTheAnswerThenWhatTheDaemonTellsNextInTheOrderItWroteItAndFailsWhenTheDaemonGoesAway()
+            throws Exception {
+        try (var daemon = new ScriptedStreamingDaemon(socket(), JsonRpc.success("1", "{\"files\":[]}"))) {
+            daemon.says(JsonRpc.notice("first"));
+            daemon.says(JsonRpc.notice("second"));
+            daemon.hangsUp();
+
+            try (var following = daemon().follow("watch-all", Map.of())) {
+                assertThat(following.reply().result()).containsEntry("files", java.util.List.of());
+                assertThat(following.next().params()).containsEntry("message", "first");
+                assertThat(following.next().params()).containsEntry("message", "second");
+                var failure = catchThrowableOfType(DaemonException.class, following::next);
+
+                assertThat(failure.getMessage()).contains("the daemon stopped: nothing is followed any more");
+                assertThat(failure.status()).isEqualTo(ErrorStatus.INTERNAL_SERVER_ERROR);
+            }
+        }
+    }
+
+    @Test
+    void followingEndsItsConnectionWhenClosed() throws Exception {
+        try (var daemon = new ScriptedStreamingDaemon(socket(), JsonRpc.success("1", "{\"files\":[]}"))) {
+            daemon().follow("watch-all", Map.of()).close();
+
+            assertThat(daemon.clientGone()).isTrue();
+        }
+    }
+
+    @Test
+    void followingRelaysTheRefusalOfTheDaemonAndLeavesNothingOpen() throws Exception {
+        var refusal = JsonRpc.failure(
+                "1",
+                new eu.gabier.protocol.Problem(
+                        "urn:gabier:error:test-refused",
+                        "Refused",
+                        "no",
+                        "test-refused",
+                        Map.of(),
+                        ErrorStatus.BAD_REQUEST));
+        try (var daemon = new ScriptedStreamingDaemon(socket(), refusal)) {
+            var failure = catchThrowableOfType(DaemonRefusal.class, () -> daemon().follow("watch-all", Map.of()));
+
+            assertThat(failure.key()).isEqualTo("test-refused");
+            assertThat(daemon.clientGone()).isTrue();
+        }
+    }
+
+    @Test
+    void followingFailsWhenTheDaemonAnswersAgainInsteadOfTellingWhatChanged() throws Exception {
+        try (var daemon = new ScriptedStreamingDaemon(socket(), JsonRpc.success("1", "{\"files\":[]}"))) {
+            daemon.says(JsonRpc.success("2", "{}"));
+
+            try (var following = daemon().follow("watch-all", Map.of())) {
+                var failure = catchThrowableOfType(DaemonException.class, following::next);
+
+                assertThat(failure.getMessage()).contains("answered again");
+            }
         }
     }
 

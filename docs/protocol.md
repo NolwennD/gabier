@@ -38,7 +38,8 @@ the values, such as the descriptor `Operations` and `OperationRunner` of the cli
 daemon ([help](commands/help.md), [init-agent](commands/init-agent.md)). The MCP server of the cli, `gabier mcp`
 ([mcp](commands/mcp.md)), serves each method of the table as a tool of the same name, with the same parameters, except
 `start` and `stop`: they are not tools (the server starts the daemon itself when the host connects, and an agent that
-stopped it would lose the tools that need it), while `status` is one. The parameters are those of the table, with the positions from 1 and a list as an array, so a
+stopped it would lose the tools that need it), while `status` is one, and `watch` and `watch-all`, which answer more than once
+(below): a tool answers once. The parameters are those of the table, with the positions from 1 and a list as an array, so a
 method added here is a tool by itself; the warm-up of the server sends the daemon a `start`, as `gabier start` does.
 A daemon that stops by itself when nobody uses it (see [the daemon](daemon.md)) answers a request that reaches it after
 it decided, whatever the method, with the refusal `daemon-stopping` (a server error, exit code 1) and runs nothing; the
@@ -51,6 +52,8 @@ it decided, whatever the method, with the refusal `daemon-stopping` (a server er
 | `stop`             | none                                                                        | [stop](commands/status-and-stop.md)                        |
 | `diagnostics`      | `files`                                                                     | [diagnostics](commands/diagnostics.md)                     |
 | `diagnostics-all`  | none (the language server chooses the files)                                | [diagnostics](commands/diagnostics.md)                     |
+| `watch`            | `files` (absolute paths, one per line); answers more than once              | [diagnostics](commands/diagnostics.md)                     |
+| `watch-all`        | none (the language server chooses the files); answers more than once        | [diagnostics](commands/diagnostics.md)                     |
 | `rename`           | `file`, `line`, `column`, `newName`, `dryRun`                               | [rename](commands/rename.md)                               |
 | `rename-token`     | `file`, `token`, `newName`, `dryRun`                                        | [rename](commands/rename.md)                               |
 | `organize-imports` | `file`, `dryRun`                                                            | [organize-imports](commands/organize-imports.md)           |
@@ -67,3 +70,32 @@ it decided, whatever the method, with the refusal `daemon-stopping` (a server er
 | `actions`          | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`                  | [actions](commands/actions.md)                             |
 | `apply-action`     | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `title`, `dryRun` | [apply-action](commands/apply-action.md)                 |
 | `affected-tests`   | `files` (absolute paths, one per line)                                      | [affected-tests](commands/affected-tests.md)               |
+
+## A method that answers more than once
+
+`watch` and `watch-all` follow the problems of Java files. Their request is answered as any other, with the problems as
+they are now, in the shape of the result of `diagnostics`; the daemon then writes, on the **same connection** and with no
+request, **notifications**: JSON-RPC messages with a `method` and `params` and **no `id`**, which the client does not
+answer. The answer is always the first line, and the notifications follow it in the order of what they tell. There are
+three:
+
+- `problems`: the `params` are the result of `diagnostics` (`{"files":[...]}`), for the files whose list of problems is
+  not the one the client has been told, in the order of the paths; a file that **became clean** is there with an empty
+  `diagnostics`, so that the client sees an error go away. The daemon tells the files that changed after each read of the
+  project, nothing when none did.
+- `notice`: the `params` are `{"message":"..."}`, a text for the person who reads. The daemon sends one when the system
+  cannot follow the files of the project (events lost, or no more watches to register the folders with) and looks at them
+  every second from then on.
+- `ended`: the `params` are the error object of a failed request (`code`, `message`, `data` the problem object): the reason
+  the subscription ends, such as a language server that cannot be read any more. Nothing is written after it, the
+  connection stays open.
+
+A client that sends a request while it follows is answered as usual (the answers and the notifications are written by one
+thread, so two lines never mix); a second `watch` on the same connection is refused with `already-watching`. **The client
+ends its subscription by closing the connection**: the daemon then stops reading the project for it, and for nobody when it
+was the last one (no thread is left), and nothing else changes for the other clients. A client that does not read is told
+the **latest state** when it reads again, not every state in between (the daemon keeps one state per client, so its memory
+is bounded and no other client waits for it); a file that breaks and is fixed between two reads of a slow client is not shown to it.
+A daemon that stops ends the connections of its watchers. A client that follows is a connected client: the daemon does not
+stop by itself for being idle while one is there. An `RpcMessage` of `eu.gabier.protocol` reads a line of the daemon as a
+response or a notification.

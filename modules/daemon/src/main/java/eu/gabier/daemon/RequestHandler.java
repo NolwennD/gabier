@@ -56,7 +56,13 @@ final class RequestHandler {
         return new RequestHandler(refusal);
     }
 
+    /** The answer to a line, for a request that runs for no client on a connection (a test of a method). */
     Reply handle(String line) {
+        return handle(line, Peer.nobody());
+    }
+
+    /** The answer to a line, for a client that a method may listen for ({@link StreamingMethod}). */
+    Reply handle(String line, Peer peer) {
         RpcRequest request;
         try {
             request = RpcRequest.parse(line);
@@ -73,13 +79,15 @@ final class RequestHandler {
             return Reply.of(JsonRpc.failure(request.id(), UnknownMethodException.of(request.method())));
         }
 
-        return call(method, request);
+        return call(method, request, peer);
     }
 
-    private Reply call(DaemonMethod method, RpcRequest request) {
+    private Reply call(DaemonMethod method, RpcRequest request, Peer peer) {
         try {
             checkParameters(method, request.params());
-            var outcome = method.call(request.params());
+            var outcome = method instanceof StreamingMethod streaming
+                    ? streaming.call(request.params(), peer)
+                    : method.call(request.params());
 
             return new Reply(JsonRpc.success(request.id(), outcome.resultJson()), outcome.afterReply());
         } catch (RuntimeException failure) {

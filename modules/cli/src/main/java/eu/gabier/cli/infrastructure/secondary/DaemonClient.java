@@ -1,5 +1,6 @@
 package eu.gabier.cli.infrastructure.secondary;
 
+import eu.gabier.protocol.RpcMessage;
 import eu.gabier.protocol.RpcRequest;
 import eu.gabier.protocol.RpcResponse;
 import java.io.BufferedReader;
@@ -77,6 +78,21 @@ final class DaemonClient implements AutoCloseable {
             }
 
             return RpcResponse.parse(line);
+        } catch (IOException e) {
+            throw DaemonException.connectionFailed("the connection was lost", e);
+        }
+    }
+
+    /**
+     * Waits for the next line of the daemon: the notifications it sends to a client that asked to follow something.
+     *
+     * @return what the daemon wrote, empty once it closed the connection
+     */
+    Optional<RpcMessage> next() {
+        try {
+            var line = input.readLine();
+
+            return line == null ? Optional.empty() : Optional.of(RpcMessage.parse(line));
         } catch (IOException e) {
             throw DaemonException.connectionFailed("the connection was lost", e);
         }

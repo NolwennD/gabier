@@ -28,6 +28,14 @@ public interface Daemon {
     DaemonStart askStarting(String method);
 
     /**
+     * Asks the daemon a method that goes on telling what changes, starting the daemon when nothing answers: the answer
+     * is the first thing the result of {@link Following#reply()} holds, and the daemon then tells more, one
+     * notification after another, until the call is closed. A refusal is thrown as for {@link #ask}, and nothing is
+     * followed then.
+     */
+    Following follow(String method, Map<String, String> params);
+
+    /**
      * The status of the daemon that runs, asked after a pause, on a connection of its own: the poll of a command that
      * waits for jdtls.
      */
@@ -41,6 +49,24 @@ public interface Daemon {
 
     /** Where the daemon of the project listens. */
     Path socket();
+
+    /** What a daemon that follows something has said so far and says next, on the connection that asked. */
+    interface Following extends AutoCloseable {
+
+        /** What the daemon answered to the request. */
+        DaemonReply reply();
+
+        /**
+         * Waits for what the daemon tells next.
+         *
+         * @throws RuntimeException (the exception of the adapter) when the daemon goes away: nothing is told any more
+         */
+        DaemonNotification next();
+
+        /** Ends the conversation: the daemon stops telling it. */
+        @Override
+        void close();
+    }
 
     /** The notice of a request that waits: nothing is written once it is closed. */
     interface Notice extends AutoCloseable {

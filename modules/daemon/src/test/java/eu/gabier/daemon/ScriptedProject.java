@@ -22,6 +22,7 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 /**
  * The project of a daemon under test: a language server given by the test, a state and a reason the test sets, a count
@@ -39,6 +40,8 @@ final class ScriptedProject implements ServedProject {
 
     private final Path root;
     private final JavaLanguageServer server;
+    private final ScriptedDisk disk = new ScriptedDisk();
+    private volatile Supplier<List<DiagnosedFile>> problems;
     private final AtomicInteger closes = new AtomicInteger();
     private final AtomicInteger warmUps = new AtomicInteger();
     private final CountDownLatch waiting = new CountDownLatch(1);
@@ -56,6 +59,17 @@ final class ScriptedProject implements ServedProject {
     ScriptedProject(Path root, JavaLanguageServer server) {
         this.root = root;
         this.server = server;
+        this.problems = () -> this.server.projectDiagnostics();
+    }
+
+    /**
+     * The problems of the whole project are what the test gives, read each time the daemon asks: the state of the
+     * project as an edit on disk changes it.
+     */
+    ScriptedProject whoseProblemsAre(Supplier<List<DiagnosedFile>> problems) {
+        this.problems = problems;
+
+        return this;
     }
 
     /** The build the project reports: what the test hands it, as the build of the language server would. */
@@ -63,6 +77,11 @@ final class ScriptedProject implements ServedProject {
         this.build = build;
 
         return this;
+    }
+
+    /** The disk the project follows: what the test says of it is what a client that watches is told. */
+    ScriptedDisk disk() {
+        return disk;
     }
 
     ScriptedProject in(JdtlsState state) {
@@ -149,6 +168,11 @@ final class ScriptedProject implements ServedProject {
     }
 
     @Override
+    public DiskChanges watchDisk() {
+        return disk;
+    }
+
+    @Override
     public void warmUp() {
         warmUps.incrementAndGet();
         if (state == JdtlsState.NOT_STARTED) {
@@ -187,7 +211,7 @@ final class ScriptedProject implements ServedProject {
 
     @Override
     public List<DiagnosedFile> projectDiagnostics() {
-        return server.projectDiagnostics();
+        return problems.get();
     }
 
     @Override

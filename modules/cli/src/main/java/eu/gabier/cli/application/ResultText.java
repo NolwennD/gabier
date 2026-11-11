@@ -11,6 +11,7 @@ import eu.gabier.protocol.TerminalText;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.IntStream;
 
 /**
@@ -127,6 +128,29 @@ public final class ResultText {
         status.idle()
                 .ifPresent(idle -> lines.add("idle stop: after " + span(idle.timeout()) + " with no request, "
                         + span(idle.left()) + " left"));
+
+        return neutralised(lines);
+    }
+
+    /**
+     * What a command that follows the problems says of some files: for each, in the order of the result, one line per
+     * problem as {@link #lines(List, DiagnosedFiles)} writes it, and for a file with no problem the line {@code <file>: no
+     * problems}, which is how a person sees an error go away. A file is shown as the user typed it when the command
+     * knows it, else under the name the daemon gave it.
+     *
+     * @param typed the files as the user typed them, by the name the daemon gives them
+     */
+    public static List<String> followed(Map<String, String> typed, DiagnosedFiles diagnosed) {
+        var lines = new ArrayList<String>();
+        for (var element : diagnosed.files()) {
+            var file = typed.getOrDefault(element.file(), element.file());
+            if (element.diagnostics().isEmpty()) {
+                lines.add(file + ": no problems");
+            }
+            element.diagnostics()
+                    .forEach(diagnosis -> lines.add(file + ":" + (diagnosis.line() + 1) + ":" + (diagnosis.column() + 1)
+                            + ": " + diagnosis.severity().text() + ": " + diagnosis.message()));
+        }
 
         return neutralised(lines);
     }

@@ -11,6 +11,7 @@ import eu.gabier.editing.application.ExtractField;
 import eu.gabier.editing.application.ExtractMethod;
 import eu.gabier.editing.application.ExtractVariable;
 import eu.gabier.editing.application.FindReferences;
+import eu.gabier.editing.application.FollowProblems;
 import eu.gabier.editing.application.Inline;
 import eu.gabier.editing.application.ListCodeActions;
 import eu.gabier.editing.application.MoveToPackage;
@@ -61,6 +62,7 @@ final class DaemonServer implements AutoCloseable {
     private final RequestHandler stoppingHandler = RequestHandler.refusing(DaemonStoppingException.idle());
     private RequestHandler handler;
     private final ServedProject project;
+    private final ProblemFeed problems;
     private final Set<SocketChannel> connections = ConcurrentHashMap.newKeySet();
     private final CompletableFuture<Void> stopRequested = new CompletableFuture<>();
     private boolean closed;
@@ -78,6 +80,8 @@ final class DaemonServer implements AutoCloseable {
         this.nanoClock = nanoClock;
         var startedAt = nanoClock.getAsLong();
         var rename = new Rename(project, new NioFileStore());
+        var follow = new FollowProblems(project);
+        problems = new ProblemFeed(follow::read, project::watchDisk);
         // The method table: to add a method, add it here (.claude/skills/add-daemon-method/SKILL.md).
         handler = new RequestHandler(
                 List.of(
@@ -86,6 +90,8 @@ final class DaemonServer implements AutoCloseable {
                         new StopMethod(this::requestStop),
                         new DiagnosticsMethod(new Diagnose(project)),
                         new DiagnosticsAllMethod(new DiagnoseProject(project)),
+                        new WatchMethod(follow, problems),
+                        new WatchAllMethod(follow, problems),
                         new RenameMethod(rename),
                         new RenameTokenMethod(rename),
                         new OrganizeImportsMethod(new OrganizeImports(project, new NioFileStore()), project.root()),
@@ -217,6 +223,7 @@ final class DaemonServer implements AutoCloseable {
             listener.close();
             Files.deleteIfExists(socket);
         } finally {
+            problems.close();
             try {
                 project.close();
             } catch (InterruptedException interrupted) {

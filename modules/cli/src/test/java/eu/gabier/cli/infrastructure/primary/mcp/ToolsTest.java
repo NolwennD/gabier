@@ -21,6 +21,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 /** The tools that the server lists are generated from the descriptors of the operations, and from nothing else. */
 class ToolsTest {
 
+    /** The operations that are no tool: the ones the server runs itself, and the ones that answer more than once. */
+    private static final List<Operation> NOT_TOOLS =
+            List.of(Operations.START, Operations.STOP, Operations.WATCH, Operations.WATCH_ALL);
+
     private static List<Map<String, @Nullable Object>> tools(Tools tools) {
         return list(Json.parse(tools.json())).stream().map(ToolsTest::object).toList();
     }
@@ -73,9 +77,10 @@ class ToolsTest {
         private final Tools served = Tools.served();
 
         @Test
-        void hasOneToolForEachOperationButStartAndStopNamedAsTheOperationInTheOrderOfTheDescriptorsThenTheGuide() {
+        void
+                hasOneToolForEachOperationButStartStopAndTheOnesThatFollowNamedAsTheOperationInTheOrderOfTheDescriptorsThenTheGuide() {
             var operations = Operations.all().stream()
-                    .filter(operation -> operation != Operations.START && operation != Operations.STOP)
+                    .filter(operation -> !NOT_TOOLS.contains(operation))
                     .map(Operation::method)
                     .toList();
 
@@ -108,7 +113,7 @@ class ToolsTest {
         @Test
         void followsTheParametersOfEachOperationInTheSchemaOfItsTool() {
             for (var operation : Operations.all()) {
-                if (operation == Operations.START || operation == Operations.STOP) {
+                if (NOT_TOOLS.contains(operation)) {
                     continue;
                 }
                 var schema = schemaOf(tool(served, operation.method()));

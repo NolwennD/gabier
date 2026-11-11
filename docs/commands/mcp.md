@@ -41,7 +41,7 @@ documentation of Claude Code, <https://code.claude.com/docs/en/mcp>.)
 The handshake carries `instructions`, in `server/discover` (revision 2026-07-28) and in the result of `initialize` (revision
 2025-11-25 and before): the resource `mcp-instructions.md` of the cli, what an agent must know to use the tools. Use them
 instead of editing Java as text, count positions from 1, try a change that crosses files with `dryRun` set to true,
-call `diagnostics` after a change, once with all the files that changed, and `organize-imports` after adding or removing a usage; `diagnostics-all` gives the problems of every Java file of the project. A test keeps every tool the text
+call `diagnostics` after a change, once with all the files that changed, and `organize-imports` after adding or removing a usage; `diagnostics-all` gives the problems of every Java file of the project. No tool follows the errors while the agent edits (a tool answers once, and `gabier diagnostics --watch` is a command that keeps running, not a tool): the instructions say to call `diagnostics` after each edit. A test keeps every tool the text
 names in step with `tools/list`.
 
 The first `server/discover` or `initialize` also **starts the daemon in the background**, as `gabier start` does (it answers
@@ -55,7 +55,7 @@ The operations of gabier that work on the code or report on it are **tools**, na
 `diagnostics-all`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`,
 `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions`, `apply-action`, `affected-tests` and `status`.
 `start` and `stop` are operations of the daemon but not tools: the server starts the daemon itself when the host
-connects (below), and an agent that stopped it would lose the tools that need it. Each tool is generated from its descriptor in `eu.gabier.cli.domain.Operations`: its description is the summary and the
+connects (below), and an agent that stopped it would lose the tools that need it. `watch` and `watch-all` are not tools either: they answer more than once, and a tool answers once. Each tool is generated from its descriptor in `eu.gabier.cli.domain.Operations`: its description is the summary and the
 notes of the operation, its input schema is its parameters (a text, a whole number, a position, `true` or `false`, a list of
 texts), all required. A **position is an integer counted from 1**, as on the command line; a list is a JSON array
 (`files` of `move`, `cleanUps` of `cleanup`). A parameter added to an operation shows in its tool with no other file

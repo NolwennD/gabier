@@ -294,4 +294,28 @@ class JdtlsProjectDiagnosticsTest {
             assertThat(Thread.interrupted()).isTrue();
         }
     }
+
+    @Test
+    void followsTheDiskForTheFilesJdtlsAskedToWatch() throws Exception {
+        try (var server = started();
+                var disk = server.watchDisk()) {
+            Files.writeString(root.resolve("Greeter.java"), "class Greeter {}");
+
+            assertThat(disk.await(Duration.ofSeconds(10))).isEqualTo(DiskChanges.Signal.CHANGED);
+        }
+    }
+
+    @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
+    @Test
+    void keepsTheInterruptionOfTheThreadThatWaitsForJdtlsToRegisterWhatItWatches() throws Exception {
+        fake.holdsBackTheWatchers();
+        try (var server = started()) {
+            Thread.currentThread().interrupt();
+
+            assertThatThrownBy(server::watchDisk)
+                    .isInstanceOf(JdtlsException.class)
+                    .hasMessageContaining("Interrupted while waiting for jdtls to register the files it watches");
+            assertThat(Thread.interrupted()).isTrue();
+        }
+    }
 }

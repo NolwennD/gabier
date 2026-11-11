@@ -409,6 +409,139 @@ class JsonRpcTest {
         }
     }
 
+    @Nested
+    class Notifications {
+
+        @Test
+        void aNotificationIsOneLineOfJsonWithNoId() {
+            var line = JsonRpc.notification("problems", "{\"files\":[]}");
+
+            assertThat(line).isEqualTo("{\"jsonrpc\":\"2.0\",\"method\":\"problems\",\"params\":{\"files\":[]}}");
+            StrictJson.parse(line);
+        }
+
+        @Test
+        void theEndOfASubscriptionCarriesTheProblemObjectAsAnErrorObject() {
+            var line = JsonRpc.ended(PROBLEM);
+
+            assertThat(line)
+                    .isEqualTo("{\"jsonrpc\":\"2.0\",\"method\":\"ended\",\"params\":{\"code\":-32000,"
+                            + "\"message\":\"Some key\",\"data\":" + PROBLEM_JSON + "}}");
+            StrictJson.parse(line);
+        }
+
+        @Test
+        void aNotificationIsReadWithItsMethodAndItsParams() {
+            var message = RpcMessage.parse(JsonRpc.notification("problems", "{\"files\":[]}"));
+
+            assertThat(message).isInstanceOfSatisfying(RpcNotification.class, notification -> {
+                assertThat(notification.method()).isEqualTo("problems");
+                assertThat(notification.params()).containsExactly(entry("files", java.util.List.of()));
+            });
+        }
+
+        @Test
+        void aResponseIsStillReadAsAResponse() {
+            assertThat(RpcMessage.parse(JsonRpc.success("1", "{}"))).isEqualTo(new RpcResponse.Success(Map.of()));
+            assertThat(RpcMessage.parse(JsonRpc.failure("1", PROBLEM))).isEqualTo(new RpcResponse.Failure(PROBLEM));
+        }
+
+        @Test
+        void theEndOfASubscriptionIsReadAsTheProblemItCarries() {
+            var message = RpcMessage.parse(JsonRpc.ended(PROBLEM));
+
+            assertThat(message)
+                    .isInstanceOfSatisfying(
+                            RpcNotification.class,
+                            notification -> assertThat(notification.ended()).isEqualTo(PROBLEM));
+        }
+
+        @Test
+        void theEndOfASubscriptionOfAFailureOfGabierKeepsItsCategory() {
+            var internal = new Problem(
+                    "urn:gabier:error:internal-server-error",
+                    "Internal server error",
+                    "It failed",
+                    "internal-server-error",
+                    Map.of(),
+                    ErrorStatus.INTERNAL_SERVER_ERROR);
+
+            assertThat(((RpcNotification) RpcMessage.parse(JsonRpc.ended(internal))).ended())
+                    .isEqualTo(internal);
+        }
+
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "this is not json",
+                    "[1]",
+                    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"problems\",\"params\":{}}",
+                    "{\"jsonrpc\":\"2.0\",\"method\":\"problems\",\"params\":[]}",
+                    "{\"jsonrpc\":\"2.0\",\"method\":\"problems\"}",
+                    "{\"jsonrpc\":\"2.0\",\"method\":7,\"params\":{}}",
+                    "{\"jsonrpc\":\"2.0\",\"method\":\"\",\"params\":{}}"
+                })
+        void aNotificationThatIsNotOneOfTheDaemonIsAnInvalidResponse(String line) {
+            var failure = catchThrowableOfType(GeneratorException.class, () -> RpcMessage.parse(line));
+
+            assertThat(failure.key()).isEqualTo(ProtocolErrorKey.INVALID_RESPONSE);
+        }
+
+        @Test
+        void theProblemsOfSomeFilesAreANotificationOfTheDiagnosedFiles() {
+            var diagnosed =
+                    new DiagnosedFiles(java.util.List.of(new FileDiagnostics("/p/A.java", java.util.List.of())));
+
+            var line = JsonRpc.problems(diagnosed);
+
+            assertThat(line)
+                    .isEqualTo("{\"jsonrpc\":\"2.0\",\"method\":\"problems\",\"params\":" + diagnosed.toJson() + "}");
+            assertThat(((RpcNotification) RpcMessage.parse(line)).problems()).isEqualTo(diagnosed);
+        }
+
+        @Test
+        void aNoticeCarriesAMessageForThePersonWhoReads() {
+            var line = JsonRpc.notice("the \"disk\" is polled");
+
+            assertThat(line)
+                    .isEqualTo(
+                            "{\"jsonrpc\":\"2.0\",\"method\":\"notice\",\"params\":{\"message\":\"the \\\"disk\\\" is"
+                                    + " polled\"}}");
+            assertThat(((RpcNotification) RpcMessage.parse(line)).notice()).isEqualTo("the \"disk\" is polled");
+        }
+
+        @Test
+        void aNotificationThatIsNotANoticeOrWithoutAMessageHasNoNotice() {
+            var problems = (RpcNotification) RpcMessage.parse(JsonRpc.notification("problems", "{\"files\":[]}"));
+            var empty = (RpcNotification) RpcMessage.parse(JsonRpc.notification("notice", "{}"));
+
+            assertThat(catchThrowableOfType(GeneratorException.class, problems::notice)
+                            .key())
+                    .isEqualTo(ProtocolErrorKey.INVALID_RESPONSE);
+            assertThat(catchThrowableOfType(GeneratorException.class, empty::notice)
+                            .key())
+                    .isEqualTo(ProtocolErrorKey.INVALID_RESPONSE);
+        }
+
+        @Test
+        void aNotificationThatIsNotTheProblemsHasNoDiagnosedFiles() {
+            var ended = (RpcNotification) RpcMessage.parse(JsonRpc.ended(PROBLEM));
+
+            assertThat(catchThrowableOfType(GeneratorException.class, ended::problems)
+                            .key())
+                    .isEqualTo(ProtocolErrorKey.INVALID_RESPONSE);
+        }
+
+        @Test
+        void aNotificationThatIsNotTheEndOfASubscriptionHasNoProblem() {
+            var notification = (RpcNotification) RpcMessage.parse(JsonRpc.notification("problems", "{}"));
+
+            assertThat(catchThrowableOfType(GeneratorException.class, notification::ended)
+                            .key())
+                    .isEqualTo(ProtocolErrorKey.INVALID_RESPONSE);
+        }
+    }
+
     private enum CustomKey implements ErrorKey {
         OTHER;
 

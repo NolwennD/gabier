@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import eu.gabier.editing.domain.DiagnosedFile;
+import eu.gabier.editing.domain.Diagnostic;
+import eu.gabier.editing.domain.LanguageServerException;
+import eu.gabier.editing.domain.Position;
 import eu.gabier.editing.fixtures.CleanUpScenarios;
 import eu.gabier.editing.fixtures.CodeActionScenarios;
 import eu.gabier.editing.fixtures.FakeJavaLanguageServer;
@@ -20,6 +24,8 @@ import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.ProtocolVersion;
+import eu.gabier.protocol.RpcMessage;
+import eu.gabier.protocol.RpcNotification;
 import eu.gabier.protocol.RpcResponse;
 import eu.gabier.protocol.UserId;
 import eu.gabier.shared.error.domain.ErrorStatus;
@@ -46,9 +52,11 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongSupplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -1583,6 +1591,243 @@ class DaemonServerTest {
                 Thread.onSpinWait();
             }
             assertThat(servers.getFirst().connectionCount()).isZero();
+        }
+    }
+
+    /**
+     * A client that follows the problems of the project on its connection, on the real socket: what it is told, and what
+     * ends its subscription and what does not.
+     */
+    @Nested
+    class Watching {
+
+        private static final String WATCH_ALL = "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"watch-all\"}\n";
+        private static final String LAST = "the last state";
+        private static final Path BROKEN = Path.of("src/main/java/demo/Broken.java");
+        private static final Path CLEAN = Path.of("src/main/java/demo/Clean.java");
+
+        private final AtomicInteger reads = new AtomicInteger();
+
+        /** The project as an agent edits it: at the n-th read a file has the problem number n, up to the last. */
+        private List<DiagnosedFile> stateOfTheProject() {
+            int read = reads.incrementAndGet();
+            var message = read >= 40 ? LAST : "state " + read;
+
+            return List.of(new DiagnosedFile(
+                    directory.resolve(BROKEN),
+                    List.of(new Diagnostic(
+                            Diagnostic.Severity.ERROR, new Position(0, 0), message + " ".repeat(100_000)))));
+        }
+
+        private String next(Client client) {
+            return CompletableFuture.supplyAsync(() -> {
+                        try {
+                            return client.readLine();
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    })
+                    .orTimeout(10, TimeUnit.SECONDS)
+                    .join();
+        }
+
+        private void changeUntilTheLastState() {
+            while (reads.get() < 40) {
+                project.disk().says(DiskChanges.Signal.CHANGED);
+                Thread.onSpinWait();
+            }
+        }
+
+        private long followers() {
+            return Thread.getAllStackTraces().keySet().stream()
+                    .filter(thread -> thread.getName().equals(ProblemFeed.PUMP) && thread.isAlive())
+                    .count();
+        }
+
+        private void awaitNoFollower() {
+            var deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            while (followers() > 0 && System.nanoTime() < deadline) {
+                Thread.onSpinWait();
+            }
+            assertThat(followers()).isZero();
+        }
+
+        private void awaitConnections(int count) {
+            var deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            while (servers.getFirst().connectionCount() > count && System.nanoTime() < deadline) {
+                Thread.onSpinWait();
+            }
+            assertThat(servers.getFirst().connectionCount()).isEqualTo(count);
+        }
+
+        private DiagnosedFiles answered(String line) {
+            return DiagnosedFiles.of(((RpcResponse.Success) RpcResponse.parse(line)).result());
+        }
+
+        @Test
+        void answersTheProblemsNowThenTellsTheFilesThatChangedAndAFileThatBecameCleanWithNoProblem() throws Exception {
+            var edited = new FakeJavaLanguageServer(directory)
+                    .scripted(ProjectDiagnosticsScenarios.DIAGNOSTICS_OF_THE_WHOLE_PROJECT_AFTER_TWO_EDITS);
+            serving();
+
+            try (var client = connect(socket())) {
+                assertThat(answered(client.ask(WATCH_ALL)).files())
+                        .extracting(FileDiagnostics::file)
+                        .hasSize(3)
+                        .contains(directory.resolve(BROKEN).toString());
+
+                project.whoseProblemsAre(edited::projectDiagnostics);
+                project.disk().says(DiskChanges.Signal.CHANGED);
+
+                var changed = ((RpcNotification) RpcMessage.parse(next(client))).problems();
+                assertThat(changed.files())
+                        .extracting(FileDiagnostics::file)
+                        .containsExactly(
+                                directory.resolve(BROKEN).toString(),
+                                directory.resolve(CLEAN).toString());
+                assertThat(changed.files().getFirst().diagnostics()).isEmpty();
+                assertThat(changed.files().getLast().diagnostics()).hasSize(1);
+            }
+        }
+
+        @Test
+        void aWatcherThatDisconnectsEndsItsOwnSubscriptionAndNoOtherOne() throws Exception {
+            var edited = new FakeJavaLanguageServer(directory)
+                    .scripted(ProjectDiagnosticsScenarios.DIAGNOSTICS_OF_THE_WHOLE_PROJECT_AFTER_TWO_EDITS);
+            serving();
+            try (var staying = connect(socket());
+                    var leaving = connect(socket())) {
+                staying.ask(WATCH_ALL);
+                leaving.ask(WATCH_ALL);
+
+                leaving.close();
+                awaitConnections(1);
+                project.whoseProblemsAre(edited::projectDiagnostics);
+                project.disk().says(DiskChanges.Signal.CHANGED);
+
+                assertThat(next(staying)).contains("\"method\":\"problems\"");
+                try (var other = connect(socket())) {
+                    assertThat(other.ask(STATUS_REQUEST)).contains("\"result\"");
+                }
+                assertThat(followers()).isEqualTo(1);
+                staying.close();
+                awaitNoFollower();
+                assertThat(project.disk().closed()).isTrue();
+            }
+        }
+
+        @Test
+        void aWatcherThatDoesNotReadHoldsUpNeitherTheDaemonNorAnotherWatcher() throws Exception {
+            project.whoseProblemsAre(this::stateOfTheProject);
+            serving();
+            try (var silent = connect(socket());
+                    var reading = connect(socket())) {
+                silent.ask(WATCH_ALL);
+                reading.ask(WATCH_ALL);
+
+                changeUntilTheLastState();
+
+                String line;
+                do {
+                    line = next(reading);
+                } while (!line.contains(LAST));
+                try (var other = connect(socket())) {
+                    assertThat(other.ask(STATUS_REQUEST)).contains("\"result\"");
+                }
+            }
+            awaitNoFollower();
+        }
+
+        @Test
+        void refusesASecondWatchOnTheSameConnectionAndKeepsTheFirst() throws Exception {
+            serving();
+
+            try (var client = connect(socket())) {
+                client.ask(WATCH_ALL);
+
+                var refusal = client.ask(WATCH_ALL);
+
+                assertThat(refusal).contains("already-watching");
+                assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
+            }
+        }
+
+        @Test
+        void endsTheWatcherWithTheProblemWhenTheProjectCannotBeReadAnyMore() throws Exception {
+            var states = new AtomicInteger();
+            project.whoseProblemsAre(() -> {
+                if (states.incrementAndGet() > 2) {
+                    throw LanguageServerException.notReady();
+                }
+
+                return List.of();
+            });
+            serving();
+
+            try (var client = connect(socket())) {
+                client.ask(WATCH_ALL);
+                project.disk().says(DiskChanges.Signal.CHANGED);
+
+                var ended = ((RpcNotification) RpcMessage.parse(next(client))).ended();
+
+                assertThat(ended.key()).isEqualTo("language-server-not-ready");
+                assertThat(client.ask(STATUS_REQUEST)).contains("\"result\"");
+            }
+        }
+
+        @Test
+        void endsTheThreadThatIsStillReadingTheProjectWhenTheDaemonStops() throws Exception {
+            var reads = new AtomicInteger();
+            var released = new CountDownLatch(1);
+            project.whoseProblemsAre(() -> {
+                if (reads.incrementAndGet() > 2) {
+                    try {
+                        released.await();
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+
+                        throw new IllegalStateException("The read was interrupted", interrupted);
+                    }
+                }
+
+                return List.of();
+            });
+            var running = serve(open());
+            try (var client = connect(socket())) {
+                client.ask(WATCH_ALL);
+                project.disk().says(DiskChanges.Signal.CHANGED);
+                var deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+                while (reads.get() < 3 && System.nanoTime() < deadline) {
+                    Thread.onSpinWait();
+                }
+                assertThat(reads).hasValue(3);
+
+                assertThat(client.ask(STOP_REQUEST)).contains("\"result\"");
+                running.orTimeout(10, TimeUnit.SECONDS).join();
+
+                assertThat(followers())
+                        .as("the thread of the feed, blocked in a read, once the daemon is closed")
+                        .isZero();
+            } finally {
+                released.countDown();
+            }
+        }
+
+        @Test
+        void endsTheWatchersWhenTheDaemonStopsAndLeavesNoThreadBehind() throws Exception {
+            var running = serve(open());
+            try (var client = connect(socket())) {
+                client.ask(WATCH_ALL);
+
+                assertThat(client.ask(STOP_REQUEST)).contains("\"result\"");
+                running.orTimeout(10, TimeUnit.SECONDS).join();
+
+                assertThat(next(client)).isNull();
+            }
+            assertThat(followers())
+                    .as("the thread of the feed, once the daemon is closed")
+                    .isZero();
+            assertThat(project.disk().closed()).isTrue();
         }
     }
 

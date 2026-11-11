@@ -69,6 +69,31 @@ public final class OperationRunner {
         return () -> ask(operation, kind, parameters);
     }
 
+    /**
+     * Asks the daemon an operation that goes on telling what changes ({@code watch}, {@code watch-all}), and keeps the
+     * conversation open: the answer is {@link Daemon.Following#reply()}, decoded as that of {@code diagnostics}, and
+     * the daemon then tells the changes, one {@link Daemon.Following#next()} after another, until it is closed.
+     *
+     * @throws GeneratorException when {@link #run} would, before it asks the daemon
+     * @throws IllegalArgumentException when the operation is not one that follows
+     */
+    public Followed follow(Operation operation, Map<String, Object> values) {
+        if (!operation.method().equals("watch") && !operation.method().equals("watch-all")) {
+            throw new IllegalArgumentException("The operation " + operation.method() + " is not run through follow");
+        }
+        var following = daemon.follow(operation.method(), parameters(operation, values));
+
+        return new Followed(DiagnosedFiles.of(following.reply().result()), following);
+    }
+
+    /**
+     * What a call that follows gives: where it starts, and the conversation, to read what comes next and to end.
+     *
+     * @param started the problems as they are when it starts
+     * @param following what the daemon tells next
+     */
+    public record Followed(DiagnosedFiles started, Daemon.Following following) {}
+
     private OperationResult ask(Operation operation, Kind kind, Map<String, String> parameters) {
         var result = (kind == Kind.REPORTED
                         ? daemon.askRunning(operation.method(), false)

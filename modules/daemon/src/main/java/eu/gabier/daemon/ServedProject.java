@@ -30,6 +30,13 @@ interface ServedProject extends JavaLanguageServer, ProjectBuild, AutoCloseable 
     Optional<String> jdtlsFailure();
 
     /**
+     * Follows the disk of the project, for the files that the language server asked to have watched: the project is
+     * started and waited for, as for a request, because what it asks to have watched is not known before. Closing what
+     * is returned gives back what it holds.
+     */
+    DiskChanges watchDisk();
+
+    /**
      * Starts the language server in the background, so that the first request finds it started, and returns at once:
      * nothing is started while it is starting or ready, and a failed start is ended and another begun, as a request
      * does.

@@ -17,6 +17,12 @@ final class ToolWords {
     /** The program and the word after it, which may be the name of a command (lower case letters and hyphens). */
     private static final Pattern INVOCATION = Pattern.compile("\\bgabier ([a-z][a-z-]*)\\b");
 
+    /**
+     * A command that keeps running and tells what changes ({@code gabier diagnostics --watch}): no tool does that, since
+     * a tool answers once, so a tool is called again after each edit.
+     */
+    private static final Pattern FOLLOWING = Pattern.compile("\\bgabier ([a-z][a-z-]*) --watch\\b");
+
     /** A command followed by the option that makes it another tool, which is the command and the word joined. */
     private static final Pattern FORM = Pattern.compile("\\bgabier ([a-z][a-z-]*) --(token|all)\\b");
 
@@ -33,7 +39,9 @@ final class ToolWords {
 
     /** The text with the commands, the forms and the options of the command line written as tools and parameters. */
     static String of(String text, Tools tools) {
-        var forms = FORM.matcher(text).replaceAll(match -> "gabier " + match.group(1) + "-" + match.group(2));
+        var following =
+                FOLLOWING.matcher(text).replaceAll(match -> "gabier " + match.group(1) + " again after each edit");
+        var forms = FORM.matcher(following).replaceAll(match -> "gabier " + match.group(1) + "-" + match.group(2));
         var invocations = INVOCATION
                 .matcher(forms)
                 .replaceAll(

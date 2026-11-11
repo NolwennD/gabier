@@ -14,6 +14,15 @@ public final class JsonRpc {
     /** The member of a problem object that names the parameter a request is refused for. */
     public static final String PARAMETER = "parameter";
 
+    /** The method of the notification that ends a subscription: its params are the error object of the reason. */
+    public static final String ENDED = "ended";
+
+    /** The method of the notification that tells the problems of some files: its params are a {@link DiagnosedFiles}. */
+    public static final String PROBLEMS = "problems";
+
+    /** The method of the notification that says something to the person who reads: its params hold a {@code message}. */
+    public static final String NOTICE = "notice";
+
     static final String VERSION = "2.0";
 
     static final int PARSE_ERROR = -32700;
@@ -48,9 +57,39 @@ public final class JsonRpc {
      * @param id the id of the request as JSON text, null when it could not be read
      */
     public static String failure(@Nullable String id, Problem problem) {
-        return "{\"jsonrpc\":\"" + VERSION + "\",\"id\":" + (id == null ? "null" : id) + ",\"error\":{\"code\":"
-                + code(problem) + ",\"message\":" + Json.quote(problem.title()) + ",\"data\":" + problem.toJson()
-                + "}}";
+        return "{\"jsonrpc\":\"" + VERSION + "\",\"id\":" + (id == null ? "null" : id) + ",\"error\":"
+                + errorObject(problem) + "}";
+    }
+
+    /**
+     * A message that is not the answer to a request: a method and its {@code params}, with no {@code id}, so that the
+     * client answers nothing. The daemon sends them on the connection of a client that asked to follow something, after
+     * the answer to its request.
+     *
+     * @param paramsJson the {@code params}, a JSON object
+     */
+    public static String notification(String method, String paramsJson) {
+        return "{\"jsonrpc\":\"" + VERSION + "\",\"method\":" + Json.quote(method) + ",\"params\":" + paramsJson + "}";
+    }
+
+    /** The notification that tells the problems of some files, as the result of {@code diagnostics} does. */
+    public static String problems(DiagnosedFiles diagnosed) {
+        return notification(PROBLEMS, diagnosed.toJson());
+    }
+
+    /** The notification that says something to the person who reads, such as why a delay is longer than usual. */
+    public static String notice(String message) {
+        return notification(NOTICE, "{\"message\":" + Json.quote(message) + "}");
+    }
+
+    /** The notification that ends a subscription for a reason: the error object a failed request carries. */
+    public static String ended(Problem problem) {
+        return notification(ENDED, errorObject(problem));
+    }
+
+    private static String errorObject(Problem problem) {
+        return "{\"code\":" + code(problem) + ",\"message\":" + Json.quote(problem.title()) + ",\"data\":"
+                + problem.toJson() + "}";
     }
 
     private static int code(Problem problem) {

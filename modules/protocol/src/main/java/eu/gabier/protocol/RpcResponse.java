@@ -9,7 +9,7 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /** What the daemon answered to a request: a result, or the problem object of an error. */
-public sealed interface RpcResponse {
+public sealed interface RpcResponse extends RpcMessage {
 
     /**
      * The request succeeded.
@@ -55,7 +55,7 @@ public sealed interface RpcResponse {
         throw invalid("The answer has neither a result object nor an error object");
     }
 
-    private static Problem problem(Map<?, ?> error) {
+    static Problem problem(Map<?, ?> error) {
         if (!(error.get("code") instanceof BigDecimal code) || !(error.get("data") instanceof Map<?, ?> data)) {
             throw invalid("The error of the answer has no code or no problem object in its data");
         }
