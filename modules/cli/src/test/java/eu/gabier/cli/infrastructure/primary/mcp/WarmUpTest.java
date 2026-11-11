@@ -80,6 +80,19 @@ class WarmUpTest {
     }
 
     @Test
+    void isRunningFromItsBeginUntilTheStartEnds() throws InterruptedException {
+        var go = new CountDownLatch(1);
+        var warmUp = WarmUp.inBackground(() -> awaitQuietly(go), err);
+
+        assertThat(warmUp.isRunning()).isFalse();
+        warmUp.begin();
+        assertThat(warmUp.isRunning()).isTrue();
+        go.countDown();
+        warmUp.awaitEnd();
+        assertThat(warmUp.isRunning()).isFalse();
+    }
+
+    @Test
     void saysNothingWhenTheDaemonStarts() {
         var warmUp = new WarmUp(() -> {}, err, Runnable::run);
 

@@ -141,6 +141,13 @@ public final class McpServer {
     }
 
     private void answer(Incoming.Request request, Output output, Calls running) {
+        if (running.isRunning(request.key())) {
+            // The id is the one of a call that will be answered: the refusal cannot carry it, or two answers would.
+            output.write(McpFailure.invalidRequest("the id is the one of a request that has not been answered yet")
+                    .toJson(null));
+
+            return;
+        }
         try {
             if (request.method().equals("tools/call")) {
                 call(request, output, running);
@@ -222,11 +229,13 @@ public final class McpServer {
             case ToolCalls.Done done -> output.write(answer.apply(done.members()));
             case ToolCalls.Waiting waiting -> {
                 Supplier<String> work = () -> {
+                    // Looked at before the daemon is asked: a daemon that is not listening yet while its start runs.
+                    var daemonStarting = !waiting.asksDaemon() && warmUp.isRunning();
                     if (calls.awaitsTheWarmUp(waiting)) {
                         warmUp.awaitEnd();
                     }
 
-                    return calls.complete(waiting);
+                    return calls.complete(waiting, daemonStarting);
                 };
                 var job = new Calls.Job(
                         request.id(),
@@ -236,9 +245,7 @@ public final class McpServer {
                         work,
                         () -> calls.status(waiting),
                         () -> calls.timedOut(pacing.bound()));
-                if (!running.start(job)) {
-                    throw McpFailure.invalidRequest("the id is the one of a request that has not been answered yet");
-                }
+                running.start(job);
             }
         }
     }

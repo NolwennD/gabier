@@ -16,5 +16,6 @@ Gabier changes Java through the language server of the project. Use its tools in
 - The server starts the daemon when it connects, and jdtls imports the project meanwhile. The first call that asks the
   daemon waits for the import, about a minute for a Gradle project; the server goes on answering meanwhile, and `status`
   answers at once with where jdtls is and what it is importing. `status` starts no daemon: the connection has started
-  one already. A call that the daemon does not answer in 11 minutes ends as a failed call (the key daemon-timeout).
+  one already, and a `status` that comes while that daemon is not listening yet fails with the key daemon-starting (call
+  it again in a moment). A call that the daemon does not answer in 11 minutes ends as a failed call (the key daemon-timeout).
 - A call that fails answers why (isError): read it before calling again.

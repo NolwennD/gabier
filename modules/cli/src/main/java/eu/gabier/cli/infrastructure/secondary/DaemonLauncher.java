@@ -8,6 +8,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -29,8 +30,11 @@ final class DaemonLauncher {
     /** How long a started daemon has to listen on its socket. It binds first, jdtls starts later, at a request. */
     static final Duration START_DELAY = Duration.ofSeconds(20);
 
-    /** What the starts of a daemon take turns on: the log file of a start is written by that start alone. */
-    private static final Object LAUNCH = new Object();
+    /**
+     * What the starts of the daemon of a socket take turns on, one lock for each socket: the log file of a start is
+     * written by that start alone, and the daemons of two projects do not wait for each other.
+     */
+    private static final Map<Path, Object> LAUNCHES = new ConcurrentHashMap<>();
 
     private static final String DAEMON_NAME = "gabier-daemon";
     private static final Pattern PATH_SEPARATOR = Pattern.compile(Pattern.quote(File.pathSeparator));
@@ -73,9 +77,10 @@ final class DaemonLauncher {
         if (running.isPresent()) {
             return running.get();
         }
-        // One start at a time in this process: calls that run together (the server of MCP answers several at once)
-        // would each launch a daemon and write its log, and the one that comes second finds the socket of the first.
-        synchronized (LAUNCH) {
+        // One start at a time for a socket in this process: calls that run together (the server of MCP answers several
+        // at once) would each launch a daemon and write its log, and the one that comes second finds the socket of the
+        // first. The starts for another socket go on meanwhile.
+        synchronized (LAUNCHES.computeIfAbsent(socket.toAbsolutePath().normalize(), _ -> new Object())) {
             return DaemonClient.tryConnect(socket).orElseGet(() -> start(socket));
         }
     }

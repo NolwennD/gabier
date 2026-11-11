@@ -75,16 +75,26 @@ final class Calls {
     }
 
     /**
-     * Runs a call in the background; its answer is written when it ends.
-     *
-     * @return false, and does nothing, when a call with the same id is still running
+     * Whether a call with this id is still running: no other request may use the id until the call has been answered.
+     * The answer and the end of the call are written behind the lock of the output, so that is where this looks: a
+     * client that has read the answer and sends another request with the id never finds the call still running.
      */
-    boolean start(Job job) {
+    boolean isRunning(String key) {
+        synchronized (output) {
+            synchronized (this) {
+                return pending.containsKey(key);
+            }
+        }
+    }
+
+    /**
+     * Runs a call in the background; its answer is written when it ends. The caller has checked that no call with the
+     * same id is running ({@link #isRunning}); only the thread that reads the client starts calls, so none starts in
+     * between.
+     */
+    void start(Job job) {
         Call call;
         synchronized (this) {
-            if (pending.containsKey(job.key())) {
-                return false;
-            }
             call = new Call(job, pacing.nanoClock().getAsLong());
             pending.put(job.key(), call);
             if (stopTicker == null) {
@@ -92,8 +102,6 @@ final class Calls {
             }
         }
         threads.execute(() -> call.end(job.work().get()));
-
-        return true;
     }
 
     /** Ends the call of this id, if it still runs, without an answer. */

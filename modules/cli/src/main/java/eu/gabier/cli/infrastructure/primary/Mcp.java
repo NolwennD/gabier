@@ -50,6 +50,8 @@ final class Mcp implements Capability {
                   daemon-start-failed: no daemon answered and gabier-daemon could not be started
                   daemon-connection-failed: the connection to the daemon was lost, or it hung up without answering
                   daemon-not-running: a call of status when no daemon answers; status never starts one
+                  daemon-starting: a call of status when no daemon answers yet and the start that the handshake began is
+                    still running: ask again in a moment
                   daemon-timeout: the daemon had not answered after 11 minutes; it may still be working on the call
                   internal-server-error: a failure gabier does not know, logged on the standard error with its cause\
                 """);

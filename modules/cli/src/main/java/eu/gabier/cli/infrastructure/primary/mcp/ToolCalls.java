@@ -41,6 +41,9 @@ final class ToolCalls {
 
     private static final String NO_PROBLEMS = "no problems";
 
+    /** The key of the refusal when no daemon answers; the primary adapter does not see the secondary one that owns it. */
+    private static final String NOT_RUNNING = "daemon-not-running";
+
     private final Tools tools;
     private final ProjectOperations operations;
     private final Function<Operation, String> commandOf;
@@ -121,15 +124,26 @@ final class ToolCalls {
 
     /**
      * Runs the call and waits for the daemon: the members of the result, which is a failed call when the operation
-     * does not work. It never throws, an {@code Error} of the process (a class or a library that is missing) included:
-     * what it meets is the result of this call, and the server goes on.
+     * does not work. When the daemon is starting ({@code daemonStarting}: a call of {@code status}, which waits for no
+     * start, made while the start of the warm-up runs) and none answers yet, the failed call says that it is starting,
+     * instead of the refusal of a daemon that is absent. It never throws, an {@code Error} of the process (a class or a
+     * library that is missing) included: what it meets is the result of this call, and the server goes on.
      */
-    String complete(Waiting waiting) {
+    String complete(Waiting waiting, boolean daemonStarting) {
         try {
             return success(waiting.run().get(), waiting.files(), waiting.dryRun());
         } catch (RuntimeException | Error failure) {
+            if (daemonStarting && isNotRunning(failure)) {
+                return failed(waiting.operation().method(), DaemonStartingException.started());
+            }
+
             return refused(waiting.operation(), failure);
         }
+    }
+
+    private static boolean isNotRunning(Throwable failure) {
+        return failure instanceof GeneratorException known
+                && NOT_RUNNING.equals(known.key().get());
     }
 
     /**

@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -70,12 +71,23 @@ public final class SocketProjects implements Projects {
         return new SocketDaemon(inProject, err, noticeDelay);
     }
 
-    /** The real path of the file, as the daemon sees it; of a file that does not exist yet, its normalized path. */
+    /**
+     * The real path of the file, as the daemon sees it. A file that does not exist yet has none: its real path is the
+     * one of the nearest folder above it that exists, under which the names that are missing follow, so that a file to
+     * be created below a symlinked folder is in the same project as the files that exist there.
+     */
     private static Path realPathOf(Path file) {
+        return realPathOfNormalized(file.toAbsolutePath().normalize());
+    }
+
+    private static Path realPathOfNormalized(Path path) {
         try {
-            return file.toRealPath();
+            return path.toRealPath();
         } catch (IOException gone) {
-            return file.toAbsolutePath().normalize();
+            // The root of a file system always exists, so a path that does not has a folder above it.
+            var folder = Objects.requireNonNull(path.getParent(), "the root of a file system exists");
+
+            return realPathOfNormalized(folder).resolve(folder.relativize(path));
         }
     }
 }

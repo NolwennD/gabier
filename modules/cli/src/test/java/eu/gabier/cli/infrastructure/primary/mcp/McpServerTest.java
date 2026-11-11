@@ -18,6 +18,7 @@ import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.Json;
 import eu.gabier.protocol.ProtocolVersion;
+import eu.gabier.shared.error.domain.GeneratorException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -218,6 +219,78 @@ class McpServerTest {
                 assertThat(daemon.asked()).extracting(StubDaemon.Asked::method).containsExactly("status");
                 go.countDown();
             }
+        }
+
+        private static GeneratorException refusalWithTheKey(String key) {
+            return GeneratorException.badRequest(() -> key).message("a refusal").build();
+        }
+
+        private @Nullable Object statusAnswerWhile(WarmUp warmUp, StubDaemon daemon) throws Exception {
+            try (var session = new McpSession(McpExchange.serverOf(daemon, warmUp))) {
+                session.send(modern("1", "server/discover"));
+                session.send(modernCall("2", "status", "{}"));
+                var first = session.next();
+
+                return at(first, "id").equals(number(2)) ? first : session.next();
+            }
+        }
+
+        @Test
+        void tellsAStatusMadeWhileTheDaemonIsStartingThatItIsStartingAndNotThatNoneRuns() throws Exception {
+            var go = new CountDownLatch(1);
+            var warmUp = WarmUp.inBackground(() -> awaitQuietly(go), McpExchange.silent());
+            var daemon = new StubDaemon().failing(refusalWithTheKey("daemon-not-running"));
+
+            var status = statusAnswerWhile(warmUp, daemon);
+
+            go.countDown();
+            assertThat(at(status, "result", "isError")).isEqualTo(true);
+            assertThat(at(status, "result", "structuredContent", "key")).isEqualTo("daemon-starting");
+            assertThat((String) at(status, "result", "content", 0, "text"))
+                    .contains("The daemon is starting")
+                    .contains("call status again");
+            assertThat(go.getCount()).isZero();
+        }
+
+        @Test
+        void keepsTheRefusalOfAStatusWhenNoStartIsRunning() throws Exception {
+            var ended = new WarmUp(() -> {}, McpExchange.silent(), Runnable::run);
+            var daemon = new StubDaemon().failing(refusalWithTheKey("daemon-not-running"));
+
+            var status = statusAnswerWhile(ended, daemon);
+
+            assertThat(at(status, "result", "isError")).isEqualTo(true);
+            assertThat(at(status, "result", "structuredContent", "key")).isEqualTo("daemon-not-running");
+        }
+
+        @Test
+        void keepsTheRefusalOfAStatusWhenTheStartEndedWithAFailure() throws Exception {
+            var failed = new WarmUp(
+                    () -> {
+                        throw new IllegalStateException("gabier-daemon was not found");
+                    },
+                    McpExchange.silent(),
+                    Runnable::run);
+            var daemon = new StubDaemon().failing(refusalWithTheKey("daemon-not-running"));
+
+            var status = statusAnswerWhile(failed, daemon);
+
+            assertThat(at(status, "result", "structuredContent", "key")).isEqualTo("daemon-not-running");
+        }
+
+        @Test
+        void keepsEveryOtherFailureOfAStatusMadeWhileTheDaemonIsStarting() throws Exception {
+            var go = new CountDownLatch(1);
+            var warmUp = WarmUp.inBackground(() -> awaitQuietly(go), McpExchange.silent());
+
+            var refused =
+                    statusAnswerWhile(warmUp, new StubDaemon().failing(refusalWithTheKey("daemon-connection-failed")));
+            var unexpected = statusAnswerWhile(
+                    warmUp, new StubDaemon().failing(new IllegalStateException("the connection broke")));
+            go.countDown();
+
+            assertThat(at(refused, "result", "structuredContent", "key")).isEqualTo("daemon-connection-failed");
+            assertThat(at(unexpected, "result", "structuredContent", "key")).isEqualTo("internal-server-error");
         }
 
         @Test

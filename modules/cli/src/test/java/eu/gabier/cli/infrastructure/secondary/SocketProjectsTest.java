@@ -66,6 +66,35 @@ class SocketProjectsTest {
     }
 
     @Test
+    void aFileThatDoesNotExistYetBelowASymlinkedFolderGoesToTheSameProjectAsAFileThatExists() throws IOException {
+        var link = Files.createSymbolicLink(directory.toRealPath().resolve("elsewhere/link"), clone);
+        var projects = projectsLaunchedIn(elsewhere);
+
+        var existing = projects.projectOf(link.resolve("src/A.java"));
+        var notYet = projects.projectOf(link.resolve("src/new/package/C.java"));
+
+        assertThat(existing).isEqualTo(clone);
+        assertThat(notYet).isEqualTo(existing);
+    }
+
+    @Test
+    void aFileThatDoesNotExistYetBelowAFolderThatIsASymlinkToAWorktreeBelongsToThatWorktree() throws IOException {
+        var link = Files.createSymbolicLink(directory.toRealPath().resolve("elsewhere/tree"), worktree);
+        var projects = projectsLaunchedIn(clone);
+
+        assertThat(projects.projectOf(link.resolve("a/b/C.java"))).isEqualTo(worktree);
+    }
+
+    @Test
+    void aFileThatDoesNotExistYetUnderADanglingSymlinkKeepsTheNameOfTheLink() throws IOException {
+        var dangling = Files.createSymbolicLink(
+                directory.toRealPath().resolve("elsewhere/dangling"), directory.resolve("nowhere"));
+        var projects = projectsLaunchedIn(clone);
+
+        assertThat(projects.projectOf(dangling.resolve("C.java"))).isEqualTo(clone);
+    }
+
+    @Test
     void aFileWithNoGitFolderAboveItBelongsToTheProjectOfTheLaunch() {
         var projects = projectsLaunchedIn(clone);
 

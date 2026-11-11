@@ -54,6 +54,13 @@ public final class WarmUp {
         }
     }
 
+    /** Whether the start is running now: begun, and not ended yet (the daemon may not listen yet). */
+    boolean isRunning() {
+        var begun = running;
+
+        return begun != null && !begun.isDone();
+    }
+
     /** Waits for the start that is running to end; returns at once when none was begun, or when it ended. */
     void awaitEnd() {
         var begun = running;

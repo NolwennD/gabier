@@ -1,6 +1,7 @@
 package eu.gabier.cli.infrastructure.secondary;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import eu.gabier.cli.infrastructure.primary.FakeDaemonScripts;
@@ -14,7 +15,13 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -172,6 +179,58 @@ class DaemonLauncherTest {
         }
 
         assertThat(Files.readAllLines(log())).hasSize(1);
+    }
+
+    @Test
+    void startsTheDaemonOnceForTwoRequestsThatComeTogether() throws Exception {
+        FakeDaemonScripts.installListening(bin());
+        var launcher = launcher(LONG);
+        var together = new CountDownLatch(2);
+        Callable<Void> connect = () -> {
+            together.countDown();
+            together.await();
+            try (var client = launcher.connect(socket())) {
+                client.call("diagnostics");
+            }
+
+            return null;
+        };
+
+        try (var threads = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (var result : threads.invokeAll(List.of(connect, connect))) {
+                result.get(30, TimeUnit.SECONDS);
+            }
+        }
+
+        assertThat(Files.readAllLines(log())).hasSize(1);
+    }
+
+    @Test
+    void doesNotMakeTheStartOfTheDaemonOfAnotherSocketWaitForTheOneThatIsStarting() throws Exception {
+        var started = directory.resolve("started");
+        new ProcessBuilder("mkfifo", started.toString()).inheritIO().start().waitFor();
+        // The first daemon says it is launched, by a named pipe the test reads, and never listens.
+        FakeDaemonScripts.install(bin(), SYSTEM_PATH + "echo $$ > '" + started + "'\nexec sleep 60");
+        var otherBin = directory.resolve("other-bin");
+        FakeDaemonScripts.installListening(otherBin);
+        var otherSocket = directory.resolve("other.sock");
+        var otherEnvironment = Map.of("GABIER_SOCKET", otherSocket.toString(), "PATH", otherBin.toString());
+        var waiting = CompletableFuture.supplyAsync(
+                () -> catchThrowable(() -> launcher(LONG).connect(socket())),
+                task -> Thread.ofVirtual().start(task));
+        var pid = Long.parseLong(Files.readString(started).trim());
+
+        try {
+            try (var client = new DaemonLauncher(otherEnvironment, directory, null, LONG).connect(otherSocket)) {
+                client.call("diagnostics");
+            }
+
+            assertThat(waiting).isNotDone();
+        } finally {
+            ProcessHandle.of(pid).ifPresent(ProcessHandle::destroyForcibly);
+            FakeDaemonScripts.end(DaemonLauncher.logOf(otherSocket));
+        }
+        assertThat(waiting.get(30, TimeUnit.SECONDS)).isInstanceOf(DaemonException.class);
     }
 
     @Test

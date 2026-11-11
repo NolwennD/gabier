@@ -125,9 +125,48 @@ class WaitingCallsTest {
 
                 var refused = session.next();
                 assertError(refused, -32600, "Invalid Request: the id is the one of a request that");
+                assertThat(idOf(refused)).isNull();
+                daemon.awaitAsked();
                 assertThat(daemon.asked()).hasSize(1);
                 release.countDown();
-                assertThat(at(session.next(), "result", "isError")).isEqualTo(false);
+                var call = session.next();
+                assertThat(idOf(call)).isEqualTo(number(1));
+                assertThat(at(call, "result", "isError")).isEqualTo(false);
+            }
+        }
+
+        @Test
+        void refusesARequestThatAnswersAtOnceWhenItsIdIsTheOneOfACallThatIsStillRunning() throws Exception {
+            try (var session = session()) {
+                session.send(modernCall("1", "diagnostics", DIAGNOSE));
+                session.send(modernCall("1", "guide", "{\"task\":\"rename a method\"}"));
+                session.send(modernCall("1", "diagnostics", "{}"));
+                session.send(modern("1", "ping"));
+
+                for (var count = 0; count < 3; count++) {
+                    var refused = session.next();
+                    assertError(refused, -32600, "Invalid Request: the id is the one of a request that");
+                    assertThat(idOf(refused)).isNull();
+                }
+                release.countDown();
+                var call = session.next();
+                assertThat(idOf(call)).isEqualTo(number(1));
+                assertThat(at(call, "result", "isError")).isEqualTo(false);
+            }
+        }
+
+        @Test
+        void servesARequestWhoseIdWasTheOneOfACallOnceThatCallIsAnswered() throws Exception {
+            release.countDown();
+            try (var session = session()) {
+                session.send(modernCall("1", "diagnostics", DIAGNOSE));
+                assertThat(idOf(session.next())).isEqualTo(number(1));
+
+                session.send(modern("1", "ping"));
+
+                var again = session.next();
+                assertThat(idOf(again)).isEqualTo(number(1));
+                assertThat(at(again, "result", "resultType")).isEqualTo("complete");
             }
         }
 

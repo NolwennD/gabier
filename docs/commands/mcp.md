@@ -98,7 +98,11 @@ meanwhile**, so a host sees it answer:
   the daemon that a handshake starts.
 - **`status`** asks a daemon that runs and starts none, and does not wait for the start the handshake began: called on the
   side, it answers at once with the state of jdtls (starting, ready...) and, while jdtls starts, `jdtlsProgress` (launching
-  or importing, the last task it reported, for how long).
+  or importing, the last task it reported, for how long). Called right after the handshake, while the daemon that the
+  handshake started is not listening yet (the launch of the process, a few seconds), no daemon answers: the call then
+  fails with the key `daemon-starting` ("the daemon is starting ... call status again in a moment") and not with
+  `daemon-not-running`. The server decides that before it asks: the start of the handshake is still running. Once that
+  start has ended (the daemon listens, or could not be started) a `status` that finds no daemon says `daemon-not-running`.
 - **Progress.** A request that carries `_meta.progressToken` (a text or a whole number) is told how the call goes: every 5
   seconds, while the call waits, a `notifications/progress` with the token, a `progress` that grows by one at each notice
   and a `message` such as `jdtls is starting: importing the project for 15s: Build model (waiting 20s so far)` (or
@@ -115,8 +119,10 @@ meanwhile**, so a host sees it answer:
   id, one that has ended or a malformed notification is ignored. The server does not interrupt the thread of the call: the
   daemon may still run what was asked.
 - **Ids.** The id of a request is given back as it was written: `1.0` and `1e2` stay as they are, and a whole number that
-  no `long` holds is answered. A text or a whole number is an id, a fraction is not (`-32600`, null id). A request whose id is
-  that of a call still running is refused (`-32600`).
+  no `long` holds is answered. A text or a whole number is an id, a fraction is not (`-32600`, null id). **No two answers carry the
+  same id**: a request of any kind (a call, `ping`, `tools/list`, the `guide`, a call whose values are wrong...) whose id is
+  that of a call that is still running, and so has not been answered, is refused with `-32600` and a **null id**, because the
+  answer of the running call is the one that carries the id. The id can be used again once the call has been answered.
 - **`ping`** is answered `{}`; a request that names the modern era in its `_meta` gets `{"resultType":"complete",...}`,
   which revision 2026-07-28 requires of every result (it removed `ping`, and hosts still send it).
 
@@ -200,6 +206,8 @@ refusal of the operation that the call runs (the page of its command lists them,
 - `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.
 - `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.
 - `daemon-not-running`: a call of `status` when no daemon answers; `status` never starts one, every other tool does.
+- `daemon-starting`: a call of `status` when no daemon answers yet and the start that the handshake began is still
+  running: ask again in a moment.
 - `daemon-timeout`: the daemon had not answered 11 minutes after the call came; the call is given up and the daemon may
   still be working on it (`status` tells).
 - `internal-server-error`: a failure gabier does not know; the problem says nothing of it, and the server logs it on the
