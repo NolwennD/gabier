@@ -13,6 +13,8 @@ import com.google.gson.JsonPrimitive;
 import eu.gabier.editing.domain.ChangeSet;
 import eu.gabier.editing.domain.Diagnostic;
 import eu.gabier.editing.domain.Diagnostic.Severity;
+import eu.gabier.editing.domain.EditingErrorKey;
+import eu.gabier.editing.domain.EditingException;
 import eu.gabier.editing.domain.FileChange;
 import eu.gabier.editing.domain.LanguageServerErrorKey;
 import eu.gabier.editing.domain.LanguageServerException;
@@ -4613,6 +4615,177 @@ class JdtlsLanguageServerTest {
                 assertThatThrownBy(() -> server.createType(widget, TypeKind.CLASS))
                         .isInstanceOf(JdtlsException.class)
                         .hasMessageContaining("Interrupted while waiting for the snippet of a class for " + widget);
+                assertThat(Thread.interrupted()).isTrue();
+            }
+        }
+    }
+
+    @Nested
+    class CreatingAPackageInfo {
+
+        private Path sources;
+        private Path packageInfo;
+
+        @BeforeEach
+        void chooseTheFile() {
+            sources = root.resolve("src/main/java");
+            packageInfo = root.resolve("src/main/java/demo/package-info.java");
+            fake.listsSourcePaths(sources);
+        }
+
+        private String textOf(ChangeSet changes, Path file) {
+            assertThat(changes.changes()).hasSize(2);
+            assertThat(changes.changes().get(0)).isEqualTo(new FileChange.CreateFile(file));
+
+            return ((FileChange.EditFile) changes.changes().get(1))
+                    .edits().stream().map(edit -> edit.newText()).collect(java.util.stream.Collectors.joining());
+        }
+
+        @Test
+        void answersTheCreationOfTheFileAndTheOneEditThatGivesItsAnnotationAndItsPackageLineOnly() throws Exception {
+            try (var server = started()) {
+                ChangeSet changes = server.createPackageInfo(packageInfo);
+
+                assertThat(changes.changes().get(1)).isInstanceOfSatisfying(FileChange.EditFile.class, edit -> {
+                    assertThat(edit.file()).isEqualTo(packageInfo);
+                    assertThat(SourceText.edited(packageInfo, "", edit.edits()))
+                            .isEqualTo("@org.jspecify.annotations.NullMarked\npackage demo;\n");
+                });
+                assertThat(changes.changes().get(0)).isEqualTo(new FileChange.CreateFile(packageInfo));
+            }
+        }
+
+        @Test
+        void asksJdtlsForTheSourceFoldersOnlyAndOpensNothingNorWritesTheFile() throws Exception {
+            try (var server = started()) {
+                server.createPackageInfo(packageInfo);
+
+                assertThat(fake.sourcePathRequests()).isEqualTo(1);
+                assertThat(fake.opened()).isEmpty();
+                assertThat(fake.completionRequests()).isEmpty();
+                assertThat(packageInfo).doesNotExist();
+            }
+        }
+
+        @Test
+        void namesTheSubpackageWithDotsAndKeepsItsFolderToItselfWhenItDoesNotExist() throws Exception {
+            Path file = root.resolve("src/main/java/demo/app/ui/package-info.java");
+
+            try (var server = started()) {
+                assertThat(textOf(server.createPackageInfo(file), file)).endsWith("package demo.app.ui;\n");
+                assertThat(file.getParent()).doesNotExist();
+            }
+        }
+
+        @Test
+        void givesTheFileOfAnyOfTheSourceFoldersThePackageOfItsFolderUnderThatOne() throws Exception {
+            fake.listsSourcePaths(root.resolve("src/main/java"), root.resolve("src/test/java"));
+            Path file = root.resolve("src/test/java/demo/package-info.java");
+
+            try (var server = started()) {
+                assertThat(textOf(server.createPackageInfo(file), file)).endsWith("package demo;\n");
+            }
+        }
+
+        @Test
+        void usesTheInnermostSourceFolderThatHoldsTheFile() throws Exception {
+            fake.listsSourcePaths(root.resolve("src"), root.resolve("src/main/java"), root.resolve("lib"));
+
+            try (var server = started()) {
+                assertThat(textOf(server.createPackageInfo(packageInfo), packageInfo))
+                        .endsWith("package demo;\n");
+            }
+        }
+
+        @Test
+        void refusesAFileStraightUnderASourceFolderWhichIsTheDefaultPackage() throws Exception {
+            Path file = root.resolve("src/main/java/package-info.java");
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.createPackageInfo(file))
+                        .isInstanceOfSatisfying(LanguageServerException.class, refusal -> {
+                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_CREATABLE);
+                            assertThat(refusal.parameters()).containsEntry("file", file.toString());
+                        });
+            }
+        }
+
+        @Test
+        void refusesAFileUnderNoSourceFolderAndNotOneThatOnlySharesTheStartOfTheName() throws Exception {
+            try (var server = started()) {
+                for (String relative : List.of("docs/package-info.java", "src/main/javax/demo/package-info.java")) {
+                    assertThatThrownBy(() -> server.createPackageInfo(root.resolve(relative)))
+                            .as(relative)
+                            .isInstanceOfSatisfying(
+                                    LanguageServerException.class,
+                                    refusal ->
+                                            assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_CREATABLE));
+                }
+            }
+        }
+
+        @Test
+        void refusesAFolderThatIsNotTheNameOfAPackageAndSaysSo() throws Exception {
+            try (var server = started()) {
+                assertThatThrownBy(
+                                () -> server.createPackageInfo(root.resolve("src/main/java/my-app/package-info.java")))
+                        .isInstanceOfSatisfying(
+                                EditingException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(EditingErrorKey.NOT_A_PACKAGE_NAME));
+                assertThatThrownBy(() ->
+                                server.createPackageInfo(root.resolve("src/main/java/demo/class/package-info.java")))
+                        .isInstanceOf(EditingException.class);
+            }
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"no workspace", "not a result"})
+        void saysWhatJdtlsAnsweredWhenItDoesNotListTheSourceFoldersAsExpected(String shape) throws Exception {
+            Object answer = "no workspace".equals(shape) ? Map.of("status", false, "message", "no workspace") : shape;
+            fake.sourcePathsAnswers(CompletableFuture.completedFuture(answer));
+
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.createPackageInfo(packageInfo))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("java.project.listSourcePaths answered")
+                        .hasMessageContaining(String.valueOf(answer));
+            }
+        }
+
+        @Test
+        void refusesAFileOutsideTheProjectWithoutAskingJdtlsAnything() throws Exception {
+            try (var server = started()) {
+                assertThatThrownBy(() -> server.createPackageInfo(root.resolve("../outside/package-info.java")))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key())
+                                        .isEqualTo(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+                assertThat(fake.sourcePathRequests()).isZero();
+            }
+        }
+
+        @Test
+        void refusesAsNotReadyWhileJdtlsIsStillImporting() throws Exception {
+            fake.neverAnswersInitialize();
+
+            try (var server = start()) {
+                assertThatThrownBy(() -> server.createPackageInfo(packageInfo))
+                        .isInstanceOfSatisfying(
+                                LanguageServerException.class,
+                                refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+                assertThat(fake.sourcePathRequests()).isZero();
+            }
+        }
+
+        @FakeOnly(reason = INTERRUPTED_WHILE_WAITING)
+        @Test
+        void keepsTheInterruptionOfTheThreadThatWaits() throws Exception {
+            try (var server = started()) {
+                Thread.currentThread().interrupt();
+
+                assertThatThrownBy(() -> server.createPackageInfo(packageInfo))
+                        .isInstanceOf(JdtlsException.class)
+                        .hasMessageContaining("Interrupted while waiting for the source folders for " + packageInfo);
                 assertThat(Thread.interrupted()).isTrue();
             }
         }

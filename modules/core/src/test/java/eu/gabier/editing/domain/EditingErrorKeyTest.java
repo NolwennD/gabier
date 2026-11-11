@@ -17,6 +17,7 @@ class EditingErrorKeyTest {
                         "editing-folder-missing",
                         "editing-invalid-range",
                         "editing-no-such-code-action",
+                        "editing-not-a-package-info",
                         "editing-not-a-package-name",
                         "editing-not-a-type-name",
                         "editing-overlapping-edits",

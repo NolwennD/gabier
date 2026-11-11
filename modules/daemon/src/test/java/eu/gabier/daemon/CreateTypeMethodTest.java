@@ -2,6 +2,7 @@ package eu.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import eu.gabier.editing.application.CreatePackageInfo;
 import eu.gabier.editing.application.CreateType;
 import eu.gabier.editing.fixtures.FakeJavaLanguageServer;
 import eu.gabier.editing.fixtures.Scenario;
@@ -30,10 +31,11 @@ class CreateTypeMethodTest {
 
     private RequestHandler handler(Scenario scenario) throws IOException {
         scenario.writeProject(project);
-        var create = new CreateType(new FakeJavaLanguageServer(project).scripted(scenario), new NioFileStore());
+        var server = new FakeJavaLanguageServer(project).scripted(scenario);
         widget = project.resolve("src/main/java/demo/Widget.java");
 
-        return new RequestHandler(List.of(new CreateTypeMethod(create)));
+        return new RequestHandler(List.of(new CreateTypeMethod(
+                new CreateType(server, new NioFileStore()), new CreatePackageInfo(server, new NioFileStore()))));
     }
 
     private static String create(Path file, String kind, String dryRun) {
@@ -53,7 +55,9 @@ class CreateTypeMethodTest {
 
     @Test
     void isNamedAndTakesTheFileTheKindAndTheDryRun() {
-        var method = new CreateTypeMethod(new CreateType(new FakeJavaLanguageServer(project), new NioFileStore()));
+        var server = new FakeJavaLanguageServer(project);
+        var method = new CreateTypeMethod(
+                new CreateType(server, new NioFileStore()), new CreatePackageInfo(server, new NioFileStore()));
 
         assertThat(method.name()).isEqualTo("create");
         assertThat(method.parameters()).containsExactlyInAnyOrder("file", "kind", "dryRun");
@@ -85,10 +89,86 @@ class CreateTypeMethodTest {
     }
 
     @Test
-    void aKindThatIsNotOneOfTheFourIsRefusedNamingTheParameter() throws IOException {
+    void theKindPackageCreatesThePackageInfoOnDiskAndAnswersWhatWasCreatedAndTheDiff() throws IOException {
+        var handler = handler(Scenarios.CREATE_A_PACKAGE_INFO);
+        var packageInfo = project.resolve("src/main/java/demo/package-info.java");
+
+        var answer = changed(handler.handle(create(packageInfo, "package", "false")));
+
+        assertThat(packageInfo).content().isEqualTo("@org.jspecify.annotations.NullMarked\npackage demo;\n");
+        assertThat(answer.created()).containsExactly(packageInfo);
+        assertThat(answer.modified()).isEmpty();
+        assertThat(answer.diff())
+                .contains("--- /dev/null\n+++ " + packageInfo)
+                .contains("+@org.jspecify.annotations.NullMarked")
+                .contains("+package demo;");
+    }
+
+    @Test
+    void aDryRunOfTheKindPackageAnswersWhatWouldBeCreatedAndWritesNothing() throws IOException {
+        var handler = handler(Scenarios.CREATE_A_PACKAGE_INFO);
+        var packageInfo = project.resolve("src/main/java/demo/package-info.java");
+
+        var answer = changed(handler.handle(create(packageInfo, "package", "true")));
+
+        assertThat(answer.created()).containsExactly(packageInfo);
+        assertThat(answer.diff()).contains("+package demo;");
+        assertThat(packageInfo).doesNotExist();
+    }
+
+    @Test
+    void theKindPackageOnAFileNotNamedPackageInfoIsRefusedWithItsProblemObject() throws IOException {
+        var handler = handler(Scenarios.CREATE_A_PACKAGE_INFO);
+
+        var failure = refused(handler.handle(create(widget, "package", "false")));
+
+        assertThat(failure.problem().key()).isEqualTo("editing-not-a-package-info");
+        assertThat(failure.problem().category()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(failure.problem().parameters()).containsEntry("file", widget.toString());
+        assertThat(widget).doesNotExist();
+    }
+
+    @Test
+    void aTypeKindOnPackageInfoIsRefusedAsNotATypeName() throws IOException {
+        var handler = handler(Scenarios.CREATE_A_PACKAGE_INFO);
+        var packageInfo = project.resolve("src/main/java/demo/package-info.java");
+
+        var failure = refused(handler.handle(create(packageInfo, "class", "false")));
+
+        assertThat(failure.problem().key()).isEqualTo("editing-not-a-type-name");
+        assertThat(packageInfo).doesNotExist();
+    }
+
+    @Test
+    void aPackageInfoThatExistsIsRefusedAndLeftAsItWas() throws IOException {
+        var handler = handler(Scenarios.CREATE_A_PACKAGE_INFO);
+        var packageInfo = project.resolve("src/main/java/demo/package-info.java");
+        Files.createDirectories(packageInfo.getParent());
+        Files.writeString(packageInfo, "package demo;\n");
+
+        var failure = refused(handler.handle(create(packageInfo, "package", "false")));
+
+        assertThat(failure.problem().key()).isEqualTo("editing-file-exists");
+        assertThat(packageInfo).content().isEqualTo("package demo;\n");
+    }
+
+    @Test
+    void aPackageInfoInTheDefaultPackageIsRefusedWithItsProblemObject() throws IOException {
+        var handler = handler(Scenarios.CREATE_A_PACKAGE_INFO_IN_THE_DEFAULT_PACKAGE);
+        var packageInfo = project.resolve("src/main/java/package-info.java");
+
+        var failure = refused(handler.handle(create(packageInfo, "package", "false")));
+
+        assertThat(failure.problem().key()).isEqualTo("language-server-not-creatable");
+        assertThat(failure.problem().parameters()).containsEntry("file", packageInfo.toString());
+        assertThat(packageInfo).doesNotExist();
+    }
+
+    @Test
+    void aKindThatIsNotOneOfTheFiveIsRefusedNamingTheParameter() throws IOException {
         var handler = handler(Scenarios.CREATE_A_CLASS);
 
-        for (String kind : List.of("annotation", "Class", "")) {
+        for (String kind : List.of("annotation", "Class", "", "Package")) {
             var failure = refused(handler.handle(create(widget, kind, "false")));
 
             assertThat(failure.problem().key()).as(kind).isEqualTo("invalid-parameter");

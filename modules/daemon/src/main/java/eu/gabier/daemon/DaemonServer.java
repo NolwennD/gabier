@@ -2,6 +2,7 @@ package eu.gabier.daemon;
 
 import eu.gabier.editing.application.ApplyCodeAction;
 import eu.gabier.editing.application.CleanUpFile;
+import eu.gabier.editing.application.CreatePackageInfo;
 import eu.gabier.editing.application.CreateType;
 import eu.gabier.editing.application.Diagnose;
 import eu.gabier.editing.application.ExtractConstant;
@@ -89,7 +90,9 @@ final class DaemonServer implements AutoCloseable {
                 new MoveTypeToFileMethod(new MoveTypeToFile(project, new NioFileStore())),
                 new MoveMethod(new MoveToPackage(project, new NioFileStore())),
                 new InlineMethod(new Inline(project, new NioFileStore())),
-                new CreateTypeMethod(new CreateType(project, new NioFileStore())),
+                new CreateTypeMethod(
+                        new CreateType(project, new NioFileStore()),
+                        new CreatePackageInfo(project, new NioFileStore())),
                 new CodeActionsMethod(new ListCodeActions(project)),
                 new ApplyCodeActionMethod(new ApplyCodeAction(project, new NioFileStore())),
                 new ReferencesMethod(new FindReferences(project, new NioFileStore()))));

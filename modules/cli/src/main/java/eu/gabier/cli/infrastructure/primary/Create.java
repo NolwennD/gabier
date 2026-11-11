@@ -4,14 +4,15 @@ import eu.gabier.cli.domain.Operations;
 import java.util.Map;
 
 /**
- * {@code create [--dry-run] <file> <class|interface|record|enum>}: the option may stand anywhere after the command. The
- * kind goes to the daemon as it is typed, and the daemon refuses a word that is not one of the four. It answers as
- * {@code rename} does: the file created, then the diff.
+ * {@code create [--dry-run] <file> <class|interface|record|enum|package>}: the option may stand anywhere after the
+ * command. The kind goes to the daemon as it is typed, and the daemon refuses a word that is not one of the five
+ * ({@code package} is the {@code package-info.java} of a package, the file named {@code package-info.java}). It
+ * answers as {@code rename} does: the file created, then the diff.
  */
 final class Create implements Capability {
 
     static final Command COMMAND = Command.called("create")
-            .usage("gabier [--json] create [--dry-run] <file> <class|interface|record|enum>")
+            .usage("gabier [--json] create [--dry-run] <file> <class|interface|record|enum|package>")
             .example("""
                 $ gabier create --dry-run src/main/java/demo/Widget.java class
                 dry run, nothing written

@@ -42,7 +42,7 @@ class OperationParametersTest {
             Map.entry("<cleanup>...", List.of("cleanUps")),
             Map.entry("<package>", List.of("package")),
             Map.entry("<title>", List.of("title")),
-            Map.entry("<class|interface|record|enum>", List.of("kind")));
+            Map.entry("<class|interface|record|enum|package>", List.of("kind")));
 
     /** The words of a usage line that choose a form of the command line or tune it, and are no parameter. */
     private static final Set<String> COMMAND_LINE_ONLY = Set.of("--token", "--wait", "[--timeout=<seconds>]");

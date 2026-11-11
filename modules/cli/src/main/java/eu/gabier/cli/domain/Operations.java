@@ -255,11 +255,14 @@ public final class Operations {
 
     public static final Operation CREATE = new Operation(
             "create",
-            "create a file that holds an empty class, interface, record or enum",
+            "create a file that holds an empty class, interface, record or enum, or the package-info.java of a package",
             """
             The name of the type is the name of the file; the package line comes from the folder of the file.
             A file in the default package has no package line.
             The new type has no comment and an empty body.
+            The kind package is for a package-info.java: the file holds the package line under\
+             @org.jspecify.annotations.NullMarked, and nothing else. The package is the folder of the file under its\
+             source folder. The file must be named package-info.java, and cannot be in the default package.
             The folders of the file that do not exist are made with it: a new package needs no mkdir.
             A dry run makes none. A file where a folder would go is refused and nothing is made.\
             """,
@@ -267,12 +270,21 @@ public final class Operations {
                     "editing-file-exists: a file is already there; nothing is overwritten",
                     "editing-folder-missing: a file is where a folder of the file would go; nothing is made",
                     "editing-not-a-type-name: the name of the file, without .java, is not the name of a type",
-                    "language-server-not-creatable: the file is under no source folder of the project, or the Java"
-                            + " level of the project has no such type",
+                    "editing-not-a-package-info: the kind is package and the file is not named package-info.java",
+                    "editing-not-a-package-name: the folder of a package-info.java is not the name of a package (a"
+                            + " folder that is not a Java identifier)",
+                    "language-server-not-creatable: the file is under no source folder of the project, or in the"
+                            + " default package of a package-info.java, or the Java level of the project has no such"
+                            + " type",
                     Refusals.FILE_OUTSIDE_PROJECT,
-                    "invalid-parameter: the kind is not class, interface, record or enum",
+                    "invalid-parameter: the kind is not class, interface, record, enum or package",
                     Refusals.NOT_READY),
-            List.of(FILE, Parameter.string("kind", "what the type is: class, interface, record or enum"), DRY_RUN));
+            List.of(
+                    FILE,
+                    Parameter.string(
+                            "kind",
+                            "what the file holds: class, interface, record, enum, or package for a package-info.java"),
+                    DRY_RUN));
 
     public static final Operation REFERENCES = new Operation(
             "references",

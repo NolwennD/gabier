@@ -208,6 +208,11 @@ class ProjectServerTest {
         }
 
         @Override
+        public ChangeSet createPackageInfo(Path file) {
+            return RENAMED;
+        }
+
+        @Override
         public ReferenceLocations references(Path file, Position position, boolean includeDeclaration) {
             return NO_REFERENCES;
         }
@@ -425,6 +430,13 @@ class ProjectServerTest {
         }
 
         @Test
+        void aCreationOfAPackageInfoStartsItToo() {
+            assertThat(project.createPackageInfo(FILE)).isEqualTo(ScriptedServer.RENAMED);
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
         void aSearchForReferencesStartsItToo() {
             assertThat(project.references(FILE, new Position(0, 0), true)).isEqualTo(ScriptedServer.NO_REFERENCES);
 
@@ -472,6 +484,7 @@ class ProjectServerTest {
             project.moveToPackage(List.of(FILE), PackageName.of("demo"));
             project.inline(FILE, new Position(0, 0));
             project.createType(FILE, TypeKind.RECORD);
+            project.createPackageInfo(FILE);
             project.references(FILE, new Position(0, 0), false);
 
             assertThat(starter.starts).hasValue(1);

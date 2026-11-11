@@ -228,6 +228,13 @@ class ScenariosTest {
                         "create-a-type-while-the-server-imports",
                         "create-a-type-outside-the-project",
                         "create-a-type-outside-the-source-folders",
+                        "create-a-package-info",
+                        "create-a-package-info-in-a-subpackage",
+                        "create-a-package-info-in-a-new-package",
+                        "create-a-package-info-in-the-default-package",
+                        "create-a-package-info-outside-the-source-folders",
+                        "create-a-package-info-while-the-server-imports",
+                        "create-a-package-info-outside-the-project",
                         "references-of-a-type",
                         "references-of-a-method-with-its-declaration",
                         "references-of-a-field-without-its-accessors",
@@ -689,6 +696,18 @@ class ScenariosTest {
     }
 
     @Test
+    void refusesForEachReasonOfThePortOnACreationOfAPackageInfo() {
+        assertThat(answeredWith(Answer.Refused.class).stream()
+                        .filter(scenario -> scenario.request() instanceof Request.CreatePackageInfo)
+                        .map(scenario -> ((Answer.Refused) scenario.answer()).key()))
+                .containsExactlyInAnyOrder(
+                        LanguageServerErrorKey.FILE_OUTSIDE_PROJECT,
+                        LanguageServerErrorKey.NOT_CREATABLE,
+                        LanguageServerErrorKey.NOT_CREATABLE,
+                        LanguageServerErrorKey.NOT_READY);
+    }
+
+    @Test
     void refusesForEachReasonOfThePortOnAReferences() {
         assertThat(answeredWith(Answer.Refused.class).stream()
                         .filter(scenario -> scenario.request() instanceof Request.References)
@@ -740,7 +759,8 @@ class ScenariosTest {
                 assertThat(scenario.files().keySet())
                         .as(scenario.name())
                         .anyMatch(source -> source.startsWith(file) && !source.equals(file));
-            } else if (scenario.request() instanceof Request.CreateType) {
+            } else if (scenario.request() instanceof Request.CreateType
+                    || scenario.request() instanceof Request.CreatePackageInfo) {
                 assertThat(scenario.files()).as(scenario.name()).doesNotContainKey(file);
             } else {
                 assertThat(scenario.files()).as(scenario.name()).containsKey(file);
@@ -1101,7 +1121,9 @@ class ScenariosTest {
 
     @Test
     void createsTheFileOfTheKindAskedInThePackageOfItsFolderWithNoComment(@TempDir Path directory) throws IOException {
-        List<Scenario> creations = answeredWith(Answer.Created.class);
+        List<Scenario> creations = answeredWith(Answer.Created.class).stream()
+                .filter(scenario -> scenario.request() instanceof Request.CreateType)
+                .toList();
         assertThat(creations).hasSize(7);
         for (Scenario scenario : creations) {
             Path root = Files.createTempDirectory(directory, "project");
@@ -1124,6 +1146,30 @@ class ScenariosTest {
                     .doesNotContain("//")
                     .doesNotContain("\t")
                     .doesNotContain("$");
+        }
+    }
+
+    @Test
+    void createsAPackageInfoThatHoldsTheAnnotationAndThePackageOfItsFolderAndNothingElse(@TempDir Path directory)
+            throws IOException {
+        List<Scenario> creations = answeredWith(Answer.Created.class).stream()
+                .filter(scenario -> scenario.request() instanceof Request.CreatePackageInfo)
+                .toList();
+        assertThat(creations).hasSize(3);
+        for (Scenario scenario : creations) {
+            Path root = Files.createTempDirectory(directory, "project");
+            Scenario inside = scenario.inside(root);
+            inside.writeProject(root);
+            Path file = inside.request().file();
+            Files.createDirectories(file.getParent());
+
+            new ChangeApplier(new NioFileStore()).apply(((Answer.Created) inside.answer()).changes());
+
+            String folder =
+                    root.resolve("src/main/java").relativize(file.getParent()).toString();
+            assertThat(Files.readString(file))
+                    .as(scenario.name())
+                    .isEqualTo("@org.jspecify.annotations.NullMarked\npackage " + folder.replace('/', '.') + ";\n");
         }
     }
 

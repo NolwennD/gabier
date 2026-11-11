@@ -218,6 +218,11 @@ public final class FakeServedMain {
         }
 
         @Override
+        public ChangeSet createPackageInfo(Path file) {
+            return server.createPackageInfo(file);
+        }
+
+        @Override
         public ReferenceLocations references(Path file, Position position, boolean includeDeclaration) {
             return server.references(file, position, includeDeclaration);
         }

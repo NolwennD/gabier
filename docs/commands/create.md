@@ -1,7 +1,7 @@
 # gabier create
 
-`gabier create <file> <class|interface|record|enum>` creates a Java file that holds an empty type of that kind, instead of
-writing it by hand. The name of the type is the name of the file, and the `package` line comes from the folder of the file
+`gabier create <file> <class|interface|record|enum|package>` creates a Java file that holds an empty type of that kind,
+instead of writing it by hand; the kind `package` makes the `package-info.java` of a package (see "A package-info.java"). The name of the type is the name of the file, and the `package` line comes from the folder of the file
 in its source folder (a file in the default package has none). The type has no comment (no header, no Javadoc) and an empty
 body. `--dry-run` (anywhere after the command) writes nothing and shows the file that would be created.
 
@@ -34,6 +34,37 @@ The four kinds give:
 
 The folders of the file that do not exist are made with it, so a type in a new package needs no `mkdir -p` first (see
 "The new folders" below). The file must not exist: it is never overwritten.
+
+## A package-info.java
+
+`gabier create [--dry-run] <dir>/package-info.java package` creates the file that describes a package: the annotation
+`@org.jspecify.annotations.NullMarked` (written in full, so the file has no import), the `package` line, and nothing else.
+
+```text
+$ gabier create --dry-run src/main/java/demo/shop/package-info.java package
+dry run, nothing written
+created /work/demo/src/main/java/demo/shop/package-info.java
+
+--- /dev/null
++++ /work/demo/src/main/java/demo/shop/package-info.java
+@@ -0,0 +1,2 @@
++@org.jspecify.annotations.NullMarked
++package demo.shop;
+```
+
+The file must be named `package-info.java` (another name is refused as `editing-not-a-package-info`, and
+`package-info.java` with a type kind is refused as `editing-not-a-type-name`). The package is the folder of the file under
+its source folder, with dots: the file must be under a source folder of the project and in a folder of it, because the
+default package has no name (`language-server-not-creatable`). A folder that is not a Java identifier (`my-app`) is refused
+as `editing-not-a-package-name`. The folders that do not exist are made with the file, and a dry run makes none, as for a
+type; the file must not exist.
+
+jdtls has no snippet for a `package-info.java` (observed on the pinned jdtls: the completion at the start of an empty
+`package-info.java` proposes the keyword `package` only, with no text to insert), so this is the one form of `create` whose
+text is written by gabier and not by jdtls. It is a light workaround in the adapter (`JdtlsLanguageServer.createPackageInfo`):
+the source folders come from jdtls (`java.project.listSourcePaths`, as for a type), the innermost one that holds the file
+gives the package, and the text is fixed. The annotation is the one the architecture test of this repository asks for; a
+project that marks its packages another way writes the file by hand.
 
 ## How it is done
 
@@ -78,7 +109,8 @@ link to nothing, where a folder would go) cannot be made a folder: it is refused
 way, and nothing is made. A file outside the project never gets this far: it is refused before jdtls answers, and no folder
 is made for it.
 
-The daemon method is `create` (parameters `file`, `kind`, one of `class`, `interface`, `record`, `enum`, and `dryRun`).
+The daemon method is `create` (parameters `file`, `kind`, one of `class`, `interface`, `record`, `enum`, `package`, and
+`dryRun`).
 
 ## Refusals
 
@@ -88,10 +120,13 @@ command can answer, and the help of the command (`gabier help create`) lists the
 - `editing-file-exists`: a file is already there; nothing is overwritten.
 - `editing-folder-missing`: a file is where a folder of the file would go, so the folder cannot be made; nothing is made.
 - `editing-not-a-type-name`: the name of the file, without .java, is not the name of a type.
-- `language-server-not-creatable`: the file is under no source folder of the project, or the Java level of the project has
-  no such type.
+- `editing-not-a-package-info`: the kind is package and the file is not named package-info.java.
+- `editing-not-a-package-name`: the folder of a package-info.java is not the name of a package (a folder that is not a Java
+  identifier).
+- `language-server-not-creatable`: the file is under no source folder of the project, or in the default package of a
+  package-info.java, or the Java level of the project has no such type.
 - `language-server-file-outside-project`: the file is not in the project the daemon serves.
-- `invalid-parameter`: the kind is not class, interface, record or enum.
+- `invalid-parameter`: the kind is not class, interface, record, enum or package.
 - `language-server-not-ready`: the Java language server is not ready.
 - `usage-error`: the arguments are not those of the command.
 - `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.

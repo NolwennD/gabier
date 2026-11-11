@@ -135,6 +135,17 @@ public interface JavaLanguageServer {
     ChangeSet createType(Path file, TypeKind kind);
 
     /**
+     * What creating the {@code package-info.java} of a package changes: the file is created, with the {@code package}
+     * line its folder gives and the annotation {@code @org.jspecify.annotations.NullMarked} (written in full, so the
+     * file has no import) before it, and nothing else. The file need not exist, and the server does not write it.
+     *
+     * @return the change set to apply, which creates the file and gives it its text
+     * @throws LanguageServerException if the server is not ready, the file is not in the project, or it is under no
+     *     source folder or straight under one (no package)
+     */
+    ChangeSet createPackageInfo(Path file);
+
+    /**
      * Where the symbol at a position (a type, a method, a field, a local variable or a parameter of the project) is
      * used, in every file of the project, the test sources included. Nothing is written. A symbol that nothing uses has
      * no reference, which is an answer and not a refusal.

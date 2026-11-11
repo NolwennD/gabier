@@ -321,6 +321,21 @@ class FakeJavaLanguageServerTest {
     }
 
     @Test
+    void answersTheChangeSetOfACreatePackageInfoScenarioWithPathsUnderItsRoot() {
+        server.scripted(Scenarios.CREATE_A_PACKAGE_INFO);
+        Path packageInfo = ROOT.resolve("src/main/java/demo/package-info.java");
+
+        ChangeSet changes = server.createPackageInfo(packageInfo);
+
+        assertThat(changes)
+                .isEqualTo(((Answer.Created)
+                                Scenarios.CREATE_A_PACKAGE_INFO.inside(ROOT).answer())
+                        .changes());
+        assertThat(changes.changes()).contains(new FileChange.CreateFile(packageInfo));
+        assertThat(server.asked()).containsExactly(new Request.CreatePackageInfo(packageInfo));
+    }
+
+    @Test
     void throwsTheRefusalOfACreateScenario() {
         server.scripted(Scenarios.CREATE_A_TYPE_WHILE_THE_SERVER_IMPORTS);
 

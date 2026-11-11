@@ -144,6 +144,13 @@ public final class FakeJavaLanguageServer implements JavaLanguageServer {
     }
 
     @Override
+    public ChangeSet createPackageInfo(Path file) {
+        Request request = new Request.CreatePackageInfo(file).resolvedIn(root);
+
+        return ((Answer.Created) answerTo(request)).changes();
+    }
+
+    @Override
     public ReferenceLocations references(Path file, Position position, boolean includeDeclaration) {
         Request request = new Request.References(file, position, includeDeclaration).resolvedIn(root);
 

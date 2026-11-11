@@ -223,6 +223,12 @@ public final class Scenarios {
     private static final Path LAUNCHER = Path.of("src/main/java/Launcher.java");
     private static final Path CONSOLE = Path.of("src/main/java/demo/app/Console.java");
     private static final Path UNSOURCED = Path.of("Unsourced.java");
+    private static final Path NULL_MARKED = Path.of("src/main/java/org/jspecify/annotations/NullMarked.java");
+    private static final Path DEMO_PACKAGE_INFO = Path.of("src/main/java/demo/package-info.java");
+    private static final Path APP_PACKAGE_INFO = Path.of("src/main/java/demo/app/package-info.java");
+    private static final Path FRESH_PACKAGE_INFO = Path.of("src/main/java/fresh/package-info.java");
+    private static final Path DEFAULT_PACKAGE_INFO = Path.of("src/main/java/package-info.java");
+    private static final Path UNSOURCED_PACKAGE_INFO = Path.of("docs/package-info.java");
     private static final Path GADGET = Path.of("src/main/java/fresh/Gadget.java");
     private static final Path PRICES = Path.of("src/main/java/demo/Prices.java");
     private static final Path CHECKOUT = Path.of("src/main/java/demo/Checkout.java");
@@ -1715,6 +1721,86 @@ public final class Scenarios {
             new Answer.Refused(LanguageServerErrorKey.NOT_CREATABLE));
 
     /**
+     * The annotation that the {@code package-info.java} of the scenarios use: the project that holds it stands for a
+     * project with {@code org.jspecify} on its classpath, so that what the replay creates compiles.
+     */
+    private static final String NULL_MARKED_SOURCE = """
+        package org.jspecify.annotations;
+
+        import java.lang.annotation.ElementType;
+        import java.lang.annotation.Target;
+
+        @Target({ElementType.PACKAGE, ElementType.TYPE})
+        public @interface NullMarked {
+        }
+        """;
+
+    /** The project of the scenarios, with the annotation {@code NullMarked} in a package of its own. */
+    private static final Map<Path, String> PACKAGE_INFO_PROJECT = withNullMarked();
+
+    /**
+     * The {@code package-info.java} of the package {@code demo}: jdtls offers no snippet for it, so the adapter derives
+     * the package from the folder of the file in its source folder, and writes the {@code package} line under the
+     * annotation that marks the package null-safe, written in full so that the file needs no import. Nothing else.
+     */
+    public static final Scenario CREATE_A_PACKAGE_INFO = new Scenario(
+            "create-a-package-info",
+            PACKAGE_INFO_PROJECT,
+            new Request.CreatePackageInfo(DEMO_PACKAGE_INFO),
+            new Answer.Created(created(DEMO_PACKAGE_INFO, """
+                @org.jspecify.annotations.NullMarked
+                package demo;
+                """)));
+
+    /** A folder two levels down: the package is the path of the folder, with dots. */
+    public static final Scenario CREATE_A_PACKAGE_INFO_IN_A_SUBPACKAGE = new Scenario(
+            "create-a-package-info-in-a-subpackage",
+            PACKAGE_INFO_PROJECT,
+            new Request.CreatePackageInfo(APP_PACKAGE_INFO),
+            new Answer.Created(created(APP_PACKAGE_INFO, """
+                @org.jspecify.annotations.NullMarked
+                package demo.app;
+                """)));
+
+    /** A folder that does not exist yet: the application of the change set makes it, as for a type. */
+    public static final Scenario CREATE_A_PACKAGE_INFO_IN_A_NEW_PACKAGE = new Scenario(
+            "create-a-package-info-in-a-new-package",
+            PACKAGE_INFO_PROJECT,
+            new Request.CreatePackageInfo(FRESH_PACKAGE_INFO),
+            new Answer.Created(created(FRESH_PACKAGE_INFO, """
+                @org.jspecify.annotations.NullMarked
+                package fresh;
+                """)));
+
+    /** Straight under a source folder is the default package, which has no name to put on a package line. */
+    public static final Scenario CREATE_A_PACKAGE_INFO_IN_THE_DEFAULT_PACKAGE = new Scenario(
+            "create-a-package-info-in-the-default-package",
+            PACKAGE_INFO_PROJECT,
+            new Request.CreatePackageInfo(DEFAULT_PACKAGE_INFO),
+            new Answer.Refused(LanguageServerErrorKey.NOT_CREATABLE));
+
+    /** A folder of the project that is under none of its source folders: no package can be derived for it. */
+    public static final Scenario CREATE_A_PACKAGE_INFO_OUTSIDE_THE_SOURCE_FOLDERS = new Scenario(
+            "create-a-package-info-outside-the-source-folders",
+            PACKAGE_INFO_PROJECT,
+            new Request.CreatePackageInfo(UNSOURCED_PACKAGE_INFO),
+            new Answer.Refused(LanguageServerErrorKey.NOT_CREATABLE));
+
+    /** The project is still being imported: the server cannot say what the source folders are. */
+    public static final Scenario CREATE_A_PACKAGE_INFO_WHILE_THE_SERVER_IMPORTS = new Scenario(
+            "create-a-package-info-while-the-server-imports",
+            PACKAGE_INFO_PROJECT,
+            new Request.CreatePackageInfo(DEMO_PACKAGE_INFO),
+            new Answer.Refused(LanguageServerErrorKey.NOT_READY));
+
+    /** A file that is not in the project the server was started on. */
+    public static final Scenario CREATE_A_PACKAGE_INFO_OUTSIDE_THE_PROJECT = new Scenario(
+            "create-a-package-info-outside-the-project",
+            PACKAGE_INFO_PROJECT,
+            new Request.CreatePackageInfo(Path.of("../outside/package-info.java")),
+            new Answer.Refused(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT));
+
+    /**
      * The type {@code Ledger}, asked from its declaration: its uses in another package (the import and the two
      * mentions in {@code Bank}) and in a test source ({@code LedgerTest}), in the order of the files then of the
      * positions. The declaration is not answered unless it is asked for.
@@ -1989,6 +2075,13 @@ public final class Scenarios {
                 CREATE_A_TYPE_WHILE_THE_SERVER_IMPORTS,
                 CREATE_A_TYPE_OUTSIDE_THE_PROJECT,
                 CREATE_A_TYPE_OUTSIDE_THE_SOURCE_FOLDERS,
+                CREATE_A_PACKAGE_INFO,
+                CREATE_A_PACKAGE_INFO_IN_A_SUBPACKAGE,
+                CREATE_A_PACKAGE_INFO_IN_A_NEW_PACKAGE,
+                CREATE_A_PACKAGE_INFO_IN_THE_DEFAULT_PACKAGE,
+                CREATE_A_PACKAGE_INFO_OUTSIDE_THE_SOURCE_FOLDERS,
+                CREATE_A_PACKAGE_INFO_WHILE_THE_SERVER_IMPORTS,
+                CREATE_A_PACKAGE_INFO_OUTSIDE_THE_PROJECT,
                 REFERENCES_OF_A_TYPE,
                 REFERENCES_OF_A_METHOD_WITH_ITS_DECLARATION,
                 REFERENCES_OF_A_FIELD_WITHOUT_ITS_ACCESSORS,
@@ -2011,6 +2104,13 @@ public final class Scenarios {
     }
 
     /** The project with the two files that have something to report, so that their scenarios share one project. */
+    private static Map<Path, String> withNullMarked() {
+        Map<Path, String> files = new HashMap<>(PROJECT);
+        files.put(NULL_MARKED, NULL_MARKED_SOURCE);
+
+        return files;
+    }
+
     private static Map<Path, String> withProblems() {
         Map<Path, String> files = new HashMap<>(PROJECT);
         files.put(BROKEN, BROKEN_SOURCE);

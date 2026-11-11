@@ -123,6 +123,18 @@ class LanguageServerExceptionTest {
     }
 
     @Test
+    void saysThatNoPackageInfoCanBeCreatedWhere() {
+        LanguageServerException exception = LanguageServerException.notCreatablePackageInfo(FILE);
+
+        assertThat(exception.key()).isEqualTo(LanguageServerErrorKey.NOT_CREATABLE);
+        assertThat(exception.status()).isEqualTo(ErrorStatus.BAD_REQUEST);
+        assertThat(exception.parameters()).isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(exception)
+                .hasMessage("A package-info.java cannot be created in " + FILE + ": the file is outside every source"
+                        + " folder of the project, or in the default package (there is no package to describe)");
+    }
+
+    @Test
     void saysWhichKindOfTypeTheServerCannotCreateWhere() {
         LanguageServerException exception = LanguageServerException.notCreatable(FILE, TypeKind.RECORD);
 

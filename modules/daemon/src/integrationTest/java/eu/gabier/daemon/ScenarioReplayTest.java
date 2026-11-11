@@ -121,6 +121,7 @@ class ScenarioReplayTest {
                 || scenario.request() instanceof Request.MoveToPackage
                 || scenario.request() instanceof Request.Inline
                 || scenario.request() instanceof Request.CreateType
+                || scenario.request() instanceof Request.CreatePackageInfo
                 || scenario.request() instanceof Request.References
                 || scenario.request() instanceof Request.CodeActions
                 || scenario.request() instanceof Request.ApplyCodeAction;
@@ -404,6 +405,7 @@ class ScenarioReplayTest {
             case Request.MoveToPackage move -> server.moveToPackage(move.files(), move.target());
             case Request.Inline inline -> server.inline(inline.file(), inline.position());
             case Request.CreateType create -> server.createType(create.file(), create.kind());
+            case Request.CreatePackageInfo create -> server.createPackageInfo(create.file());
             case Request.References references ->
                 server.references(references.file(), references.position(), references.includeDeclaration());
             case Request.CodeActions actions -> server.codeActions(actions.file(), actions.range());

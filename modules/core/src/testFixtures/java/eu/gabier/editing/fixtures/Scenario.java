@@ -90,7 +90,11 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                 require(request instanceof Request.MoveToPackage, "moved to a package", request);
             case Answer.Inlined _ -> require(request instanceof Request.Inline, "inlined", request);
             case Answer.Referenced _ -> require(request instanceof Request.References, "referenced", request);
-            case Answer.Created _ -> require(request instanceof Request.CreateType, "created", request);
+            case Answer.Created _ ->
+                require(
+                        request instanceof Request.CreateType || request instanceof Request.CreatePackageInfo,
+                        "created",
+                        request);
             case Answer.Offered _ -> require(request instanceof Request.CodeActions, "offered", request);
             case Answer.CodeActionApplied _ ->
                 require(request instanceof Request.ApplyCodeAction, "code action applied", request);
@@ -709,6 +713,41 @@ public record Scenario(String name, Map<Path, String> files, Request request, An
                             AMBIGUOUS_IMPORTS,
                             UNRESOLVED_IMPORTS ->
                         throw new IllegalArgumentException("A creation of a type cannot get " + key);
+                };
+            }
+        }
+
+        /** The creation of the {@code package-info.java} of a package, in a new file. */
+        record CreatePackageInfo(Path file) implements Request {
+
+            public CreatePackageInfo {
+                Assert.notNull("file", file);
+            }
+
+            @Override
+            public CreatePackageInfo resolvedIn(Path root) {
+                return new CreatePackageInfo(resolve(root, file));
+            }
+
+            @Override
+            public LanguageServerException refusal(LanguageServerErrorKey key, List<String> details) {
+                return switch (key) {
+                    case NOT_READY -> LanguageServerException.notReady();
+                    case FILE_OUTSIDE_PROJECT -> LanguageServerException.fileOutsideProject(file);
+                    case NOT_CREATABLE -> LanguageServerException.notCreatablePackageInfo(file);
+                    case FILE_MISSING,
+                            NOT_A_FILE,
+                            NOT_APPLICABLE,
+                            EMPTY_PACKAGE,
+                            NO_SUCH_SYMBOL,
+                            INVALID_NAME,
+                            NOT_EXTRACTABLE,
+                            NOT_INLINABLE,
+                            NOT_MOVABLE,
+                            NOT_MOVABLE_TO_PACKAGE,
+                            AMBIGUOUS_IMPORTS,
+                            UNRESOLVED_IMPORTS ->
+                        throw new IllegalArgumentException("A creation of a package-info cannot get " + key);
                 };
             }
         }

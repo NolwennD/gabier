@@ -118,6 +118,9 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     /** The module descriptor, at the root of a source folder. */
     private static final String MODULE_DESCRIPTOR = "module-info.java";
 
+    /** The annotation that marks a package null-safe, written in full so that a {@code package-info.java} needs no import. */
+    private static final String NULL_MARKED = "@org.jspecify.annotations.NullMarked";
+
     /** The kinds of the symbols that jdtls lists for a class, an interface or an enum (a record is a class). */
     private static final Set<SymbolKind> TYPES = Set.of(SymbolKind.Class, SymbolKind.Interface, SymbolKind.Enum);
 
@@ -1199,6 +1202,55 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
             Thread.currentThread().interrupt();
             throw new JdtlsException("Interrupted while waiting for " + what, interrupted);
         }
+    }
+
+    /**
+     * Creates the {@code package-info.java} of a package, which jdtls offers no snippet for ({@code
+     * textDocument/completion} at the start of an empty {@code package-info.java} proposes the keyword {@code package}
+     * only, with no text to insert). So the adapter writes the text itself, as a light workaround of that gap of
+     * jdtls: the package is the folder of the file under its source folder
+     * ({@code java.project.listSourcePaths}, the innermost one when they nest), the same derivation jdtls makes for a
+     * type, and the text is the annotation {@code @org.jspecify.annotations.NullMarked}, written in full so that the
+     * file has no import, the {@code package} line, and nothing else. A folder whose name is not an identifier is
+     * refused as the name of a package, and nothing is written.
+     *
+     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, or it is under no source
+     *     folder or straight under one
+     * @throws eu.gabier.editing.domain.EditingException if a folder of the package is not an identifier
+     * @throws JdtlsException if jdtls dies or does not answer in time
+     */
+    @Override
+    public synchronized ChangeSet createPackageInfo(Path file) {
+        JdtlsSession session = ready();
+        Path path = normalized(file);
+        requireInProject(session, path);
+        JdtlsWatch watch = session.newWatch();
+        try {
+            takeInChangesOnDisk(session, watch);
+            PackageName name = packageOfFolder(path, sourceFolders(session, watch));
+            var start = new Position(0, 0);
+            var text = new TextEdit(new Range(start, start), NULL_MARKED + "\npackage " + name.value() + ";\n");
+
+            return new ChangeSet(
+                    List.of(new FileChange.CreateFile(path), new FileChange.EditFile(path, List.of(text))));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new JdtlsException("Interrupted while waiting for the source folders for " + path, interrupted);
+        }
+    }
+
+    /** The package of the folder of the file under the innermost source folder that holds it. */
+    private static PackageName packageOfFolder(Path file, List<Path> sourceFolders) {
+        Path folder = sourceFolders.stream()
+                .filter(file::startsWith)
+                .max(Comparator.comparingInt(Path::getNameCount))
+                .orElseThrow(() -> LanguageServerException.notCreatablePackageInfo(file));
+        Path inside = folder.relativize(file.getParent());
+        if (inside.toString().isEmpty()) {
+            throw LanguageServerException.notCreatablePackageInfo(file);
+        }
+
+        return PackageName.of(inside.toString().replace(inside.getFileSystem().getSeparator(), "."));
     }
 
     /** The snippet of the kind that jdtls completes the empty text of the file with; the file is closed afterwards. */

@@ -174,6 +174,11 @@ final class ProjectServer implements ServedProject {
     }
 
     @Override
+    public ChangeSet createPackageInfo(Path file) {
+        return ready().createPackageInfo(file);
+    }
+
+    @Override
     public ReferenceLocations references(Path file, Position position, boolean includeDeclaration) {
         return ready().references(file, position, includeDeclaration);
     }

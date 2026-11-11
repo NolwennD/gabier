@@ -112,6 +112,13 @@ public final class EditingException extends GeneratorException {
                 .addParameter("folder", folder.toString()));
     }
 
+    static EditingException notAPackageInfo(Path file) {
+        return new EditingException(GeneratorException.badRequest(EditingErrorKey.NOT_A_PACKAGE_INFO)
+                .message("The file " + file + " cannot be the description of a package: it must be named"
+                        + " package-info.java")
+                .addParameter("file", file.toString()));
+    }
+
     static EditingException notAPackageName(String text) {
         return new EditingException(GeneratorException.badRequest(EditingErrorKey.NOT_A_PACKAGE_NAME)
                 .message("\"" + text + "\" is not the name of a package: it must be Java identifiers that are not"

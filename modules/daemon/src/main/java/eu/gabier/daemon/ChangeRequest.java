@@ -2,6 +2,7 @@ package eu.gabier.daemon;
 
 import eu.gabier.editing.application.ApplyCodeAction;
 import eu.gabier.editing.application.CleanUpFile;
+import eu.gabier.editing.application.CreatePackageInfo;
 import eu.gabier.editing.application.CreateType;
 import eu.gabier.editing.application.ExtractConstant;
 import eu.gabier.editing.application.ExtractField;
@@ -38,6 +39,7 @@ final class ChangeRequest {
     static final String NEW_NAME = "newName";
     static final String NAME = "name";
     static final String KIND = "kind";
+    static final String PACKAGE_KIND = "package";
     static final String DRY_RUN = "dryRun";
     static final String INCLUDE_DECLARATION = "includeDeclaration";
     static final String START_LINE = "startLine";
@@ -112,7 +114,7 @@ final class ChangeRequest {
         return value;
     }
 
-    /** The kind of type to create: the keyword of one of the four, as the cli passes it. */
+    /** The kind of type to create: the keyword of one of the four, as the cli passes it ({@code package} is not one). */
     TypeKind kind() {
         return TypeKind.ofKeyword(text(KIND)).orElseThrow(() -> ParameterException.invalid(method, KIND));
     }
@@ -194,9 +196,17 @@ final class ChangeRequest {
         return DaemonMethod.Outcome.of(changed(report).toJson());
     }
 
-    /** What creating a type of the kind in the file does, written unless the request is a dry run. */
-    DaemonMethod.Outcome run(CreateType create) {
+    /**
+     * What creating the file does, written unless the request is a dry run: a type of the kind, or, for the kind {@code
+     * package}, the {@code package-info.java} of the package.
+     */
+    DaemonMethod.Outcome run(CreateType create, CreatePackageInfo packageInfo) {
         Path file = file();
+        if (PACKAGE_KIND.equals(text(KIND))) {
+            ChangeReport report = dryRun() ? packageInfo.dryRun(file) : packageInfo.apply(file);
+
+            return DaemonMethod.Outcome.of(changed(report).toJson());
+        }
         TypeKind kind = kind();
         ChangeReport report = dryRun() ? create.dryRun(file, kind) : create.apply(file, kind);
 

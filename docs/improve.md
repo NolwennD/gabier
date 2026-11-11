@@ -996,9 +996,10 @@ exit code 0. For the fix of an error, see "A compiler error that jdtls has a fix
 
 ### A new file for a new type
 
-Words: create a file, new class, new interface, new record, new enum, make a Java file with the right package
+Words: create a file, new class, new interface, new record, new enum, new Java file with its package, package-info
 
-Ask: `gabier create --dry-run <file> <class|interface|record|enum>`, then without `--dry-run`.
+Ask: `gabier create --dry-run <file> <class|interface|record|enum|package>`, then without `--dry-run`. The kind
+`package` is for a `package-info.java`: it holds `@org.jspecify.annotations.NullMarked` and the `package` line.
 
 After `gabier create src/main/java/demo/shop/Shelf.java class`:
 
@@ -1011,7 +1012,8 @@ public class Shelf {
 ```
 
 Limits: the name of the type is the name of the file, and the `package` line comes from the folder, which is made with
-it. A file that exists is never overwritten (`editing-file-exists`). The type has no comment and an empty body. See
+it. A file that exists is never overwritten (`editing-file-exists`). The type has no comment and an empty body. A
+`package-info.java` is made with the kind `package` and no other (a file in the default package is refused). See
 `gabier help create`.
 
 ### A compiler error that jdtls has a fix for

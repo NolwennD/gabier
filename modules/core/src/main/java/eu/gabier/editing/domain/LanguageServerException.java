@@ -121,6 +121,18 @@ public final class LanguageServerException extends GeneratorException {
     }
 
     /**
+     * No {@code package-info.java} can be created in the file: the file is outside every source folder of the project,
+     * or straight under one, in the default package, which has no package to describe.
+     */
+    public static LanguageServerException notCreatablePackageInfo(Path file) {
+        return new LanguageServerException(GeneratorException.badRequest(LanguageServerErrorKey.NOT_CREATABLE)
+                .message("A package-info.java cannot be created in " + file
+                        + ": the file is outside every source folder of the project, or in the default package"
+                        + " (there is no package to describe)")
+                .addParameter("file", file.toString()));
+    }
+
+    /**
      * The server offers the action on the range but gives no edit for it: it is a command for a client to run (it opens
      * a dialog, or asks to choose a place), or it has nothing to change there.
      */

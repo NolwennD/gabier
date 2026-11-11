@@ -239,7 +239,7 @@ positions counted from 1 and `dryRun` in place of `--dry-run`.
 - [`gabier inline`](docs/commands/inline.md): replace a local variable, a method or a constant by its value (on the declaration of a method
   or constant: every use, and the declaration goes; on one use: that use only).
 - [`gabier create`](docs/commands/create.md): create a file that holds an empty class, interface, record or enum, with the
-  right `package` line and no comment.
+  right `package` line and no comment, or the `package-info.java` of a package.
 - [`gabier references`](docs/commands/references.md): list where a symbol is used, in every file of the project and its
   tests (the declaration on request).
 - [`gabier actions`](docs/commands/actions.md): list the fixes (a missing import) and the rewrites (a concatenation to a

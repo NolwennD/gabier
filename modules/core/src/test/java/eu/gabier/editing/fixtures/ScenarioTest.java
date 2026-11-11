@@ -220,6 +220,47 @@ class ScenarioTest {
     }
 
     @Test
+    void acceptsACreatedAnswerForTheCreationOfAPackageInfo() {
+        var create = new Request.CreatePackageInfo(FILE);
+        var created = new Answer.Created(set(new CreateFile(FILE)));
+
+        assertThat(scenario(create, created).answer()).isSameAs(created);
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> scenario(create, new Answer.Moved(set(new CreateFile(FILE)))));
+    }
+
+    @Test
+    void buildsTheRefusalOfACreatePackageInfoRequest() {
+        Request.CreatePackageInfo create = new Request.CreatePackageInfo(FILE);
+
+        assertThat(create.refusal(LanguageServerErrorKey.NOT_READY).key()).isEqualTo(LanguageServerErrorKey.NOT_READY);
+        assertThat(create.refusal(LanguageServerErrorKey.FILE_OUTSIDE_PROJECT).parameters())
+                .isEqualTo(Map.of("file", FILE.toString()));
+        assertThat(create.refusal(LanguageServerErrorKey.NOT_CREATABLE).parameters())
+                .isEqualTo(Map.of("file", FILE.toString()));
+        for (var key : List.of(
+                LanguageServerErrorKey.FILE_MISSING,
+                LanguageServerErrorKey.NOT_A_FILE,
+                LanguageServerErrorKey.NO_SUCH_SYMBOL,
+                LanguageServerErrorKey.INVALID_NAME,
+                LanguageServerErrorKey.NOT_EXTRACTABLE,
+                LanguageServerErrorKey.NOT_INLINABLE,
+                LanguageServerErrorKey.NOT_MOVABLE,
+                LanguageServerErrorKey.AMBIGUOUS_IMPORTS,
+                LanguageServerErrorKey.UNRESOLVED_IMPORTS)) {
+            assertThatExceptionOfType(IllegalArgumentException.class)
+                    .as(key.toString())
+                    .isThrownBy(() -> create.refusal(key));
+        }
+    }
+
+    @Test
+    void resolvesACreatePackageInfoRequestAgainstARoot() {
+        assertThat(new Request.CreatePackageInfo(FILE).resolvedIn(ROOT))
+                .isEqualTo(new Request.CreatePackageInfo(Path.of("/project/src/A.java")));
+    }
+
+    @Test
     void rejectsAnInlinedAnswerForAnotherRequestAndAnotherAnswerForInlining() {
         Request.Rename rename = new Request.Rename(FILE, POSITION, "B");
         Request.Inline inline = new Request.Inline(FILE, POSITION);
@@ -803,7 +844,8 @@ class ScenarioTest {
                 new Request.MoveToPackage(List.of(FILE), PackageName.of("a.b")),
                 new Request.Inline(FILE, POSITION),
                 new Request.References(FILE, POSITION, false),
-                new Request.CreateType(FILE, TypeKind.CLASS));
+                new Request.CreateType(FILE, TypeKind.CLASS),
+                new Request.CreatePackageInfo(FILE));
 
         for (Request request : requests) {
             assertThatExceptionOfType(IllegalArgumentException.class)
