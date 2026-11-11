@@ -59,9 +59,10 @@ cause to its log, `<socket>.log`, with the method of the request: a line `reques
 a line `caused by <type>: <message>` for each cause, and, for an error that jdtls answered (`ResponseErrorException`), its
 response error code and the data of its answer, one line of the log per line of it (jdtls puts the stack trace of its own
 failure there). A refusal that carries a cause (a file that could not be written, an internal error that jdtls answered:
-`language-server-request-failed`) is logged the same way; a refusal with no cause says everything in its answer and is not. The parameters of the request (the
-file, the position, the name) and the text of the files are never written, only the words of the exceptions, with control
-characters written as escapes like the lines of jdtls.
+`language-server-request-failed`) is logged the same way; a refusal with no cause says everything in its answer and is not. The log holds the words of the
+exceptions and nothing else: the parameters of the request (the file, the position, the name) and the text of the files
+are not written on purpose, but those words may hold a path (a file that could not be read) or a type or symbol name (the
+data of a jdtls error), and control characters are written as escapes like the lines of jdtls.
 
 **Stopping when nobody uses it.** A daemon stops by itself, the way `gabier stop` stops it (jdtls and its workspace
 folder are ended and removed, the socket is given back), once **no client has been connected for 60 minutes**: the delay
