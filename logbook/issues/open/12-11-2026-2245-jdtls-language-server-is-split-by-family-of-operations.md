@@ -1,7 +1,9 @@
 # JdtlsLanguageServer is split by family of operations
 
 Opened: 12-11-2026 22:45
-Depends on: 12-11-2026-2147-affected-tests-can-be-followed-as-a-stream (it changes the same class).
+Depends on: 12-11-2026-2147-affected-tests-can-be-followed-as-a-stream (it changes the same class),
+12-11-2026-2305-the-daemon-package-is-split-by-role-with-a-minimal-surface (the class lands in its package first, and
+its public surface is decided there).
 
 Tidying, no new behaviour. A worker that changes one operation of the adapter (`move`, `extract`, `create`) reads the
 operations of that family only, not the whole `JdtlsLanguageServer` (about 1900 lines, every operation of the port
