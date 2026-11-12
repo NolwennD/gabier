@@ -37,7 +37,7 @@ MCP tool.
   throwaway):** what jdtls was told of (`WatchedFiles` events, accumulated in `JdtlsLanguageServer.takeInChangesOnDisk`, the one
   call site of `session.changesOnDisk`) was kept over the class files it rewrote.
   - A body edit (by hand or with the Edit tool): told of = the edited file; class files rewritten = its class only.
-  - `gabier rename`: told of = the users edited, the new file created, the old one deleted; class files rewritten = the same
+  - `gabier rename`: told of = the edited dependent, the new file created, the old one deleted; class files rewritten = the same
     classes.
   - A signature change: told of = the edited file only; class files = it and its dependent. A deleted used class: told of =
     the deletion only; the dependent is rewritten as an error stub, and `diagnostics --all` reports it.
