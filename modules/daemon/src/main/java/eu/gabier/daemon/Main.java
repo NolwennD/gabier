@@ -80,8 +80,7 @@ public final class Main {
             PrintStream out,
             PrintStream err)
             throws IOException {
-        if (arguments.isEmpty()
-                || arguments.size() == 1 && !arguments.getFirst().startsWith("-")) {
+        if (servesAProject(arguments)) {
             var root = projectRoot(arguments, environment, workingDirectory);
 
             // What jdtls says is shown as text: a terminal that tails the log must not obey it.
@@ -102,6 +101,11 @@ public final class Main {
         }
 
         throw UsageException.unsupportedArguments(arguments);
+    }
+
+    private static boolean servesAProject(List<String> arguments) {
+        return arguments.isEmpty()
+                || (arguments.size() == 1 && !arguments.getFirst().startsWith("-"));
     }
 
     /**
