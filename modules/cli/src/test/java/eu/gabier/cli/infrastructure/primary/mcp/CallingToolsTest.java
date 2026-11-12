@@ -272,6 +272,18 @@ class CallingToolsTest {
         }
 
         @Test
+        void listsTheTestsOfWhatChangedSinceTheLastAnswerWithNoFileToName() {
+            var selected = new SelectedTests(List.of("demo.LedgerTest"));
+            var daemon = new StubDaemon().answering(selected.toJson());
+
+            var answer =
+                    exchange(daemon, modernCall("affected-tests-changed", "{}")).getFirst();
+
+            assertThat(content(answer)).isEqualTo("demo.LedgerTest");
+            assertThat(at(answer, "result", "structuredContent")).isEqualTo(Json.parse(selected.toJson()));
+        }
+
+        @Test
         void listsTheActionsOfARange() {
             var offered = new CodeActions(List.of(new Action("quickfix", "Import 'List' (java.util)")));
             var daemon = new StubDaemon().answering(offered.toJson());

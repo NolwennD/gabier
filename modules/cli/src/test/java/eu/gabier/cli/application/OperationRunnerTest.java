@@ -536,7 +536,7 @@ class OperationRunnerTest {
                 var offered = new CodeActions(List.of());
                 yield new KindAnswered(offered.toJson(), new OperationResult.Offered(offered));
             }
-            case "affected-tests" -> {
+            case "affected-tests", "affected-tests-changed" -> {
                 var selected = new SelectedTests(List.of("demo.LedgerTest"));
                 yield new KindAnswered(selected.toJson(), new OperationResult.Selected(selected));
             }

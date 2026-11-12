@@ -70,6 +70,7 @@ it decided, whatever the method, with the refusal `daemon-stopping` (a server er
 | `actions`          | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`                  | [actions](commands/actions.md)                             |
 | `apply-action`     | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `title`, `dryRun` | [apply-action](commands/apply-action.md)                 |
 | `affected-tests`   | `files` (absolute paths, one per line)                                      | [affected-tests](commands/affected-tests.md)               |
+| `affected-tests-changed` | none                                                                  | [affected-tests](commands/affected-tests.md)               |
 
 ## A method that answers more than once
 

@@ -8,10 +8,13 @@ import eu.gabier.protocol.SelectedTests;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import eu.gabier.testing.application.AffectedTests;
 import eu.gabier.testing.domain.BuiltProject;
+import eu.gabier.testing.domain.ChangedBuild;
 import eu.gabier.testing.domain.ProjectBuild;
 import eu.gabier.testing.fixtures.AffectedTestsCase;
 import eu.gabier.testing.fixtures.AffectedTestsCases;
+import eu.gabier.testing.fixtures.BuildScenario;
 import eu.gabier.testing.fixtures.CompiledProject;
+import eu.gabier.testing.fixtures.FakeProjectBuild;
 import eu.gabier.testing.infrastructure.secondary.NioProjectFiles;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -29,6 +32,7 @@ class AffectedTestsMethodTest {
     Path project;
 
     private BuiltProject built;
+    private FakeProjectBuild build;
 
     private RequestHandler handler(ProjectBuild build) {
         return new RequestHandler(
@@ -41,7 +45,9 @@ class AffectedTestsMethodTest {
         }
         built = CompiledProject.of(project, AffectedTestsCases.mainSources(), AffectedTestsCases.testSources());
 
-        return handler(() -> built);
+        build = new FakeProjectBuild(project).scripted(new BuildScenario("shop", Map.of(), built));
+
+        return handler(build);
     }
 
     private static String ask(RequestHandler handler, String files) {
@@ -60,7 +66,8 @@ class AffectedTestsMethodTest {
 
     @Test
     void isNamedAffectedTestsAndTakesTheFiles() {
-        var method = new AffectedTestsMethod(new AffectedTests(() -> built, new NioProjectFiles(), project));
+        var method = new AffectedTestsMethod(
+                new AffectedTests(new FakeProjectBuild(project), new NioProjectFiles(), project));
 
         assertThat(method.name()).isEqualTo("affected-tests");
         assertThat(method.parameters()).containsExactly("files");
@@ -147,6 +154,7 @@ class AffectedTestsMethodTest {
         var broken = project.resolve("src/main/java/shop/Greeter.java");
         var handler = handlerOfTheShop();
         built = new BuiltProject(built.folders(), built.libraries(), List.of(broken));
+        build.scripted(new BuildScenario("shop-with-an-error", Map.of(), built));
 
         var failure = refusal(ask(handler, broken.toString()));
 
@@ -156,8 +164,16 @@ class AffectedTestsMethodTest {
 
     @Test
     void aServerThatIsNotReadyIsRefusedWithItsProblemObject() {
-        var handler = handler(() -> {
-            throw LanguageServerException.notReady();
+        var handler = handler(new ProjectBuild() {
+            @Override
+            public BuiltProject built() {
+                throw LanguageServerException.notReady();
+            }
+
+            @Override
+            public ChangedBuild builtWithChanges() {
+                throw LanguageServerException.notReady();
+            }
         });
 
         var failure = refusal(

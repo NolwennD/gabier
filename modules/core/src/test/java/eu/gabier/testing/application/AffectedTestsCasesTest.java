@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import eu.gabier.testing.domain.BuiltProject;
 import eu.gabier.testing.fixtures.AffectedTestsCase;
 import eu.gabier.testing.fixtures.AffectedTestsCases;
+import eu.gabier.testing.fixtures.BuildScenario;
 import eu.gabier.testing.fixtures.CompiledProject;
+import eu.gabier.testing.fixtures.FakeProjectBuild;
 import eu.gabier.testing.infrastructure.secondary.NioProjectFiles;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -79,12 +81,17 @@ class AffectedTestsCasesTest {
             }
         });
         BuiltProject built = CompiledProject.of(project, main, tests);
-        AffectedTests affectedTests = new AffectedTests(() -> built, new NioProjectFiles(), project);
+        FakeProjectBuild build =
+                new FakeProjectBuild(project).scripted(new BuildScenario(scenario.name(), Map.of(), built));
+        AffectedTests affectedTests = new AffectedTests(build, new NioProjectFiles(), project);
 
         List<String> affected = affectedTests.affectedBy(
                 scenario.changed().stream().map(project::resolve).toList());
+        build.edited(scenario.changed().toArray(Path[]::new));
+        List<String> affectedWithNoFileGiven = affectedTests.affectedByChanges();
 
         assertThat(affected).containsExactlyElementsOf(scenario.affected());
+        assertThat(affectedWithNoFileGiven).containsExactlyElementsOf(scenario.affected());
     }
 
     private static List<Path> projectFiles() {

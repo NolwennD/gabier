@@ -30,7 +30,9 @@ import eu.gabier.protocol.RpcResponse;
 import eu.gabier.protocol.UserId;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import eu.gabier.testing.fixtures.AffectedTestsCases;
+import eu.gabier.testing.fixtures.BuildScenario;
 import eu.gabier.testing.fixtures.CompiledProject;
+import eu.gabier.testing.fixtures.FakeProjectBuild;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -1088,7 +1090,7 @@ class DaemonServerTest {
             serving();
             var built =
                     CompiledProject.of(directory, AffectedTestsCases.mainSources(), AffectedTestsCases.testSources());
-            project.building(() -> built);
+            project.building(new FakeProjectBuild(directory).scripted(new BuildScenario("compiled", Map.of(), built)));
             var greeter = directory.resolve("src/main/java/shop/Greeter.java");
 
             try (var client = connect(socket())) {
@@ -1098,6 +1100,30 @@ class DaemonServerTest {
                         {"jsonrpc":"2.0","id":3,"result":{"tests":["shop.ArchitectureTest","shop.FrenchGreeterTest",\
                         "shop.GreeterIT","shop.GreeterTest"]}}\
                         """);
+            }
+        }
+
+        @Test
+        void affectedTestsChangedAnswersTheTestsOfWhatChangedOnceToTheClientThatAsksFirstOnASocket()
+                throws IOException {
+            serving();
+            var built =
+                    CompiledProject.of(directory, AffectedTestsCases.mainSources(), AffectedTestsCases.testSources());
+            var build = new FakeProjectBuild(directory).scripted(new BuildScenario("compiled", Map.of(), built));
+            project.building(build);
+            build.edited(Path.of("src/main/java/shop/Unused.java"));
+            String request = """
+                {"jsonrpc":"2.0","id":3,"method":"affected-tests-changed","params":{}}
+                """;
+
+            try (var first = connect(socket());
+                    var second = connect(socket())) {
+                assertThat(first.ask(request)).isEqualTo("""
+                    {"jsonrpc":"2.0","id":3,"result":{"tests":["shop.ArchitectureTest"]}}\
+                    """);
+                assertThat(second.ask(request)).isEqualTo("""
+                    {"jsonrpc":"2.0","id":3,"result":{"tests":[]}}\
+                    """);
             }
         }
 

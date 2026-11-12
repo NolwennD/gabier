@@ -197,7 +197,7 @@ class ToolsTest {
         }
 
         @ParameterizedTest
-        @ValueSource(strings = {"rename", "move", "cleanup", "apply-action", "create"})
+        @ValueSource(strings = {"rename", "move", "cleanup", "apply-action", "create", "affected-tests-changed"})
         void saysNothingOfTheHintForTheToolsThatWrite(String name) {
             assertThat(tool(served, name)).doesNotContainKey("annotations");
         }

@@ -276,6 +276,46 @@ class TestSelectorTest {
                 .isEmpty();
     }
 
+    private List<String> affectedByChanges(Path... sources) {
+        return new TestSelector(new NioProjectFiles(), root).affectedByChanges(built, List.of(sources));
+    }
+
+    @Test
+    void selectsTheTestsOfTheFilesThatChangedAsItDoesOfTheFilesGiven() throws IOException {
+        project(Map.of("app/Greeter.java", GREETER), Map.of("app/GreeterTest.java", GREETER_TEST));
+
+        assertThat(affectedByChanges(main("app/Greeter.java"))).containsExactly("app.GreeterTest");
+        assertThat(affectedByChanges(test("app/GreeterTest.java"))).containsExactly("app.GreeterTest");
+        assertThat(affectedByChanges()).isEmpty();
+    }
+
+    @Test
+    void leavesOutWhatChangedAndCannotBeAskedOfTheBuildInsteadOfRefusing() throws IOException {
+        project(Map.of("app/Greeter.java", GREETER), Map.of("app/GreeterTest.java", GREETER_TEST));
+        Path readme = Files.writeString(root.resolve("README.md"), "# Project");
+        Path script = Files.writeString(root.resolve("Script.java"), "class Script {}");
+
+        assertThat(affectedByChanges(readme, script, main("app/Gone.java"), main("app/Greeter.java")))
+                .containsExactly("app.GreeterTest");
+        assertThat(affectedByChanges(readme, script, main("app/Gone.java"))).isEmpty();
+    }
+
+    @Test
+    void refusesAChangedFileTheBuildFoundAnErrorInNamingIt() throws IOException {
+        project(
+                Map.of("app/Greeter.java", GREETER),
+                Map.of("app/GreeterTest.java", GREETER_TEST),
+                main("app/Greeter.java"));
+
+        assertThatExceptionOfType(TestingException.class)
+                .isThrownBy(() -> affectedByChanges(test("app/GreeterTest.java"), main("app/Greeter.java")))
+                .satisfies(exception -> {
+                    assertThat(exception.key()).isEqualTo(TestingErrorKey.COMPILATION_FAILED);
+                    assertThat(exception.parameters())
+                            .containsEntry("files", main("app/Greeter.java").toString());
+                });
+    }
+
     @Test
     void refusesWhatItCannotReadNamingTheFile() throws IOException {
         project(Map.of("app/Greeter.java", GREETER), Map.of("app/GreeterTest.java", """

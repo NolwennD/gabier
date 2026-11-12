@@ -328,6 +328,156 @@ class JdtlsBuiltProjectTest {
         }
     }
 
+    /** A project with the files of {@code demo}, which exist before jdtls starts. */
+    private Path[] demoSources() throws Exception {
+        eclipse(root);
+        Path main = root.resolve("src/main/java/demo/Main.java");
+        Path other = root.resolve("src/main/java/demo/Other.java");
+        Files.createDirectories(main.getParent());
+        Files.writeString(main, "class Main {}\n");
+        Files.writeString(other, "class Other {}\n");
+
+        return new Path[] {main, other};
+    }
+
+    @Test
+    void reportsTheJavaFilesCreatedOrEditedOnDiskSinceItStartedAndNoOtherFile() throws Exception {
+        var sources = demoSources();
+        Path created = root.resolve("src/test/java/demo/MainTest.java");
+        fake.registersWatchersFor("**/*.md");
+
+        try (var server = started()) {
+            Files.writeString(sources[0], "class Main { int edited; }\n");
+            Files.createDirectories(created.getParent());
+            Files.writeString(created, "class MainTest {}\n");
+            Files.writeString(root.resolve("README.md"), "# demo\n");
+
+            assertThat(server.builtWithChanges().sources()).containsExactly(sources[0], created);
+        }
+    }
+
+    @Test
+    void reportsNothingWhenNothingChangedSinceItStartedWhateverTheFilesOfTheProjectLookLike() throws Exception {
+        demoSources();
+
+        try (var server = started()) {
+            assertThat(server.builtWithChanges().sources()).isEmpty();
+        }
+    }
+
+    @Test
+    void forgetsTheChangesOnceTheyAreAnsweredAndReportsOnlyWhatChangesAfterThem() throws Exception {
+        var sources = demoSources();
+
+        try (var server = started()) {
+            Files.writeString(sources[0], "class Main { int edited; }\n");
+            server.builtWithChanges().answered();
+
+            assertThat(server.builtWithChanges().sources()).isEmpty();
+
+            Files.writeString(sources[1], "class Other { int edited; }\n");
+
+            assertThat(server.builtWithChanges().sources()).containsExactly(sources[1]);
+        }
+    }
+
+    @Test
+    void keepsTheChangesOfACallThatWasNotAnsweredAndAddsTheNewOnesToThem() throws Exception {
+        var sources = demoSources();
+
+        try (var server = started()) {
+            Files.writeString(sources[0], "class Main { int edited; }\n");
+            assertThat(server.builtWithChanges().sources()).containsExactly(sources[0]);
+
+            Files.writeString(sources[1], "class Other { int edited; }\n");
+
+            assertThat(server.builtWithChanges().sources()).containsExactly(sources[0], sources[1]);
+        }
+    }
+
+    @Test
+    void doesNotUseUpTheChangesWhenAnotherKindOfRequestTakesThemIn() throws Exception {
+        var sources = demoSources();
+
+        try (var server = started()) {
+            Files.writeString(sources[0], "class Main { int edited; }\n");
+
+            server.projectDiagnostics();
+
+            assertThat(server.builtWithChanges().sources()).containsExactly(sources[0]);
+        }
+    }
+
+    @Test
+    void keepsAFileThatChangedAgainSinceTheCallItAnswersForAfterTheAnswer() throws Exception {
+        var sources = demoSources();
+
+        try (var server = started()) {
+            Files.writeString(sources[0], "class Main { int edited; }\n");
+            var answeredFor = server.builtWithChanges();
+            Files.writeString(sources[0], "class Main { int editedAgain; }\n");
+            server.projectDiagnostics();
+
+            answeredFor.answered();
+
+            assertThat(server.builtWithChanges().sources()).containsExactly(sources[0]);
+        }
+    }
+
+    @Test
+    void doesNotReportAFileDeletedAfterItChangedNorOneDeletedByItself() throws Exception {
+        var sources = demoSources();
+
+        try (var server = started()) {
+            Files.writeString(sources[0], "class Main { int edited; }\n");
+            Files.delete(sources[0]);
+            Files.delete(sources[1]);
+
+            assertThat(server.builtWithChanges().sources()).isEmpty();
+        }
+    }
+
+    @Test
+    void doesNotUseUpTheChangesWhenTheBuildFailsAndReportsThemOnceItAnswers() throws Exception {
+        var sources = demoSources();
+        fake.answersForEachProject("java.project.getSettings", uri -> "nothing");
+
+        try (var server = started()) {
+            Files.writeString(sources[0], "class Main { int edited; }\n");
+            assertThatThrownBy(server::builtWithChanges).isInstanceOf(JdtlsException.class);
+            eclipse(root);
+
+            assertThat(server.builtWithChanges().sources()).containsExactly(sources[0]);
+        }
+    }
+
+    @Test
+    void forgetsTheChangesWhenItRestartsAsTheyAreTheStateOfTheRunningServer() throws Exception {
+        var sources = demoSources();
+
+        try (var server = started()) {
+            Files.writeString(sources[0], "class Main { int edited; }\n");
+            assertThat(server.builtWithChanges().sources()).containsExactly(sources[0]);
+        }
+
+        try (var restarted = started()) {
+            assertThat(restarted.builtWithChanges().sources()).isEmpty();
+        }
+    }
+
+    @Test
+    void refusesAsNotReadyWhileJdtlsIsStillImportingAndAsksItNothingForTheChanges() throws Exception {
+        fake.neverAnswersInitialize();
+
+        try (var server = start()) {
+            assertThatThrownBy(server::builtWithChanges)
+                    .isInstanceOfSatisfying(
+                            LanguageServerException.class,
+                            refusal -> assertThat(refusal.key()).isEqualTo(LanguageServerErrorKey.NOT_READY));
+            assertThat(fake.buildRequests()).isEmpty();
+        }
+    }
+
     @Test
     void refusesAsNotReadyWhileJdtlsIsStillImportingAndAsksItNothing() throws Exception {
         fake.neverAnswersInitialize();

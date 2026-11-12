@@ -23,6 +23,7 @@ import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.testing.domain.BuiltProject;
+import eu.gabier.testing.domain.ChangedBuild;
 import eu.gabier.testing.domain.ClassFolder;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -44,6 +45,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -145,6 +147,14 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     private final List<FileEvent> untaken = new ArrayList<>();
 
     private int batches;
+
+    /**
+     * The Java files that changed on disk, as every request told jdtls of them, and whose tests no answer has covered
+     * yet, each with the number of its last change (see {@link #builtWithChanges}).
+     */
+    private final Map<Path, Long> changedSources = new TreeMap<>();
+
+    private long changes;
 
     /** The import settings jdtls has: its own defaults at its start, then what the adapter last gave it. */
     private ImportSettings importsOfJdtls = ImportSettings.DEFAULTS;
@@ -366,6 +376,47 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new JdtlsException("Interrupted while waiting for the build of the project", interrupted);
+        }
+    }
+
+    /**
+     * What {@link #built()} gives, with the Java files that changed on disk since the changes were last answered for.
+     * They are what jdtls was told of, by this request or by any other ({@link #takeInChangesOnDisk} is the one place
+     * where the changes of the disk are read): a request that is not about the tests takes the changes in too, and does
+     * not use them up. Checked on the real jdtls for an edit by hand, a text edit and a rename: all of them are told,
+     * as {@code Created}, {@code Changed} and {@code Deleted} events (the dependents of a deleted class are told of
+     * only when their own file changed). The class files jdtls rewrites are no source of the changes: a jdtls that
+     * starts rewrites every class, with no edit.
+     *
+     * <p>The changes are those of the running jdtls, so a restart forgets them. A file that was deleted is not among
+     * them, and nor is a file that is not Java.
+     *
+     * @throws LanguageServerException if jdtls is not ready
+     * @throws JdtlsException if jdtls dies, does not answer in time, fails the build or answers a shape that is not
+     *     the documented one
+     */
+    @Override
+    public synchronized ChangedBuild builtWithChanges() {
+        BuiltProject built = built();
+        Map<Path, Long> told = new TreeMap<>(changedSources);
+
+        return new ChangedBuild(built, List.copyOf(told.keySet()), () -> answered(told));
+    }
+
+    /** Forgets the changes an answer covered, and not a file that changed again after it. */
+    private synchronized void answered(Map<Path, Long> told) {
+        told.forEach(changedSources::remove);
+    }
+
+    private void remember(FileEvent event) {
+        Path file = Path.of(URI.create(event.getUri()));
+        if (!file.getFileName().toString().endsWith(".java")) {
+            return;
+        }
+        if (event.getType() == FileChangeType.Deleted) {
+            changedSources.remove(file);
+        } else {
+            changedSources.put(file, ++changes);
         }
     }
 
@@ -1653,7 +1704,9 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * file of its own, so that a late acknowledgment of the earlier batch is not taken for the one of the retry.
      */
     private void takeInChangesOnDisk(JdtlsSession session, JdtlsWatch watch) throws InterruptedException {
-        untaken.addAll(session.changesOnDisk());
+        List<FileEvent> onDisk = session.changesOnDisk();
+        onDisk.forEach(this::remember);
+        untaken.addAll(onDisk);
         if (untaken.isEmpty()) {
             return;
         }

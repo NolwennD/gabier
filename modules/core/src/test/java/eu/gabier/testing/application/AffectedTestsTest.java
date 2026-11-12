@@ -6,16 +6,16 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import eu.gabier.shared.error.domain.AssertionException;
 import eu.gabier.shared.error.domain.MissingMandatoryValueException;
 import eu.gabier.testing.domain.BuiltProject;
-import eu.gabier.testing.domain.ProjectBuild;
 import eu.gabier.testing.domain.TestingErrorKey;
 import eu.gabier.testing.domain.TestingException;
+import eu.gabier.testing.fixtures.BuildScenario;
 import eu.gabier.testing.fixtures.CompiledProject;
+import eu.gabier.testing.fixtures.FakeProjectBuild;
 import eu.gabier.testing.infrastructure.secondary.NioProjectFiles;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -24,13 +24,10 @@ class AffectedTestsTest {
     @TempDir
     Path root;
 
-    private final AtomicInteger builds = new AtomicInteger();
+    private FakeProjectBuild build;
 
     private AffectedTests affectedTests(BuiltProject built) {
-        ProjectBuild build = () -> {
-            builds.incrementAndGet();
-            return built;
-        };
+        build = building(built);
 
         return new AffectedTests(build, new NioProjectFiles(), root);
     }
@@ -57,7 +54,50 @@ class AffectedTestsTest {
 
         assertThat(affected.affectedBy(List.of(root.resolve("src/main/java/app/Greeter.java"))))
                 .containsExactly("app.GreeterTest");
-        assertThat(builds).hasValue(1);
+        assertThat(build.asked()).isEqualTo(1);
+    }
+
+    private FakeProjectBuild building(BuiltProject built) {
+        return new FakeProjectBuild(root).scripted(new BuildScenario("compiled-by-javac", Map.of(), built));
+    }
+
+    @Test
+    void selectsTheTestsOfTheFilesThatChangedSinceTheLastAnswerAndNamesNoFile() throws IOException {
+        var build = building(project());
+        var affected = new AffectedTests(build, new NioProjectFiles(), root);
+        build.edited(Path.of("src/main/java/app/Greeter.java"));
+
+        assertThat(affected.affectedByChanges()).containsExactly("app.GreeterTest");
+        assertThat(build.asked()).isEqualTo(1);
+    }
+
+    @Test
+    void answersNoTestWhenNothingChangedSinceTheLastAnswer() throws IOException {
+        var build = building(project());
+        var affected = new AffectedTests(build, new NioProjectFiles(), root);
+
+        assertThat(affected.affectedByChanges()).isEmpty();
+
+        build.edited(Path.of("src/test/java/app/GreeterTest.java"));
+
+        assertThat(affected.affectedByChanges()).containsExactly("app.GreeterTest");
+        assertThat(affected.affectedByChanges()).isEmpty();
+    }
+
+    @Test
+    void listsAgainTheChangesOfACallThatWasRefusedOnceTheyCompile() throws IOException {
+        BuiltProject compiling = project();
+        Path greeter = root.resolve("src/main/java/app/Greeter.java");
+        var build = building(new BuiltProject(compiling.folders(), compiling.libraries(), List.of(greeter)));
+        var affected = new AffectedTests(build, new NioProjectFiles(), root);
+        build.edited(Path.of("src/main/java/app/Greeter.java"));
+
+        assertThatExceptionOfType(TestingException.class)
+                .isThrownBy(affected::affectedByChanges)
+                .satisfies(exception -> assertThat(exception.key()).isEqualTo(TestingErrorKey.COMPILATION_FAILED));
+        build.scripted(new BuildScenario("fixed", Map.of(), compiling));
+
+        assertThat(affected.affectedByChanges()).containsExactly("app.GreeterTest");
     }
 
     @Test
@@ -82,7 +122,7 @@ class AffectedTestsTest {
                 .isThrownBy(() -> new AffectedTests(null, new NioProjectFiles(), root))
                 .satisfies(exception -> assertThat(exception.field()).isEqualTo("build"));
         assertThatExceptionOfType(MissingMandatoryValueException.class)
-                .isThrownBy(() -> new AffectedTests(() -> null, null, root))
+                .isThrownBy(() -> new AffectedTests(new FakeProjectBuild(root), null, root))
                 .satisfies(exception -> assertThat(exception.field()).isEqualTo("files"));
     }
 }

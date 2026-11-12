@@ -7,6 +7,8 @@ import eu.gabier.testing.fixtures.AffectedTestsCase;
 import eu.gabier.testing.fixtures.AffectedTestsCases;
 import eu.gabier.testing.fixtures.BuildScenario;
 import eu.gabier.testing.fixtures.BuildScenarios;
+import eu.gabier.testing.fixtures.ChangeScenario;
+import eu.gabier.testing.fixtures.ChangeScenarios;
 import eu.gabier.testing.fixtures.CompiledProject;
 import eu.gabier.testing.infrastructure.secondary.NioProjectFiles;
 import java.io.IOException;
@@ -86,5 +88,89 @@ class AffectedTestsReplayTest {
                 assertThat(affected).as(scenario.name()).containsExactlyElementsOf(scenario.affected());
             }
         }
+    }
+
+    @Test
+    void reportsTheChangesOnDiskOfEveryScenarioAsTheServerWasTold() throws Exception {
+        for (ChangeScenario scenario : ChangeScenarios.all()) {
+            Path root = Files.createTempDirectory("gabier-changes-").toRealPath();
+            scenario.writeProject(root);
+            EclipseProject.describe(root);
+
+            try (var server = started(root)) {
+                for (ChangeScenario.Step step : scenario.steps()) {
+                    write(root, Path.of(""), toStrings(step.writes()));
+                    for (Path deleted : step.deletes()) {
+                        Files.delete(root.resolve(deleted));
+                    }
+
+                    var changed = server.builtWithChanges();
+
+                    assertThat(changed.sources())
+                            .as(scenario.name())
+                            .containsExactlyElementsOf(
+                                    step.reported().stream().map(root::resolve).toList());
+                    if (step.answered()) {
+                        changed.answered();
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void forgetsTheChangesOfAServerThatWasStoppedAndStartedAgain() throws Exception {
+        var scenario = ChangeScenarios.AN_EDIT_ON_DISK;
+        Path root = Files.createTempDirectory("gabier-restart-").toRealPath();
+        scenario.writeProject(root);
+        EclipseProject.describe(root);
+        Path edited = scenario.steps().get(1).writes().keySet().iterator().next();
+
+        try (var server = started(root)) {
+            write(root, Path.of(""), toStrings(scenario.steps().get(1).writes()));
+
+            assertThat(server.builtWithChanges().sources()).containsExactly(root.resolve(edited));
+        }
+
+        try (var restarted = started(root)) {
+            assertThat(restarted.builtWithChanges().sources()).isEmpty();
+        }
+    }
+
+    @Test
+    void selectsTheTestsOfEveryCaseFromTheFilesJdtlsWasToldChangedWithNoFileGiven() throws Exception {
+        Path root = Files.createTempDirectory("gabier-affected-changes-").toRealPath();
+        write(root, Path.of("src/main/java"), AffectedTestsCases.mainSources());
+        write(root, Path.of("src/test/java"), AffectedTestsCases.testSources());
+        for (Map.Entry<Path, String> other : AffectedTestsCases.otherFiles().entrySet()) {
+            Files.writeString(root.resolve(other.getKey()), other.getValue());
+        }
+        EclipseProject.describe(root, List.of(CompiledProject.frameworks(root)));
+
+        try (var server = started(root)) {
+            var affectedTests = new AffectedTests(server, new NioProjectFiles(), root);
+            for (AffectedTestsCase scenario : AffectedTestsCases.all()) {
+                for (Map.Entry<Path, String> edit : scenario.edits().entrySet()) {
+                    Files.writeString(root.resolve(edit.getKey()), edit.getValue());
+                }
+                for (Path changed : scenario.changed()) {
+                    Path file = root.resolve(changed);
+                    Files.writeString(file, Files.readString(file) + "\n");
+                }
+
+                var affected = affectedTests.affectedByChanges();
+
+                assertThat(affected).as(scenario.name()).containsExactlyElementsOf(scenario.affected());
+                assertThat(affectedTests.affectedByChanges())
+                        .as(scenario.name())
+                        .isEmpty();
+            }
+        }
+    }
+
+    private static Map<String, String> toStrings(Map<Path, String> files) {
+        return files.entrySet().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        entry -> entry.getKey().toString(), Map.Entry::getValue));
     }
 }

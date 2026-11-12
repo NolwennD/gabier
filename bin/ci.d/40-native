@@ -38,7 +38,7 @@ import java.util.stream.Stream;
  * a method extracted under the name given, refusals), {@code extract-constant} (a dry run, a constant extracted under the
  * name given, refusals), {@code extract-field} (a dry run, a field extracted under the name given, refusals), {@code move-type-to-file} (a dry run, a type moved to a file of
  * its own, a refusal), {@code move} (a dry run that makes no folder, classes moved to a new package, refusals), {@code inline} (a dry run, a constant inlined, a refusal) and {@code create} (a dry run, a class
- * created, refusals), {@code references} (the uses of a type, the declaration apart, a symbol nothing uses, refusals), {@code actions} (the fixes of a range, none, as JSON, refusals) and {@code apply-action} (a dry run, an action applied by its title, refusals); {@code affected-tests} (the tests of a changed class, as JSON, a file that is not Java, a missing file);
+ * created, refusals), {@code references} (the uses of a type, the declaration apart, a symbol nothing uses, refusals), {@code actions} (the fixes of a range, none, as JSON, refusals) and {@code apply-action} (a dry run, an action applied by its title, refusals); {@code affected-tests} (the tests of a changed class, as JSON, a file that is not Java, a missing file, and with no file the tests of what changed, once);
  * a request command with no daemon running starts {@code gabier-daemon} (found on the {@code PATH} or next to the cli;
  * not found, exiting at once), the next request uses it, and {@code stop} ends it. Runs in the current directory, the
  * checkout under verification. It starts and signals only the processes it started, by their handle, and the daemons
@@ -1952,6 +1952,28 @@ public final class Native {
                             && missing.out().isEmpty()
                             && missing.err().contains("(testing-file-missing; "),
                     "a Java file that does not exist is refused as a problem object, exit 2");
+
+            // The fake has no jdtls to be told of edits: the lines of this file are the Java files that changed.
+            Files.writeString(project.resolve(".gabier-fake-changed"), "src/main/java/shop/Greeter.java\n");
+            Run changed = gabier("affected-tests");
+            expect(
+                    changed.exit() == 0
+                            && changed.err().isEmpty()
+                            && changed.out().equals("shop.ArchitectureTest\nshop.FrenchGreeterTest\nshop.GreeterTest"),
+                    "gabier affected-tests with no file lists the tests of the files that changed, one per line");
+
+            Run answeredOnce = gabier("affected-tests");
+            expect(
+                    answeredOnce.exit() == 0
+                            && answeredOnce.err().isEmpty()
+                            && answeredOnce.out().equals("no affected tests"),
+                    "a second gabier affected-tests with no new change prints no affected tests, exit 0");
+
+            Files.writeString(project.resolve(".gabier-fake-changed"), "src/main/java/shop/Unused.java\n");
+            Run changedAsJson = gabier("--json", "affected-tests");
+            expect(
+                    changedAsJson.exit() == 0 && changedAsJson.out().equals("{\"tests\":[\"shop.ArchitectureTest\"]}"),
+                    "gabier --json affected-tests with no file gives the result as the daemon gave it");
 
             gabier("stop");
             expect(ends(process), "the daemon served by the fake stops after the affected tests");

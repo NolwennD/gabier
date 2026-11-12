@@ -4,7 +4,7 @@ One daemon runs per project. `gabier diagnostics`, `gabier rename`, `gabier orga
 agent runs them in a project folder and gets the answer; `gabier status` and `gabier stop` never start one (see [status and stop](commands/status-and-stop.md)).
 It can also be started by hand, with `gabier-daemon` from the installed distribution (`./gradlew :daemon:installDist`,
 then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until `gabier stop`, a SIGTERM, or the delay with no client below; it
-answers `status`, `start`, `stop`, `diagnostics`, `diagnostics-all`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions`, `apply-action` and `affected-tests`, and nothing else yet.
+answers `status`, `start`, `stop`, `diagnostics`, `diagnostics-all`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions`, `apply-action`, `affected-tests` and `affected-tests-changed`, and nothing else yet.
 
 **Installing both by name.** `mise run install` builds the native cli and the daemon of the checkout it is run in,
 **copies** them into `~/.local/share/gabier/<version>` (`<version>` is the one `gabier --version` prints; the folder is
@@ -98,7 +98,7 @@ another job; a first run under a heavier load took 105 s to be ready, and `04-11
 | import | jdtls imports the project: for a Gradle project it starts a Gradle daemon and runs the build (compile of `build-logic`, evaluation of the settings, configuration of every module, the model of each); this is nearly all of the wait, and its `language/status` messages (`70% Starting Java Language Server - Configure project :core`) name the task | about 54 s |
 | ready | `ServiceReady`, then the list of the projects jdtls imported | about 0.1 s |
 | diagnostics | `diagnostics`: the file is opened, jdtls publishes, and the daemon waits for jdtls to be quiet for 5 seconds. `diagnostics-all`: no file is opened; the daemon waits for jdtls to register the files it watches (the end of its initialization, which publishes the problems of the whole workspace), tells it of the changes on disk, asks for an incremental build, and waits 1 second in which nothing is published | 7 to 9 s for one file; 1.2 s for the whole project (532 files) once jdtls is started, 50 s for the first call right after the start of the daemon |
-| affected-tests | `affected-tests`: jdtls is told of the files on disk, asked for an incremental build, and awaited; then the daemon reads the class folders and the jars of the test classpath | 1 to 3 s on a small project once jdtls is started (about 1.1 s after the first call), plus the reading of the class files |
+| affected-tests | `affected-tests` and `affected-tests-changed`: jdtls is told of the files on disk, asked for an incremental build, and awaited; then the daemon reads the class folders and the jars of the test classpath | 1 to 3 s on a small project once jdtls is started (about 1.1 s after the first call), plus the reading of the class files |
 
 so the first `gabier diagnostics` of a session answers after about a minute (69 s in the measure, 112 s in the heavier run), the same call warm
 after 6 to 9 s (the 5 seconds of quiet are in it), and a command that does not wait for the diagnostics (`rename`,
@@ -125,6 +125,19 @@ client sends, as the protocol expects of a client, and not from the disk. Its ow
 workspace (`refresh.enabled`), which can only be set in a file of its data folder, whose monitor on Linux is a poll of 4
 seconds at the least, and which was slow when it was tried: 2 to 8 seconds on a small project and 7 to 23 seconds on this
 checkout, against 1.1 to 1.3 seconds and 12 to 16 seconds with the events the daemon sends.
+
+**What the daemon remembers of the disk, for `affected-tests`.** `gabier affected-tests` with no file
+([affected-tests](commands/affected-tests.md)) is answered from a list the daemon keeps in memory: the Java files that were
+created or edited on disk, as jdtls was told of them, since the last answer of that call. Every request takes in the
+changes of the disk before it asks jdtls (a `diagnostics`, a `rename`, a `references`), and each one adds the Java files it
+finds to the list; none removes one, only an answer of `affected-tests` does, and only for the files it answered for (a file
+that changed again since stays). The list belongs to the daemon of the project: two clients that ask share it, and whichever
+asks first is answered. It starts empty with jdtls, from the state of the disk read just before jdtls starts, so what
+changes while jdtls imports the project is in it, and what changed before the daemon started is not. It is lost when the
+daemon stops (`gabier stop`, or the hour with no request after which it stops itself) and when the daemon starts another
+jdtls after a failure. The class files that jdtls writes are not used for it: a jdtls that starts rewrites all of them with no
+edit (observed: after a stop and a start of the daemon on a project of four classes, every class file, those of untouched
+classes included, was written again).
 
 What it costs and how late it is, **measured on Linux** with jdtls 1.63.0, one machine shared with other jobs
 (**measurements, not guarantees**; the JDK on other systems polls slowly, about every ten seconds on macOS, and these

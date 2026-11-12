@@ -2,7 +2,8 @@
 
 `gabier [--json] affected-tests <file>...` lists the test classes to run again after a change to Java files, with no
 Maven or Gradle and whatever the build tool of the project (Infinitest does it for a developer in an IDE; gabier does it
-for an agent). One line per test, the binary name of the class (`demo.LedgerTest`, `demo.Outer$InnerTest`), in the order
+for an agent). `gabier [--json] affected-tests`, with no file, does it for what changed on disk since its last answer
+([see below](#with-no-file)). One line per test, the binary name of the class (`demo.LedgerTest`, `demo.Outer$InnerTest`), in the order
 of the names. Nothing is written and nothing is run: the names are classes, which a test runner takes as they are. The
 files are typed as paths, from the working directory, and the cli sends their absolute paths to the daemon, which
 alone cleans them (`./src/...` and `src/../src/...` name the file they lead to). The exit code is 0 whenever the daemon
@@ -31,6 +32,45 @@ gets the files one to a line.
 
 **A file that is not a Java source** (a `pom.xml`, a readme) is left out and does not refuse the call. A Java file that
 does not exist is refused, a deleted file included: its tests cannot be told from a class that is gone.
+
+## With no file
+
+```text
+$ gabier affected-tests
+demo.LedgerTest
+$ gabier affected-tests
+no affected tests
+```
+
+The daemon keeps the Java files that were created or edited on disk since it was last answered for, as jdtls was told of
+them ([the daemon](../daemon.md)): the agent names no file. The first call lists the tests of those files, as the call with
+files does, and forgets them; a second call with no new edit prints `no affected tests`. The output, the order and
+`--json` are the same as with files, and so is what is selected (the sections below hold for both).
+
+- **Any edit counts**: by hand, by a text edit of an agent, or by a `gabier` command such as `rename` (the daemon tells jdtls
+  of the files that changed on disk before every request, and each of them adds the Java files to the list, whatever the
+  request is: a `gabier diagnostics` in between does not use the changes up). A file that is not Java is left out.
+- **A refused call keeps the changes**: a file that does not compile is refused as `testing-compilation-failed` (`gabier
+  diagnostics` says why), and so is a server that is not ready; the next call that is answered lists the tests of those
+  changes too, with what changed since.
+- **A deleted file, and a Java file under no source folder, are left out**, never refused (the call has no file of its own
+  to be wrong about). A rename leaves the old file deleted, the new one created and the files that used the class
+  edited: the last two are listed. The tests that depended on a class that was deleted are listed only when their own file
+  changed; otherwise they do not compile, and `gabier diagnostics --all` says so.
+- **The first call of a daemon answers for what changed since the daemon started**, not for the whole project: the state
+  of the disk is read just before jdtls starts, and what changes while jdtls imports the project is counted. A daemon
+  that is started by this very command (nothing was running) has seen nothing change, so it prints `no affected tests`:
+  run `gabier start` before editing to make the first call useful. The choice is made so that no call answers every test
+  of a large project by surprise; to run them all, give the files.
+- **The state is the daemon's, not the client's**: two clients of the same daemon share it, and the one that asks first is
+  answered (the second prints `no affected tests`). When the daemon stops (`gabier stop`, or after an hour with no request)
+  or starts another jdtls after a failure, the changes made before are forgotten.
+- **The class files are not the source of the changes**: observed on the real jdtls, a stop and a start of the daemon
+  rewrote every class file of a project, those of classes nobody had touched included, so they would list every test after
+  each start. For a body edit by hand and by a text edit, and for a rename, the files jdtls was told of and the class
+  files it rewrote named the same classes; they differed where jdtls recompiles other classes than the ones edited (a
+  changed signature, a deleted class): the class files show the dependents, the files told of do not, and the selection
+  finds the dependents of a changed file by itself.
 
 ## Where the dependencies come from
 
@@ -92,7 +132,8 @@ file, the line and the pattern).
 
 ## How it is done
 
-The daemon method is `affected-tests` (parameter `files`, absolute paths, one per line). The daemon asks jdtls and reads
+The daemon method is `affected-tests` (parameter `files`, absolute paths, one per line); with no file the cli calls
+`affected-tests-changed`, which takes no parameter and answers the same result. The daemon asks jdtls and reads
 the class folders; the selection (`eu.gabier.testing`, in the core) has no dependency on jdtls and is tested against
 class files compiled by the tests, and the replay `AffectedTestsReplayTest` runs the same cases against the real jdtls.
 A class file compiled for a Java newer than the one the daemon runs on cannot be read and is refused as
@@ -103,9 +144,10 @@ A class file compiled for a Java newer than the one the daemon runs on cannot be
 A refusal is the problem object on the standard error, exit code 2, and nothing is written. These are the keys the
 command can answer, and the help of the command (`gabier help affected-tests`) lists them:
 
-- `testing-compilation-failed`: a file given has an error the language server reported.
-- `testing-file-missing`: a Java file given does not exist.
-- `testing-not-in-a-source-folder`: a Java file given is under no source folder of the project.
+- `testing-compilation-failed`: a file given (or, with no file, a file that changed) has an error the language server
+  reported.
+- `testing-file-missing`: a Java file given does not exist (never with no file).
+- `testing-not-in-a-source-folder`: a Java file given is under no source folder of the project (never with no file).
 - `testing-invalid-test-filter`: a pattern of `infinitest.filters` is not a regular expression.
 - `testing-read-failed`: a class file, a jar or the file of filters could not be read (a class compiled for a Java newer
   than the daemon's is not read).

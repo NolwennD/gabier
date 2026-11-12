@@ -23,5 +23,15 @@ public final class Refusals {
     public static final String STALE_EDIT_OF_FILES =
             "editing-stale-edit: the change cannot be applied to the files as they are";
 
+    public static final String TESTING_COMPILATION_FAILED =
+            "testing-compilation-failed: a Java file given, or one that changed, has an error the language server"
+                    + " reported; the problem names the files, and diagnostics tells what";
+    public static final String TESTING_INVALID_TEST_FILTER =
+            "testing-invalid-test-filter: a pattern of infinitest.filters is not a regular expression; the"
+                    + " problem gives the file, the line and the pattern";
+    public static final String TESTING_READ_FAILED =
+            "testing-read-failed: a class file, a jar or the file of filters could not be read (a class"
+                    + " compiled for a Java newer than the daemon's is not read)";
+
     private Refusals() {}
 }

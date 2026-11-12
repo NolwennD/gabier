@@ -2,6 +2,7 @@ package eu.gabier.cli.infrastructure.primary;
 
 import eu.gabier.cli.application.OperationResult;
 import eu.gabier.cli.application.ResultText;
+import eu.gabier.cli.domain.Operation;
 import eu.gabier.cli.domain.Operations;
 import eu.gabier.protocol.TerminalText;
 import java.nio.file.Path;
@@ -19,14 +20,22 @@ import java.util.stream.IntStream;
 final class AffectedTests implements Capability {
 
     static final Command COMMAND = Command.called("affected-tests")
-            .usage("gabier [--json] affected-tests <file>...")
+            .usage("""
+                gabier [--json] affected-tests <file>...
+                gabier [--json] affected-tests\
+                """)
             .example("""
                 $ gabier affected-tests src/main/java/demo/Ledger.java
                 demo.LedgerTest
-                demo.app.BankTest\
+                demo.app.BankTest
+                $ gabier affected-tests
+                demo.LedgerTest\
                 """)
-            .asksTheDaemon(Operations.AFFECTED_TESTS)
+            .asksTheDaemon(Operations.AFFECTED_TESTS, Operations.AFFECTED_TESTS_CHANGED)
             .withNotes("""
+                With no file, the tests of what changed on disk since the last answer of the daemon are listed (it\
+                 follows the files itself, so none is named): the answer forgets them, a second call answers "no\
+                 affected tests", and the daemon of the project, not the command, keeps them.
                 The files are typed as paths, from the working directory; a file that is not a Java source is left out.\
                  A change that affects no test prints "no affected tests" and exits with 0; with --json, an empty list.
                 The command lists the tests, it runs none: the names are classes, which a test runner takes as they are.\
@@ -39,6 +48,11 @@ final class AffectedTests implements Capability {
 
     @Override
     public void run(Invocation invocation) {
+        if (invocation.arguments().operands().isEmpty()) {
+            show(invocation, Operations.AFFECTED_TESTS_CHANGED, Map.of());
+
+            return;
+        }
         var arguments = invocation.arguments().atLeastOne();
         var indexes = IntStream.range(0, arguments.operands().size());
         List<Path> files = indexes.mapToObj(arguments::file).toList();
@@ -47,11 +61,14 @@ final class AffectedTests implements Capability {
                         file.toString().contains("\n") || file.toString().contains("\r"))) {
             throw UsageException.unsupportedArguments(arguments.all());
         }
-        var result = invocation
-                .operations()
-                .run(
-                        Operations.AFFECTED_TESTS,
-                        Map.of("files", files.stream().map(Path::toString).toList()));
+        show(
+                invocation,
+                Operations.AFFECTED_TESTS,
+                Map.of("files", files.stream().map(Path::toString).toList()));
+    }
+
+    private static void show(Invocation invocation, Operation operation, Map<String, Object> values) {
+        var result = invocation.operations().run(operation, values);
         var selected = ((OperationResult.Selected) result).selected();
         if (invocation.json()) {
             invocation.out().println(selected.toJson());

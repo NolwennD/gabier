@@ -22,9 +22,11 @@ import eu.gabier.editing.fixtures.Scenarios;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.testing.domain.BuiltProject;
+import eu.gabier.testing.domain.ChangedBuild;
 import eu.gabier.testing.fixtures.AffectedTestsCases;
 import eu.gabier.testing.fixtures.CompiledProject;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -53,6 +55,12 @@ public final class FakeServedMain {
 
     /** The file whose appearance in the folder of the project is the edit of the files of the project. */
     static final String EDIT = ".gabier-fake-edit";
+
+    /**
+     * The file whose lines (paths of Java files, relative to the folder of the project) are the files that changed since
+     * the last answer of {@code affected-tests-changed}: the fake has no jdtls to be told of edits. The answer deletes it.
+     */
+    static final String CHANGED = ".gabier-fake-changed";
 
     private FakeServedMain() {}
 
@@ -243,6 +251,30 @@ public final class FakeServedMain {
         @Override
         public BuiltProject built() {
             return built;
+        }
+
+        /** The files of the lines of {@value #CHANGED}, as the files changed; answering for them deletes the file. */
+        @Override
+        public ChangedBuild builtWithChanges() {
+            Path changed = root.resolve(CHANGED);
+            try {
+                List<Path> sources = Files.exists(changed)
+                        ? Files.readAllLines(changed).stream()
+                                .filter(line -> !line.isBlank())
+                                .map(root::resolve)
+                                .toList()
+                        : List.of();
+
+                return new ChangedBuild(built, sources, () -> {
+                    try {
+                        Files.deleteIfExists(changed);
+                    } catch (IOException failure) {
+                        throw new UncheckedIOException(failure);
+                    }
+                });
+            } catch (IOException failure) {
+                throw new UncheckedIOException(failure);
+            }
         }
 
         @Override

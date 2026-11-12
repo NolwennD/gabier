@@ -13,4 +13,15 @@ public interface ProjectBuild {
      * @throws eu.gabier.shared.error.domain.GeneratorException if the server is not ready
      */
     BuiltProject built();
+
+    /**
+     * What {@link #built()} gives, with the Java files that changed on disk since the changes were last answered for
+     * (the files the server was told of, by this or any other request, that were created or edited and still exist).
+     * The server is told of the changes and its build waited for as in {@link #built()}. The changes stay until {@link
+     * ChangedBuild#answered()}: a call that ends in a refusal does not use them up, and a request of another kind does not
+     * either.
+     *
+     * @throws eu.gabier.shared.error.domain.GeneratorException if the server is not ready
+     */
+    ChangedBuild builtWithChanges();
 }

@@ -71,6 +71,32 @@ public final class TestSelector {
         return TestSelection.of(index, changed, filters());
     }
 
+    /**
+     * As {@link #affectedBy}, for the files that changed and that nobody named: what cannot be asked of the build is left
+     * out instead of refused, since no one gave it. A file that no longer exists (its tests, if it had any, are gone,
+     * and the classes that used it are recompiled by the build, so a change to them is told on its own), and a Java file
+     * that is under no source folder, change nothing. A file the build found an error in is still refused.
+     *
+     * @param built what the build gives, once it has compiled the sources
+     * @param sources the files that changed, as absolute paths
+     * @return the binary names of the tests, in the order of the names, none when no source is left to ask about
+     * @throws TestingException if the build found an error in one of the files, or if a class or the file of filters
+     *     cannot be read
+     */
+    public List<String> affectedByChanges(BuiltProject built, List<Path> sources) {
+        Assert.notNull("built", built);
+        Assert.field("sources", sources).notNull().noNullElement();
+
+        List<Path> askable = sources.stream()
+                .map(Path::normalize)
+                .filter(TestSelector::isJava)
+                .filter(files::isFile)
+                .filter(file -> sourceFolderOf(built, file).isPresent())
+                .toList();
+
+        return askable.isEmpty() ? List.of() : affectedBy(built, askable);
+    }
+
     private static boolean isJava(Path file) {
         return file.getFileName().toString().endsWith(".java");
     }
@@ -81,10 +107,13 @@ public final class TestSelector {
             throw TestingException.fileMissing(file);
         }
 
+        return sourceFolderOf(built, file).orElseThrow(() -> TestingException.notInASourceFolder(file));
+    }
+
+    private static Optional<ClassFolder> sourceFolderOf(BuiltProject built, Path file) {
         return built.folders().stream()
                 .filter(folder -> file.startsWith(folder.sources()))
-                .max(Comparator.comparingInt(folder -> folder.sources().getNameCount()))
-                .orElseThrow(() -> TestingException.notInASourceFolder(file));
+                .max(Comparator.comparingInt(folder -> folder.sources().getNameCount()));
     }
 
     /** The classes the build wrote in the class folder for the file: those of its package that name it as their source. */

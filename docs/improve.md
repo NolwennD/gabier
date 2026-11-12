@@ -1046,7 +1046,9 @@ reads is not shown. The command ends when it is killed, and with a problem when 
 
 Words: affected tests, which tests are affected, tests to rerun, retest after a change, test selection
 
-Ask: `gabier affected-tests <file>...`, with every Java file the change touched in one call.
+Ask: `gabier affected-tests`, with no file, after the edits: the daemon lists the tests of the Java files that changed
+on disk since its last answer (it follows them itself, however they were edited). Or `gabier affected-tests <file>...`,
+with every Java file the change touched in one call.
 
 Output, one test class per line, the binary name of the class, in the order of the names:
 
@@ -1061,7 +1063,9 @@ recognised, `infinitest.filters` at the root of the project leaves tests out (`e
 ignored. A file that does not compile is refused (`testing-compilation-failed`): run `gabier diagnostics` on it. What it
 does not see: a constant the compiler inlined and a test reads through a static import, a class used through
 reflection or injection, an implementation reached only through its interface; the ArchUnit tests are always listed. A
-change that affects no test prints `no affected tests`. See `gabier help affected-tests`.
+change that affects no test prints `no affected tests`. With no file, only what changed since the daemon started is
+known (a daemon started by the command itself answers nothing the first time: run `gabier start` before editing), a
+second call answers nothing until another edit, and a refused call keeps the changes. See `gabier help affected-tests`.
 
 ### A new file for a new type
 

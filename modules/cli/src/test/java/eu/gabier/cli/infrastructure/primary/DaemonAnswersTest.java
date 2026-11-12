@@ -34,7 +34,8 @@ class DaemonAnswersTest extends CliTest {
                 List.of("references", "/project/Ledger.java", "10:17"),
                 List.of("actions", "/project/Offers.java", "4:5", "4:9"),
                 List.of("apply-action", "/project/Offers.java", "4:5", "4:9", "Import 'List' (java.util)"),
-                List.of("affected-tests", "/project/Ledger.java"));
+                List.of("affected-tests", "/project/Ledger.java"),
+                List.of("affected-tests"));
     }
 
     static Stream<List<String>> commandsThatTalkToTheDaemon() {

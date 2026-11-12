@@ -126,7 +126,7 @@ public final class OperationRunner {
             case "diagnostics", "diagnostics-all" -> Kind.DIAGNOSED;
             case "references" -> Kind.REFERENCED;
             case "actions" -> Kind.OFFERED;
-            case "affected-tests" -> Kind.SELECTED;
+            case "affected-tests", "affected-tests-changed" -> Kind.SELECTED;
             case "rename",
                     "rename-token",
                     "organize-imports",

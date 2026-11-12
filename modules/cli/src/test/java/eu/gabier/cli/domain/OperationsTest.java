@@ -37,7 +37,8 @@ class OperationsTest {
                         "references",
                         "actions",
                         "apply-action",
-                        "affected-tests");
+                        "affected-tests",
+                        "affected-tests-changed");
     }
 
     @Test

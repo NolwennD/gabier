@@ -22,6 +22,7 @@ import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import eu.gabier.testing.domain.BuiltProject;
+import eu.gabier.testing.domain.ChangedBuild;
 import eu.gabier.testing.domain.ClassFolder;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -91,6 +92,8 @@ class ProjectServerTest {
                 new ChangeSet(List.of(new FileChange.CreateFile(Path.of("/work/demo/Other.java"))));
         static final BuiltProject BUILT = new BuiltProject(
                 List.of(new ClassFolder(Path.of("/work/demo/src"), Path.of("/work/demo/bin"))), List.of(), List.of());
+        static final ChangedBuild CHANGED =
+                new ChangedBuild(BUILT, List.of(Path.of("/work/demo/src/Main.java")), () -> {});
         static final ReferenceLocations NO_REFERENCES = new ReferenceLocations(List.of(), List.of());
         static final OfferedActions OFFERED = new OfferedActions(List.of(new OfferedAction("quickfix", "Fix it")));
         static final ScriptedDisk DISK = new ScriptedDisk();
@@ -181,6 +184,11 @@ class ProjectServerTest {
         @Override
         public BuiltProject built() {
             return BUILT;
+        }
+
+        @Override
+        public ChangedBuild builtWithChanges() {
+            return CHANGED;
         }
 
         @Override
@@ -391,6 +399,13 @@ class ProjectServerTest {
         }
 
         @Test
+        void theBuildWithItsChangesStartsItToo() {
+            assertThat(project.builtWithChanges()).isEqualTo(ScriptedServer.CHANGED);
+
+            assertThat(starter.starts).hasValue(1);
+        }
+
+        @Test
         void theBuildStartsItToo() {
             assertThat(project.built()).isEqualTo(ScriptedServer.BUILT);
 
@@ -518,6 +533,7 @@ class ProjectServerTest {
             project.diagnostics(List.of(FILE));
             project.projectDiagnostics();
             project.built();
+            project.builtWithChanges();
             project.rename(FILE, new Position(0, 0), "Other");
             project.organizeImports(FILE);
             project.cleanUp(FILE, List.of(CleanUp.ADD_OVERRIDE));

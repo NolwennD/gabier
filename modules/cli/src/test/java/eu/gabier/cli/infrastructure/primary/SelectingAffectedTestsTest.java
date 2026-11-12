@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class SelectingAffectedTestsTest extends CliTest {
@@ -88,9 +89,9 @@ class SelectingAffectedTestsTest extends CliTest {
     }
 
     @Test
-    void refusesNoFileAndTheDryRunOptionItDoesNotHaveAsAUsageError() throws IOException {
+    void refusesTheDryRunOptionItDoesNotHaveAsAUsageErrorWithFilesAndWithout() throws IOException {
         try (var daemon = daemonAnswering(selected())) {
-            assertThat(runWithSocket("affected-tests")).isEqualTo(2);
+            assertThat(runWithSocket("affected-tests", "--dry-run")).isEqualTo(2);
             assertThat(err()).contains("usage-error");
             err.reset();
             assertThat(runWithSocket("affected-tests", "--dry-run", "/project/Ledger.java"))
@@ -98,6 +99,55 @@ class SelectingAffectedTestsTest extends CliTest {
             assertThat(err()).contains("usage-error");
 
             assertThat(daemon.requests()).isEmpty();
+        }
+    }
+
+    @Nested
+    class WithNoFile {
+
+        private static final String REQUEST = """
+            {"jsonrpc":"2.0","id":1,"method":"affected-tests-changed"}\
+            """;
+
+        @Test
+        void asksTheDaemonForTheTestsOfWhatChangedSinceItsLastAnswerAndSendsNoParameter() throws IOException {
+            try (var daemon = daemonAnswering(selected("demo.LedgerTest"))) {
+                assertThat(runWithSocket("affected-tests")).isZero();
+
+                assertThat(daemon.requests()).containsExactly(REQUEST);
+            }
+        }
+
+        @Test
+        void printsOneLineForEachTestAsTheCallWithFilesDoes() throws IOException {
+            try (var daemon = daemonAnswering(selected("demo.LedgerTest", "demo.app.BankTest$Nested"))) {
+                assertThat(runWithSocket("affected-tests")).isZero();
+
+                assertThat(out().lines()).containsExactly("demo.LedgerTest", "demo.app.BankTest$Nested");
+                assertThat(err()).isEmpty();
+                assertThat(daemon.requests()).hasSize(1);
+            }
+        }
+
+        @Test
+        void saysThatNoTestIsAffectedAndExitsWithZeroWhenTheListIsEmpty() throws IOException {
+            try (var daemon = daemonAnswering(selected())) {
+                assertThat(runWithSocket("affected-tests")).isZero();
+
+                assertThat(out().lines()).containsExactly("no affected tests");
+                assertThat(err()).isEmpty();
+                assertThat(daemon.requests()).hasSize(1);
+            }
+        }
+
+        @Test
+        void givesTheResultAsJsonAsTheDaemonGaveIt() throws IOException {
+            try (var daemon = daemonAnswering(selected("demo.LedgerTest"))) {
+                assertThat(runWithSocket("--json", "affected-tests")).isZero();
+
+                assertThat(out()).isEqualTo(selected("demo.LedgerTest") + System.lineSeparator());
+                assertThat(daemon.requests()).containsExactly(REQUEST);
+            }
         }
     }
 

@@ -476,17 +476,41 @@ public final class Operations {
              refuses the whole call.\
             """,
             List.of(
-                    "testing-compilation-failed: a file given has an error the language server reported; the problem"
-                            + " names the files, and diagnostics tells what",
+                    Refusals.TESTING_COMPILATION_FAILED,
                     "testing-file-missing: a Java file given does not exist (a deleted file is refused too)",
                     "testing-not-in-a-source-folder: a Java file given is under no source folder of the project",
-                    "testing-invalid-test-filter: a pattern of infinitest.filters is not a regular expression; the"
-                            + " problem gives the file, the line and the pattern",
-                    "testing-read-failed: a class file, a jar or the file of filters could not be read (a class"
-                            + " compiled for a Java newer than the daemon's is not read)",
+                    Refusals.TESTING_INVALID_TEST_FILTER,
+                    Refusals.TESTING_READ_FAILED,
                     Refusals.REQUEST_FAILED,
                     Refusals.NOT_READY),
             List.of(Parameter.paths("files", "the Java files that changed, absolute paths in the project")));
+
+    public static final Operation AFFECTED_TESTS_CHANGED = new Operation(
+            "affected-tests-changed",
+            "the tests to run again after what changed on disk since the last answer, with no file to name",
+            """
+            The same answer as affected-tests, for the Java files that changed on disk since the daemon last answered\
+             this call, with none to give: the daemon knows the files it was told of when any request took in the\
+             changes on disk (an edit by hand, a text edit, a rename: all of them). The answer forgets them, so a second\
+             call with no new change answers an empty list; a call that is refused keeps them, and the next call that\
+             is answered lists their tests. The changes belong to the daemon of the project, not to the client: two\
+             clients share them, and whichever asks first is answered. Nothing changed answers an empty list.
+            The changes are those since the daemon started its language server: what changes while it imports the\
+             project counts, what changed before does not. A daemon started by this very call has seen nothing change,\
+             so its first call answers an empty list (never every test of the project by surprise): start the daemon\
+             before editing. A daemon that stops, or that stopped itself after an hour with no request, forgets the\
+             changes. A Java file that was deleted, or is under no source folder, is left out and never refused, and\
+             so is a file that is not Java. The tests that depended on a deleted class are listed when their own file\
+             changed (a rename does), and not otherwise.
+            A Java file that changed and does not compile is refused, with its name, as affected-tests does.\
+            """,
+            List.of(
+                    Refusals.TESTING_COMPILATION_FAILED,
+                    Refusals.TESTING_INVALID_TEST_FILTER,
+                    Refusals.TESTING_READ_FAILED,
+                    Refusals.REQUEST_FAILED,
+                    Refusals.NOT_READY),
+            List.of());
 
     private Operations() {}
 
@@ -515,7 +539,8 @@ public final class Operations {
                 REFERENCES,
                 ACTIONS,
                 APPLY_ACTION,
-                AFFECTED_TESTS);
+                AFFECTED_TESTS,
+                AFFECTED_TESTS_CHANGED);
     }
 
     /** An extraction of a selection into something named: the four commands share their parameters and their refusals. */

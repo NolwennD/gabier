@@ -16,6 +16,8 @@ Gabier changes Java through the language server of the project. Use its tools in
 - To fix an error, or to rewrite code, list what the language server offers on a range with `actions`, then apply one by its
   title with `apply-action`. `references` lists where a symbol is used.
   `affected-tests` lists the test classes to run again after a change to Java files; it runs none.
+  `affected-tests-changed` does it for what changed on disk since its last answer, with no file to name: call it after
+  your edits (it answers once; a second call with no new edit lists nothing).
 - The server starts the daemon when it connects, and jdtls imports the project meanwhile. The first call that asks the
   daemon waits for the import, about a minute for a Gradle project; the server goes on answering meanwhile, and `status`
   answers at once with where jdtls is and what it is importing. `status` starts no daemon: the connection has started

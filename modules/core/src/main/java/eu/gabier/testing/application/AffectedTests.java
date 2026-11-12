@@ -1,6 +1,7 @@
 package eu.gabier.testing.application;
 
 import eu.gabier.shared.error.domain.Assert;
+import eu.gabier.testing.domain.ChangedBuild;
 import eu.gabier.testing.domain.ProjectBuild;
 import eu.gabier.testing.domain.ProjectFiles;
 import eu.gabier.testing.domain.TestSelector;
@@ -40,5 +41,22 @@ public final class AffectedTests {
         Assert.field("sources", sources).notNull().notEmpty().noNullElement();
 
         return selector.affectedBy(build.built(), sources);
+    }
+
+    /**
+     * Waits for the build to have compiled what changed on disk since the last answer, then selects the tests that
+     * change affects. The changes are forgotten once the tests are answered, and not when the call is refused.
+     *
+     * @return the binary names of the tests to run again, in the order of the names, none when nothing changed or no
+     *     test is affected
+     * @throws eu.gabier.shared.error.domain.GeneratorException if the build is not ready, a changed Java file does not
+     *     compile, a class or the filters cannot be read, or a filter is not a regular expression
+     */
+    public List<String> affectedByChanges() {
+        ChangedBuild changed = build.builtWithChanges();
+        List<String> tests = selector.affectedByChanges(changed.built(), changed.sources());
+        changed.answered();
+
+        return tests;
     }
 }

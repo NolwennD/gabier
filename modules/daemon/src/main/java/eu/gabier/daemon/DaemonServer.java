@@ -109,7 +109,9 @@ final class DaemonServer implements AutoCloseable {
                         new CodeActionsMethod(new ListCodeActions(project)),
                         new ApplyCodeActionMethod(new ApplyCodeAction(project, new NioFileStore())),
                         new ReferencesMethod(new FindReferences(project, new NioFileStore())),
-                        new AffectedTestsMethod(new AffectedTests(project, new NioProjectFiles(), project.root()))),
+                        new AffectedTestsMethod(new AffectedTests(project, new NioProjectFiles(), project.root())),
+                        new AffectedTestsChangedMethod(
+                                new AffectedTests(project, new NioProjectFiles(), project.root()))),
                 line -> log.accept(line));
     }
 
