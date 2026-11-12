@@ -151,8 +151,10 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    "Capabilities" list of the README that links to it, and a row in the table of methods of `docs/protocol.md`. A file
    given on the command line is sent as an absolute path (the daemon's working directory is not the cli's), and a
    position is shown from 1 in the text and kept from 0 with `--json`.
-6. **Prove it end to end**: add the command to `Daemon.check` in `bin/ci.d/40-native`, which runs the native `gabier`
-   against the installed `gabier-daemon`, then run `bin/ci` (the `native` stage). A command of the catalogue is run there
+6. **Prove it end to end**: add the check of the command to the class of its area in `bin/ci.d/native/` (the one of the
+   commands of its kind: `RewriteChecks`, `ExtractChecks`, `MoveChecks`, `QueryChecks`, `DiagnosticsChecks`, `LifecycleChecks`;
+   a new area is a new class that extends `Checks`) and its call to `Session.check`: the stage `40-native` starts that
+   program, which runs the native `gabier` against the installed `gabier-daemon`. Then run `bin/ci` (the `native` stage). A command of the catalogue is run there
    against the daemon served by the fake language server (`:daemon:installFakeServed`, main class `FakeServedMain` in
    the source set `fakeServed` of `modules/daemon`): it is a distribution of its own, never the one a user installs, and
    it is the only way to the fake (no option, no request). A new answer to script is a scenario of the core

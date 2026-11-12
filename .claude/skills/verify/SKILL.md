@@ -184,7 +184,9 @@ it prints goes in your report.
 The stages are the executable files of `bin/ci.d/`, named `NN-name` and run in that order: `10-format`, `20-build`,
 `30-test`, `35-release-install` (the `install.sh` of a release on fake files), `36-release-notes` (the notes of a release,
 and the refusal of a version with no `docs/releases/<version>.md`, with no tag), `40-native`, `50-jdtls`. Each one is its
-own JEP 330 program, like the dev scripts of the sibling projects.
+own JEP 330 program, like the dev scripts of the sibling projects. A stage too big for one file keeps a launcher of a few
+lines in `bin/ci.d/` and its classes in a folder next to it: the Java launcher compiles a script with no `.java` extension
+alone, so only a `.java` main class sees its neighbours (`40-native` starts `bin/ci.d/native/Native.java`).
 Adding a stage is adding a file; the contract (run in the current directory, exit 77 and a `skip: <reason>` line to say
 it does not apply yet, `--describe` for its description) is in the header of `bin/ci`.
 
