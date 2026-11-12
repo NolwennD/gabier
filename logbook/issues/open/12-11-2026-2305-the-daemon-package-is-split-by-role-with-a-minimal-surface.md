@@ -30,5 +30,8 @@ Done when:
 - The classes are moved with `gabier move` (it rewrites the `package` lines, the imports and the references), `gabier
   diagnostics` is run after each move for the package-private members it cannot see, and the friction met is reported to the
   supervisor.
+- `Main` moves with the split, and the warning `OperatorPrecedence` that `./gradlew :daemon:compileJava` prints for its
+  condition on the arguments is gone: the condition is extracted into a method named for the rule (with `gabier
+  extract-method`), not parenthesised or commented.
 - The page of the daemon (`docs/daemon.md`) and `bin/ci.d/native/` still name what exists; the guide and the skills that name
   a class of the daemon are corrected.
