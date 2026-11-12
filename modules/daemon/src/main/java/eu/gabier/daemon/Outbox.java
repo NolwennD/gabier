@@ -1,6 +1,5 @@
 package eu.gabier.daemon;
 
-import eu.gabier.editing.domain.DiagnosedFile;
 import eu.gabier.protocol.JsonRpc;
 import eu.gabier.protocol.Problem;
 import eu.gabier.shared.error.domain.GeneratorException;
@@ -12,6 +11,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -36,7 +36,7 @@ final class Outbox implements Peer, AutoCloseable {
     private final Runnable onFailure;
     private final Thread writer;
     private final Deque<Answer> answers = new ArrayDeque<>();
-    private @Nullable Subscription subscription;
+    private @Nullable Subscription<?> subscription;
     private boolean closed;
 
     /**
@@ -84,22 +84,23 @@ final class Outbox implements Peer, AutoCloseable {
     }
 
     @Override
-    public synchronized Listener listen(
-            Function<List<DiagnosedFile>, List<String>> notifications, Consumer<Listener> whenGone) {
+    public synchronized <S> Listener<S> listen(
+            Function<S, List<String>> notifications, BinaryOperator<S> merge, Consumer<Listener<S>> whenGone) {
         if (subscription != null) {
             throw GeneratorException.badRequest(DaemonErrorKey.ALREADY_WATCHING)
                     .message("This connection already follows something: ask on another connection")
                     .build();
         }
-        subscription = new Subscription(notifications, whenGone);
+        var listener = new Subscription<>(notifications, merge, whenGone);
+        subscription = listener;
 
-        return subscription;
+        return listener;
     }
 
     /** Ends the connection: the subscription is told, the stream is closed, which ends a write that is blocked. */
     @Override
     public void close() throws IOException {
-        Subscription ending;
+        Subscription<?> ending;
         synchronized (this) {
             closed = true;
             ending = subscription;
@@ -109,7 +110,7 @@ final class Outbox implements Peer, AutoCloseable {
             out.close();
         } finally {
             if (ending != null) {
-                ending.whenGone.accept(ending);
+                ending.gone();
             }
             joinWriter();
         }
@@ -179,12 +180,9 @@ final class Outbox implements Peer, AutoCloseable {
         if (notice != null) {
             return new Work(() -> List.of(JsonRpc.notice(notice)), new CompletableFuture<>());
         }
-        var notifications = subscription.notifications;
-        var state = subscription.state;
-        if (state != null) {
-            subscription.state = null;
-
-            return new Work(() -> notifications.apply(state), new CompletableFuture<>());
+        var told = subscription.tellState();
+        if (told != null) {
+            return new Work(told, new CompletableFuture<>());
         }
         var reason = subscription.reason;
         if (reason != null && !subscription.finished) {
@@ -210,29 +208,48 @@ final class Outbox implements Peer, AutoCloseable {
     /** Lines to write, worked out by the writer once the lock is released, and what completes once they are written, or fails. */
     private record Work(Supplier<List<String>> lines, CompletableFuture<Void> written) {}
 
-    /** What a connection that listens has to tell: the latest state not written, and why it ended, if it did. */
-    private final class Subscription implements Listener {
+    /** What a connection that listens has to tell: the state not written, and why it ended, if it did. */
+    private final class Subscription<S> implements Listener<S> {
 
-        private final Function<List<DiagnosedFile>, List<String>> notifications;
-        private final Consumer<Listener> whenGone;
+        private final Function<S, List<String>> notifications;
+        private final BinaryOperator<S> merge;
+        private final Consumer<Listener<S>> whenGone;
         private final Deque<String> notices = new ArrayDeque<>();
         private boolean armed;
         private boolean finished;
-        private @Nullable List<DiagnosedFile> state;
+        private @Nullable S state;
         private @Nullable Problem reason;
 
-        Subscription(Function<List<DiagnosedFile>, List<String>> notifications, Consumer<Listener> whenGone) {
+        Subscription(Function<S, List<String>> notifications, BinaryOperator<S> merge, Consumer<Listener<S>> whenGone) {
             this.notifications = notifications;
+            this.merge = merge;
             this.whenGone = whenGone;
         }
 
+        /** The lines of the state waiting, which is then taken; none when there is none. Holding the lock. */
+        @Nullable
+        Supplier<List<String>> tellState() {
+            var waiting = state;
+            if (waiting == null) {
+                return null;
+            }
+            state = null;
+
+            return () -> notifications.apply(waiting);
+        }
+
+        void gone() {
+            whenGone.accept(this);
+        }
+
         @Override
-        public void offer(List<DiagnosedFile> state) {
+        public void offer(S state) {
             synchronized (Outbox.this) {
                 if (closed || reason != null) {
                     return;
                 }
-                this.state = state;
+                var waiting = this.state;
+                this.state = waiting == null ? state : merge.apply(waiting, state);
                 Outbox.this.notifyAll();
             }
         }

@@ -34,7 +34,7 @@ class ConnectionFollowingTest {
     private static final Problem BROKEN = new Problem(
             "urn:gabier:error:jdtls-down", "Jdtls is down", "It died", "jdtls-down", Map.of(), ErrorStatus.BAD_REQUEST);
 
-    private final AtomicReference<Peer.Listener> listener = new AtomicReference<>();
+    private final AtomicReference<Peer.Listener<List<DiagnosedFile>>> listener = new AtomicReference<>();
     private final CountDownLatch gone = new CountDownLatch(1);
     private final LiveInput in = new LiveInput();
     private final CapturedOutput out = new CapturedOutput();
@@ -50,10 +50,11 @@ class ConnectionFollowingTest {
 
         @Override
         public Outcome call(Map<String, String> params, Peer peer) {
-            listener.set(peer.listen(
+            listener.set(peer.<List<DiagnosedFile>>listen(
                     files -> files.isEmpty()
                             ? List.of()
                             : List.of(JsonRpc.notification("problems", "{\"count\":" + files.size() + "}")),
+                    (waiting, offered) -> offered,
                     ended -> gone.countDown()));
 
             return Outcome.of("{}");
@@ -70,8 +71,9 @@ class ConnectionFollowingTest {
 
         @Override
         public Outcome call(Map<String, String> params, Peer peer) {
-            peer.listen(
+            peer.<List<DiagnosedFile>>listen(
                             files -> List.of(JsonRpc.notification("problems", "{\"count\":" + files.size() + "}")),
+                            (waiting, offered) -> offered,
                             ended -> gone.countDown())
                     .offer(files(1));
 
@@ -288,7 +290,8 @@ class ConnectionFollowingTest {
 
     @Test
     void refusesToListenWhenThereIsNoClientToWriteTo() {
-        assertThatThrownBy(() -> Peer.nobody().listen(files -> List.of(), ended -> {}))
+        assertThatThrownBy(() -> Peer.nobody()
+                        .<List<DiagnosedFile>>listen(files -> List.of(), (waiting, offered) -> offered, ended -> {}))
                 .isInstanceOf(IllegalStateException.class);
     }
 

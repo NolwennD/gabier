@@ -102,6 +102,8 @@ class GuideQuestionsTest {
                 question("which tests are affected by my change", "The tests that a change affects"),
                 question("select the tests to rerun", "The tests that a change affects"),
                 question("which tests to run after my edit", "The tests that a change affects"),
+                question("follow the tests to run while I edit", "Following the tests as the files change"),
+                question("watch the tests as the files change", "Following the tests as the files change"),
                 question("text blocks", "A string built from literals with `+` and line breaks"),
                 question("extract variable", "An expression used twice, or too long to read"),
                 question("inline variable", "A call that hides what it does"));

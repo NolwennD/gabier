@@ -1067,6 +1067,28 @@ change that affects no test prints `no affected tests`. With no file, only what 
 known (a daemon started by the command itself answers nothing the first time: run `gabier start` before editing), a
 second call answers nothing until another edit, and a refused call keeps the changes. See `gabier help affected-tests`.
 
+### Following the tests as the files change
+
+Words: follow the tests while I edit, watch the tests, follow tests as the files change, retest continuously, stream
+
+Ask: `gabier affected-tests --watch`. It keeps running: start it once, in the background, and read what it prints as it
+comes (Infinitest in an IDE, with no IDE and no build tool). A tool answers once, so the tools of the MCP server do not
+follow: there, call `affected-tests-changed` each time you have changed files.
+
+Output, first the tests of the changes so far, then for each series of changes on disk the tests they affect, one test
+class per line as `gabier affected-tests` writes it; a change that affects no test prints nothing:
+
+```text
+demo.LedgerTest
+demo.app.BankTest
+```
+
+Limits: what it prints is used up, so a call of `gabier affected-tests` with no file answers nothing for those changes.
+A change that does not compile is told on the standard error as the problem `testing-compilation-failed`, the command
+goes on, and the tests of that change are printed once the code compiles (`gabier diagnostics` says what is wrong). It
+takes no file and no `--dry-run`. Nothing is executed. It ends when it is killed, and with a problem when the daemon
+ends it or goes away. See "The tests that a change affects" and `gabier help affected-tests`.
+
 ### A new file for a new type
 
 Words: create a file, new class, new interface, new record, new enum, new Java file with its package, package-info

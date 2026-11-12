@@ -22,8 +22,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 class ToolsTest {
 
     /** The operations that are no tool: the ones the server runs itself, and the ones that answer more than once. */
-    private static final List<Operation> NOT_TOOLS =
-            List.of(Operations.START, Operations.STOP, Operations.WATCH, Operations.WATCH_ALL);
+    private static final List<Operation> NOT_TOOLS = List.of(
+            Operations.START, Operations.STOP, Operations.WATCH, Operations.WATCH_ALL, Operations.WATCH_AFFECTED_TESTS);
 
     private static List<Map<String, @Nullable Object>> tools(Tools tools) {
         return list(Json.parse(tools.json())).stream().map(ToolsTest::object).toList();

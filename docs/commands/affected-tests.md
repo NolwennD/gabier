@@ -3,7 +3,8 @@
 `gabier [--json] affected-tests <file>...` lists the test classes to run again after a change to Java files, with no
 Maven or Gradle and whatever the build tool of the project (Infinitest does it for a developer in an IDE; gabier does it
 for an agent). `gabier [--json] affected-tests`, with no file, does it for what changed on disk since its last answer
-([see below](#with-no-file)). One line per test, the binary name of the class (`demo.LedgerTest`, `demo.Outer$InnerTest`), in the order
+([see below](#with-no-file)), and `gabier [--json] affected-tests --watch` keeps running and prints the tests of each
+change as it is made ([see below](#following-the-tests)). One line per test, the binary name of the class (`demo.LedgerTest`, `demo.Outer$InnerTest`), in the order
 of the names. Nothing is written and nothing is run: the names are classes, which a test runner takes as they are. The
 files are typed as paths, from the working directory, and the cli sends their absolute paths to the daemon, which
 alone cleans them (`./src/...` and `src/../src/...` name the file they lead to). The exit code is 0 whenever the daemon
@@ -63,7 +64,7 @@ files does, and forgets them; a second call with no new edit prints `no affected
   run `gabier start` before editing to make the first call useful. The choice is made so that no call answers every test
   of a large project by surprise; to run them all, give the files.
 - **The state is the daemon's, not the client's**: two clients of the same daemon share it, and the one that asks first is
-  answered (the second prints `no affected tests`). When the daemon stops (`gabier stop`, or after an hour with no request)
+  answered (the second prints `no affected tests`); a watcher ([below](#following-the-tests)) is a client too. When the daemon stops (`gabier stop`, or after an hour with no request)
   or starts another jdtls after a failure, the changes made before are forgotten.
 - **The class files are not the source of the changes**: observed on the real jdtls, a stop and a start of the daemon
   rewrote every class file of a project, those of classes nobody had touched included, so they would list every test after
@@ -71,6 +72,58 @@ files does, and forgets them; a second call with no new edit prints `no affected
   files it rewrote named the same classes; they differed where jdtls recompiles other classes than the ones edited (a
   changed signature, a deleted class): the class files show the dependents, the files told of do not, and the selection
   finds the dependents of a changed file by itself.
+
+## Following the tests
+
+```text
+$ gabier affected-tests --watch
+demo.LedgerTest
+demo.app.BankTest
+```
+
+`gabier [--json] affected-tests --watch` does not end: it prints the tests of the changes so far (what a call with no file
+answers, and it uses those changes up as that call does; nothing when no test is affected), then, after each series of
+changes on disk, **the tests they affect**, one per line and each as soon as it is known, in the output of the call with
+no file. It is what Infinitest does in an IDE, with no IDE and no build tool: start it once and read what comes. A change
+that affects no test prints nothing (not `no affected tests`). Several saves that come close together (a rename, a
+formatter) are one change and one answer: the daemon waits for 100 ms without an event before it looks, and a change
+counts only when the files that jdtls watches no longer look as they did. It takes no file and no `--dry-run`: both are
+usage errors, with exit code 2 and nothing asked of the daemon. The command lists the tests, it runs none.
+
+- **`--json`** prints one `{"tests":[...]}` object per line, as the call does, and nothing for a change that affects no
+  test; a notice is `{"notice":"..."}`.
+- **The follow of `diagnostics --watch`, not another one**: the daemon follows the disk with one thread and one watcher
+  for every client that follows something, the problems or the tests ([the daemon](../daemon.md)), and reads what a kind
+  of client follows only while one watches it: a watcher of the problems alone reads no test, so it never uses the changes
+  up. If the daemon cannot follow the disk any more it says so with a line `gabier: notice: ...` and goes on, as
+  `diagnostics --watch` does.
+- **A change that does not compile is not answered as "no test affected"**: the refusal (`testing-compilation-failed`, and
+  the other refusals of the testing context: `testing-invalid-test-filter`, `testing-read-failed`) is printed on the
+  standard error as the problem object, as the text or the JSON of any refusal, and the command **goes on**. The changes
+  are kept: once the code compiles, the next change on disk lists their tests. A file that does not compile when the
+  command starts is told the same way, after an empty start. That is also what the call does with no file (it keeps the
+  changes), except that the call ends with the refusal.
+- **Who uses up the changes**: whoever answers them first, the watcher or a call with no file, as the daemon keeps one
+  list of changes for the project. The watcher reads the changes after each change on disk, so a call with no file made
+  after the watcher printed its tests answers `no affected tests`, and the watcher prints nothing for the changes a call
+  answered just before. **Two watchers** are told the same tests: the daemon reads the changes once for each change on
+  disk and tells every watcher, so neither takes tests from the other. A watcher that reads slowly is told the tests of
+  the changes it missed together, once each, in the order of the names: none is lost. (A call and a read of the watcher
+  that overlap in time can both be answered the same changes: the tests are then printed twice, and none is lost.)
+- **It ends** as `diagnostics --watch` ends: when it is killed (Ctrl-C or SIGTERM: the process ends with the status of
+  the signal and prints nothing), with the problem of the daemon, exit code 2, when the daemon ends the subscription (the
+  language server cannot be read any more), and with `daemon-connection-failed`, exit code 1, when the daemon stops or
+  goes away. A refusal of the request itself (the language server is not ready) ends it with that problem and follows
+  nothing. A client that follows is a connected client: the daemon does not stop by itself for being idle while one runs.
+- **A first answer of the daemon that was just started is empty**, as for the call with no file: run `gabier start`
+  before editing.
+- **`gabier mcp` serves no tool for it**: a tool answers once, so the agent calls the tool `affected-tests-changed` after
+  each edit ([mcp](mcp.md)).
+
+The daemon method is `watch-affected-tests` (no parameter), which answers like `affected-tests-changed` and then writes
+the notifications `affected-tests` (the result of `affected-tests`, never with no test), `refusal` (the error object of
+the refusal the stream goes on after), `notice` and `ended`; the protocol is in
+[A method that answers more than once](../protocol.md#a-method-that-answers-more-than-once).
 
 ## Where the dependencies come from
 
@@ -154,6 +207,8 @@ command can answer, and the help of the command (`gabier help affected-tests`) l
 - `language-server-request-failed`: the language server failed on the request with an error of its own, which the
   problem relays (its code and its message; the cause is in the log of the daemon, see [the daemon](../daemon.md)).
 - `language-server-not-ready`: the Java language server is not ready.
-- `usage-error`: the arguments are not those of the command.
+- `already-watching`: with `--watch`, the connection already follows something. The cli follows once per connection, so it
+  does not meet it; a client of the protocol does.
+- `usage-error`: the arguments are not those of the command (with `--watch`, a file or `--dry-run`).
 - `daemon-start-failed`: no daemon answered and `gabier-daemon` could not be started.
 - `daemon-connection-failed`: the connection to the daemon was lost, or it hung up without answering.

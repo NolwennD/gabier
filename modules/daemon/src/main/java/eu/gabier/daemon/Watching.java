@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * What {@code watch} and {@code watch-all} share: the answer is the problems the client starts from, and the client is
  * then told, as notifications, the files whose problems changed ({@link eu.gabier.editing.domain.ProblemWatch}, one for
- * each client) each time the project is read again ({@link ProblemFeed}). The client leaves by disconnecting: the
+ * each client) each time the project is read again ({@link ProjectFeed}). The client leaves by disconnecting: the
  * feed stops reading for it, and for nobody once the last one is gone.
  */
 final class Watching {
@@ -22,9 +22,10 @@ final class Watching {
      *
      * @param following where the client starts: what it is answered, and what tells it the changes from there
      */
-    static DaemonMethod.Outcome begin(FollowProblems.Following following, ProblemFeed feed, Peer peer) {
+    static DaemonMethod.Outcome begin(FollowProblems.Following following, ProjectFeed feed, Peer peer) {
         var watch = following.watch();
-        var listener = peer.listen(state -> problems(watch.changesIn(state)), feed::unsubscribe);
+        var listener = peer.listen(
+                state -> problems(watch.changesIn(state)), (waiting, offered) -> offered, feed::unsubscribe);
         feed.subscribe(listener);
 
         return DaemonMethod.Outcome.of(diagnosed(following.told()).toJson());

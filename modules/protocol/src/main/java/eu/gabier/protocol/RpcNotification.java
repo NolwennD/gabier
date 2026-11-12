@@ -11,7 +11,8 @@ import org.jspecify.annotations.Nullable;
  * to that request, in the order of what they tell.
  *
  * @param method what the notification is: {@value JsonRpc#PROBLEMS} (the params are a {@link DiagnosedFiles}), {@value
- *     JsonRpc#NOTICE} or {@value JsonRpc#ENDED}
+ *     JsonRpc#AFFECTED_TESTS} (a {@link SelectedTests}), {@value JsonRpc#REFUSAL}, {@value JsonRpc#NOTICE} or {@value
+ *     JsonRpc#ENDED}
  * @param params the members of its {@code params}
  */
 public record RpcNotification(String method, Map<String, @Nullable Object> params) implements RpcMessage {
@@ -45,6 +46,33 @@ public record RpcNotification(String method, Map<String, @Nullable Object> param
         }
 
         return DiagnosedFiles.of(params);
+    }
+
+    /**
+     * The tests a change affects, for a notification of the method {@value JsonRpc#AFFECTED_TESTS}.
+     *
+     * @throws InvalidResponseException when the notification is another one, or the tests are not the expected shape
+     */
+    public SelectedTests affectedTests() {
+        if (!JsonRpc.AFFECTED_TESTS.equals(method)) {
+            throw InvalidResponseException.of("The notification " + method + " does not tell affected tests", null);
+        }
+
+        return SelectedTests.of(params);
+    }
+
+    /**
+     * The refusal a subscription goes on after, for a notification of the method {@value JsonRpc#REFUSAL}: the problem
+     * the params carry as the error object of a failed request.
+     *
+     * @throws InvalidResponseException when the notification is another one, or the problem is not the expected shape
+     */
+    public Problem refusal() {
+        if (!JsonRpc.REFUSAL.equals(method)) {
+            throw InvalidResponseException.of("The notification " + method + " is not a refusal", null);
+        }
+
+        return RpcResponse.problem(params);
     }
 
     /**

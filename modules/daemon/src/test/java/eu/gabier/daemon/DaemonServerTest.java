@@ -1631,6 +1631,12 @@ class DaemonServerTest {
         private static final String LAST = "the last state";
         private static final Path BROKEN = Path.of("src/main/java/demo/Broken.java");
         private static final Path CLEAN = Path.of("src/main/java/demo/Clean.java");
+        private static final String WATCH_AFFECTED_TESTS =
+                "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"watch-affected-tests\"}\n";
+        private static final String AFFECTED_TESTS_CHANGED =
+                "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"affected-tests-changed\",\"params\":{}}\n";
+        private static final Path UNUSED = Path.of("src/main/java/shop/Unused.java");
+        private static final Path SERVICE_TEST = Path.of("src/test/java/shop/ServiceTest.java");
 
         private final AtomicInteger reads = new AtomicInteger();
 
@@ -1666,7 +1672,7 @@ class DaemonServerTest {
 
         private long followers() {
             return Thread.getAllStackTraces().keySet().stream()
-                    .filter(thread -> thread.getName().equals(ProblemFeed.PUMP) && thread.isAlive())
+                    .filter(thread -> thread.getName().equals(ProjectFeed.PUMP) && thread.isAlive())
                     .count();
         }
 
@@ -1713,6 +1719,125 @@ class DaemonServerTest {
                                 directory.resolve(CLEAN).toString());
                 assertThat(changed.files().getFirst().diagnostics()).isEmpty();
                 assertThat(changed.files().getLast().diagnostics()).hasSize(1);
+            }
+        }
+
+        /** The shop built by the fake build, which the test edits as an agent edits files. */
+        private FakeProjectBuild servingTheShop() throws IOException {
+            var built =
+                    CompiledProject.of(directory, AffectedTestsCases.mainSources(), AffectedTestsCases.testSources());
+            var build = new FakeProjectBuild(directory).scripted(new BuildScenario("compiled", Map.of(), built));
+            project.building(build);
+            serving();
+
+            return build;
+        }
+
+        private List<String> toldTests(Client client) {
+            return ((RpcNotification) RpcMessage.parse(next(client)))
+                    .affectedTests()
+                    .tests();
+        }
+
+        @Test
+        void tellsTheTestsOfEachChangeToAWatcherOfTheTests() throws Exception {
+            var build = servingTheShop();
+            build.edited(UNUSED);
+
+            try (var client = connect(socket())) {
+                assertThat(client.ask(WATCH_AFFECTED_TESTS)).isEqualTo("""
+                    {"jsonrpc":"2.0","id":8,"result":{"tests":["shop.ArchitectureTest"]}}\
+                    """);
+
+                build.edited(SERVICE_TEST);
+                project.disk().says(DiskChanges.Signal.CHANGED);
+
+                assertThat(toldTests(client)).containsExactly("shop.ArchitectureTest", "shop.ServiceTest");
+            }
+            awaitNoFollower();
+            assertThat(project.disk().closed()).isTrue();
+        }
+
+        @Test
+        void tellsTheSameTestsToTwoWatchersOfTheTestsAndReadsOnceForTheChange() throws Exception {
+            var build = servingTheShop();
+
+            try (var first = connect(socket());
+                    var second = connect(socket())) {
+                first.ask(WATCH_AFFECTED_TESTS);
+                second.ask(WATCH_AFFECTED_TESTS);
+                int before = build.asked();
+
+                build.edited(SERVICE_TEST);
+                project.disk().says(DiskChanges.Signal.CHANGED);
+
+                assertThat(toldTests(first)).containsExactly("shop.ArchitectureTest", "shop.ServiceTest");
+                assertThat(toldTests(second)).containsExactly("shop.ArchitectureTest", "shop.ServiceTest");
+                assertThat(build.asked()).isEqualTo(before + 1);
+            }
+        }
+
+        @Test
+        void answersNoTestToTheCallThatComesAfterTheWatcherWasTold() throws Exception {
+            var build = servingTheShop();
+
+            try (var watcher = connect(socket());
+                    var caller = connect(socket())) {
+                watcher.ask(WATCH_AFFECTED_TESTS);
+                build.edited(UNUSED);
+                project.disk().says(DiskChanges.Signal.CHANGED);
+                assertThat(toldTests(watcher)).containsExactly("shop.ArchitectureTest");
+
+                assertThat(caller.ask(AFFECTED_TESTS_CHANGED)).isEqualTo("""
+                    {"jsonrpc":"2.0","id":9,"result":{"tests":[]}}\
+                    """);
+            }
+        }
+
+        @Test
+        void tellsTheWatcherOnlyWhatChangedAfterTheCallThatCameFirstUsedTheChangesUp() throws Exception {
+            var build = servingTheShop();
+
+            try (var watcher = connect(socket());
+                    var caller = connect(socket())) {
+                watcher.ask(WATCH_AFFECTED_TESTS);
+                build.edited(UNUSED);
+                assertThat(caller.ask(AFFECTED_TESTS_CHANGED)).contains("\"tests\":[\"shop.ArchitectureTest\"]");
+                project.disk().says(DiskChanges.Signal.CHANGED);
+
+                build.edited(SERVICE_TEST);
+                project.disk().says(DiskChanges.Signal.CHANGED);
+
+                assertThat(toldTests(watcher)).containsExactly("shop.ArchitectureTest", "shop.ServiceTest");
+            }
+        }
+
+        @Test
+        void aWatcherOfTheTestsAndAWatcherOfTheProblemsShareTheThreadThatFollowsTheDisk() throws Exception {
+            servingTheShop();
+
+            try (var tests = connect(socket());
+                    var problems = connect(socket())) {
+                tests.ask(WATCH_AFFECTED_TESTS);
+                problems.ask(WATCH_ALL);
+
+                assertThat(followers()).isEqualTo(1);
+            }
+            awaitNoFollower();
+        }
+
+        @Test
+        void aWatcherOfTheProblemsAloneLeavesTheChangesToTheCallThatComesAfter() throws Exception {
+            var build = servingTheShop();
+            build.edited(UNUSED);
+
+            try (var problems = connect(socket());
+                    var caller = connect(socket())) {
+                problems.ask(WATCH_ALL);
+                project.disk().says(DiskChanges.Signal.CHANGED);
+                problems.ask(STATUS_REQUEST);
+
+                assertThat(caller.ask(AFFECTED_TESTS_CHANGED)).contains("\"tests\":[\"shop.ArchitectureTest\"]");
             }
         }
 

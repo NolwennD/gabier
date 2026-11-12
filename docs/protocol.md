@@ -38,7 +38,7 @@ the values, such as the descriptor `Operations` and `OperationRunner` of the cli
 daemon ([help](commands/help.md), [init-agent](commands/init-agent.md)). The MCP server of the cli, `gabier mcp`
 ([mcp](commands/mcp.md)), serves each method of the table as a tool of the same name, with the same parameters, except
 `start` and `stop`: they are not tools (the server starts the daemon itself when the host connects, and an agent that
-stopped it would lose the tools that need it), while `status` is one, and `watch` and `watch-all`, which answer more than once
+stopped it would lose the tools that need it), while `status` is one, and `watch`, `watch-all` and `watch-affected-tests`, which answer more than once
 (below): a tool answers once. The parameters are those of the table, with the positions from 1 and a list as an array, so a
 method added here is a tool by itself; the warm-up of the server sends the daemon a `start`, as `gabier start` does.
 A daemon that stops by itself when nobody uses it (see [the daemon](daemon.md)) answers a request that reaches it after
@@ -54,6 +54,7 @@ it decided, whatever the method, with the refusal `daemon-stopping` (a server er
 | `diagnostics-all`  | none (the language server chooses the files)                                | [diagnostics](commands/diagnostics.md)                     |
 | `watch`            | `files` (absolute paths, one per line); answers more than once              | [diagnostics](commands/diagnostics.md)                     |
 | `watch-all`        | none (the language server chooses the files); answers more than once        | [diagnostics](commands/diagnostics.md)                     |
+| `watch-affected-tests` | none; answers more than once                                            | [affected-tests](commands/affected-tests.md)               |
 | `rename`           | `file`, `line`, `column`, `newName`, `dryRun`                               | [rename](commands/rename.md)                               |
 | `rename-token`     | `file`, `token`, `newName`, `dryRun`                                        | [rename](commands/rename.md)                               |
 | `organize-imports` | `file`, `dryRun`                                                            | [organize-imports](commands/organize-imports.md)           |
@@ -78,7 +79,7 @@ it decided, whatever the method, with the refusal `daemon-stopping` (a server er
 they are now, in the shape of the result of `diagnostics`; the daemon then writes, on the **same connection** and with no
 request, **notifications**: JSON-RPC messages with a `method` and `params` and **no `id`**, which the client does not
 answer. The answer is always the first line, and the notifications follow it in the order of what they tell. There are
-three:
+three of them for `watch` and `watch-all` (`watch-affected-tests` has two more, below):
 
 - `problems`: the `params` are the result of `diagnostics` (`{"files":[...]}`), for the files whose list of problems is
   not the one the client has been told, in the order of the paths; a file that **became clean** is there with an empty
@@ -90,6 +91,17 @@ three:
 - `ended`: the `params` are the error object of a failed request (`code`, `message`, `data` the problem object): the reason
   the subscription ends, such as a language server that cannot be read any more. Nothing is written after it, the
   connection stays open.
+
+`watch-affected-tests` follows the tests that the changes on disk affect. Its request is answered as `affected-tests-changed`
+answers (`{"tests":[...]}`, for the changes now, which it uses up); the daemon then writes the notifications `affected-tests`
+(the `params` are `{"tests":[...]}`, never with no test: a change that affects none is not told), `refusal` (the `params`
+are the error object of a refusal of the testing context, such as a changed file that does not compile: **the subscription
+goes on**, the changes are kept and their tests are told once they can be), `notice` and `ended`, as above. Unlike the
+problems, which are a state the next one replaces, the tests of a change are something that happened: a client that reads
+slowly is told the tests of the changes it missed together, once each, and none is lost. The daemon reads the tests once for
+each change on disk whatever the number of watchers, only while a client follows them, with the thread that follows the disk
+for the problems; the changes belong to the daemon, so what a watcher is told is no longer told to a call of
+`affected-tests-changed`, and the other way round.
 
 A client that sends a request while it follows is answered as usual (the answers and the notifications are written by one
 thread, so two lines never mix); a second `watch` on the same connection is refused with `already-watching`. **The client

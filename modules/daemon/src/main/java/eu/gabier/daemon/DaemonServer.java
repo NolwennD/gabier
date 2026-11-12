@@ -62,7 +62,7 @@ final class DaemonServer implements AutoCloseable {
     private final RequestHandler stoppingHandler = RequestHandler.refusing(DaemonStoppingException.idle());
     private RequestHandler handler;
     private final ServedProject project;
-    private final ProblemFeed problems;
+    private final ProjectFeed problems;
     private final Set<SocketChannel> connections = ConcurrentHashMap.newKeySet();
     private final CompletableFuture<Void> stopRequested = new CompletableFuture<>();
     private boolean closed;
@@ -81,7 +81,9 @@ final class DaemonServer implements AutoCloseable {
         var startedAt = nanoClock.getAsLong();
         var rename = new Rename(project, new NioFileStore());
         var follow = new FollowProblems(project);
-        problems = new ProblemFeed(follow::read, project::watchDisk);
+        var affectedTests = new AffectedTests(project, new NioProjectFiles(), project.root());
+        var followedTests = new FollowedTests(affectedTests);
+        problems = new ProjectFeed(follow::read, followedTests::read, project::watchDisk);
         // The method table: to add a method, add it here (.claude/skills/add-daemon-method/SKILL.md).
         handler = new RequestHandler(
                 List.of(
@@ -109,9 +111,9 @@ final class DaemonServer implements AutoCloseable {
                         new CodeActionsMethod(new ListCodeActions(project)),
                         new ApplyCodeActionMethod(new ApplyCodeAction(project, new NioFileStore())),
                         new ReferencesMethod(new FindReferences(project, new NioFileStore())),
-                        new AffectedTestsMethod(new AffectedTests(project, new NioProjectFiles(), project.root())),
-                        new AffectedTestsChangedMethod(
-                                new AffectedTests(project, new NioProjectFiles(), project.root()))),
+                        new AffectedTestsMethod(affectedTests),
+                        new AffectedTestsChangedMethod(affectedTests),
+                        new WatchAffectedTestsMethod(followedTests, problems)),
                 line -> log.accept(line));
     }
 

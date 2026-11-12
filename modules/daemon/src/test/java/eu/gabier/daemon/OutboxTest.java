@@ -179,12 +179,13 @@ class OutboxTest {
 
     @Test
     void endsTheConnectionWhenItsWriterIsInterrupted() throws InterruptedException {
-        var listener = outbox.listen(
+        var listener = outbox.<List<DiagnosedFile>>listen(
                 state -> {
                     Thread.currentThread().interrupt();
 
                     return List.of();
                 },
+                (waiting, offered) -> offered,
                 ended -> {});
         outbox.startNotifying();
 
@@ -194,9 +195,28 @@ class OutboxTest {
     }
 
     @Test
+    void putsTogetherWhatIsOfferedWhileTheWriterIsBusyWhenTheListenerAsksToMergeInsteadOfReplace()
+            throws InterruptedException {
+        output.hold();
+        var listener = outbox.<String>listen(
+                state -> List.of("told " + state), (waiting, offered) -> waiting + "+" + offered, ended -> {});
+        outbox.startNotifying();
+        listener.offer("a");
+        output.started.await(10, TimeUnit.SECONDS);
+
+        listener.offer("b");
+        listener.offer("c");
+        output.release(false);
+
+        eventually(() -> output.lines().size() == 2, "both lines to be written");
+        assertThat(output.lines()).containsExactly("told a", "told b+c");
+    }
+
+    @Test
     void ignoresWhatIsOfferedSaidOrEndedOnceTheSubscriptionEndedOrTheConnectionDid()
             throws IOException, InterruptedException {
-        var listener = outbox.listen(state -> List.of("state"), ended -> {});
+        var listener = outbox.<List<DiagnosedFile>>listen(
+                state -> List.of("state"), (waiting, offered) -> offered, ended -> {});
         outbox.answer("answer");
         outbox.startNotifying();
         listener.end(BROKEN);

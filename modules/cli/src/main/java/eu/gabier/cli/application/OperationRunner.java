@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The one way to run an operation, whatever front end asks for it: it checks the named values against the descriptor of
@@ -70,29 +71,36 @@ public final class OperationRunner {
     }
 
     /**
-     * Asks the daemon an operation that goes on telling what changes ({@code watch}, {@code watch-all}), and keeps the
-     * conversation open: the answer is {@link Daemon.Following#reply()}, decoded as that of {@code diagnostics}, and
-     * the daemon then tells the changes, one {@link Daemon.Following#next()} after another, until it is closed.
+     * Asks the daemon an operation that goes on telling what changes ({@code watch}, {@code watch-all}, {@code
+     * watch-affected-tests}), and keeps the conversation open: the answer is {@link Daemon.Following#reply()}, decoded
+     * as that of {@code diagnostics} for the first two and as that of {@code affected-tests} for the last, and the
+     * daemon then tells the changes, one {@link Daemon.Following#next()} after another, until it is closed.
      *
      * @throws GeneratorException when {@link #run} would, before it asks the daemon
      * @throws IllegalArgumentException when the operation is not one that follows
      */
     public Followed follow(Operation operation, Map<String, Object> values) {
-        if (!operation.method().equals("watch") && !operation.method().equals("watch-all")) {
-            throw new IllegalArgumentException("The operation " + operation.method() + " is not run through follow");
-        }
+        var kind = switch (operation.method()) {
+            case "watch", "watch-all" -> Kind.DIAGNOSED;
+            case "watch-affected-tests" -> Kind.SELECTED;
+            default ->
+                throw new IllegalArgumentException(
+                        "The operation " + operation.method() + " is not run through follow");
+        };
         var following = daemon.follow(operation.method(), parameters(operation, values));
 
-        return new Followed(DiagnosedFiles.of(following.reply().result()), following);
+        return new Followed(decode(kind, following.reply().result()), following);
     }
 
     /**
      * What a call that follows gives: where it starts, and the conversation, to read what comes next and to end.
      *
-     * @param started the problems as they are when it starts
+     * @param started what the daemon answered when it started: the problems as they are for the operations that follow
+     *     the problems (a {@link OperationResult.Diagnosed}), the tests of the changes so far for the one that follows
+     *     the tests (a {@link OperationResult.Selected})
      * @param following what the daemon tells next
      */
-    public record Followed(DiagnosedFiles started, Daemon.Following following) {}
+    public record Followed(OperationResult started, Daemon.Following following) {}
 
     private OperationResult ask(Operation operation, Kind kind, Map<String, String> parameters) {
         var result = (kind == Kind.REPORTED
@@ -100,6 +108,10 @@ public final class OperationRunner {
                         : daemon.ask(operation.method(), parameters))
                 .result();
 
+        return decode(kind, result);
+    }
+
+    private static OperationResult decode(Kind kind, Map<String, @Nullable Object> result) {
         return switch (kind) {
             case REPORTED -> new OperationResult.Reported(DaemonStatus.of(result));
             case DIAGNOSED -> new OperationResult.Diagnosed(DiagnosedFiles.of(result));

@@ -20,6 +20,18 @@ public final class JsonRpc {
     /** The method of the notification that tells the problems of some files: its params are a {@link DiagnosedFiles}. */
     public static final String PROBLEMS = "problems";
 
+    /**
+     * The method of the notification that tells the tests a change affects: its params are a {@link SelectedTests}, never
+     * with no test.
+     */
+    public static final String AFFECTED_TESTS = "affected-tests";
+
+    /**
+     * The method of the notification that tells a refusal the subscription goes on after: its params are the error object
+     * of the refusal, as for {@value #ENDED}.
+     */
+    public static final String REFUSAL = "refusal";
+
     /** The method of the notification that says something to the person who reads: its params hold a {@code message}. */
     public static final String NOTICE = "notice";
 
@@ -75,6 +87,16 @@ public final class JsonRpc {
     /** The notification that tells the problems of some files, as the result of {@code diagnostics} does. */
     public static String problems(DiagnosedFiles diagnosed) {
         return notification(PROBLEMS, diagnosed.toJson());
+    }
+
+    /** The notification that tells the tests a change affects, as the result of {@code affected-tests} gives them. */
+    public static String affectedTests(SelectedTests selected) {
+        return notification(AFFECTED_TESTS, selected.toJson());
+    }
+
+    /** The notification that tells a refusal and leaves the subscription going: the error object a failed request carries. */
+    public static String refusal(Problem problem) {
+        return notification(REFUSAL, errorObject(problem));
     }
 
     /** The notification that says something to the person who reads, such as why a delay is longer than usual. */

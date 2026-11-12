@@ -107,9 +107,10 @@ build file jdtls can read is refused at once, and a small Eclipse or Maven proje
 that is still running from an earlier import shortens the import a great deal: a cold start of the daemon and of jdtls with
 one warm answered the first `diagnostics` in 32 s.
 
-**Following the files while a client watches.** `gabier diagnostics --watch` ([diagnostics](commands/diagnostics.md))
-makes the daemon look at the disk, and only while a client watches: the first watcher starts it, the last one leaving
-ends it (a thread `gabier-problems`, and the system's registrations, are given back; nothing runs when nobody
+**Following the files while a client watches.** `gabier diagnostics --watch` ([diagnostics](commands/diagnostics.md)) and
+`gabier affected-tests --watch` ([affected-tests](commands/affected-tests.md)) make the daemon look at the disk, and only
+while a client watches (one thread and one watcher for the clients of both, a thread `gabier-problems`): the first
+watcher starts it, the last one leaving ends it (a thread `gabier-problems`, and the system's registrations, are given back; nothing runs when nobody
 watches). It asks the system to tell it of every change in the folders of the project: one registration per folder
 (inotify on Linux, through the `WatchService` of the JDK: a registration covers one folder and not what is below it, so
 every folder is registered, build folders included, and a folder created later when its creation is told; links are not
@@ -118,7 +119,11 @@ watched (its globs, which jdtls registers late in its initialization: the daemon
 close together, such as the files of a rename, are one change (**100 ms** without event), and a change counts only when
 the watched files no longer look as they did (their modification time and size), so jdtls writing its class files, or a
 file touched with no change, reads nothing again. A change is then told to jdtls, which builds, and the daemon reads the problems of
-the project as `diagnostics --all` does, **once for every client that watches**.
+the project as `diagnostics --all` does, **once for every client that watches the problems**. For the clients that watch
+the tests, the daemon reads the tests of the changes on disk instead (what `affected-tests` with no file answers, which
+uses those changes up), **once for every client that watches the tests**, and only while one does: a watcher of the
+problems alone reads no test, so it never uses the changes up. The first read of the thread that starts reads no test, as
+the request of the watcher answered with the changes so far.
 
 Why the daemon follows the disk itself: jdtls refreshes the files from the `workspace/didChangeWatchedFiles` events its
 client sends, as the protocol expects of a client, and not from the disk. Its own refresh is a preference of the Eclipse

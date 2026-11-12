@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -46,7 +47,8 @@ class WatchMethodsTest {
     private final ScriptedDisk disk = new ScriptedDisk();
     private final Peers peer = new Peers();
     private Supplier<List<DiagnosedFile>> later = List::of;
-    private final ProblemFeed feed = new ProblemFeed(() -> later.get(), () -> disk);
+    private final ProjectFeed feed =
+            new ProjectFeed(() -> later.get(), () -> AffectedTestsUpdate.of(List.of()), () -> disk);
 
     @AfterEach
     void stopFollowing() {
@@ -58,14 +60,16 @@ class WatchMethodsTest {
 
         private final List<List<DiagnosedFile>> offered = new CopyOnWriteArrayList<>();
         private volatile Function<List<DiagnosedFile>, List<String>> notifications = state -> List.of();
-        private volatile Consumer<Listener> whenGone = listener -> {};
-        private volatile Listener listener;
+        private volatile Consumer<Listener<List<DiagnosedFile>>> whenGone = listener -> {};
+        private volatile Listener<List<DiagnosedFile>> listener;
 
         @Override
-        public Listener listen(Function<List<DiagnosedFile>, List<String>> notifications, Consumer<Listener> whenGone) {
-            this.notifications = notifications;
-            this.whenGone = whenGone;
-            listener = new Listener() {
+        @SuppressWarnings("unchecked")
+        public <S> Listener<S> listen(
+                Function<S, List<String>> notifications, BinaryOperator<S> merge, Consumer<Listener<S>> whenGone) {
+            this.notifications = (Function<List<DiagnosedFile>, List<String>>) notifications;
+            this.whenGone = (Consumer<Listener<List<DiagnosedFile>>>) (Consumer<?>) whenGone;
+            listener = new Listener<>() {
                 @Override
                 public void offer(List<DiagnosedFile> state) {
                     offered.add(state);
@@ -78,7 +82,7 @@ class WatchMethodsTest {
                 public void end(Problem reason) {}
             };
 
-            return listener;
+            return (Listener<S>) listener;
         }
 
         /** The lines the connection would write for what the feed offered. */

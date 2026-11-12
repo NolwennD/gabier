@@ -249,7 +249,8 @@ positions counted from 1 and `dryRun` in place of `--dry-run`.
 - [`gabier apply-action`](docs/commands/apply-action.md): apply one of them, chosen by its title.
 - [`gabier affected-tests`](docs/commands/affected-tests.md): list the test classes to run again after a change to Java
   files, or with no file the ones that changed on disk since its last answer (JUnit 3, 4, 5 and TestNG, the
-  dependencies read in the classes jdtls compiled, `infinitest.filters`), with no Maven or Gradle.
+  dependencies read in the classes jdtls compiled, `infinitest.filters`), with no Maven or Gradle;
+  `gabier affected-tests --watch` keeps running and prints the tests to run again after each edit.
 - [`gabier help [<command>]`](docs/commands/help.md): list the commands, or explain one (usage, example, refusals).
 - [`gabier help guide`](docs/improve.md): which problem each improvement of the code solves (a text block, a switch
   expression, a condition to turn round...), what jdtls offers for it and what it leaves to you. The page is inside the

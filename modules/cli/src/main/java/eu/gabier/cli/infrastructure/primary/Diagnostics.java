@@ -2,20 +2,14 @@ package eu.gabier.cli.infrastructure.primary;
 
 import eu.gabier.cli.application.OperationResult;
 import eu.gabier.cli.application.ResultText;
-import eu.gabier.cli.domain.DaemonNotification;
-import eu.gabier.cli.domain.DaemonRefusal;
 import eu.gabier.cli.domain.Operation;
 import eu.gabier.cli.domain.Operations;
-import eu.gabier.protocol.Json;
 import eu.gabier.protocol.JsonRpc;
-import eu.gabier.protocol.Problem;
-import eu.gabier.protocol.RpcNotification;
 import eu.gabier.protocol.TerminalText;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.IntStream;
 
 /**
@@ -129,71 +123,27 @@ final class Diagnostics implements Capability {
         var followed = invocation.operations().follow(operation, values);
         var following = followed.following();
         try {
+            var started = ((OperationResult.Diagnosed) followed.started()).diagnostics();
             if (invocation.json()) {
-                print(invocation, followed.started().toJson());
-            } else if (followed.started().files().isEmpty()) {
-                print(invocation, NO_PROBLEMS);
+                Streaming.print(invocation, started.toJson());
+            } else if (started.files().isEmpty()) {
+                Streaming.print(invocation, NO_PROBLEMS);
             } else {
-                ResultText.followed(typed, followed.started()).forEach(line -> print(invocation, line));
+                ResultText.followed(typed, started).forEach(line -> Streaming.print(invocation, line));
             }
-            while (true) {
-                DaemonNotification notification;
-                try {
-                    notification = following.next();
-                } catch (RuntimeException goneAway) {
-                    return goneAway;
+
+            return Streaming.readUntilItEnds(invocation, following, message -> {
+                if (message.method().equals(JsonRpc.PROBLEMS)) {
+                    if (invocation.json()) {
+                        Streaming.print(invocation, message.problems().toJson());
+                    } else {
+                        ResultText.followed(typed, message.problems())
+                                .forEach(line -> Streaming.print(invocation, line));
+                    }
                 }
-                var ended = tell(invocation, typed, notification);
-                if (ended.isPresent()) {
-                    return ended.get();
-                }
-            }
+            });
         } finally {
             following.close();
         }
-    }
-
-    /** Shows what the daemon tells; the refusal that ends the subscription when it is that, nothing when it is not. */
-    private static Optional<RuntimeException> tell(
-            Invocation invocation, Map<String, String> typed, DaemonNotification notification) {
-        var message = new RpcNotification(notification.method(), notification.params());
-        switch (notification.method()) {
-            case JsonRpc.PROBLEMS -> {
-                if (invocation.json()) {
-                    print(invocation, message.problems().toJson());
-                } else {
-                    ResultText.followed(typed, message.problems()).forEach(line -> print(invocation, line));
-                }
-            }
-            case JsonRpc.NOTICE ->
-                print(
-                        invocation,
-                        invocation.json()
-                                ? "{\"notice\":" + Json.quote(message.notice()) + "}"
-                                : "gabier: notice: " + TerminalText.neutralise(message.notice()));
-            case JsonRpc.ENDED -> {
-                return Optional.of(refusal(message.ended()));
-            }
-            default -> {
-                // A notification of a later version of the daemon: nothing to show.
-            }
-        }
-
-        return Optional.empty();
-    }
-
-    private static DaemonRefusal refusal(Problem problem) {
-        return new DaemonRefusal(
-                problem.type(),
-                problem.title(),
-                problem.detail(),
-                problem.key(),
-                problem.parameters(),
-                problem.category());
-    }
-
-    private static void print(Invocation invocation, String line) {
-        invocation.out().println(line);
-        invocation.out().flush();
     }
 }

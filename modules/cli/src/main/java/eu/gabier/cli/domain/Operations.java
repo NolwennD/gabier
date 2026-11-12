@@ -117,6 +117,35 @@ public final class Operations {
                     "already-watching: the connection already follows something"),
             List.of());
 
+    public static final Operation WATCH_AFFECTED_TESTS = new Operation(
+            "watch-affected-tests",
+            "follow the tests to run again after what changes on disk, until the connection is closed",
+            """
+            The answer is the one of affected-tests-changed, for the changes on disk now (the daemon uses them up as that\
+             call does). The daemon then writes, on the same connection and with no request, one notification (a JSON-RPC\
+             message with no id) after each series of changes on disk, once the language server built the project:\
+             affected-tests, with the tests the change affects in the shape of the result of affected-tests (never with\
+             no test: a change that affects none is not told), refusal, with the error object of a refusal of the testing\
+             context (a changed file does not compile, a filter is not a regular expression) after which the daemon goes\
+             on, keeps the changes and lists their tests once they can be told, notice, with a message for the person\
+             who reads (the daemon can no longer follow the disk and looks at the files every second), and ended, with\
+             the problem that ends the subscription, after which nothing more is written. The answer to the request is\
+             refused only for what refuses affected-tests-changed apart from the refusals of the testing context, which\
+             are told as a refusal notification after the answer.
+            The daemon follows the disk with the one watcher that the other streams use, while at least one client\
+             follows something, and reads the tests once whatever the number of watchers of the tests, only while one\
+             watches them: every watcher is told the same tests. The changes belong to the daemon, as for\
+             affected-tests-changed: what a watcher is told is no longer told to another client, a call that asks\
+             affected-tests-changed included, and the one that is told first uses them up. A client that reads slowly is\
+             told the tests of the changes it missed together, none is lost. The subscription ends when the connection\
+             does. A connection follows one thing: a second watch on it is refused.\
+            """,
+            List.of(
+                    Refusals.REQUEST_FAILED,
+                    Refusals.NOT_READY,
+                    "already-watching: the connection already follows something"),
+            List.of());
+
     public static final Operation RENAME = new Operation(
             "rename",
             "rename a symbol, and everything that refers to it, in every file",
@@ -524,6 +553,7 @@ public final class Operations {
                 DIAGNOSTICS_ALL,
                 WATCH,
                 WATCH_ALL,
+                WATCH_AFFECTED_TESTS,
                 RENAME,
                 RENAME_TOKEN,
                 ORGANIZE_IMPORTS,

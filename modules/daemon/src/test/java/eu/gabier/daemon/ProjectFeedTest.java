@@ -24,14 +24,14 @@ import org.junit.jupiter.api.Test;
  * disk changed, whatever the number of clients, offers the state to each of them, and stops, with the disk it follows,
  * when the last one leaves. The disk and the project are scripted: the real ones are the business of the adapters.
  */
-class ProblemFeedTest {
+class ProjectFeedTest {
 
     private static final Path FILE = Path.of("/project/A.java");
 
     private final AtomicInteger reads = new AtomicInteger();
     private final ScriptedDisk disk = new ScriptedDisk();
     private volatile IntFunction<List<DiagnosedFile>> project = read -> List.of();
-    private final ProblemFeed feed = new ProblemFeed(this::read, () -> disk);
+    private final ProjectFeed feed = new ProjectFeed(this::read, () -> AffectedTestsUpdate.of(List.of()), () -> disk);
 
     private List<DiagnosedFile> read() {
         return project.apply(reads.incrementAndGet());
@@ -53,7 +53,7 @@ class ProblemFeedTest {
     }
 
     /** A client: what it was offered, told and ended with. */
-    private static final class Client implements Peer.Listener {
+    private static final class Client implements Peer.Listener<List<DiagnosedFile>> {
 
         final List<List<DiagnosedFile>> states = new CopyOnWriteArrayList<>();
         final List<String> notices = new CopyOnWriteArrayList<>();
@@ -93,13 +93,13 @@ class ProblemFeedTest {
 
     private static long pumps() {
         return Thread.getAllStackTraces().keySet().stream()
-                .filter(thread -> thread.getName().equals(ProblemFeed.PUMP) && thread.isAlive())
+                .filter(thread -> thread.getName().equals(ProjectFeed.PUMP) && thread.isAlive())
                 .count();
     }
 
     @Test
     void readsTheProjectWhenItStartsFollowingAndOffersItToTheClient() {
-        project = ProblemFeedTest::withProblems;
+        project = ProjectFeedTest::withProblems;
         var client = new Client();
 
         feed.subscribe(client);
@@ -110,7 +110,7 @@ class ProblemFeedTest {
 
     @Test
     void readsAgainWhenTheDiskChangedAndOffersTheNewStateAfterTheFirstOne() {
-        project = ProblemFeedTest::withProblems;
+        project = ProjectFeedTest::withProblems;
         var client = new Client();
         feed.subscribe(client);
         eventually(() -> client.states.size() == 1, "the first state");
@@ -135,7 +135,7 @@ class ProblemFeedTest {
 
     @Test
     void readsOnceForAChangeWhateverTheNumberOfClientsAndOffersTheSameStateToEach() {
-        project = ProblemFeedTest::withProblems;
+        project = ProjectFeedTest::withProblems;
         var first = new Client();
         var second = new Client();
         feed.subscribe(first);
@@ -155,7 +155,7 @@ class ProblemFeedTest {
 
     @Test
     void offersTheProjectAtOnceToAClientThatComesWhileAnotherIsFollowed() {
-        project = ProblemFeedTest::withProblems;
+        project = ProjectFeedTest::withProblems;
         var first = new Client();
         feed.subscribe(first);
         eventually(() -> !first.states.isEmpty(), "the first client told");
@@ -290,7 +290,7 @@ class ProblemFeedTest {
 
     @Test
     void endsTheClientWithTheProblemWhenTheDiskCannotBeFollowedAtAll() {
-        var failing = new ProblemFeed(this::read, () -> {
+        var failing = new ProjectFeed(this::read, () -> AffectedTestsUpdate.of(List.of()), () -> {
             throw LanguageServerException.notReady();
         });
         var client = new Client();

@@ -1,6 +1,8 @@
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /** {@code diagnostics} with no jdtls and with the fake language server, and {@code diagnostics --watch}. */
@@ -162,10 +164,68 @@ final class DiagnosticsChecks extends Checks {
         expect(ends(process), "the daemon served by the fake stops");
     }
 
+    /**
+     * {@code gabier affected-tests --watch}, the native binary, against the daemon served by the fake language server:
+     * it prints nothing while nothing changed and keeps running; once the file {@code .gabier-fake-changed} holds a
+     * changed Java file (the fake's way to tell the daemon that the disk changed), it prints the tests of that change,
+     * as the call with no file does, and the changes are used up; {@code --json} prints one object per change; SIGTERM
+     * ends it with nothing on the standard error; and it ends with the problem of a lost connection when the daemon
+     * stops.
+     */
+    void watchingTheTestsWithTheFakeServer() throws IOException, InterruptedException {
+        Path project = directory.resolve("watch-tests-project");
+        Process process = startDaemon(fakeDaemon, project.toString());
+        if (process == null) {
+            failed();
+            return;
+        }
+        Path out = Files.createTempFile(directory, "watch-tests-out", ".txt");
+        Path err = Files.createTempFile(directory, "watch-tests-err", ".txt");
+        Process watching = startWatch(out, err, "affected-tests", "--watch");
+        Thread.sleep(500);
+        expect(
+                watching.isAlive() && Files.readString(out).isEmpty(),
+                "gabier affected-tests --watch keeps running and prints nothing while no change was made");
+        Files.writeString(project.resolve(".gabier-fake-changed"), "src/main/java/shop/Greeter.java\n");
+        expect(
+                awaitText(out, "shop.ArchitectureTest\nshop.FrenchGreeterTest\nshop.GreeterTest\n"),
+                "gabier affected-tests --watch prints the tests of a change of the disk, one per line");
+        expect(watching.isAlive(), "gabier affected-tests --watch keeps running after it printed them");
+        watching.destroy(); // SIGTERM, to the process we started and to nothing else
+        expect(
+                watching.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                        && watching.exitValue() == 143
+                        && Files.readString(err).isEmpty(),
+                "gabier affected-tests --watch ends on SIGTERM with the status of the signal and nothing on the"
+                        + " standard error");
+        Path goneOut = Files.createTempFile(directory, "watch-tests-gone-out", ".txt");
+        Path goneErr = Files.createTempFile(directory, "watch-tests-gone-err", ".txt");
+        Process gone = startWatch(goneOut, goneErr, "--json", "affected-tests", "--watch");
+        Thread.sleep(500);
+        Files.writeString(project.resolve(".gabier-fake-changed"), "src/main/java/shop/Greeter.java\n");
+        expect(awaitText(goneOut, "{\"tests\":["), "gabier --json affected-tests --watch prints one object per change");
+        gabier("stop");
+        expect(
+                gone.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                        && gone.exitValue() == 1
+                        && Files.readString(goneErr).contains("daemon-connection-failed")
+                        && !Files.readString(goneErr).contains("\tat "),
+                "gabier affected-tests --watch ends with a daemon-connection-failed problem, no stack trace, when the"
+                        + " daemon stops");
+        expect(ends(process), "the daemon served by the fake stops after the watch of the tests");
+    }
+
     /** Starts {@code gabier diagnostics --watch} in the background, its streams in these files. */
     Process startWatch(Path out, Path err) throws IOException {
-        ProcessBuilder builder =
-                new ProcessBuilder(cli.toString(), "diagnostics", "--watch").directory(directory.toFile());
+        return startWatch(out, err, "diagnostics", "--watch");
+    }
+
+    /** Starts {@code gabier} with this command line in the background, its streams in these files. */
+    Process startWatch(Path out, Path err, String... command) throws IOException {
+        List<String> line = new ArrayList<>();
+        line.add(cli.toString());
+        line.addAll(List.of(command));
+        ProcessBuilder builder = new ProcessBuilder(line).directory(directory.toFile());
         builder.environment().clear();
         builder.environment().put("GABIER_SOCKET", socket.toString());
         builder.redirectOutput(out.toFile()).redirectError(err.toFile());

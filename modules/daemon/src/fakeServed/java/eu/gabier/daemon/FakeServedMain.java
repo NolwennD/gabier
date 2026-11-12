@@ -45,8 +45,9 @@ import java.util.stream.Stream;
  *
  * <p>The disk of the project changes when a file named {@value #EDIT} appears in its folder: from then on the problems
  * of the whole project are those of {@code DIAGNOSTICS_OF_THE_WHOLE_PROJECT_AFTER_TWO_EDITS} (an error fixed, another
- * made), and a client that follows the disk is told so. It is how the {@code native} stage makes a change happen with no
- * jdtls to edit files for.
+ * made), and a client that follows the disk is told so. So is it each time the file named {@value #CHANGED} is written
+ * (it holds the Java files that changed). It is how the {@code native} stage makes a change happen with no jdtls to
+ * edit files for.
  *
  * <p>It is its own distribution ({@code :daemon:installFakeServed}), never part of the one a user installs: the fake is
  * test code, and nothing a client sends can switch a daemon to it.
@@ -229,10 +230,17 @@ public final class FakeServedMain {
         public DiskChanges watchDisk() {
             return new DiskChanges() {
                 private boolean told = isEdited();
+                private long toldChanged = -1;
 
                 @Override
                 public Signal await(Duration timeout) throws InterruptedException {
                     Thread.sleep(Math.min(timeout.toMillis(), 50));
+                    long changed = whenChanged();
+                    if (changed != -1 && changed != toldChanged) {
+                        toldChanged = changed;
+
+                        return Signal.CHANGED;
+                    }
                     if (told || !isEdited()) {
                         return Signal.QUIET;
                     }
@@ -246,6 +254,15 @@ public final class FakeServedMain {
                     // The fake holds no registration.
                 }
             };
+        }
+
+        /** When the file of the changed Java files was written, so that a new one is a change of the disk; -1 when none. */
+        private long whenChanged() {
+            try {
+                return Files.getLastModifiedTime(root.resolve(CHANGED)).toMillis();
+            } catch (IOException noFile) {
+                return -1;
+            }
         }
 
         @Override

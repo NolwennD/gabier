@@ -2,6 +2,7 @@ package eu.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import eu.gabier.protocol.Problem;
 import eu.gabier.testing.application.AffectedTests;
 import eu.gabier.testing.fixtures.AffectedTestsCase;
 import eu.gabier.testing.fixtures.AffectedTestsCases;
@@ -17,6 +18,9 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -28,6 +32,12 @@ import org.junit.jupiter.api.Test;
 class AffectedTestsReplayTest {
 
     private static final Duration TIMEOUT = Duration.ofMinutes(5);
+
+    /** How long a client that follows the tests may wait to be told those of an edit. */
+    private static final Duration TOLD_WITHIN = Duration.ofSeconds(60);
+
+    /** How long a client that follows the tests is watched after it was told, to see that nothing more comes. */
+    private static final Duration QUIET = Duration.ofSeconds(2);
 
     private static JdtlsLanguageServer started(Path root) throws Exception {
         var settings = JdtlsSettings.of(root, List.of(root), TIMEOUT);
@@ -166,6 +176,93 @@ class AffectedTestsReplayTest {
                         .isEmpty();
             }
         }
+    }
+
+    /**
+     * The tests of every case, told to a client that follows them as the files change on disk: the feed follows the disk
+     * with the events of the system and reads the tests once for each change, with no request of the client, so this is
+     * also the proof that jdtls is told of an edit by the files alone. A client is told the tests of the case, once the
+     * edit is made, and nothing more afterwards.
+     */
+    @Test
+    void tellsTheTestsOfEveryCaseToAClientThatFollowsThemWhileTheFilesChange() throws Exception {
+        Path root = Files.createTempDirectory("gabier-affected-follow-").toRealPath();
+        write(root, Path.of("src/main/java"), AffectedTestsCases.mainSources());
+        write(root, Path.of("src/test/java"), AffectedTestsCases.testSources());
+        for (Map.Entry<Path, String> other : AffectedTestsCases.otherFiles().entrySet()) {
+            Files.writeString(root.resolve(other.getKey()), other.getValue());
+        }
+        EclipseProject.describe(root, List.of(CompiledProject.frameworks(root)));
+
+        try (var server = started(root)) {
+            var followed = new FollowedTests(new AffectedTests(server, new NioProjectFiles(), root));
+            var updates = new CopyOnWriteArrayList<AffectedTestsUpdate>();
+            var following = new CountDownLatch(1);
+            try (var feed = new ProjectFeed(List::of, followed::read, () -> {
+                var changes = server.watchDisk();
+                following.countDown();
+
+                return changes;
+            })) {
+                feed.subscribeTests(new Peer.Listener<AffectedTestsUpdate>() {
+                    @Override
+                    public void offer(AffectedTestsUpdate state) {
+                        updates.add(state);
+                    }
+
+                    @Override
+                    public void say(String notice) {
+                        System.out.println("the feed said: " + notice);
+                    }
+
+                    @Override
+                    public void end(Problem reason) {
+                        updates.add(AffectedTestsUpdate.refused(reason));
+                    }
+                });
+                assertThat(following.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS))
+                        .as("the feed follows the disk")
+                        .isTrue();
+                for (AffectedTestsCase scenario : AffectedTestsCases.all()) {
+                    updates.clear();
+                    for (Map.Entry<Path, String> edit : scenario.edits().entrySet()) {
+                        Files.writeString(root.resolve(edit.getKey()), edit.getValue());
+                    }
+                    for (Path changed : scenario.changed()) {
+                        Path file = root.resolve(changed);
+                        Files.writeString(file, Files.readString(file) + "\n");
+                    }
+
+                    var told = awaitTold(updates, scenario);
+
+                    System.out.println(scenario.name() + ": told " + told);
+                    assertThat(told.tests()).as(scenario.name()).containsExactlyElementsOf(scenario.affected());
+                    assertThat(told.refusal()).as(scenario.name()).isEmpty();
+                    Thread.sleep(QUIET.toMillis());
+                    assertThat(together(updates).tests())
+                            .as(scenario.name() + " (nothing more after the edit)")
+                            .containsExactlyElementsOf(scenario.affected());
+                }
+            }
+        }
+    }
+
+    /** What a client is told, put together, once it has been told what the case says or the time ran out. */
+    private static AffectedTestsUpdate awaitTold(List<AffectedTestsUpdate> updates, AffectedTestsCase scenario)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + TOLD_WITHIN.toNanos();
+        while (System.nanoTime() < deadline) {
+            if (!updates.isEmpty() && together(updates).tests().equals(scenario.affected())) {
+                break;
+            }
+            Thread.sleep(50);
+        }
+
+        return together(updates);
+    }
+
+    private static AffectedTestsUpdate together(List<AffectedTestsUpdate> updates) {
+        return updates.stream().reduce(AffectedTestsUpdate.of(List.of()), AffectedTestsUpdate::then);
     }
 
     private static Map<String, String> toStrings(Map<Path, String> files) {

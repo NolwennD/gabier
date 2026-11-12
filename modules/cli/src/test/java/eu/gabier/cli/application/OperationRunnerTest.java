@@ -182,8 +182,19 @@ class OperationRunnerTest {
 
             var followed = runner.follow(Operations.WATCH, Map.of("files", List.of("/work/A.java")));
 
-            assertThat(followed.started().files()).isEmpty();
+            assertThat(followed.started()).isEqualTo(new OperationResult.Diagnosed(new DiagnosedFiles(List.of())));
             assertThat(daemon.asked).containsExactly(new Asked("watch", Map.of("files", "/work/A.java")));
+        }
+
+        @Test
+        void asksTheDaemonForTheTestsAndDecodesWhereTheyStartAsThoseOfAffectedTests() {
+            daemon.answers("{\"tests\":[\"app.GreeterTest\"]}");
+
+            var followed = runner.follow(Operations.WATCH_AFFECTED_TESTS, Map.of());
+
+            assertThat(followed.started())
+                    .isEqualTo(new OperationResult.Selected(new SelectedTests(List.of("app.GreeterTest"))));
+            assertThat(daemon.asked).containsExactly(new Asked("watch-affected-tests", Map.of()));
         }
 
         @Test
@@ -508,7 +519,12 @@ class OperationRunnerTest {
     }
 
     static Stream<Operation> operationsOfTheDaemonThatAskDoesNotServe() {
-        return Stream.of(Operations.START, Operations.STOP, Operations.WATCH, Operations.WATCH_ALL);
+        return Stream.of(
+                Operations.START,
+                Operations.STOP,
+                Operations.WATCH,
+                Operations.WATCH_ALL,
+                Operations.WATCH_AFFECTED_TESTS);
     }
 
     static Stream<Operation> operationsOfTheDaemonThatAskServes() {

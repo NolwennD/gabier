@@ -22,6 +22,7 @@ class OperationsTest {
                         "diagnostics-all",
                         "watch",
                         "watch-all",
+                        "watch-affected-tests",
                         "rename",
                         "rename-token",
                         "organize-imports",

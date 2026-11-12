@@ -114,6 +114,7 @@ final class Session extends Support {
             lifecycle.startWithTheFakeServer();
             diagnostics.diagnosticsWithTheFakeServer();
             diagnostics.watchingWithTheFakeServer();
+            diagnostics.watchingTheTestsWithTheFakeServer();
             rewrites.renameWithTheFakeServer();
             rewrites.organizeImportsWithTheFakeServer();
             rewrites.cleanupWithTheFakeServer();

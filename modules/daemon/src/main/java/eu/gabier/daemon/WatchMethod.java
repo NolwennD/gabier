@@ -13,7 +13,7 @@ import java.util.Set;
  * WatchAllMethod}, for those files only. The refusals are those of {@code diagnostics}, for the whole call, and then
  * nothing is followed.
  */
-record WatchMethod(FollowProblems follow, ProblemFeed feed) implements StreamingMethod {
+record WatchMethod(FollowProblems follow, ProjectFeed feed) implements StreamingMethod {
 
     @Override
     public String name() {

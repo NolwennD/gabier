@@ -163,29 +163,35 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
 
 ## A method that answers more than once (a stream)
 
-A method that follows something (`watch`, `watch-all`) answers its request once, as any method does, then goes on
+A method that follows something (`watch`, `watch-all`, `watch-affected-tests`) answers its request once, as any method does, then goes on
 writing **notifications** on the same connection: JSON-RPC messages with no `id` (`{"jsonrpc":"2.0","method":"problems",
 "params":{...}}`), which the client does not answer. The notifications of the daemon today are `problems` (the params are
 the result of `diagnostics`, for the files whose list changed; an empty list is a file that became clean), `notice` (a
-`message` for the person who reads) and `ended` (the params are the error object of a failed request: the reason the
-subscription ends, after which nothing is written). `RpcMessage.parse` reads a line of the daemon as an `RpcResponse` or
-an `RpcNotification`; `JsonRpc.problems`, `notice` and `ended` write them. Rules:
+`message` for the person who reads), `ended` (the params are the error object of a failed request: the reason the
+subscription ends, after which nothing is written), and, for the tests, `affected-tests` (the params are the result of
+`affected-tests`) and `refusal` (the error object of a refusal the subscription goes on after). `RpcMessage.parse` reads a
+line of the daemon as an `RpcResponse` or an `RpcNotification`; `JsonRpc.problems`, `affectedTests`, `refusal`, `notice`
+and `ended` write them. Rules:
 
 1. **The method is a `StreamingMethod`** (a `DaemonMethod` whose `call(params, peer)` also gets the `Peer` of the client),
    and does its work that can fail (the refusals) **before** it asks the peer to listen: a request that is refused
-   follows nothing. `peer.listen(notifications, whenGone)` makes the connection write what `notifications` turns the
+   follows nothing. `peer.listen(notifications, merge, whenGone)` makes the connection write what `notifications` turns the
    states it is offered into, **after the answer** to the request (the answer is always the first line), and runs
    `whenGone` once when the connection ends, whatever the reason, which is where the method gives up its subscription.
    A connection follows one thing: a second `listen` is refused with `already-watching`.
 2. **One writer thread per connection** (`Outbox`) writes every line, answers and notifications, so two lines never mix
    and the order of what is offered is kept. Nobody else writes to a socket. A state that the writer has not taken yet is
-   **replaced** by the next one the method offers (`Peer.Listener.offer`), so a client that does not read costs the
-   daemon one blocked writer and one state, and holds up neither the method, nor another client, nor the daemon; what
-   such a client is told is the latest state, not every state. `offer`, `say` and `end` never block.
+   **replaced** by the next one the method offers (`Peer.Listener.offer`: `merge` is `(waiting, offered) -> offered`), so a
+   client that does not read costs the daemon one blocked writer and one state, and holds up neither the method, nor
+   another client, nor the daemon; what such a client is told is the latest state, not every state. That holds for a
+   state that is the whole truth (the problems of the project). A state that is something that happened (the tests that
+   a change affects, whose changes were used up) is **put together** with the next one by a `merge` that keeps both
+   (`AffectedTestsUpdate.then`), so no answer is lost. `offer`, `say` and `end` never block.
 3. **A client that disconnects ends its subscription and nothing else**: the reader of the connection goes on reading
    while the writer writes, so the end of its input is seen, the connection ends, and `whenGone` runs. What the method
-   shares between clients (the reader of the project, `ProblemFeed`, which follows the disk and reads the project once
-   for all the listeners) stops with the last of them, and leaves no thread. A client that is connected counts for the
+   shares between clients (the reader of the project, `ProjectFeed`, which follows the disk with one thread and one
+   watcher for every kind of client, and reads each thing that is followed once for all the listeners of its kind, and
+   only while one listens: a read that uses something up, the tests, must not be made for nobody) stops with the last of them, and leaves no thread. A client that is connected counts for the
    idle stop of the daemon: it does not stop while someone watches.
 4. **Test it** with `ConnectionFollowingTest` (the handler, the writer and the order, over streams), the real socket of
    `DaemonServerTest` (`Watching`: a disconnected client, a client that does not read, the stop of the daemon, no thread

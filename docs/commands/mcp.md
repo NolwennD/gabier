@@ -55,7 +55,7 @@ The operations of gabier that work on the code or report on it are **tools**, na
 `diagnostics-all`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`,
 `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions`, `apply-action`, `affected-tests`, `affected-tests-changed` and `status`.
 `start` and `stop` are operations of the daemon but not tools: the server starts the daemon itself when the host
-connects (below), and an agent that stopped it would lose the tools that need it. `watch` and `watch-all` are not tools either: they answer more than once, and a tool answers once. Each tool is generated from its descriptor in `eu.gabier.cli.domain.Operations`: its description is the summary and the
+connects (below), and an agent that stopped it would lose the tools that need it. `watch`, `watch-all` and `watch-affected-tests` are not tools either: they answer more than once, and a tool answers once. An agent that works through MCP calls `affected-tests-changed` after each edit, in place of `gabier affected-tests --watch` (the same changes, answered once; the decision is the one made for the problems: `ToolsTest` and `OperationRunnerTest` keep `watch-affected-tests` off the list of tools). Each tool is generated from its descriptor in `eu.gabier.cli.domain.Operations`: its description is the summary and the
 notes of the operation, its input schema is its parameters (a text, a whole number, a position, `true` or `false`, a list of
 texts), all required. A **position is an integer counted from 1**, as on the command line; a list is a JSON array
 (`files` of `move`, `cleanUps` of `cleanup`). A parameter added to an operation shows in its tool with no other file

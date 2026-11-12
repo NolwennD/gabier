@@ -30,7 +30,7 @@ final class FolderWatch implements DiskChanges {
     /** How long the events must stop before the files are compared. */
     static final Duration DEBOUNCE = Duration.ofMillis(100);
 
-    /** How often the files are compared once the system cannot follow (the notice of {@link ProblemFeed} says it). */
+    /** How often the files are compared once the system cannot follow (the notice of {@link ProjectFeed} says it). */
     static final Duration POLL_PACE = Duration.ofSeconds(1);
 
     private final FolderEvents events;

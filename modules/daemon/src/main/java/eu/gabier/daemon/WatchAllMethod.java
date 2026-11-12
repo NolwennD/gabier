@@ -12,7 +12,7 @@ import java.util.Map;
  * diagnostics-all}, and then nothing is followed; a connection follows one thing, a second request is refused with
  * {@code already-watching}.
  */
-record WatchAllMethod(FollowProblems follow, ProblemFeed feed) implements StreamingMethod {
+record WatchAllMethod(FollowProblems follow, ProjectFeed feed) implements StreamingMethod {
 
     @Override
     public String name() {

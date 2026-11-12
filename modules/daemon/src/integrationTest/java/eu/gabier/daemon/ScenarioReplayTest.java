@@ -220,9 +220,10 @@ class ScenarioReplayTest {
         }
         bringTo(root, first.files());
         var states = new LinkedBlockingQueue<List<DiagnosedFile>>();
-        var feed = new ProblemFeed(server::projectDiagnostics, server::watchDisk);
+        var feed =
+                new ProjectFeed(server::projectDiagnostics, () -> AffectedTestsUpdate.of(List.of()), server::watchDisk);
         try {
-            feed.subscribe(new Peer.Listener() {
+            feed.subscribe(new Peer.Listener<List<DiagnosedFile>>() {
                 @Override
                 public void offer(List<DiagnosedFile> state) {
                     states.add(state);

@@ -500,6 +500,41 @@ class JsonRpcTest {
         }
 
         @Test
+        void theAffectedTestsAreANotificationOfTheSelectedTests() {
+            var selected = new SelectedTests(java.util.List.of("app.GreeterTest", "app.Outer$InnerTest"));
+
+            var line = JsonRpc.affectedTests(selected);
+
+            assertThat(line)
+                    .isEqualTo(
+                            "{\"jsonrpc\":\"2.0\",\"method\":\"affected-tests\",\"params\":" + selected.toJson() + "}");
+            assertThat(((RpcNotification) RpcMessage.parse(line)).affectedTests())
+                    .isEqualTo(selected);
+        }
+
+        @Test
+        void aRefusalThatLeavesTheSubscriptionGoingCarriesTheProblemObjectAsAnErrorObject() {
+            var line = JsonRpc.refusal(PROBLEM);
+
+            assertThat(line)
+                    .isEqualTo("{\"jsonrpc\":\"2.0\",\"method\":\"refusal\",\"params\":{\"code\":-32000,"
+                            + "\"message\":\"Some key\",\"data\":" + PROBLEM_JSON + "}}");
+            assertThat(((RpcNotification) RpcMessage.parse(line)).refusal()).isEqualTo(PROBLEM);
+        }
+
+        @Test
+        void aNotificationThatIsNotTheAffectedTestsOrTheRefusalHasNeither() {
+            var problems = (RpcNotification) RpcMessage.parse(JsonRpc.notification("problems", "{\"files\":[]}"));
+
+            assertThat(catchThrowableOfType(GeneratorException.class, problems::affectedTests)
+                            .key())
+                    .isEqualTo(ProtocolErrorKey.INVALID_RESPONSE);
+            assertThat(catchThrowableOfType(GeneratorException.class, problems::refusal)
+                            .key())
+                    .isEqualTo(ProtocolErrorKey.INVALID_RESPONSE);
+        }
+
+        @Test
         void aNoticeCarriesAMessageForThePersonWhoReads() {
             var line = JsonRpc.notice("the \"disk\" is polled");
 
