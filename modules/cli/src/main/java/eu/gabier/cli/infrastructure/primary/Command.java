@@ -38,6 +38,18 @@ record Command(
         String ownNotes,
         List<String> commandLineRefusals) {
 
+    private static final String POSITIONS = """
+        A position is <line>:<column>, both counted from 1 as diagnostics shows them. A range is two positions, the
+        end excluded.\
+        """;
+
+    private static final String CHANGED_FILES = """
+        The answer lists the files modified, created, moved and deleted, then the diff of them all, with absolute paths;
+        a tab in them shows as \\u0009 and a backslash as two. --dry-run, anywhere after the command, writes nothing and
+        starts the answer with "dry run, nothing written". With --json, the answer is the changed files and the diff as
+        an object.\
+        """;
+
     Command {
         Assert.field("commandName", commandName).notBlank().noWhitespace();
         Assert.field("usage", usage)
@@ -164,18 +176,6 @@ record Command(
          */
         Command servesTheOperations(String summary);
     }
-
-    private static final String POSITIONS = """
-        A position is <line>:<column>, both counted from 1 as diagnostics shows them. A range is two positions, the
-        end excluded.\
-        """;
-
-    private static final String CHANGED_FILES = """
-        The answer lists the files modified, created, moved and deleted, then the diff of them all, with absolute paths;
-        a tab in them shows as \\u0009 and a backslash as two. --dry-run, anywhere after the command, writes nothing and
-        starts the answer with "dry run, nothing written". With --json, the answer is the changed files and the diff as
-        an object.\
-        """;
 
     private static final class Builder implements UsageStep, ExampleStep, RefusalsStep {
 
