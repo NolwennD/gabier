@@ -24,7 +24,8 @@ public final class Operations {
                 what it is doing and for how long it has been doing it: launching jdtls (its process and its runtime
                 come up), then importing the project (for a Gradle project, jdtls runs the build), with the last task
                 it reported. That is the member jdtlsProgress (phase, message, spentMillis) of the result, present
-                only while jdtls is starting. A request made while jdtls is starting waits for it. A daemon stops by
+                only while jdtls is starting. A request made while jdtls is starting waits for it, and one made right
+                after it is ready waits until jdtls has built the project (a few seconds). A daemon stops by
                 itself, with jdtls, once no client has been connected for a delay (60 minutes by default, set with
                 GABIER_IDLE_TIMEOUT in minutes, 0 for never): the member idle (timeoutMillis, leftMillis) of the
                 result says that delay and what is left of it before this call, and is absent when the daemon never

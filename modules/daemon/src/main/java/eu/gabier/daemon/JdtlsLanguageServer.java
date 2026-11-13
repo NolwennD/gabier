@@ -365,11 +365,16 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * does not exist: for a deletion jdtls publishes empty diagnostics of the file, as the events are handled, and
      * that publication is the acknowledgment (a request of jdtls has none).
      *
+     * <p>It starts by waiting until jdtls has finished its initialization ({@link Builds#awaitInitialized}): jdtls says
+     * it is ready before it has built the project and registered the files it watches, so a request made right after
+     * would be answered for a project that is not built, and the changes on disk could not be told.
+     *
      * <p>The events stay in {@link #untaken} until that wait has ended: when it times out (jdtls is busy), the retry
      * tells them again and waits again, and does not ask jdtls while they may still be queued. Each batch ends with a
      * file of its own, so that a late acknowledgment of the earlier batch is not taken for the one of the retry.
      */
     void takeInChangesOnDisk(JdtlsSession session, JdtlsWatch watch) throws InterruptedException {
+        builds.awaitInitialized(session, watch);
         List<FileEvent> onDisk = session.changesOnDisk();
         onDisk.forEach(this::remember);
         untaken.addAll(onDisk);

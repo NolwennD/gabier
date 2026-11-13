@@ -1,5 +1,6 @@
 package eu.gabier.daemon;
 
+import static eu.gabier.daemon.FakeOnlyReasons.A_START_THAT_LASTS;
 import static eu.gabier.daemon.FakeOnlyReasons.INTERRUPTED_WHILE_WAITING;
 import static eu.gabier.daemon.FakeOnlyReasons.JDTLS_DIED;
 import static eu.gabier.daemon.FakeOnlyReasons.JDTLS_FAILS;
@@ -40,6 +41,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 import org.eclipse.lsp4j.CodeAction;
@@ -936,6 +939,28 @@ class JdtlsLanguageServerTest {
                                 "Deleted "
                                         + root.resolve(".gabier-changes-taken-1")
                                                 .toUri());
+            }
+        }
+
+        @FakeOnly(reason = A_START_THAT_LASTS)
+        @Test
+        void asksJdtlsNothingBeforeItHasRegisteredTheFilesItWatchesThenRenames() throws Exception {
+            fake.holdsBackTheWatchers()
+                    .registersWatchersFor("**/*.java")
+                    .prepareRenameAnswers(renamable())
+                    .renameAnswers(CompletableFuture.completedFuture(edit(editsOf(greeter, replace(1, 9, 14, "hi")))));
+
+            try (var server = started()) {
+                var answer = CompletableFuture.supplyAsync(() -> server.rename(greeter, new Position(1, 10), "hi"));
+
+                LockSupport.parkNanos(Duration.ofMillis(500).toNanos());
+                assertThat(answer).isNotDone();
+                assertThat(fake.received()).doesNotContain("prepareRename Greeter.java");
+
+                fake.registersTheHeldBackWatchers();
+
+                assertThat(answer.get(10, TimeUnit.SECONDS))
+                        .isEqualTo(new ChangeSet(List.of(domainEdits(greeter, domainReplace(1, 9, 14, "hi")))));
             }
         }
 

@@ -97,6 +97,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     }
 
     private static final String METHOD = "workspace/didChangeWatchedFiles";
+    private static final List<List<String>> DEFAULT_WATCHERS = List.of(List.of("**/*.java"));
 
     /** The command of the child process that stands in for the jdtls process. */
     private String[] child = {"sleep", "300"};
@@ -520,7 +521,8 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     /**
      * Registers these globs to be watched ({@code client/registerCapability} for {@code workspace/didChangeWatchedFiles},
      * as jdtls does) once it is ready, in a registration of its own for each call: the start does not end before the
-     * client has answered it.
+     * client has answered it. A fake that is told none registers {@code **}{@code /*.java}, as every real jdtls registers
+     * the files it watches, so that a request is not held back for it.
      */
     FakeJdtls registersWatchersFor(String... globs) {
         registeredWatchers.add(List.of(globs));
@@ -542,9 +544,10 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     }
 
     private void registerWatchers() {
-        for (int registration = 0; registration < registeredWatchers.size(); registration++) {
+        List<List<String>> registrations = registeredWatchers.isEmpty() ? DEFAULT_WATCHERS : registeredWatchers;
+        for (int registration = 0; registration < registrations.size(); registration++) {
             var watchers = new JsonArray();
-            for (String glob : registeredWatchers.get(registration)) {
+            for (String glob : registrations.get(registration)) {
                 var watcher = new JsonObject();
                 watcher.addProperty("globPattern", glob);
                 watchers.add(watcher);
@@ -786,7 +789,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
             if (!publishesOnInitialized.isEmpty()) {
                 client.publishDiagnostics(new PublishDiagnosticsParams(publishesOnInitialized, List.of()));
             }
-            if (registeredWatchers.isEmpty() || watchersHeldBack) {
+            if (watchersHeldBack) {
                 sendStatus();
             } else {
                 // The answer to a registration arrives on the thread that is handling this notification.

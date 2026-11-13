@@ -92,7 +92,6 @@ final class JdtlsDiagnostics {
      */
     private JdtlsWatch afterTheBuild(JdtlsSession session) throws InterruptedException {
         JdtlsWatch watch = session.newWatch();
-        builds.awaitInitialized(session, watch);
         server.takeInChangesOnDisk(session, watch);
         builds.awaitFinished(session, watch);
 
