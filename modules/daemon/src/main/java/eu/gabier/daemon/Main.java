@@ -147,11 +147,10 @@ public final class Main {
         var idleDelay = idleDelay(environment);
         var uid = UserId.current();
         var socket = SocketLocation.resolve(environment, uid, workingDirectory);
-        var server = DaemonServer.open(
-                socket, uid, System::nanoTime, ProcessHandle.current().pid(), project);
-        idleDelay.ifPresent(server::stoppingWhenIdleFor);
         // The log of the daemon is its output: what the failure of a request says is written there, with the rest.
-        server.loggingTo(out::println);
+        var server = DaemonServer.open(
+                socket, uid, System::nanoTime, ProcessHandle.current().pid(), project, out::println);
+        idleDelay.ifPresent(server::stoppingWhenIdleFor);
         // A signal (SIGTERM) ends the JVM without serve() returning: the hook removes the socket.
         Runtime.getRuntime().addShutdownHook(server.shutdownHook());
         out.println("gabier-daemon " + ProtocolVersion.CURRENT + " listening on " + socket);

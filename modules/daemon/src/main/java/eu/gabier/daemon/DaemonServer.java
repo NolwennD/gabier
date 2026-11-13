@@ -70,10 +70,14 @@ final class DaemonServer implements AutoCloseable {
     private Duration grace = DISCONNECT_GRACE;
     private Optional<IdleWatch> idle = Optional.empty();
     private IdleWatch.Pause pause = this::pauseUnlessStopping;
-    private volatile Consumer<String> log = line -> {};
 
     private DaemonServer(
-            Path socket, ServerSocketChannel listener, LongSupplier nanoClock, long pid, ServedProject project) {
+            Path socket,
+            ServerSocketChannel listener,
+            LongSupplier nanoClock,
+            long pid,
+            ServedProject project,
+            Consumer<String> log) {
         this.socket = socket;
         this.listener = listener;
         this.project = project;
@@ -114,7 +118,12 @@ final class DaemonServer implements AutoCloseable {
                         new AffectedTestsMethod(affectedTests),
                         new AffectedTestsChangedMethod(affectedTests),
                         new WatchAffectedTestsMethod(followedTests, problems)),
-                line -> log.accept(line));
+                log);
+    }
+
+    /** As {@link #open(Path, String, LongSupplier, long, ServedProject, Consumer)}, for a daemon that logs nowhere. */
+    static DaemonServer open(Path socket, String uid, LongSupplier nanoClock, long pid, ServedProject project) {
+        return open(socket, uid, nanoClock, pid, project, line -> {});
     }
 
     /**
@@ -126,17 +135,30 @@ final class DaemonServer implements AutoCloseable {
      *     the wall clock, which a user can set back; replaced by a hand-made one in the tests
      * @param project the project served: its language server is the one the methods of the catalogue ask, and it is
      *     closed when the daemon stops
+     * @param log where the daemon writes what it says of a request that failed ({@link FailureLog})
      * @throws DaemonSocketException when the socket is not the daemon's to take, or cannot be set up
      */
-    static DaemonServer open(Path socket, String uid, LongSupplier nanoClock, long pid, ServedProject project) {
-        return open(socket, new SocketGuard(uid), nanoClock, pid, project);
+    static DaemonServer open(
+            Path socket, String uid, LongSupplier nanoClock, long pid, ServedProject project, Consumer<String> log) {
+        return open(socket, new SocketGuard(uid), nanoClock, pid, project, log);
+    }
+
+    /** As {@link #open(Path, SocketGuard, LongSupplier, long, ServedProject, Consumer)}, for a daemon that logs nowhere. */
+    static DaemonServer open(Path socket, SocketGuard guard, LongSupplier nanoClock, long pid, ServedProject project) {
+        return open(socket, guard, nanoClock, pid, project, line -> {});
     }
 
     /**
      * Starts listening on the socket, with the guard that judges and restricts it. A daemon that does not start leaves
      * no listener and no socket file behind: what it bound, it gives back.
      */
-    static DaemonServer open(Path socket, SocketGuard guard, LongSupplier nanoClock, long pid, ServedProject project) {
+    static DaemonServer open(
+            Path socket,
+            SocketGuard guard,
+            LongSupplier nanoClock,
+            long pid,
+            ServedProject project,
+            Consumer<String> log) {
         try {
             guard.prepareFolder(Objects.requireNonNull(socket.getParent(), "the socket is in a folder"));
             guard.clearStale(socket);
@@ -144,7 +166,7 @@ final class DaemonServer implements AutoCloseable {
             listener.bind(UnixDomainSocketAddress.of(socket));
             restrictOrGiveBack(guard, socket, listener);
 
-            return new DaemonServer(socket, listener, nanoClock, pid, project);
+            return new DaemonServer(socket, listener, nanoClock, pid, project, log);
         } catch (IOException e) {
             throw DaemonSocketException.unavailable(socket, e);
         }
@@ -315,16 +337,6 @@ final class DaemonServer implements AutoCloseable {
      */
     DaemonServer stoppingWhenIdleFor(Duration delay) {
         idle = Optional.of(new IdleWatch(nanoClock, delay));
-
-        return this;
-    }
-
-    /**
-     * Where the daemon writes what it says of a request that failed ({@link FailureLog}); a daemon that is not told
-     * writes it nowhere.
-     */
-    DaemonServer loggingTo(Consumer<String> log) {
-        this.log = log;
 
         return this;
     }

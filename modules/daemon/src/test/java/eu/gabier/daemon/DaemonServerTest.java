@@ -59,6 +59,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -141,7 +142,11 @@ class DaemonServerTest {
     }
 
     private DaemonServer open() {
-        var server = DaemonServer.open(socket(), uid, clock, PID, project);
+        return open(line -> {});
+    }
+
+    private DaemonServer open(Consumer<String> log) {
+        var server = DaemonServer.open(socket(), uid, clock, PID, project, log);
         servers.add(server);
 
         return server;
@@ -354,7 +359,7 @@ class DaemonServerTest {
         void writesToItsLogWhatAFailureOfARequestSaysWhileTheClientGetsTheInternalError() throws IOException {
             project.whoseRequestsBreak();
             var log = new CopyOnWriteArrayList<String>();
-            serve(open().loggingTo(log::add));
+            serve(open(log::add));
 
             try (var client = connect(socket())) {
                 var answer = client.ask("""
