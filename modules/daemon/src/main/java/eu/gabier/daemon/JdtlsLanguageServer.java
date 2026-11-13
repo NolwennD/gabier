@@ -57,9 +57,6 @@ import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionContext;
 import org.eclipse.lsp4j.CodeActionKind;
 import org.eclipse.lsp4j.CodeActionParams;
-import org.eclipse.lsp4j.CompletionItem;
-import org.eclipse.lsp4j.CompletionItemKind;
-import org.eclipse.lsp4j.CompletionParams;
 import org.eclipse.lsp4j.DefinitionParams;
 import org.eclipse.lsp4j.DiagnosticSeverity;
 import org.eclipse.lsp4j.DidCloseTextDocumentParams;
@@ -123,9 +120,6 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     /** The module descriptor, at the root of a source folder. */
     private static final String MODULE_DESCRIPTOR = "module-info.java";
 
-    /** The annotation that marks a package null-safe, written in full so that a {@code package-info.java} needs no import. */
-    private static final String NULL_MARKED = "@org.jspecify.annotations.NullMarked";
-
     /** The kinds of the symbols that jdtls lists for a class, an interface or an enum (a record is a class). */
     private static final Set<SymbolKind> TYPES = Set.of(SymbolKind.Class, SymbolKind.Interface, SymbolKind.Enum);
 
@@ -158,6 +152,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
 
     /** The import settings jdtls has: its own defaults at its start, then what the adapter last gave it. */
     private ImportSettings importsOfJdtls = ImportSettings.DEFAULTS;
+
+    private final JdtlsCreations creations = new JdtlsCreations(this);
 
     private JdtlsLanguageServer(
             Diagnostics diagnostics,
@@ -433,7 +429,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         JdtlsSession session = ready();
         Map<Path, String> texts = new LinkedHashMap<>();
         for (Path file : files) {
-            texts.put(normalized(file), textInProject(session, normalized(file)));
+            texts.put(
+                    JdtlsProject.normalized(file), JdtlsProject.textInProject(session, JdtlsProject.normalized(file)));
         }
         JdtlsWatch watch = session.newWatch();
         try {
@@ -449,7 +446,9 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         } finally {
             close(session, texts.keySet());
         }
-        return files.stream().map(file -> diagnostics.latest(normalized(file))).toList();
+        return files.stream()
+                .map(file -> diagnostics.latest(JdtlsProject.normalized(file)))
+                .toList();
     }
 
     /**
@@ -469,8 +468,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     @Override
     public synchronized ChangeSet rename(Path file, Position position, String newName) {
         JdtlsSession session = ready();
-        Path path = normalized(file);
-        String text = textInProject(session, path);
+        Path path = JdtlsProject.normalized(file);
+        String text = JdtlsProject.textInProject(session, path);
         var document = new TextDocumentIdentifier(path.toUri().toString());
         var at = new org.eclipse.lsp4j.Position(position.line(), position.column());
         var service = session.server().getTextDocumentService();
@@ -606,8 +605,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         String command = extraction.command;
         String what = extraction.what;
         JdtlsSession session = ready();
-        Path path = normalized(file);
-        String original = textInProject(session, path);
+        Path path = JdtlsProject.normalized(file);
+        String original = JdtlsProject.textInProject(session, path);
         var document = new TextDocumentIdentifier(path.toUri().toString());
         var refactoring = new JdtlsServer.RefactorEditParams(
                 command, new CodeActionParams(document, lsp(selection), new CodeActionContext(List.of())));
@@ -852,8 +851,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     @Override
     public synchronized ChangeSet moveTypeToFile(Path file, Position position) {
         JdtlsSession session = ready();
-        Path path = normalized(file);
-        textInProject(session, path);
+        Path path = JdtlsProject.normalized(file);
+        JdtlsProject.textInProject(session, path);
         var at = new org.eclipse.lsp4j.Position(position.line(), position.column());
         var context = new CodeActionParams(
                 new TextDocumentIdentifier(path.toUri().toString()),
@@ -910,14 +909,14 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     @Override
     public synchronized ChangeSet moveToPackage(List<Path> files, PackageName target) {
         JdtlsSession session = ready();
-        List<Path> paths = files.stream().map(JdtlsLanguageServer::normalized).toList();
-        paths.forEach(path -> textInProject(session, path));
+        List<Path> paths = files.stream().map(JdtlsProject::normalized).toList();
+        paths.forEach(path -> JdtlsProject.textInProject(session, path));
         String move = "the move of " + paths.size() + (paths.size() == 1 ? " file" : " files") + " to the package "
                 + target.value();
         JdtlsWatch watch = session.newWatch();
         try {
             prepare(session, watch);
-            Destination destination = destinationOf(paths, target, sourceFolders(session, watch));
+            Destination destination = destinationOf(paths, target, JdtlsProject.sourceFolders(session, watch));
             Path folder = destination.folder();
             List<Path> made = makeFolders(paths, folder, target);
             try {
@@ -1116,8 +1115,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     @Override
     public synchronized ChangeSet inline(Path file, Position position) {
         JdtlsSession session = ready();
-        Path path = normalized(file);
-        textInProject(session, path);
+        Path path = JdtlsProject.normalized(file);
+        JdtlsProject.textInProject(session, path);
         var at = new org.eclipse.lsp4j.Position(position.line(), position.column());
         var params = new CodeActionParams(
                 new TextDocumentIdentifier(path.toUri().toString()),
@@ -1178,8 +1177,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     @Override
     public synchronized ReferenceLocations references(Path file, Position position, boolean includeDeclaration) {
         JdtlsSession session = ready();
-        Path path = normalized(file);
-        textInProject(session, path);
+        Path path = JdtlsProject.normalized(file);
+        JdtlsProject.textInProject(session, path);
         var document = new TextDocumentIdentifier(path.toUri().toString());
         var at = new org.eclipse.lsp4j.Position(position.line(), position.column());
         var service = session.server().getTextDocumentService();
@@ -1268,7 +1267,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      */
     @Override
     public synchronized ChangeSet codeActionEdit(Path file, Range range, OfferedAction action) {
-        Path path = normalized(file);
+        Path path = JdtlsProject.normalized(file);
         Optional<CodeAction> found = offered(file, range).stream()
                 .filter(offer ->
                         kindOf(offer).equals(action.kind()) && offer.getTitle().equals(action.title()))
@@ -1301,7 +1300,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     }
 
     private List<CodeAction> offered(Path file, Range range) {
-        Path path = normalized(file);
+        Path path = JdtlsProject.normalized(file);
         var asked = lsp(range);
         List<org.eclipse.lsp4j.Diagnostic> problems = published(List.of(path)).getFirst().stream()
                 .filter(problem -> touches(problem.getRange(), asked))
@@ -1351,151 +1350,14 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
                 && offer.getTitle().startsWith("Inline ");
     }
 
-    /**
-     * Creates a type of the kind in a file that need not exist: the file is opened in jdtls with no text (as an editor
-     * opens a new file, never written to disk), and the snippet of the kind that jdtls completes the empty text with
-     * ({@code textDocument/completion} at 0:0, the client declaring {@code snippetSupport}, see {@link
-     * JdtlsCapabilities}) is the text of the file: jdtls derives the {@code package} line from the folder of the file
-     * in its source folder, writes the name of the file as the name of the type and, with the preferences of {@link
-     * JdtlsSettings#javaPreferences}, no comment. {@link NewTypeText} turns the snippet into the text of a file.
-     *
-     * <p>jdtls offers the snippet whatever the file: for one that is under no source folder it has no package to
-     * write, and gives the text of the default package. So the adapter asks which folders are source folders ({@code
-     * java.project.listSourcePaths}) and refuses a file that is under none. A kind jdtls has no snippet for (a record,
-     * before Java 14) is refused the same way, and jdtls does not say which of the two it is.
-     *
-     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, the file is under no
-     *     source folder or jdtls has no snippet of this kind
-     * @throws JdtlsException if jdtls dies or does not answer in time
-     */
     @Override
     public synchronized ChangeSet createType(Path file, TypeKind kind) {
-        JdtlsSession session = ready();
-        Path path = normalized(file);
-        requireInProject(session, path);
-        String what = "the snippet of a " + kind.keyword() + " for " + path;
-        JdtlsWatch watch = session.newWatch();
-        try {
-            prepare(session, watch);
-            if (sourceFolders(session, watch).stream().noneMatch(path::startsWith)) {
-                throw LanguageServerException.notCreatable(path, kind);
-            }
-            String snippet = snippetOfKind(session, watch, path, kind, what)
-                    .orElseThrow(() -> LanguageServerException.notCreatable(path, kind));
-            var start = new Position(0, 0);
-            var text = new TextEdit(new Range(start, start), NewTypeText.of(snippet));
-
-            return new ChangeSet(
-                    List.of(new FileChange.CreateFile(path), new FileChange.EditFile(path, List.of(text))));
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new JdtlsException("Interrupted while waiting for " + what, interrupted);
-        }
+        return creations.createType(file, kind);
     }
 
-    /**
-     * Creates the {@code package-info.java} of a package, which jdtls offers no snippet for ({@code
-     * textDocument/completion} at the start of an empty {@code package-info.java} proposes the keyword {@code package}
-     * only, with no text to insert). So the adapter writes the text itself, as a light workaround of that gap of
-     * jdtls: the package is the folder of the file under its source folder
-     * ({@code java.project.listSourcePaths}, the innermost one when they nest), the same derivation jdtls makes for a
-     * type, and the text is the annotation {@code @org.jspecify.annotations.NullMarked}, written in full so that the
-     * file has no import, the {@code package} line, and nothing else. A folder whose name is not an identifier is
-     * refused as the name of a package, and nothing is written.
-     *
-     * @throws LanguageServerException if jdtls is not ready, the file is not in its project, or it is under no source
-     *     folder or straight under one
-     * @throws eu.gabier.editing.domain.EditingException if a folder of the package is not an identifier
-     * @throws JdtlsException if jdtls dies or does not answer in time
-     */
     @Override
     public synchronized ChangeSet createPackageInfo(Path file) {
-        JdtlsSession session = ready();
-        Path path = normalized(file);
-        requireInProject(session, path);
-        JdtlsWatch watch = session.newWatch();
-        try {
-            takeInChangesOnDisk(session, watch);
-            PackageName name = packageOfFolder(path, sourceFolders(session, watch));
-            var start = new Position(0, 0);
-            var text = new TextEdit(new Range(start, start), NULL_MARKED + "\npackage " + name.value() + ";\n");
-
-            return new ChangeSet(
-                    List.of(new FileChange.CreateFile(path), new FileChange.EditFile(path, List.of(text))));
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new JdtlsException("Interrupted while waiting for the source folders for " + path, interrupted);
-        }
-    }
-
-    /** The package of the folder of the file under the innermost source folder that holds it. */
-    private static PackageName packageOfFolder(Path file, List<Path> sourceFolders) {
-        Path folder = sourceFolders.stream()
-                .filter(file::startsWith)
-                .max(Comparator.comparingInt(Path::getNameCount))
-                .orElseThrow(() -> LanguageServerException.notCreatablePackageInfo(file));
-        Path inside = folder.relativize(file.getParent());
-        if (inside.toString().isEmpty()) {
-            throw LanguageServerException.notCreatablePackageInfo(file);
-        }
-
-        return PackageName.of(inside.toString().replace(inside.getFileSystem().getSeparator(), "."));
-    }
-
-    /** The snippet of the kind that jdtls completes the empty text of the file with; the file is closed afterwards. */
-    private Optional<String> snippetOfKind(
-            JdtlsSession session, JdtlsWatch watch, Path path, TypeKind kind, String what) throws InterruptedException {
-        var uri = path.toUri().toString();
-        var service = session.server().getTextDocumentService();
-        var params = new CompletionParams(new TextDocumentIdentifier(uri), new org.eclipse.lsp4j.Position(0, 0));
-        service.didOpen(new DidOpenTextDocumentParams(new TextDocumentItem(uri, "java", 1, "")));
-        try {
-            return watch
-                    .await(what, () -> JdtlsRequests.unlessDeclined(service.completion(params)))
-                    .map(completion -> completion.isLeft()
-                            ? completion.getLeft()
-                            : completion.getRight().getItems())
-                    .stream()
-                    .flatMap(List::stream)
-                    .filter(item -> item.getKind() == CompletionItemKind.Snippet
-                            && kind.keyword().equals(item.getLabel()))
-                    .map(CompletionItem::getInsertText)
-                    .filter(Objects::nonNull)
-                    .findFirst();
-        } finally {
-            close(session, List.of(path));
-        }
-    }
-
-    /**
-     * The source folders of the projects jdtls imported ({@code java.project.listSourcePaths}: a result whose {@code
-     * data} lists them, each with its {@code path}).
-     *
-     * @throws JdtlsException if jdtls answers something else
-     */
-    private static List<Path> sourceFolders(JdtlsSession session, JdtlsWatch watch) throws InterruptedException {
-        var command = new ExecuteCommandParams("java.project.listSourcePaths", List.of());
-        Object answer = watch.await(
-                "the source folders of the project (java.project.listSourcePaths)",
-                () -> session.server().getWorkspaceService().executeCommand(command));
-        if (answer instanceof Map<?, ?> result
-                && Boolean.TRUE.equals(result.get("status"))
-                && result.get("data") instanceof List<?> sources) {
-            List<Path> folders = new ArrayList<>();
-            for (Object source : sources) {
-                if (!(source instanceof Map<?, ?> entry && entry.get("path") instanceof String folder)) {
-                    throw notSourceFolders(answer);
-                }
-                folders.add(normalized(Path.of(folder)));
-            }
-            return folders;
-        }
-        throw notSourceFolders(answer);
-    }
-
-    private static JdtlsException notSourceFolders(@Nullable Object answer) {
-        return new JdtlsException(
-                "java.project.listSourcePaths answered " + answer + ", which is not a list of source folders");
+        return creations.createPackageInfo(file);
     }
 
     /**
@@ -1521,8 +1383,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     @Override
     public synchronized Optional<ChangeSet> organizeImports(Path file) {
         JdtlsSession session = ready();
-        Path path = normalized(file);
-        String original = textInProject(session, path);
+        Path path = JdtlsProject.normalized(file);
+        String original = JdtlsProject.textInProject(session, path);
         var params = new CodeActionParams(
                 new TextDocumentIdentifier(path.toUri().toString()),
                 new org.eclipse.lsp4j.Range(new org.eclipse.lsp4j.Position(0, 0), new org.eclipse.lsp4j.Position(0, 0)),
@@ -1579,8 +1441,8 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     @Override
     public synchronized Optional<ChangeSet> cleanUp(Path file, List<CleanUp> cleanUps) {
         JdtlsSession session = ready();
-        Path path = normalized(file);
-        textInProject(session, path);
+        Path path = JdtlsProject.normalized(file);
+        JdtlsProject.textInProject(session, path);
         var identifier = new TextDocumentIdentifier(path.toUri().toString());
         JdtlsWatch watch = session.newWatch();
         try {
@@ -1703,7 +1565,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * tells them again and waits again, and does not ask jdtls while they may still be queued. Each batch ends with a
      * file of its own, so that a late acknowledgment of the earlier batch is not taken for the one of the retry.
      */
-    private void takeInChangesOnDisk(JdtlsSession session, JdtlsWatch watch) throws InterruptedException {
+    void takeInChangesOnDisk(JdtlsSession session, JdtlsWatch watch) throws InterruptedException {
         List<FileEvent> onDisk = session.changesOnDisk();
         onDisk.forEach(this::remember);
         untaken.addAll(onDisk);
@@ -1723,7 +1585,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
      * say them now ({@link #followTheImportPreferences}), and told of the changes on disk. A request that writes none
      * ({@code diagnostics}, {@code references}) only takes in the changes.
      */
-    private void prepare(JdtlsSession session, JdtlsWatch watch) throws InterruptedException {
+    void prepare(JdtlsSession session, JdtlsWatch watch) throws InterruptedException {
         followTheImportPreferences(session);
         takeInChangesOnDisk(session, watch);
     }
@@ -1757,7 +1619,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     }
 
     /** A notification: LSP4J does not throw when jdtls is gone, the next wait for an answer says so. */
-    private static void close(JdtlsSession session, Iterable<Path> files) {
+    static void close(JdtlsSession session, Iterable<Path> files) {
         for (Path file : files) {
             session.server()
                     .getTextDocumentService()
@@ -1787,7 +1649,7 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         return session.watchDisk();
     }
 
-    private JdtlsSession ready() {
+    JdtlsSession ready() {
         if (starting.state() == Future.State.RUNNING) {
             throw LanguageServerException.notReady();
         }
@@ -1825,31 +1687,6 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     private static JdtlsException death(JdtlsSession session) {
         return new JdtlsException(
                 "jdtls is not running any more: it exited with code " + session.exitValue() + " after it was ready");
-    }
-
-    /**
-     * The text of a file of the project.
-     *
-     * @throws LanguageServerException if the file is outside the project, does not exist or is a folder
-     */
-    private static String textInProject(JdtlsSession session, Path file) {
-        requireInProject(session, file);
-        if (Files.isDirectory(file)) {
-            throw LanguageServerException.notAFile(file);
-        }
-        try {
-            return Files.readString(file);
-        } catch (NoSuchFileException missing) {
-            throw LanguageServerException.fileMissing(file);
-        } catch (IOException failure) {
-            throw new UncheckedIOException(failure);
-        }
-    }
-
-    private static void requireInProject(JdtlsSession session, Path file) {
-        if (session.projects().stream().noneMatch(file::startsWith)) {
-            throw LanguageServerException.fileOutsideProject(file);
-        }
     }
 
     private Map<Path, CompletableFuture<List<org.eclipse.lsp4j.Diagnostic>>> open(
@@ -1901,9 +1738,5 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
         } catch (IOException failure) {
             throw new UncheckedIOException(failure);
         }
-    }
-
-    private static Path normalized(Path file) {
-        return file.toAbsolutePath().normalize();
     }
 }
