@@ -10,7 +10,7 @@ an import of their own new package (`import eu.gabier.cli.infrastructure.seconda
 Done when:
 - [ ] A scenario shows the case: a class moved with a class of the same move that it uses (or that uses it), then the files of
       the moved class are compared.
-- [ ] Either the import is gone after `gabier move`, or `docs/commands/move.md` and the guide say that jdtls leaves it and that
+- [ ] Either the import is gone after `gabier move`, or `gabier help move` and the guide say that jdtls leaves it and that
       `gabier organize-imports <file>` removes it (checked on the real jdtls), per "jdtls is never fought"
       (`.claude/rules/workflow.md`); a light workaround is allowed only in the adapter, with its reason in the resolution.
 - [ ] `bin/ci` passes.

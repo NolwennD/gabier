@@ -300,23 +300,35 @@ public final class Operations {
             "move Java classes to a package, creating the package when it does not exist",
             """
             The last operand is the package, such as demo.billing; the other operands are the files to move.
+            The files must be Java sources of one source folder of the project; the package is made in that folder,
+            so a test class goes to the test sources.
             The package is created, with its folder, when it does not exist; a dry run creates nothing.
             The default package cannot be the target.
-            The files must be Java sources of one source folder of the project.
-            The references and the imports of the project follow the moved classes, the fully qualified names
-            too, and a nested type keeps its outer type (Invoice.Line). A name in a string literal or a comment
-            is not rewritten.
-            jdtls does not sort the imports it writes: run organize-imports on the modified files.
-            When no Java file is left in the old package, its exports and opens in module-info.java follow it.
-            A member that was package-private in the old package, used from there, is no longer reachable.
-            Run diagnostics on the files that use it after the move.\
+            The answer lists the files modified, moved and created, then the diff; a dry run starts with
+            "dry run, nothing written".
+            The folders the move empties are removed, up to the source folder; a folder that still holds a file
+            stays. A dry run removes none.
+            The imports, the static imports and the fully qualified names of the project follow the moved classes,
+            in the other packages and the other modules of the build. A nested type keeps its outer type
+            (Invoice.Line). A name in a string literal or a comment, and a file that is not Java, are not rewritten:
+            search them for the old name.
+            The other modules are rewritten only when the build links them. A Gradle build with the plugin
+            org.gradlex.extra-java-module-info links none by default: set skipLocalJars = true in its
+            extraJavaModuleInfo block, or only the module of the class is rewritten.
+            The imports it writes are not sorted: run organize-imports on the modified files, after diagnostics (a
+            file whose imports cannot be resolved loses them).
+            When no Java file is left in the old package, its exports and opens in module-info.java follow it, with
+            their to clause. The new package is not exported or opened if the old one was not. uses and provides
+            are not changed.
+            A member that was package-private in the old package and is used across the move is no longer
+            reachable, and nothing says so: run diagnostics on the moved files and on the files that use them.\
             """,
             List.of(
                     """
-                    language-server-not-movable-to-package: the files cannot go to the package (the reason says why:\
-                     already in it, a file of that name there, not a Java source, in no source folder, in\
-                     several source folders, the folder cannot be made, or the language server has no change\
-                     to make)\
+                    language-server-not-movable-to-package: the files cannot go to the package; the parameter reason\
+                     says why: already-in-package, name-taken (a file of that name is there, or two files of the\
+                     list share a name), not-a-java-source, outside-source-folders, several-source-folders,\
+                     folder-not-made (a file is where a folder of the package goes) or nothing-to-move (no change to make)\
                     """,
                     "editing-not-a-package-name: the last operand is not a package name (the default package, a"
                             + " keyword, an empty part)",

@@ -15,7 +15,7 @@ An agent that moves classes keeps the module's own visibility rules, or is told 
 Done when:
 - [ ] on the cases above (and `opens`), the module-info keeps the widest of the two visibilities, or the move is refused
       with a key that says the `exports`/`opens` of the two packages differ; one of the two, said in `gabier help move`
-      and `docs/commands/move.md`;
+      and `gabier help move`;
 - [ ] a unit test per case in `ModuleExportsTest` and a scenario with its replay on the real jdtls (the effect: the
       module-info after the move compiles); `bin/ci` passes.
 

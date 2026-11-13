@@ -222,7 +222,7 @@ final class JdtlsMoves {
     private static Destination destinationOf(List<Path> paths, PackageName target, List<Path> sourceFolders) {
         Set<Path> roots = new LinkedHashSet<>();
         for (Path path : paths) {
-            if (!path.getFileName().toString().endsWith(".java")) {
+            if (isNotAJavaSource(path)) {
                 throw LanguageServerException.notMovableToPackage(
                         List.of(path), target, NotMovableReason.NOT_A_JAVA_SOURCE);
             }
@@ -239,16 +239,28 @@ final class JdtlsMoves {
         Path folder = sourceFolder.resolve(target.folder());
         Set<Path> names = new HashSet<>();
         for (Path path : paths) {
-            if (folder.equals(path.getParent())) {
+            if (isAlreadyIn(folder, path)) {
                 throw LanguageServerException.notMovableToPackage(
                         List.of(path), target, NotMovableReason.ALREADY_IN_PACKAGE);
             }
-            if (Files.exists(folder.resolve(path.getFileName())) || !names.add(path.getFileName())) {
+            if (takesTheNameOfAFileIn(folder, path) || !names.add(path.getFileName())) {
                 throw LanguageServerException.notMovableToPackage(List.of(path), target, NotMovableReason.NAME_TAKEN);
             }
         }
 
         return new Destination(sourceFolder, folder);
+    }
+
+    private static boolean takesTheNameOfAFileIn(Path folder, Path path) {
+        return Files.exists(folder.resolve(path.getFileName()));
+    }
+
+    private static boolean isAlreadyIn(Path folder, Path path) {
+        return folder.equals(path.getParent());
+    }
+
+    private static boolean isNotAJavaSource(Path path) {
+        return !path.getFileName().toString().endsWith(".java");
     }
 
     /** Where a move puts the files: the source folder they are in and the folder of the package under it. */

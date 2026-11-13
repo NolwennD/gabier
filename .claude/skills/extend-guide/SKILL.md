@@ -19,7 +19,7 @@ situation: its title is the situation, never the name of a tool. A situation met
 
 1. **Say the situation.** One sentence, in the words of the person who had the problem ("a string built with calls and
    quotes", not "String.format proposal"). Search the guide first (`grep -n -i "<word>" docs/improve.md`): an entry that
-   exists is corrected, not duplicated. The guide holds situations; a command's usage stays in `docs/commands/`.
+   exists is corrected, not duplicated. The guide holds situations; a command's usage stays in its help (`gabier help <command>`, `.claude/rules/help.md`).
 2. **Observe before writing.** Run what you are going to recommend, on real code, and read the answer:
    - the language: `gabier cleanup --dry-run <file> <id>` for a clean-up of the whole file (`gabier help cleanup`), or
      `gabier actions <file> <line>:<column> <line>:<column>` on the place, then `gabier apply-action --dry-run <file>

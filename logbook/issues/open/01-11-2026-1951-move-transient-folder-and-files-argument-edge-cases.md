@@ -12,5 +12,5 @@ Done when:
       fails the `MakeFolder` step with `WRITE_FAILED`); a test for each order, or the page says so.
 - [ ] `removeFolders` in the `finally` of `JdtlsLanguageServer.moveToPackage` (lines 609-615) does not replace the original exception (`addSuppressed`), and the
       `Deleted` event is sent even when a folder cannot be removed; a test on the failure path of jdtls with a non-empty folder.
-- [ ] `docs/commands/move.md` says that a dry run makes the missing folders for the time of the question, that a kill between make and remove leaves an empty
+- [ ] `gabier help move` says that a dry run makes the missing folders for the time of the question, that a kill between make and remove leaves an empty
       folder, and what a watching tool sees; or a way is found that makes none. `bin/ci` green, coverage 100%.

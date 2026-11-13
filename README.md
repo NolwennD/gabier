@@ -237,7 +237,7 @@ positions counted from 1 and `dryRun` in place of `--dry-run`.
 - [`gabier extract-field`](docs/commands/extract-field.md): turn an expression into a field of the class.
 - [`gabier move-type-to-file`](docs/commands/move-type-to-file.md): make a nested type a top-level type in a file of its
   own.
-- [`gabier move`](docs/commands/move.md): move Java classes to a package, creating the package when it does not exist.
+- `gabier move` (`gabier help move`): move Java classes to a package, creating the package when it does not exist.
 - [`gabier inline`](docs/commands/inline.md): replace a local variable, a method or a constant by its value (on the declaration of a method
   or constant: every use, and the declaration goes; on one use: that use only).
 - [`gabier create`](docs/commands/create.md): create a file that holds an empty class, interface, record or enum, with the

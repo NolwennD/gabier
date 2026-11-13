@@ -98,8 +98,8 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
      command, the example starts with `$ gabier `) are `Assert`s of the compact constructor of `Command`. `command()`
      returns `COMMAND`. `gabier help`, `gabier help <command>` and `gabier <command> --help` (handled once, in the dispatch of
      `Gabier`, for every command) print it, and `UsageException` points to them: nothing else lists the commands, so the
-     usage text is not edited. The refusals are the keys of the `## Refusals` section of the command's page (below):
-     `CommandRefusalsTest` fails when they differ. `run` reads the words with `invocation.arguments()`
+     usage text is not edited. The refusals are the keys of the operation in `Operations` (the help is the documentation of
+     the command, `.claude/rules/help.md`): `RefusalKeysTest` fails when one is the key of no `ErrorKey` of the code. `run` reads the words with `invocation.arguments()`
      (`Arguments`: `dryRun()`, `has(option)`, `operands(count, options...)` which takes `--dry-run` and the options out
      and refuses a wrong count, `exactly(count)` which keeps every word, `file(i)` as an absolute path, `position(i)` for
      `line:column` and `position(i, j)` for two numbers, both counted from 1 by the user and kept from 1; every refusal is
@@ -145,10 +145,9 @@ the server changes. `status` (answers with a result) and `stop` (answers, then a
    line and its request (`InliningTest.ReturningChangedFiles` is the model), and inherits the tests of the absolute path,
    `--dry-run`, the list and the diff, the terminal escapes and `--json`; add its command line to `DaemonAnswersTest`
    (refusal as text and as JSON, a result it cannot read) and the lines that are not its usage to `UnknownUsageTest`.
-   Document it: a page `docs/commands/<command>.md` (modelled on the
-   existing ones: usage, example in text and `--json`, a `## Refusals` section with one bullet `` - `key`: meaning `` per
-   refusal, the daemon method and its parameters), one line in the
-   "Capabilities" list of the README that links to it, and a row in the table of methods of `docs/protocol.md`. A file
+   Document it in the help, not in a page (`.claude/rules/help.md`): the summary, the notes (output, limits, what to run
+   after) and the refusals in `Operations`, the usage and the example in the command, one line in the "Capabilities" list
+   of the README that points to `gabier help <command>`, and a row in the table of methods of `docs/protocol.md`. A file
    given on the command line is sent as an absolute path (the daemon's working directory is not the cli's), and a
    position is shown from 1 in the text and kept from 0 with `--json`.
 6. **Prove it end to end**: add the check of the command to the class of its area in `bin/ci.d/native/` (the one of the
