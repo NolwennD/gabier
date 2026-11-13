@@ -226,21 +226,21 @@ positions counted from 1 and `dryRun` in place of `--dry-run`.
 - [`gabier diagnostics <file>...`](docs/commands/diagnostics.md): the errors and warnings of Java files, without a build;
   `gabier diagnostics --all` the Java files of the project that have a problem, as jdtls published them;
   `gabier diagnostics --watch` keeps running and prints the files whose problems change as you edit.
-- [`gabier rename`](docs/commands/rename.md): rename a symbol, and everything that refers to it, in every file.
-- [`gabier organize-imports <file>`](docs/commands/organize-imports.md): add the missing imports, remove the unused
+- `gabier rename`: rename a symbol, and everything that refers to it, in every file.
+- `gabier organize-imports <file>`: add the missing imports, remove the unused
   ones and order the rest as the project does (its `.settings` or `.vscode` preferences).
-- [`gabier cleanup <file> <cleanup>...`](docs/commands/cleanup.md): apply clean-ups of jdtls to a file, such as
+- `gabier cleanup <file> <cleanup>...`: apply clean-ups of jdtls to a file, such as
   `stringConcatToTextBlock`, which rewrites string concatenations into text blocks.
-- [`gabier extract-variable`](docs/commands/extract-variable.md): turn an expression into a local variable.
-- [`gabier extract-method`](docs/commands/extract-method.md): turn statements, or an expression, into a method.
-- [`gabier extract-constant`](docs/commands/extract-constant.md): turn an expression into a constant.
-- [`gabier extract-field`](docs/commands/extract-field.md): turn an expression into a field of the class.
-- [`gabier move-type-to-file`](docs/commands/move-type-to-file.md): make a nested type a top-level type in a file of its
+- `gabier extract-variable`: turn an expression into a local variable.
+- `gabier extract-method`: turn statements, or an expression, into a method.
+- `gabier extract-constant`: turn an expression into a constant.
+- `gabier extract-field`: turn an expression into a field of the class.
+- `gabier move-type-to-file`: make a nested type a top-level type in a file of its
   own.
 - `gabier move` (`gabier help move`): move Java classes to a package, creating the package when it does not exist.
-- [`gabier inline`](docs/commands/inline.md): replace a local variable, a method or a constant by its value (on the declaration of a method
+- `gabier inline`: replace a local variable, a method or a constant by its value (on the declaration of a method
   or constant: every use, and the declaration goes; on one use: that use only).
-- [`gabier create`](docs/commands/create.md): create a file that holds an empty class, interface, record or enum, with the
+- `gabier create`: create a file that holds an empty class, interface, record or enum, with the
   right `package` line and no comment, or the `package-info.java` of a package.
 - [`gabier references`](docs/commands/references.md): list where a symbol is used, in every file of the project and its
   tests (the declaration on request).

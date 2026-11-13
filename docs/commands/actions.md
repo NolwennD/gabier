@@ -5,7 +5,7 @@ the problems the range holds (a type that is not imported, a method to create, a
 **rewrites** of the code it covers (a concatenation to a text block, an extraction). It is the way to ask jdtls "what can
 you do here?" instead of editing the text. To apply one of them, give its title to
 [`gabier apply-action`](apply-action.md); to apply a rewrite to every place of a whole file instead of one range, use
-[`gabier cleanup`](cleanup.md). Nothing is written. The exit code is 0 whenever the daemon answered.
+`gabier cleanup`. Nothing is written. The exit code is 0 whenever the daemon answered.
 
 The range is two positions, each **from 1** as `diagnostics` shows them, the end excluded (as for `extract-variable`); to
 ask about one place, give the same position twice. They are sent to the daemon from 0.
@@ -32,15 +32,15 @@ is linked when its title starts with `Inline`.
 
 | Kind of the action | Command | How to call it |
 | --- | --- | --- |
-| `refactor.extract.variable` | [`extract-variable`](extract-variable.md) | the same file and range, then the name of the variable |
-| `refactor.extract.field` | [`extract-field`](extract-field.md) | the same file and range, then the name of the field |
-| `refactor.extract.function` | [`extract-method`](extract-method.md) | the same file and range, then the name of the method |
-| `refactor.extract.constant` | [`extract-constant`](extract-constant.md) | the same file and range, then the name of the constant |
-| `refactor.inline`, titled `Inline ...` | [`inline`](inline.md) | the file and one position, on the name to inline |
+| `refactor.extract.variable` | `extract-variable` | the same file and range, then the name of the variable |
+| `refactor.extract.field` | `extract-field` | the same file and range, then the name of the field |
+| `refactor.extract.function` | `extract-method` | the same file and range, then the name of the method |
+| `refactor.extract.constant` | `extract-constant` | the same file and range, then the name of the constant |
+| `refactor.inline`, titled `Inline ...` | `inline` | the file and one position, on the name to inline |
 
 **The command is not always what the action does.** jdtls offers two extractions to a local variable, with the same kind:
 "Extract to local variable" and "Extract to local variable (replace all occurrences)". Both are linked to
-`extract-variable`, which replaces the **selected expression only** ([`extract-variable`](extract-variable.md)). To replace
+`extract-variable`, which replaces the **selected expression only** (`extract-variable`). To replace
 every occurrence, apply the second one by its title with `apply-action` (it takes the name jdtls guesses). "Make Static"
 is not linked: it makes the method static and inlines nothing.
 

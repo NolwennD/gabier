@@ -26,7 +26,6 @@ final class Move implements Capability {
                 """)
             .asksTheDaemon(Operations.MOVE)
             .withNotes("""
-                With --json, the answer is the changed files.
                 gabier organize-imports <file> orders the imports of a file, and gabier diagnostics <file> lists its\
                  problems.\
                 """);

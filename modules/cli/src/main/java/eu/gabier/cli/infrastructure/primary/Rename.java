@@ -11,17 +11,24 @@ import java.util.Map;
  */
 final class Rename implements Capability {
 
-    static final Command COMMAND =
-            Command.called("rename").usage("""
+    static final Command COMMAND = Command.called("rename")
+            .usage("""
                 gabier [--json] rename [--dry-run] <file> <line>:<column> <new-name>
                 gabier [--json] rename [--dry-run] --token <file> <identifier> <new-name>\
-                """).example("""
-                    $ gabier rename --dry-run src/main/java/demo/Greeter.java 6:19 welcome
-                    dry run, nothing written
-                    modified /work/demo/src/main/java/demo/Greeter.java
-                    modified /work/demo/src/main/java/demo/Main.java
-                    ...\
-                    """).asksTheDaemon(Operations.RENAME, Operations.RENAME_TOKEN);
+                """)
+            .example("""
+                $ gabier rename --dry-run src/main/java/demo/Greeter.java 6:19 welcome
+                dry run, nothing written
+                modified /work/demo/src/main/java/demo/Greeter.java
+                modified /work/demo/src/main/java/demo/Main.java
+                ...\
+                """)
+            .asksTheDaemon(Operations.RENAME, Operations.RENAME_TOKEN)
+            .withNotes("""
+                --token names the symbol by the first occurrence of an identifier in the file, as a whole word (greet is
+                not found in greeting). A comment or a string counts: the first occurrence may be in one.
+                A rename sees the files that an earlier one wrote.\
+                """);
 
     @Override
     public Command command() {

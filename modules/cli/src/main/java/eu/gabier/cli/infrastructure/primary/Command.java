@@ -1,6 +1,7 @@
 package eu.gabier.cli.infrastructure.primary;
 
 import eu.gabier.cli.domain.Operation;
+import eu.gabier.cli.domain.Parameter;
 import eu.gabier.shared.error.domain.Assert;
 import java.util.ArrayList;
 import java.util.List;
@@ -71,9 +72,24 @@ record Command(
      * the command line itself (what only a person who types it reads: an option, the text it prints); often none.
      */
     String notes() {
-        return Stream.concat(operations.stream().map(Operation::notes), Stream.of(ownNotes))
+        return Stream.of(operations.stream().map(Operation::notes), sharedNotes(), Stream.of(ownNotes))
+                .flatMap(notes -> notes)
                 .filter(notes -> !notes.isEmpty())
                 .collect(Collectors.joining("\n"));
+    }
+
+    /**
+     * What every command of a kind says the same way, written once: how a position is typed, for a command that takes
+     * one, and what the answer of a command that can change files looks like (the ones with a {@code dryRun}).
+     */
+    private Stream<String> sharedNotes() {
+        var parameters = operations.stream()
+                .flatMap(operation -> operation.parameters().stream())
+                .toList();
+
+        return Stream.of(
+                parameters.stream().anyMatch(parameter -> parameter.type() == Parameter.Type.POSITION) ? POSITIONS : "",
+                parameters.stream().anyMatch(parameter -> parameter.name().equals("dryRun")) ? CHANGED_FILES : "");
     }
 
     /**
@@ -148,6 +164,18 @@ record Command(
          */
         Command servesTheOperations(String summary);
     }
+
+    private static final String POSITIONS = """
+        A position is <line>:<column>, both counted from 1 as diagnostics shows them. A range is two positions, the
+        end excluded.\
+        """;
+
+    private static final String CHANGED_FILES = """
+        The answer lists the files modified, created, moved and deleted, then the diff of them all, with absolute paths;
+        a tab in them shows as \\u0009 and a backslash as two. --dry-run, anywhere after the command, writes nothing and
+        starts the answer with "dry run, nothing written". With --json, the answer is the changed files and the diff as
+        an object.\
+        """;
 
     private static final class Builder implements UsageStep, ExampleStep, RefusalsStep {
 

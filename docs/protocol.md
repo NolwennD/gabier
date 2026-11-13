@@ -55,18 +55,18 @@ it decided, whatever the method, with the refusal `daemon-stopping` (a server er
 | `watch`            | `files` (absolute paths, one per line); answers more than once              | [diagnostics](commands/diagnostics.md)                     |
 | `watch-all`        | none (the language server chooses the files); answers more than once        | [diagnostics](commands/diagnostics.md)                     |
 | `watch-affected-tests` | none; answers more than once                                            | [affected-tests](commands/affected-tests.md)               |
-| `rename`           | `file`, `line`, `column`, `newName`, `dryRun`                               | [rename](commands/rename.md)                               |
-| `rename-token`     | `file`, `token`, `newName`, `dryRun`                                        | [rename](commands/rename.md)                               |
-| `organize-imports` | `file`, `dryRun`                                                            | [organize-imports](commands/organize-imports.md)           |
-| `cleanup`          | `file`, `cleanUps`, `dryRun`                                                | [cleanup](commands/cleanup.md)                             |
-| `extract-variable` | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-variable](commands/extract-variable.md)           |
-| `extract-method`   | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-method](commands/extract-method.md)               |
-| `extract-constant` | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-constant](commands/extract-constant.md)           |
-| `extract-field`    | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | [extract-field](commands/extract-field.md)                 |
-| `move-type-to-file` | `file`, `line`, `column`, `dryRun`                                          | [move-type-to-file](commands/move-type-to-file.md)         |
+| `rename`           | `file`, `line`, `column`, `newName`, `dryRun`                               | rename                               |
+| `rename-token`     | `file`, `token`, `newName`, `dryRun`                                        | rename                               |
+| `organize-imports` | `file`, `dryRun`                                                            | organize-imports           |
+| `cleanup`          | `file`, `cleanUps`, `dryRun`                                                | cleanup                             |
+| `extract-variable` | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | extract-variable           |
+| `extract-method`   | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | extract-method               |
+| `extract-constant` | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | extract-constant           |
+| `extract-field`    | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | extract-field                 |
+| `move-type-to-file` | `file`, `line`, `column`, `dryRun`                                          | move-type-to-file         |
 | `move`             | `files` (absolute paths, one per line), `package`, `dryRun`                 | [move](commands/move.md)                                   |
-| `inline`           | `file`, `line`, `column`, `dryRun`                                          | [inline](commands/inline.md)                               |
-| `create`           | `file`, `kind`, `dryRun`                                                    | [create](commands/create.md)                               |
+| `inline`           | `file`, `line`, `column`, `dryRun`                                          | inline                               |
+| `create`           | `file`, `kind`, `dryRun`                                                    | create                               |
 | `references`       | `file`, `line`, `column`, `includeDeclaration`                              | [references](commands/references.md)                       |
 | `actions`          | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`                  | [actions](commands/actions.md)                             |
 | `apply-action`     | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `title`, `dryRun` | [apply-action](commands/apply-action.md)                 |

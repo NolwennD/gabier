@@ -176,7 +176,7 @@ class HelpTest extends CliTest {
         assertThat(run("help", "--json", "extract-variable")).isZero();
 
         var help = object(Json.parse(out()));
-        assertThat(help).containsOnlyKeys("name", "summary", "usage", "example", "refusals");
+        assertThat(help).containsOnlyKeys("name", "summary", "usage", "example", "notes", "refusals");
         assertThat(help.get("name")).isEqualTo("extract-variable");
         assertThat((String) help.get("usage")).contains("extract-variable [--dry-run] <file>");
         assertThat((String) help.get("example")).startsWith("$ gabier extract-variable");

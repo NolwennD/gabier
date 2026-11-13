@@ -155,7 +155,8 @@ public final class Operations {
             (demo.shop); the segment the position is on decides how much of the old name is renamed (on app in
             demo.app.sub, demo.app); a package with no class of its own (demo in demo.app) is refused as
             language-server-empty-package. Sub-packages keep their names, and the same package in another source set
-            (the tests) is a rename of its own. A package that exists, or a name that is not a package name, is
+            (the tests) is a rename of its own: a second call, on a file of that source set. The test classes keep the
+            import that the first call gave them, which shows as an unused import: organize-imports removes it. A package that exists, or a name that is not a package name, is
             refused as language-server-invalid-name. module-info.java, string literals and build files are not
             changed: edit them as text.
 
@@ -206,7 +207,22 @@ public final class Operations {
     public static final Operation ORGANIZE_IMPORTS = new Operation(
             "organize-imports",
             "add the missing imports, remove the unused ones and order the rest as the project does",
-            "",
+            """
+            The imports are written as the project writes them: the order, the groups and the star-import
+            thresholds come from .settings/org.eclipse.jdt.ui.prefs (importorder, ondemandthreshold,
+            staticondemandthreshold) or from .vscode/settings.json (java.completion.importOrder,
+            java.sources.organizeImports.starThreshold and staticStarThreshold) at the root of the project. A
+            setting that neither file gives keeps the default: the groups java, javax, org and com, a blank line
+            between them, and a star import from 99 imports. status shows each setting and where it comes from.
+            When the two files give different values for a setting, .settings is followed and the answer carries
+            a warning, as it does for a file that cannot be read or a setting of the wrong type.
+            A file whose imports are already in order answers nothing to change.
+            A type that several packages declare (Date) and that the file uses without importing it is refused with
+            its candidates: choose, add the import by hand, then organize.
+            An import that the file still uses and that the server reports an error on (a package of a module the
+            file cannot read) would be deleted: it is refused and the file is not touched. Run diagnostics first.
+            The types of the packages com.sun, sun and jdk are never offered for a missing import.\
+            """,
             List.of(
                     "language-server-ambiguous-imports: several packages declare a type the file uses without"
                             + " importing it; the candidates are in the problem",
@@ -234,6 +250,8 @@ public final class Operations {
             redundantFallingThroughBlockEnd, redundantIfCondition, redundantModifiers, redundantSuperCall,
             renameUnusedLocalVariables, stringConcatToTextBlock, switchExpression, tryWithResource,
             useSwitchForInstanceofPattern.
+            stringConcatToTextBlock rewrites a concatenation of three literals or more, and leaves one of two
+            alone; the escaped quotes of the literals are plain quotes in the block.
             A file with nothing to clean up is not an error: the answer is nothing to change.
             To organize the imports, use organize-imports.\
             """,
@@ -254,34 +272,70 @@ public final class Operations {
     public static final Operation EXTRACT_VARIABLE = extraction(
             "extract-variable",
             "turn an expression into a local variable",
+            """
+            The selection is replaced by the name, and the variable is declared on the line above the statement that
+            holds it. Only the selected expression is replaced, not its other occurrences.
+            A keyword, a whole statement and a call of a void method cannot be extracted.
+            The name asked for replaces the one the server proposes (string for a String).\
+            """,
             "language-server-invalid-name: the name is not a Java identifier, or is a parameter of the method");
 
     public static final Operation EXTRACT_METHOD = extraction(
             "extract-method",
             "turn statements, or an expression, into a method",
+            """
+            The selection is replaced by a call to a new private method, declared after the method that holds it. The
+            parameters (the local variables and parameters the selection reads) and the return value (the local
+            variable it assigns that the rest of the method uses, or the value of an expression) are worked out.
+            Half a statement, or an if whose branch returns while the code after it still runs, cannot be
+            extracted.
+            A method of the class with the same name and other parameter types is an overload and is accepted.\
+            """,
             "language-server-invalid-name: the name is not a Java identifier, or another method of the class"
                     + " has it with the same parameters");
 
     public static final Operation EXTRACT_CONSTANT = extraction(
             "extract-constant",
             "turn an expression into a constant",
+            """
+            The selection is replaced by the name, and a private static final field of that name, initialised with
+            the expression, is declared at the top of the class. Only the selected expression is replaced, not its
+            other occurrences.
+            An expression that reads a local variable ("count: " + count) or a keyword cannot be extracted.\
+            """,
             "language-server-invalid-name: the name is not a Java identifier");
 
     public static final Operation EXTRACT_FIELD = extraction(
             "extract-field",
             "turn an expression into a field",
+            """
+            The selection is replaced by the name, and a private field of that name is declared at the top of the
+            class. It is initialised in the current method, as an assignment before the statement that holds the
+            expression; there is no option for the declaration of the field or for the constructors.
+            Only the selected expression is replaced, not its other occurrences.
+            A keyword, a whole statement and a selection outside a class body (the name in the package line) cannot
+            be extracted.\
+            """,
             "language-server-invalid-name: the name is not a Java identifier");
 
     public static final Operation MOVE_TYPE_TO_FILE = new Operation(
             "move-type-to-file",
             "make a nested type a top-level type in a file of its own",
             """
-            The position is inside the type to move: the innermost type that encloses it moves.
+            The position is inside the type to move, on its name or in one of its methods: the innermost type that
+            encloses it moves.
+            The type goes to a file of its own, named after it, in the package of the outer class; the imports and
+            the references of the project follow it. A static nested class, and an inner class that does not use the
+            outer instance, move as they are.
             An inner class that uses its outer instance gets a field and a constructor parameter of the outer type.
             A JUnit @Nested test class can then no longer be instantiated by JUnit.
             To avoid it, first make the class independent of the outer instance,
             for example by having it extend the shared base class, then move it.
-            Each annotation of the class, such as @Nested, stays on it after the move.\
+            A field the class read from the outer class that was private is no longer private.
+            Each annotation of the class, such as @Nested, stays on it after the move: a top-level class still
+            annotated @Nested is not run by JUnit, so remove it when the moved class is a test that must run alone.
+            The new file has no line break at its end, and the field and the constructor added to an inner class
+            carry an empty Javadoc: run the formatter of the project on it.\
             """,
             List.of(
                     "language-server-not-movable: no nested type can be moved at the position (outside any type, a"
@@ -304,8 +358,6 @@ public final class Operations {
             so a test class goes to the test sources.
             The package is created, with its folder, when it does not exist; a dry run creates nothing.
             The default package cannot be the target.
-            The answer lists the files modified, moved and created, then the diff; a dry run starts with
-            "dry run, nothing written".
             The folders the move empties are removed, up to the source folder; a folder that still holds a file
             stays. A dry run removes none.
             The imports, the static imports and the fully qualified names of the project follow the moved classes,
@@ -351,7 +403,9 @@ public final class Operations {
             The position is on the name of a local variable, a method or a constant.
             A local variable is inlined everywhere, whatever the position.
             A position on the declaration of a method or a constant inlines every use and removes it;
-            a position on one use inlines that use only and keeps the declaration.\
+            a position on one use inlines that use only and keeps the declaration.
+            Parentheses are added where the value could otherwise read differently (in a concatenation), and left
+            out where precedence already holds.\
             """,
             List.of(
                     "language-server-not-inlinable: nothing the server can inline at the position (not on a variable,"
@@ -371,7 +425,8 @@ public final class Operations {
             """
             The name of the type is the name of the file; the package line comes from the folder of the file.
             A file in the default package has no package line.
-            The new type has no comment and an empty body.
+            The new type is public, has no comment and an empty body (a record has empty parentheses).
+            The file must not exist: it is never overwritten.
             The kind package is for a package-info.java: the file holds the package line under\
              @org.jspecify.annotations.NullMarked, and nothing else. The package is the folder of the file under its\
              source folder. The file must be named package-info.java, and cannot be in the default package.
@@ -586,11 +641,11 @@ public final class Operations {
     }
 
     /** An extraction of a selection into something named: the four commands share their parameters and their refusals. */
-    private static Operation extraction(String method, String summary, String invalidName) {
+    private static Operation extraction(String method, String summary, String notes, String invalidName) {
         return new Operation(
                 method,
                 summary,
-                "",
+                notes,
                 List.of(
                         Refusals.NOT_EXTRACTABLE,
                         invalidName,

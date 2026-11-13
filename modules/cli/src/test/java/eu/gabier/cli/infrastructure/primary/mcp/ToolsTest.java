@@ -106,8 +106,9 @@ class ToolsTest {
 
         @Test
         void describesATooWithNoNotesByItsSummaryAlone() {
-            assertThat(tool(served, "extract-variable").get("description"))
-                    .isEqualTo(Operations.EXTRACT_VARIABLE.summary());
+            var withNoNotes = new Tools(List.of(operation("inline", "")));
+
+            assertThat(tool(withNoNotes, "inline").get("description")).isEqualTo("do inline");
         }
 
         @Test
