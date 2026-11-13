@@ -42,6 +42,15 @@ final class Diagnostics implements Capability {
                 """)
             .asksTheDaemon(Operations.DIAGNOSTICS, Operations.DIAGNOSTICS_ALL, Operations.WATCH, Operations.WATCH_ALL)
             .withNotes("""
+                One line per problem: file:line:column: severity: message, the files in the order given, each as typed;\
+                 the severity is error, warning, information or hint; a clean file prints nothing. The exit code is 0\
+                 whenever the daemon answered, whatever the problems. With --json, the answer has one element per file,\
+                 named by its absolute path, with an empty list for a clean file, and the positions counted from 0.
+                A file given twice is answered twice. The path is cleaned lexically and no symbolic link is followed: with\
+                 src a link to /other/src, src/../Foo.java asks for ./Foo.java; type the path you mean.
+                No operand and no --all, --dry-run, a file with --all, and a file name with a line break are usage errors.
+                Give every file you changed in one call: the wait is paid once per call. The first call after the daemon\
+                 starts waits for the import of the project, up to a minute on a large one.
                 --watch keeps running, starts by printing the problems as they are (a line "no problems" when there is
                 none), then prints, after each edit that jdtls has built, the files whose problems changed: their problems
                 in the format above, and for a file that became clean the line "<file>: no problems". It prints each line

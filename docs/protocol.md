@@ -50,11 +50,11 @@ it decided, whatever the method, with the refusal `daemon-stopping` (a server er
 | `status`           | none                                                                        | [status](commands/status-and-stop.md)                      |
 | `start`            | none (starts jdtls in the background, answers the result of `status`)      | [start](commands/start.md)                                 |
 | `stop`             | none                                                                        | [stop](commands/status-and-stop.md)                        |
-| `diagnostics`      | `files`                                                                     | [diagnostics](commands/diagnostics.md)                     |
-| `diagnostics-all`  | none (the language server chooses the files)                                | [diagnostics](commands/diagnostics.md)                     |
-| `watch`            | `files` (absolute paths, one per line); answers more than once              | [diagnostics](commands/diagnostics.md)                     |
-| `watch-all`        | none (the language server chooses the files); answers more than once        | [diagnostics](commands/diagnostics.md)                     |
-| `watch-affected-tests` | none; answers more than once                                            | [affected-tests](commands/affected-tests.md)               |
+| `diagnostics`      | `files`                                                                     | diagnostics                     |
+| `diagnostics-all`  | none (the language server chooses the files)                                | diagnostics                     |
+| `watch`            | `files` (absolute paths, one per line); answers more than once              | diagnostics                     |
+| `watch-all`        | none (the language server chooses the files); answers more than once        | diagnostics                     |
+| `watch-affected-tests` | none; answers more than once                                            | affected-tests               |
 | `rename`           | `file`, `line`, `column`, `newName`, `dryRun`                               | rename                               |
 | `rename-token`     | `file`, `token`, `newName`, `dryRun`                                        | rename                               |
 | `organize-imports` | `file`, `dryRun`                                                            | organize-imports           |
@@ -67,11 +67,11 @@ it decided, whatever the method, with the refusal `daemon-stopping` (a server er
 | `move`             | `files` (absolute paths, one per line), `package`, `dryRun`                 | [move](commands/move.md)                                   |
 | `inline`           | `file`, `line`, `column`, `dryRun`                                          | inline                               |
 | `create`           | `file`, `kind`, `dryRun`                                                    | create                               |
-| `references`       | `file`, `line`, `column`, `includeDeclaration`                              | [references](commands/references.md)                       |
-| `actions`          | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`                  | [actions](commands/actions.md)                             |
-| `apply-action`     | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `title`, `dryRun` | [apply-action](commands/apply-action.md)                 |
-| `affected-tests`   | `files` (absolute paths, one per line)                                      | [affected-tests](commands/affected-tests.md)               |
-| `affected-tests-changed` | none                                                                  | [affected-tests](commands/affected-tests.md)               |
+| `references`       | `file`, `line`, `column`, `includeDeclaration`                              | references                       |
+| `actions`          | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`                  | actions                             |
+| `apply-action`     | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `title`, `dryRun` | apply-action                 |
+| `affected-tests`   | `files` (absolute paths, one per line)                                      | affected-tests               |
+| `affected-tests-changed` | none                                                                  | affected-tests               |
 
 ## A method that answers more than once
 

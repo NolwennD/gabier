@@ -223,7 +223,7 @@ positions counted from 1 and `dryRun` in place of `--dry-run`.
 
 ## Capabilities
 
-- [`gabier diagnostics <file>...`](docs/commands/diagnostics.md): the errors and warnings of Java files, without a build;
+- `gabier diagnostics <file>...`: the errors and warnings of Java files, without a build;
   `gabier diagnostics --all` the Java files of the project that have a problem, as jdtls published them;
   `gabier diagnostics --watch` keeps running and prints the files whose problems change as you edit.
 - `gabier rename`: rename a symbol, and everything that refers to it, in every file.
@@ -242,12 +242,12 @@ positions counted from 1 and `dryRun` in place of `--dry-run`.
   or constant: every use, and the declaration goes; on one use: that use only).
 - `gabier create`: create a file that holds an empty class, interface, record or enum, with the
   right `package` line and no comment, or the `package-info.java` of a package.
-- [`gabier references`](docs/commands/references.md): list where a symbol is used, in every file of the project and its
+- `gabier references`: list where a symbol is used, in every file of the project and its
   tests (the declaration on request).
-- [`gabier actions`](docs/commands/actions.md): list the fixes (a missing import) and the rewrites (a concatenation to a
+- `gabier actions`: list the fixes (a missing import) and the rewrites (a concatenation to a
   text block) the language server offers on a range of a file.
-- [`gabier apply-action`](docs/commands/apply-action.md): apply one of them, chosen by its title.
-- [`gabier affected-tests`](docs/commands/affected-tests.md): list the test classes to run again after a change to Java
+- `gabier apply-action`: apply one of them, chosen by its title.
+- `gabier affected-tests`: list the test classes to run again after a change to Java
   files, or with no file the ones that changed on disk since its last answer (JUnit 3, 4, 5 and TestNG, the
   dependencies read in the classes jdtls compiled, `infinitest.filters`), with no Maven or Gradle;
   `gabier affected-tests --watch` keeps running and prints the tests to run again after each edit.

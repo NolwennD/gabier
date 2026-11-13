@@ -28,8 +28,8 @@ final class References implements Capability {
                 """)
             .asksTheDaemon(Operations.REFERENCES)
             .withNotes("""
-                The position is typed line:column. Without --include-declaration the declaration is not listed; with it,\
-                 it is listed apart, under "declaration:", and the uses under "references:".
+                One line per place: file:line:column: source, the file absolute, the source line without its\
+                 indentation. With --json the positions are counted from 0 and the source lines are exact.
                 A symbol nothing uses prints "no references" and exits with 0; with --json, two empty lists.\
                 """);
 

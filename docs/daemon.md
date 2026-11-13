@@ -107,8 +107,8 @@ build file jdtls can read is refused at once, and a small Eclipse or Maven proje
 that is still running from an earlier import shortens the import a great deal: a cold start of the daemon and of jdtls with
 one warm answered the first `diagnostics` in 32 s.
 
-**Following the files while a client watches.** `gabier diagnostics --watch` ([diagnostics](commands/diagnostics.md)) and
-`gabier affected-tests --watch` ([affected-tests](commands/affected-tests.md)) make the daemon look at the disk, and only
+**Following the files while a client watches.** `gabier diagnostics --watch` (diagnostics) and
+`gabier affected-tests --watch` (affected-tests) make the daemon look at the disk, and only
 while a client watches (one thread and one watcher for the clients of both, a thread `gabier-problems`): the first
 watcher starts it, the last one leaving ends it (a thread `gabier-problems`, and the system's registrations, are given back; nothing runs when nobody
 watches). It asks the system to tell it of every change in the folders of the project: one registration per folder
@@ -132,7 +132,7 @@ seconds at the least, and which was slow when it was tried: 2 to 8 seconds on a 
 checkout, against 1.1 to 1.3 seconds and 12 to 16 seconds with the events the daemon sends.
 
 **What the daemon remembers of the disk, for `affected-tests`.** `gabier affected-tests` with no file
-([affected-tests](commands/affected-tests.md)) is answered from a list the daemon keeps in memory: the Java files that were
+(affected-tests) is answered from a list the daemon keeps in memory: the Java files that were
 created or edited on disk, as jdtls was told of them, since the last answer of that call. Every request takes in the
 changes of the disk before it asks jdtls (a `diagnostics`, a `rename`, a `references`), and each one adds the Java files it
 finds to the list; none removes one, only an answer of `affected-tests` does, and only for the files it answered for (a file

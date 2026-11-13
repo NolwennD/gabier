@@ -458,8 +458,8 @@ public final class Operations {
             "references",
             "where a symbol is used, in every file of the project and its tests",
             """
-            Nothing is written. The position is a line and a column, each from 1, on the name of a type, a method, a field,\
-             a local variable or a parameter, at its declaration or at a use.
+            Nothing is written. The position is on the name of a type, a method, a field, a local variable or a\
+             parameter, at its declaration or at a use.
             The declaration is not listed unless includeDeclaration is true; it is then listed apart, under\
              "declaration:", and the uses under "references:".
             The places are ordered by file, then by position. The uses in test sources are listed.
@@ -468,7 +468,8 @@ public final class Operations {
             Only the symbols of the project have references: a type of the JDK or of a library is refused as\
              language-server-no-such-symbol, and no place in a library is ever listed.
             A name that does not resolve (its import names a package the project does not see) is refused the same\
-             way, not answered with the references of the type that holds it: diagnostics tells why.\
+             way, not answered with the references of the type that holds it: diagnostics tells why. A fully\
+             qualified name that does not resolve is answered as a symbol nothing uses.\
             """,
             List.of(
                     "language-server-no-such-symbol: no symbol of the project at the position (a blank, a comment,"
@@ -490,8 +491,8 @@ public final class Operations {
             "actions",
             "list the fixes and the rewrites the language server offers on a range",
             """
-            Nothing is written. The range is two positions, each a line and a column from 1, the end excluded; to ask\
-             about a point, give it twice.
+            Nothing is written. To ask about a point, give the position twice. The fixes need the problems of the\
+             range, so the call waits for the language server to be quiet, about 5 seconds.
             The actions are the fixes of the problems the range holds (a type that is not imported, a method to\
              create) and the rewrites of the code it covers (a concatenation to a text block, an extraction).\
              The actions of a whole file (organize the imports, generate accessors) are not listed: they are not\
@@ -526,7 +527,7 @@ public final class Operations {
             The title is the one actions lists for the same file and range, exactly as written: the number\
              of an action changes from one call to the next, the title does not.
             A title that no action has is refused with the titles the range offers; one that several have, with\
-             those actions. Nothing is written.
+             those actions: ask on a narrower range. Nothing is written.
             Some actions of the language server are commands for an editor: they ask a question (a dialog) or a\
              place before they change anything, and give no edit. They are listed by actions and refused\
              here as language-server-not-applicable.\
@@ -563,7 +564,8 @@ public final class Operations {
              that load classes by themselves (ArchUnit) are always listed when a Java file changed. The file\
              infinitest.filters at the root of the project leaves tests out: its include and exclude lines are regular\
              expressions on the whole class name (exclude .*IT leaves out the integration tests); its groups lines are\
-             not read.
+             not read. The patterns of a line are separated by commas, a line that starts with # or ! is a comment, a\
+             line that is no directive is an exclude, and a pattern that is not a regular expression is refused.
             A file that is not a Java source (a pom.xml, a readme) is left out and does not refuse the call.\
              What the selection does not see: a constant that the compiler inlined and a test reads through a static\
              import, a class used through reflection or injection, a class linked to a test only through an interface that it implements.
