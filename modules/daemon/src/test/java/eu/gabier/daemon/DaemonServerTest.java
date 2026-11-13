@@ -71,6 +71,7 @@ import org.junit.jupiter.api.io.TempDir;
 class DaemonServerTest {
 
     private static final long PID = 4242;
+    private static final Consumer<String> NO_LOG = line -> {};
     private static final String START_REQUEST = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"start\"}\n";
     private static final String STATUS_REQUEST = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"status\"}\n";
     private static final String STOP_REQUEST = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"stop\"}\n";
@@ -142,7 +143,7 @@ class DaemonServerTest {
     }
 
     private DaemonServer open() {
-        return open(line -> {});
+        return open(NO_LOG);
     }
 
     private DaemonServer open(Consumer<String> log) {
@@ -225,7 +226,7 @@ class DaemonServerTest {
             serving();
 
             var refusal = catchThrowableOfType(
-                    DaemonSocketException.class, () -> DaemonServer.open(socket(), uid, clock, PID, project));
+                    DaemonSocketException.class, () -> DaemonServer.open(socket(), uid, clock, PID, project, NO_LOG));
 
             assertThat(refusal.key()).isEqualTo(DaemonErrorKey.ALREADY_RUNNING);
             try (var client = connect(socket())) {
@@ -255,7 +256,7 @@ class DaemonServerTest {
             Files.setPosixFilePermissions(folder, PosixFilePermissions.fromString("rwxrwxr-x"));
 
             var refusal = catchThrowableOfType(
-                    DaemonSocketException.class, () -> DaemonServer.open(socket(), uid, clock, PID, project));
+                    DaemonSocketException.class, () -> DaemonServer.open(socket(), uid, clock, PID, project, NO_LOG));
 
             assertThat(refusal.key()).isEqualTo(DaemonErrorKey.SOCKET_NOT_PRIVATE);
             assertThat(socket()).doesNotExist();
@@ -268,7 +269,7 @@ class DaemonServerTest {
                     PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
             Files.writeString(socket(), "precious");
 
-            assertThatThrownBy(() -> DaemonServer.open(socket(), uid, clock, PID, project))
+            assertThatThrownBy(() -> DaemonServer.open(socket(), uid, clock, PID, project, NO_LOG))
                     .isInstanceOf(DaemonSocketException.class);
             assertThat(socket()).hasContent("precious");
         }
@@ -289,7 +290,8 @@ class DaemonServerTest {
             };
 
             var failure = catchThrowableOfType(
-                    DaemonSocketException.class, () -> DaemonServer.open(socket(), failing, clock, PID, project));
+                    DaemonSocketException.class,
+                    () -> DaemonServer.open(socket(), failing, clock, PID, project, NO_LOG));
 
             assertThat(failure.key()).isEqualTo(DaemonErrorKey.SOCKET_UNAVAILABLE);
             assertThat(failure.getCause()).isInstanceOf(IOException.class).hasMessage("restrict failed");
@@ -314,7 +316,8 @@ class DaemonServerTest {
             };
 
             var failure = catchThrowableOfType(
-                    DaemonSocketException.class, () -> DaemonServer.open(socket(), failing, clock, PID, project));
+                    DaemonSocketException.class,
+                    () -> DaemonServer.open(socket(), failing, clock, PID, project, NO_LOG));
 
             assertThat(failure.getCause()).hasMessage("restrict failed");
             assertThat(failure.getCause().getSuppressed()).hasSize(1);
@@ -328,7 +331,7 @@ class DaemonServerTest {
                     throw new IOException("restrict failed");
                 }
             };
-            assertThatThrownBy(() -> DaemonServer.open(socket(), failing, clock, PID, project))
+            assertThatThrownBy(() -> DaemonServer.open(socket(), failing, clock, PID, project, NO_LOG))
                     .isInstanceOf(DaemonSocketException.class);
 
             serving();
@@ -344,7 +347,7 @@ class DaemonServerTest {
 
             var failure = catchThrowableOfType(
                     DaemonSocketException.class,
-                    () -> DaemonServer.open(file.resolve("gabier/gabier.sock"), uid, clock, PID, project));
+                    () -> DaemonServer.open(file.resolve("gabier/gabier.sock"), uid, clock, PID, project, NO_LOG));
 
             assertThat(failure.key()).isEqualTo(DaemonErrorKey.SOCKET_UNAVAILABLE);
             assertThat(failure.status()).isEqualTo(ErrorStatus.INTERNAL_SERVER_ERROR);

@@ -121,11 +121,6 @@ final class DaemonServer implements AutoCloseable {
                 log);
     }
 
-    /** As {@link #open(Path, String, LongSupplier, long, ServedProject, Consumer)}, for a daemon that logs nowhere. */
-    static DaemonServer open(Path socket, String uid, LongSupplier nanoClock, long pid, ServedProject project) {
-        return open(socket, uid, nanoClock, pid, project, line -> {});
-    }
-
     /**
      * Starts listening on the socket.
      *
@@ -141,11 +136,6 @@ final class DaemonServer implements AutoCloseable {
     static DaemonServer open(
             Path socket, String uid, LongSupplier nanoClock, long pid, ServedProject project, Consumer<String> log) {
         return open(socket, new SocketGuard(uid), nanoClock, pid, project, log);
-    }
-
-    /** As {@link #open(Path, SocketGuard, LongSupplier, long, ServedProject, Consumer)}, for a daemon that logs nowhere. */
-    static DaemonServer open(Path socket, SocketGuard guard, LongSupplier nanoClock, long pid, ServedProject project) {
-        return open(socket, guard, nanoClock, pid, project, line -> {});
     }
 
     /**
