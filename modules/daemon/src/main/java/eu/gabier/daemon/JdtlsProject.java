@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.eclipse.lsp4j.ExecuteCommandParams;
 import org.jspecify.annotations.Nullable;
 
@@ -70,6 +71,16 @@ final class JdtlsProject {
     static void requireInProject(JdtlsSession session, Path file) {
         if (session.projects().stream().noneMatch(file::startsWith)) {
             throw LanguageServerException.fileOutsideProject(file);
+        }
+    }
+
+    static Optional<String> textOnDisk(Path file) {
+        try {
+            return Optional.of(Files.readString(file));
+        } catch (NoSuchFileException missing) {
+            return Optional.empty();
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
         }
     }
 
