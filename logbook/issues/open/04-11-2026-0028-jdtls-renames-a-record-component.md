@@ -23,4 +23,4 @@ Done when:
   fix if the user wants it (a test in `RenameHandlerTest`);
 - once a jdtls milestone with the fix is out: `jdtls_version` and `jdtls_sha256` of `mise.toml` are bumped together, the
   scenario of the rename of a component is written (an effect that compiles), and the limit is removed from `gabier help
-  rename`, `docs/commands/rename.md` and the code that maps the failure to a key.
+  rename`, `gabier help rename` and the code that maps the failure to a key.

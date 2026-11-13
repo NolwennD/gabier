@@ -6,7 +6,7 @@ real use yet (`.claude/rules/workflow.md`, "Value first"); the user lifts the ho
 
 Done when:
 - [ ] The replay of a refusal (`ScenarioReplayTest.java:233-253`) asserts a fragment of jdtls's message in the test (no parsing in
-      production), or `docs/commands/move-type-to-file.md` and the Javadoc of `Scenarios.java` word it as "jdtls refuses, reason not
+      production), or `gabier help move-type-to-file` and the Javadoc of `Scenarios.java` word it as "jdtls refuses, reason not
       distinguished". Today `MOVE_A_TOP_LEVEL_TYPE` passes whatever jdtls's reason is.
 - [ ] The replay of `MOVE_A_TYPE_TO_A_FILE_THAT_EXISTS` compares the project files before and after: `Totals.java` is unchanged.
 - [ ] The message of `language-server-not-movable` (`LanguageServerException.java:58-67`) tells to look for a file of the same name in the

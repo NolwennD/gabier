@@ -21,11 +21,11 @@ final class Status implements Capability {
                 """)
             .asksARunningDaemon(Operations.STATUS)
             .withNotes("""
-                In text, what jdtls is doing while it starts ends the line, in parentheses. With --json, it is the member\
-                 jdtlsProgress of the result. A daemon stops by itself after a delay with no client (60 minutes, \
-                GABIER_IDLE_TIMEOUT in minutes, 0 for never): a last line says the delay and the time left before this\
-                 call, which restarts it; with --json it is the member idle (timeoutMillis, leftMillis), absent when the\
-                 daemon never stops by itself.\
+                In text, what jdtls is doing while it starts ends the line, in parentheses, and a last line says the\
+                 delay of the idle stop and the time left. The message of jdtls is its own text: a control character in\
+                 it is written as an escape. It never starts jdtls (start does) and never starts a daemon: with none\
+                 running it answers daemon-not-running at once. A command that finds the daemon gone, or that is told by\
+                 it that it is stopping (daemon-stopping), starts a new one.\
                 """);
 
     @Override

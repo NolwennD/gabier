@@ -14,6 +14,6 @@ Done when:
       on a read-only file answers `editing-write-failed`. `diagnostics` is checked for `editing-unsupported-encoding`.
 - [ ] A test fails when a key a command can answer is on neither its page nor its help (today `CommandRefusalsTest` only compares the
       help with the page); find a way that does not copy the list.
-- [ ] `HelpFlagTest` runs `rename --token --help` (the case `docs/commands/help.md` promises) and `gabier help rename --help`, whose
+- [ ] `HelpFlagTest` runs `rename --token --help` (the case `gabier help help` promises) and `gabier help rename --help`, whose
       answer (the help of `help`) is pinned or decided.
 - [ ] `bin/ci` green, coverage 100%.

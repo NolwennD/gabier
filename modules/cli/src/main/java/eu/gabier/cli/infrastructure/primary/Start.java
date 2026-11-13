@@ -16,14 +16,28 @@ import java.util.Optional;
  */
 final class Start implements Capability {
 
-    static final Command COMMAND =
-            Command.called("start").usage("""
+    static final Command COMMAND = Command.called("start")
+            .usage("""
                 gabier [--json] start
                 gabier [--json] start --wait [--timeout=<seconds>]\
-                """).example("""
-                    $ gabier start
-                    gabier-daemon started, pid 4242, project /work/demo, jdtls starting; socket /run/user/1000/gabier/demo-6f1c0d4e.sock, log /run/user/1000/gabier/demo-6f1c0d4e.sock.log\
-                    """).asksTheDaemon(Operations.START);
+                """)
+            .example("""
+                $ gabier start
+                gabier-daemon started, pid 4242, project /work/demo, jdtls starting; socket /run/user/1000/gabier/demo-6f1c0d4e.sock, log /run/user/1000/gabier/demo-6f1c0d4e.sock.log\
+                """)
+            .asksTheDaemon(Operations.START)
+            .withNotes("""
+                The line says "started" when this call started the daemon, and only then names its log, where a failed\
+                 start leaves its reason; else it says "running". With --json, the member daemon says the same and the\
+                 member log is present only when it started. The state of jdtls is the one status shows; a jdtls that\
+                 had failed is started again, and one that fails at once is answered ("jdtls failed (reason)", the\
+                 member jdtlsFailure with --json).
+                --timeout is a whole number of seconds from 1 and is a usage error without --wait.
+                When jdtls fails while --wait waits, the refusal is jdtls-start-failed, with exit code 1. When the time\
+                 passes it is jdtls-start-timeout, with exit code 1: it names the last state of jdtls and what it was\
+                 doing, and jdtls goes on starting, so run start --wait again, or status.
+                A daemon that stops answering while --wait waits is daemon-connection-failed.\
+                """);
 
     static final String WAIT = "--wait";
     static final String TIMEOUT = "--timeout=";

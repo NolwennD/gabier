@@ -57,7 +57,7 @@ of mise, `install.sh` and `SHA256SUMS`), with the notes of `.github/release-note
 - **What changed in the commands is written before the tag.** Each version has a file `docs/releases/<version>.md`
   (the version is the tag without its `v`, whole: `0.6.0-rc.1` has `docs/releases/0.6.0-rc.1.md`, not the file of
   `0.6.0`), a section `## New in <version>` written from what a user of the commands sees between the previous tag and
-  this one (`git log <previous tag>..HEAD`, the issues closed in that range, `docs/commands`): a new command, a changed
+  this one (`git log <previous tag>..HEAD`, the issues closed in that range, the helps of the commands: `Operations` and the classes of `Capabilities`): a new command, a changed
   option, output or refusal, a changed requirement, and `No change to the commands.` when it is true. It is merged to
   `main` with the work, before the tag is pushed. `scripts/release-notes.sh` puts it in the notes of the release, in the
   place of the line `@WHAT_CHANGED@` of `.github/release-notes.md` (the template stays generic), and the release

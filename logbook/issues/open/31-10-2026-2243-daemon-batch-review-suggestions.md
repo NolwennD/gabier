@@ -15,7 +15,7 @@ Done when:
 - [ ] The check of `extract-variable` compares the whole text after the rename with the text before, the identifier
       replaced, and not only the first line after the name (`JdtlsLanguageServer.java:373-384`): a merged edit
       `name = "Hello, " + name;\n        retur nam` is refused.
-- [ ] `docs/commands/extract-variable.md` says "not tested", not "is not caught", of the collisions that jdtls renames
+- [ ] `gabier help extract-variable` says "not tested", not "is not caught", of the collisions that jdtls renames
       cleanly; a collision with a local variable declared earlier has a scenario.
 - [ ] `failsWhenTheFileCannotBeReadAtAll` (`JdtlsLanguageServerTest`) is skipped (`assumeThat`) as root and on a file system
       without POSIX permissions.

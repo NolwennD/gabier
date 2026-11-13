@@ -1,7 +1,7 @@
 # The daemon
 
 One daemon runs per project. `gabier diagnostics`, `gabier rename`, `gabier organize-imports`, `gabier cleanup`, `gabier extract-variable`, `gabier extract-method`, `gabier extract-constant`, `gabier extract-field`, `gabier move-type-to-file`, `gabier move`, `gabier inline`, `gabier create`, `gabier references`, `gabier actions`, `gabier apply-action`, `gabier affected-tests` and `gabier start` **start it when nothing answers on the socket**, so an
-agent runs them in a project folder and gets the answer; `gabier status` and `gabier stop` never start one (see [status and stop](commands/status-and-stop.md)).
+agent runs them in a project folder and gets the answer; `gabier status` and `gabier stop` never start one (see status and stop).
 It can also be started by hand, with `gabier-daemon` from the installed distribution (`./gradlew :daemon:installDist`,
 then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until `gabier stop`, a SIGTERM, or the delay with no client below; it
 answers `status`, `start`, `stop`, `diagnostics`, `diagnostics-all`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions`, `apply-action`, `affected-tests` and `affected-tests-changed`, and nothing else yet.
@@ -41,7 +41,7 @@ root of the directory it is started in, the nearest folder from it up that holds
 to that directory; one that is not a folder is a usage error).
 Starting the daemon starts nothing else. jdtls is started by the
 first request that needs it, or by `gabier start` (the daemon method `start`, which starts jdtls in the background and
-answers at once, see [start](commands/start.md)), on that folder, and the request waits until it has imported the project: the first
+answers at once, see start), on that folder, and the request waits until it has imported the project: the first
 `diagnostics` takes seconds for a small project and about a minute for this checkout (see "What the first call costs" below). Requests that arrive
 meanwhile wait for the same start, never for another. jdtls then stays up for the next requests, and is ended, with every
 process it started, by `gabier stop`, by SIGTERM, and when the daemon is stopped while jdtls is still starting. A jdtls
@@ -179,7 +179,7 @@ problem), both with exit code 1, and jdtls goes on starting in the daemon after 
 **The notice.** A request command that has waited **3 seconds** while jdtls is starting writes one line on the
 **standard error** (`gabier: waiting for jdtls (starting, 41s so far; importing the project for 38s: Configure project :core); the first
 command of a session waits for it to start and import the project, the next ones are quick`; what jdtls is doing is the
-one `gabier status` gives, see [status and stop](commands/status-and-stop.md)), and again every 15 seconds for as long as jdtls is starting, so an
+one `gabier status` gives, see status and stop), and again every 15 seconds for as long as jdtls is starting, so an
 agent can tell a wait from a hang. It asks the daemon for its `status` on a connection of its own while the request
 waits, and writes nothing when the answer comes within 3 seconds, when jdtls is already ready (a slow request to a ready
 jdtls, such as a `references` that waits for the indexes, gets no line), when the daemon does not answer the question,

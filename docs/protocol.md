@@ -35,7 +35,7 @@ All the parameters of a method are required; a value is a string (`dryRun` is `t
 are numbers from 0, and a list, `files` or `cleanUps`, is its elements one to a line, none empty). A front end that types
 the values, such as the descriptor `Operations` and `OperationRunner` of the cli, writes each as its kind says
 (`Parameter.Type`) and counts a position from 1. The page of each command says what it does. `help` and `init-agent` have no row: they are answered by the cli alone and never reach the
-daemon ([help](commands/help.md), [init-agent](commands/init-agent.md)). The MCP server of the cli, `gabier mcp`
+daemon (help, init-agent). The MCP server of the cli, `gabier mcp`
 ([mcp](commands/mcp.md)), serves each method of the table as a tool of the same name, with the same parameters, except
 `start` and `stop`: they are not tools (the server starts the daemon itself when the host connects, and an agent that
 stopped it would lose the tools that need it), while `status` is one, and `watch`, `watch-all` and `watch-affected-tests`, which answer more than once
@@ -45,33 +45,33 @@ A daemon that stops by itself when nobody uses it (see [the daemon](daemon.md)) 
 it decided, whatever the method, with the refusal `daemon-stopping` (a server error, exit code 1) and runs nothing; the
 `status` result has the member `idle` (`timeoutMillis`, `leftMillis`) while that rule is on.
 
-| Method             | Parameters                                                                  | Command                                                    |
-| ------------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `status`           | none                                                                        | [status](commands/status-and-stop.md)                      |
-| `start`            | none (starts jdtls in the background, answers the result of `status`)      | [start](commands/start.md)                                 |
-| `stop`             | none                                                                        | [stop](commands/status-and-stop.md)                        |
-| `diagnostics`      | `files`                                                                     | diagnostics                     |
-| `diagnostics-all`  | none (the language server chooses the files)                                | diagnostics                     |
-| `watch`            | `files` (absolute paths, one per line); answers more than once              | diagnostics                     |
-| `watch-all`        | none (the language server chooses the files); answers more than once        | diagnostics                     |
-| `watch-affected-tests` | none; answers more than once                                            | affected-tests               |
-| `rename`           | `file`, `line`, `column`, `newName`, `dryRun`                               | rename                               |
-| `rename-token`     | `file`, `token`, `newName`, `dryRun`                                        | rename                               |
-| `organize-imports` | `file`, `dryRun`                                                            | organize-imports           |
-| `cleanup`          | `file`, `cleanUps`, `dryRun`                                                | cleanup                             |
-| `extract-variable` | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | extract-variable           |
-| `extract-method`   | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | extract-method               |
-| `extract-constant` | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | extract-constant           |
-| `extract-field`    | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun` | extract-field                 |
-| `move-type-to-file` | `file`, `line`, `column`, `dryRun`                                          | move-type-to-file         |
-| `move`             | `files` (absolute paths, one per line), `package`, `dryRun`                 | [move](commands/move.md)                                   |
-| `inline`           | `file`, `line`, `column`, `dryRun`                                          | inline                               |
-| `create`           | `file`, `kind`, `dryRun`                                                    | create                               |
-| `references`       | `file`, `line`, `column`, `includeDeclaration`                              | references                       |
-| `actions`          | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`                  | actions                             |
-| `apply-action`     | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `title`, `dryRun` | apply-action                 |
-| `affected-tests`   | `files` (absolute paths, one per line)                                      | affected-tests               |
-| `affected-tests-changed` | none                                                                  | affected-tests               |
+| Method                   | Parameters                                                                    | Command                  |
+| ------------------------ | ----------------------------------------------------------------------------- | ------------------------ |
+| `status`                 | none                                                                          | status                   |
+| `start`                  | none (starts jdtls in the background, answers the result of `status`)         | start                    |
+| `stop`                   | none                                                                          | stop                     |
+| `diagnostics`            | `files`                                                                       | diagnostics              |
+| `diagnostics-all`        | none (the language server chooses the files)                                  | diagnostics              |
+| `watch`                  | `files` (absolute paths, one per line); answers more than once                | diagnostics              |
+| `watch-all`              | none (the language server chooses the files); answers more than once          | diagnostics              |
+| `watch-affected-tests`   | none; answers more than once                                                  | affected-tests           |
+| `rename`                 | `file`, `line`, `column`, `newName`, `dryRun`                                 | rename                   |
+| `rename-token`           | `file`, `token`, `newName`, `dryRun`                                          | rename                   |
+| `organize-imports`       | `file`, `dryRun`                                                              | organize-imports         |
+| `cleanup`                | `file`, `cleanUps`, `dryRun`                                                  | cleanup                  |
+| `extract-variable`       | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun`  | extract-variable         |
+| `extract-method`         | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun`  | extract-method           |
+| `extract-constant`       | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun`  | extract-constant         |
+| `extract-field`          | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `name`, `dryRun`  | extract-field            |
+| `move-type-to-file`      | `file`, `line`, `column`, `dryRun`                                            | move-type-to-file        |
+| `move`                   | `files` (absolute paths, one per line), `package`, `dryRun`                   | [move](commands/move.md) |
+| `inline`                 | `file`, `line`, `column`, `dryRun`                                            | inline                   |
+| `create`                 | `file`, `kind`, `dryRun`                                                      | create                   |
+| `references`             | `file`, `line`, `column`, `includeDeclaration`                                | references               |
+| `actions`                | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`                    | actions                  |
+| `apply-action`           | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `title`, `dryRun` | apply-action             |
+| `affected-tests`         | `files` (absolute paths, one per line)                                        | affected-tests           |
+| `affected-tests-changed` | none                                                                          | affected-tests           |
 
 ## A method that answers more than once
 

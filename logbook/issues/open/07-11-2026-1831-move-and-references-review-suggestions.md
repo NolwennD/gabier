@@ -4,7 +4,7 @@ Opened: 07-11-2026 18:31
 On hold: findings of the review of the batch `move-keeps-nested-and-qualified-names`, `move-updates-the-exports-of-the-module-info`
 and `references-refuses-a-symbol-that-does-not-resolve`; none breaks a `Done when` point or a real use met so far.
 
-- `docs/commands/references.md:60-64`: claims more than the scenario shows. Only an import of a package that does not
+- `gabier help references`: claims more than the scenario shows. Only an import of a package that does not
   exist (`demo.missing.Gone`) is replayed; "a module that is not required, a package that is not exported" and "a fully
   qualified name that does not resolve is answered `no references`" have no scenario. Also, the scenario of the issue
   (a type of a module the project does not see) differs from `demo.missing`, and `FindReferencesTest` only echoes the

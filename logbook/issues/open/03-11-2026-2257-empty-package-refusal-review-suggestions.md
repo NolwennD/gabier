@@ -11,5 +11,5 @@ Done when:
 - the dot between two segments: `package legacy.tools;` at column 14 has a row in the test, observed on the real jdtls
   first (which segment does jdtls rename?);
 - the scenario `rename-a-package-that-holds-no-class` uses a new name that is a valid prefix rename, and the message of
-  `LanguageServerException.emptyPackage` and `docs/commands/rename.md` say the same thing about the new name;
+  `LanguageServerException.emptyPackage` and `gabier help rename` say the same thing about the new name;
 - `bin/ci` passes.

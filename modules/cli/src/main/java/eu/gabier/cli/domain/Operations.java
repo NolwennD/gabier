@@ -28,7 +28,12 @@ public final class Operations {
                 itself, with jdtls, once no client has been connected for a delay (60 minutes by default, set with
                 GABIER_IDLE_TIMEOUT in minutes, 0 for never): the member idle (timeoutMillis, leftMillis) of the
                 result says that delay and what is left of it before this call, and is absent when the daemon never
-                stops by itself. The next command starts a new daemon, so an agent does nothing about it.\
+                stops by itself. The next command starts a new daemon, so an agent does nothing about it.
+                It also shows the import settings that organize-imports follows: for each of the three, its value and\
+                 where it comes from, .settings (.settings/org.eclipse.jdt.ui.prefs), .vscode (.vscode/settings.json) or\
+                 the default of the language server. The files are read when status is asked, so a file edited a moment\
+                 ago is already in it. They are the member imports of the result (importOrder, starThreshold,\
+                 staticStarThreshold, each with its value and its source).\
                 """, List.of(), List.of());
 
     public static final Operation START = new Operation(

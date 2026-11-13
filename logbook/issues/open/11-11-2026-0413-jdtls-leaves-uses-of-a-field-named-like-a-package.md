@@ -7,4 +7,4 @@ Met by the worker of `rename-a-record-component` (11-11-2026): with jdtls 1.63.0
 
 Done when:
 - [ ] The cause is shown on the real jdtls with a throwaway replay (the names above are those of packages of the JDK, to check), on a plain class field and on a record component.
-- [ ] Either a report for eclipse.jdt.ls is ready for the user to send (reproduction, cause), or the help of `rename` and `docs/commands/rename.md` name the limit, with the check an agent runs after the rename (`gabier diagnostics`); no check before the request (`.claude/rules/workflow.md`, "jdtls is never fought"). `bin/ci` passes.
+- [ ] Either a report for eclipse.jdt.ls is ready for the user to send (reproduction, cause), or the help of `rename` and `gabier help rename` name the limit, with the check an agent runs after the rename (`gabier diagnostics`); no check before the request (`.claude/rules/workflow.md`, "jdtls is never fought"). `bin/ci` passes.

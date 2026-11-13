@@ -3,7 +3,7 @@
 Opened: 08-11-2026 11:15
 On hold: findings of the review of the batch `the-first-call-says-why-it-is-slow`, `status-shows-the-indexing-of-jdtls`; none breaks a `Done when` point or a real use met so far.
 
-- `modules/daemon/src/main/java/eu/gabier/daemon/StartProgress.java:42` and `docs/commands/status-and-stop.md`: the doc says
+- `modules/daemon/src/main/java/eu/gabier/daemon/StartProgress.java:42` and `gabier help status`: the doc says
   the numbers in front of the statuses of jdtls are not shown, but a launch status is kept whole, so `gabier status`
   prints `launching jdtls for 7s: 45% Starting Java Language Server` (`StartProgressTest` asserts it). Strip the prefix or
   correct the doc.

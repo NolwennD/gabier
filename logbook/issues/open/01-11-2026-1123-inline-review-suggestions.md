@@ -7,8 +7,8 @@ no real use yet (`.claude/rules/workflow.md`, "Value first"); the user lifts the
 Done when:
 - [ ] `gabier inline` on one call or use of a method or a constant inlines every use and removes the declaration, as on the
       declaration: the daemon resolves the position to the declaration with `textDocument/definition` and inlines from there. A
-      scenario replayed on the real jdtls; the help, `docs/commands/inline.md` and the README say it (today they say that one use is
+      scenario replayed on the real jdtls; the help, `gabier help inline` and the README say it (today they say that one use is
       inlined alone, as jdtls does).
-- [ ] The refusal "a declaration that nothing uses" (listed in `Command.java` and `docs/commands/inline.md`) is a scenario replayed on
+- [ ] The refusal "a declaration that nothing uses" (listed in `Command.java` and `gabier help inline`) is a scenario replayed on
       the real jdtls for a constant, a local variable and a method, or the claim is dropped for what jdtls does not refuse.
 - [ ] `bin/ci` green, coverage 100%.

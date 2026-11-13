@@ -9,7 +9,7 @@ On hold: findings of the review of `help-for-answers-two-word-questions`; none b
 - `modules/cli/src/main/java/eu/gabier/cli/ranking/Ranking.java:48`: the margin of `THRESHOLD` shrank, "remove imports I
   don't use" scores 0.338 against 0.3 (0.352 before); one more `Words:` line can push it under with no failing test that
   names the cause.
-- `docs/commands/help.md:59-60`: a line well over 120 columns.
+- `gabier help help`: a line well over 120 columns.
 
 Done when:
 - [ ] a document holds "that", "these" and "those" in its keywords and the test asserts `answer("that alpha")` is empty,

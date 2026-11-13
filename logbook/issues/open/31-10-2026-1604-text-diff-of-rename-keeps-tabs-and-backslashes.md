@@ -9,5 +9,5 @@ Found in the review of `gabier-renames-a-symbol`. The text output of `gabier ren
 
 Done when:
 - [ ] The text diff shows tabs and backslashes as they are in the file, with control sequences still neutralised.
-- [ ] A test with a tab-indented file and a Java string escape shows it; `docs/commands/rename.md` says how a diff is printed.
+- [ ] A test with a tab-indented file and a Java string escape shows it; `gabier help rename` says how a diff is printed.
 - [ ] `bin/ci` green, coverage 100%.

@@ -131,7 +131,7 @@ Whichever way you installed it:
    after an upgrade: `gabier init-agent skill` (`.claude/skills/gabier/SKILL.md`), `gabier init-agent rule`
    (`.claude/rules/gabier.md`) or `gabier init-agent snippet` (a marked block of `AGENTS.md`, replaced in place by a second
    run). `--only=rename,diagnostics` keeps the commands you want taught, `--dry-run` shows the text first; see
-   [`init-agent`](docs/commands/init-agent.md).
+   `init-agent`.
 4. Or give an agent host that speaks [MCP](https://modelcontextprotocol.io) the operations as tools, with their
    instructions and no command line to learn. For Claude Code, from the project:
 
@@ -255,19 +255,19 @@ positions counted from 1 and `dryRun` in place of `--dry-run`.
 - [`gabier help guide`](docs/improve.md): which problem each improvement of the code solves (a text block, a switch
   expression, a condition to turn round...), what jdtls offers for it and what it leaves to you. The page is inside the
   installed cli: no clone needed.
-- [`gabier help --for="<task>"`](docs/commands/help.md): ask the guide a question in English ("turn this string
+- `gabier help --for="<task>"`: ask the guide a question in English ("turn this string
   concatenation into a text block") and get the one to three sections that answer, with the command to run and a
   confidence, or the plain word that nothing matches. No daemon, no network.
-- [`gabier help agents`](docs/commands/help.md): the lines to paste in the instructions of a coding agent (`AGENTS.md`,
+- `gabier help agents`: the lines to paste in the instructions of a coding agent (`AGENTS.md`,
   `CLAUDE.md`): `gabier start`, `gabier help --for=...` before editing by hand, the commands that replace a text edit.
-- [`gabier init-agent <skill|rule|snippet>`](docs/commands/init-agent.md): write those instructions into the project as a
+- `gabier init-agent <skill|rule|snippet>`: write those instructions into the project as a
   skill, a rule or a marked block of `AGENTS.md`, with the commands you choose (`--only`) and the version of gabier that
   wrote them; a second run replaces the block. No daemon.
 - [`gabier mcp`](docs/commands/mcp.md): the MCP server, for an agent host: one tool per operation, a `guide` tool that
   answers which tool does a task, the instructions of the server and the daemon started in the background.
-- [`gabier start`](docs/commands/start.md): start the daemon and jdtls ahead of the first command; `--wait` returns when
+- `gabier start`: start the daemon and jdtls ahead of the first command; `--wait` returns when
   jdtls is ready.
-- [`gabier status` and `gabier stop`](docs/commands/status-and-stop.md): see what the daemon serves, and stop it.
+- `gabier status` and `gabier stop`: see what the daemon serves, and stop it.
 
 ## Reference
 

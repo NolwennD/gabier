@@ -13,7 +13,7 @@ Done when:
 - A project that jdtls cannot build, where the error is published on the project and not on a file (see the note of
   `EclipseProject`), is not read as clean: the answer or the page says that an empty answer does not prove the build is
   healthy; a test covers the case.
-- The page `docs/commands/diagnostics.md` and the Javadoc of `Builds` say what the mechanism gives (jdtls answered the
+- The page `gabier help diagnostics` and the Javadoc of `Builds` say what the mechanism gives (jdtls answered the
   build, then published nothing for the settle time) and not more: a publication that comes later is missed, as the
   Javadoc of `Builds` already says of the order of publications.
 - A jdtls that never registers the files it watches, or unregisters them and does not register again, is covered by a

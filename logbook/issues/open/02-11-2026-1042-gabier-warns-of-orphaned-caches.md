@@ -11,4 +11,4 @@ Done when:
       orphaned caches exist: how many, how much space, and the command that removes them (the one of `0902`); nothing when there are
       none. The check is cheap (no jdtls, no walk of the whole cache) and never touches a folder of a live jdtls.
 - [ ] Tests red first: orphaned data folders are reported with their size; a live one is not; a cache folder that cannot be read does not make the command fail.
-- [ ] `docs/daemon.md` and `docs/commands/status.md` say what is watched and what the warning looks like. `bin/ci` passes.
+- [ ] `docs/daemon.md` and `gabier help status` say what is watched and what the warning looks like. `bin/ci` passes.

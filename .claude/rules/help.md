@@ -7,10 +7,9 @@ paths:
 # The help is the documentation of a command
 
 An agent that uses a command reads `gabier help <command>` and nothing else. The help of a command is its only
-documentation: there is no page `docs/commands/<command>.md` for a command, and none is written. (`docs/commands/` still
-holds the pages of the commands not yet moved to this rule, and the pages of what is not a command; the ticket
-`the-help-of-every-command-replaces-its-page` removes the first.) The pages of what is not a command (`mcp.md`,
-`daemon.md`, `protocol.md`, the concept pages) are written by hand and stay.
+documentation: there is no page `docs/commands/<command>.md` for a command, and none is written. `docs/commands/` holds
+`mcp.md` only (the MCP server is read by a host, and `McpPageTest` keeps it true). The pages of what is not a command
+(`mcp.md`, `daemon.md`, `protocol.md`, `cli.md`, the concept pages) are written by hand and stay.
 
 - **What the help says**: the usage, the output (what is printed, and with `--json`), the refusals (each key, and when it
   is answered) and the limits (what the command does not do, and what the agent runs after it). Each fact once, in short
@@ -27,7 +26,9 @@ holds the pages of the commands not yet moved to this rule, and the pages of wha
   name says the rule (`isNotAJavaSource`, `takesTheNameOfAFileIn`), not a comment and not a paragraph of a page.
   `gabier extract-method` does the extraction.
 - **The refusals are tested against the code, not against a page**: `RefusalKeysTest` (`:architecture`) fails when a key
-  in the help is the key of no `ErrorKey` of the code. `CommandRefusalsTest` still compares the commands that keep a page
-  with it, until their pages are removed.
+  in the help is the key of no `ErrorKey` of the code.
+- **What every command of a kind says the same way is written once**, in `Command.notes()`: how a position is typed, and
+  what the answer of a command that changes files looks like (`--dry-run`, the diff, `--json`). A command states only what
+  is its own.
 - **A change to a command updates its help** in the same commit (`.claude/skills/ticket/SKILL.md`): the notes and
   refusals in `Operations`, never a page.

@@ -14,7 +14,7 @@ $ gabier --json --bogus
 ```
 
 A first word one typo away from a command (`gabier organise-imports x.java`) is refused with the command it meant, in the
-detail (`did you mean organize-imports?`) and in the `suggestion` parameter; see [help](commands/help.md).
+detail (`did you mean organize-imports?`) and in the `suggestion` parameter; see help.
 
 A refusal can end with a **pointer to the help**: after the problem on the standard error, one more line, and with `--json` a
 last member `help` of the problem object (`"help":"..."`; the other members and the exit code are the same). A first word that
@@ -23,9 +23,9 @@ language server declined or failed on (`language-server-not-extractable`, `langu
 gets `Usage and other ways: gabier help <command>`, with the command that was run.
 
 `gabier help` lists the commands and `gabier help <command>` explains one, as does `gabier <command> --help` (or `-h`):
-`gabier help agents` prints the lines to paste in the instructions of a coding agent; see [help](commands/help.md).
+`gabier help agents` prints the lines to paste in the instructions of a coding agent; see help.
 `gabier init-agent <skill|rule|snippet>` writes them into the project as a skill, a rule or a block of `AGENTS.md`, with no
-daemon; see [init-agent](commands/init-agent.md). Its refusals (`init-agent-file-exists`, `init-agent-unknown-command`...) end
+daemon; see init-agent. Its refusals (`init-agent-file-exists`, `init-agent-unknown-command`...) end
 with the same pointer line, `Usage and other ways: gabier help init-agent`.
 
 The JSON object follows the data model of [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) (problem details)
@@ -38,7 +38,7 @@ its cause to its log, see [the daemon](daemon.md)).
 **Starting ahead of the first command.** `gabier start` starts the daemon of the project and jdtls and answers at once;
 `gabier start --wait [--timeout=<seconds>]` answers when jdtls is ready, writing where jdtls is on the standard error while
 it waits (never on the standard output). Its refusals, `jdtls-start-failed` and `jdtls-start-timeout`, are problem
-objects like the others, with exit code 1. See [start](commands/start.md).
+objects like the others, with exit code 1. See start.
 
 ## How the cli is built
 
