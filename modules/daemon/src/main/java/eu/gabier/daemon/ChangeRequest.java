@@ -22,6 +22,7 @@ import eu.gabier.editing.domain.TypeKind;
 import eu.gabier.protocol.ChangedFiles;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,6 +36,8 @@ final class ChangeRequest {
 
     static final String FILE = "file";
     static final String FILES = "files";
+    static final String CLASSES = "classes";
+    static final String TIMEOUT = "timeout";
     static final String CLEAN_UPS = "cleanUps";
     static final String NEW_NAME = "newName";
     static final String NAME = "name";
@@ -71,6 +74,26 @@ final class ChangeRequest {
         } catch (InvalidPathException e) {
             throw ParameterException.invalid(method, FILES);
         }
+    }
+
+    /** The binary names of the test classes of a request that takes some: one per line, none of them blank. */
+    List<String> classes() {
+        List<String> names = text(CLASSES).lines().toList();
+        if (names.isEmpty() || names.stream().anyMatch(String::isBlank)) {
+            throw ParameterException.invalid(method, CLASSES);
+        }
+
+        return names;
+    }
+
+    /** How long the tests may take, in seconds: a whole number above zero. */
+    Duration timeLimit() {
+        int seconds = number(TIMEOUT);
+        if (seconds < 1) {
+            throw ParameterException.invalid(method, TIMEOUT);
+        }
+
+        return Duration.ofSeconds(seconds);
     }
 
     /** The identifiers of the clean-ups of a request that takes some: one per line, none of them blank. */

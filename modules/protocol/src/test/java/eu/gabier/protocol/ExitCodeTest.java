@@ -31,6 +31,14 @@ class ExitCodeTest {
     }
 
     @Test
+    void failedTestsAreThreeAndNoProblemHasThatCode() {
+        assertThat(ExitCode.TESTS_FAILED.value()).isEqualTo(3);
+        for (ErrorStatus category : ErrorStatus.values()) {
+            assertThat(ExitCode.of(problem(category))).isNotEqualTo(ExitCode.TESTS_FAILED);
+        }
+    }
+
+    @Test
     void everyCategoryOfProblemHasACode() {
         for (ErrorStatus category : ErrorStatus.values()) {
             assertThat(ExitCode.of(problem(category))).isNotEqualTo(ExitCode.SUCCESS);

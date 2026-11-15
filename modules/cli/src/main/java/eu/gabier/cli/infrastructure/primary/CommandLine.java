@@ -45,6 +45,8 @@ public final class CommandLine {
             execute(words, json, in, out, err, daemon, projects);
 
             return ExitCode.SUCCESS.value();
+        } catch (TestsFailed failed) {
+            return ExitCode.TESTS_FAILED.value();
         } catch (DaemonRefusal refusal) {
             var problem = Problems.of(refusal);
 

@@ -24,14 +24,29 @@ public final class Refusals {
             "editing-stale-edit: the change cannot be applied to the files as they are";
 
     public static final String TESTING_COMPILATION_FAILED =
-            "testing-compilation-failed: a Java file given, or one that changed, has an error the language server"
-                    + " reported; the problem names the files, and diagnostics tells what";
+            "testing-compilation-failed: a Java file given, one that changed, or the file of a test to run has an"
+                    + " error the language server reported; the problem names the files, and diagnostics tells what";
     public static final String TESTING_INVALID_TEST_FILTER =
             "testing-invalid-test-filter: a pattern of infinitest.filters is not a regular expression; the"
                     + " problem gives the file, the line and the pattern";
     public static final String TESTING_READ_FAILED =
             "testing-read-failed: a class file, a jar or the file of filters could not be read (a class"
                     + " compiled for a Java newer than the daemon's is not read)";
+
+    public static final String TESTING_NO_SUCH_TEST_CLASS =
+            "testing-no-such-test-class: a class given is not a class of the build; the problem names it";
+    public static final String TESTING_NO_TEST_ENGINE =
+            "testing-no-test-engine: no test engine of the class path recognises a class as a test (it holds no test,"
+                    + " or its engine is not on the class path); nothing was run, and the problem names the classes";
+    public static final String TESTING_NO_TEST_LAUNCHER =
+            "testing-no-test-launcher: the class path of the tests has no JUnit Platform launcher"
+                    + " (org.junit.platform:junit-platform-launcher), which the tests are run with; nothing was run";
+    public static final String TESTING_TEST_TIMEOUT =
+            "testing-test-timeout: the tests did not end within the time limit and were stopped (a test that never"
+                    + " ends, or a limit too short for them)";
+    public static final String TESTING_RUN_FAILED =
+            "testing-run-failed: the JVM of the tests could not be started, or ended with no report (a test stopped it,"
+                    + " ran it out of memory or crashed it); the problem gives the end of what it wrote";
 
     private Refusals() {}
 }

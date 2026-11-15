@@ -23,6 +23,7 @@ import eu.gabier.protocol.FileDiagnostics.Severity;
 import eu.gabier.protocol.FoundReferences;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.Json;
+import eu.gabier.protocol.RanTests;
 import eu.gabier.protocol.SelectedTests;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import eu.gabier.shared.error.domain.GeneratorException;
@@ -555,6 +556,10 @@ class OperationRunnerTest {
             case "affected-tests", "affected-tests-changed" -> {
                 var selected = new SelectedTests(List.of("demo.LedgerTest"));
                 yield new KindAnswered(selected.toJson(), new OperationResult.Selected(selected));
+            }
+            case "test", "test-changed" -> {
+                var ran = new RanTests(1, 0, List.of());
+                yield new KindAnswered(ran.toJson(), new OperationResult.Ran(ran));
             }
             default -> new KindAnswered(CHANGED.toJson(), new OperationResult.Changed(CHANGED));
         };

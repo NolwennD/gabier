@@ -106,6 +106,8 @@ class GuideQuestionsTest {
                 question("which tests to run after my edit", "The tests that a change affects"),
                 question("follow the tests to run while I edit", "Following the tests as the files change"),
                 question("watch the tests as the files change", "Following the tests as the files change"),
+                question("run the tests and show the failures", "Run the tests and read the failures"),
+                question("run a test class without gradle or maven", "Run the tests and read the failures"),
                 question("text blocks", "A string built from literals with `+` and line breaks"),
                 question("extract variable", "An expression used twice, or too long to read"),
                 question("inline variable", "A call that hides what it does"));
@@ -126,7 +128,7 @@ class GuideQuestionsTest {
                 "a 1 -",
                 // Questions with a word the guide holds and no answer in it (the review of 04-11-2026).
                 "write a unit test for this class",
-                "run the build and the tests",
+                "package the project into a jar with the build",
                 "commit the change to git",
                 "the",
                 "block",

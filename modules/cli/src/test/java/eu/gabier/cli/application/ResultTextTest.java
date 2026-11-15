@@ -16,6 +16,7 @@ import eu.gabier.protocol.FoundReferences.Place;
 import eu.gabier.protocol.IdleStop;
 import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.RanTests;
 import eu.gabier.protocol.SelectedTests;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -390,6 +391,59 @@ class ResultTextTest {
         void writesOutWhatATerminalWouldObeyInTheNameOfAClass() {
             assertThat(ResultText.lines(new SelectedTests(List.of("demo." + ESCAPE))))
                     .containsExactly("demo." + ESCAPED);
+        }
+    }
+
+    @Nested
+    class OfRanTests {
+
+        @Test
+        void saysThatNoTestRanWhenNoneRanAndNoneWasSkipped() {
+            assertThat(ResultText.lines(new RanTests(0, 0, List.of()))).containsExactly("no tests ran");
+        }
+
+        @Test
+        void givesTheCountsWhenOnlySkippedTestsAreThere() {
+            assertThat(ResultText.lines(new RanTests(0, 2, List.of())))
+                    .containsExactly("ran 0 tests: 0 passed, 0 failed, 2 skipped");
+        }
+
+        @Test
+        void givesTheClassMethodMessageAndPlaceOfAFailureTheMessageOneLineToALine() {
+            var failure = new RanTests.Failure(
+                    "demo.LedgerTest",
+                    Optional.of("withdraws"),
+                    "java.lang.AssertionError",
+                    "first\nsecond",
+                    Optional.of("demo.Ledger.withdraw(Ledger.java:17)"));
+
+            assertThat(ResultText.lines(new RanTests(1, 0, List.of(failure))))
+                    .containsExactly(
+                            "ran 2 tests: 1 passed, 1 failed, 0 skipped",
+                            "FAILED demo.LedgerTest withdraws",
+                            "  java.lang.AssertionError: first",
+                            "  second",
+                            "  at demo.Ledger.withdraw(Ledger.java:17)");
+        }
+
+        @Test
+        void givesTheClassAloneWhenItFailedBeforeItsTestsAndNothingWhenThereIsNoMessageNorPlace() {
+            var failure = new RanTests.Failure("demo.BrokenTest", Optional.empty(), "E", "", Optional.empty());
+
+            assertThat(ResultText.lines(new RanTests(0, 0, List.of(failure))))
+                    .containsExactly("ran 1 test: 0 passed, 1 failed, 0 skipped", "FAILED demo.BrokenTest", "  E");
+        }
+
+        @Test
+        void writesOutWhatATerminalWouldObeyInTheNamesAndTheMessage() {
+            var failure = new RanTests.Failure("demo." + ESCAPE, Optional.empty(), "E", ESCAPE, Optional.of(ESCAPE));
+
+            assertThat(ResultText.lines(new RanTests(0, 0, List.of(failure))))
+                    .containsExactly(
+                            "ran 1 test: 0 passed, 1 failed, 0 skipped",
+                            "FAILED demo." + ESCAPED,
+                            "  E: " + ESCAPED,
+                            "  at " + ESCAPED);
         }
     }
 

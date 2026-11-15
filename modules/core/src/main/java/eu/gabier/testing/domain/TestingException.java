@@ -2,6 +2,7 @@ package eu.gabier.testing.domain;
 
 import eu.gabier.shared.error.domain.GeneratorException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -49,6 +50,89 @@ public final class TestingException extends GeneratorException {
                         + " error is not the class of its text, so the tests it affects cannot be told: fix the errors"
                         + " first")
                 .addParameter("files", names));
+    }
+
+    /**
+     * The files of the test classes to run have an error: the classes the build wrote for them are stubs, and a test
+     * that ran on them would fail for what the compiler said, not for what the test checks.
+     */
+    public static TestingException notRunnableBecauseOfErrors(List<Path> files) {
+        String names = files.stream().map(Path::toString).collect(Collectors.joining(", "));
+
+        return new TestingException(GeneratorException.badRequest(TestingErrorKey.COMPILATION_FAILED)
+                .message("These files do not compile: " + names + ". The classes the compiler wrote for them are not"
+                        + " the classes of their text, so the tests would not run on the code you wrote: fix the"
+                        + " errors first (gabier diagnostics tells them)")
+                .addParameter("files", names));
+    }
+
+    public static TestingException noSuchTestClass(String className) {
+        return new TestingException(GeneratorException.badRequest(TestingErrorKey.NO_SUCH_TEST_CLASS)
+                .message("The build has no class " + className + ": give the binary name of a class of the project"
+                        + " (app.GreeterTest, app.Outer$Inner)")
+                .addParameter("class", className));
+    }
+
+    /**
+     * No test engine of the class path recognises these classes as tests.
+     *
+     * @param classes the binary names of the classes
+     */
+    public static TestingException noTestEngine(List<String> classes) {
+        String names = String.join(", ", classes);
+
+        return new TestingException(GeneratorException.badRequest(TestingErrorKey.NO_TEST_ENGINE)
+                .message("No test engine of the class path recognises " + names + " as tests: a class that holds no"
+                        + " test, or tests whose engine (JUnit Jupiter, JUnit Vintage, ...) the class path does not"
+                        + " have. Nothing was run")
+                .addParameter("classes", names));
+    }
+
+    /**
+     * The class path of the tests has no JUnit Platform launcher: gabier runs the tests with the libraries of the
+     * project, and adds none of its own.
+     */
+    public static TestingException noTestLauncher() {
+        return new TestingException(GeneratorException.badRequest(TestingErrorKey.NO_TEST_LAUNCHER)
+                .message("The class path of the tests has no JUnit Platform launcher (the class"
+                        + " org.junit.platform.launcher.core.LauncherFactory), which runs the tests: add"
+                        + " org.junit.platform:junit-platform-launcher to the test dependencies of the project, at the"
+                        + " version of its JUnit. Nothing was run"));
+    }
+
+    /**
+     * The tests did not end within the time limit and were stopped.
+     *
+     * @param timeLimit what was allowed
+     */
+    public static TestingException timedOut(Duration timeLimit) {
+        return new TestingException(GeneratorException.badRequest(TestingErrorKey.TEST_TIMEOUT)
+                .message("The tests did not end within " + timeLimit.toSeconds() + " seconds and were stopped: a"
+                        + " test that never ends, or a time limit that is too short for them")
+                .addParameter("seconds", String.valueOf(timeLimit.toSeconds())));
+    }
+
+    /**
+     * The process of the tests ended with no report: a test stopped the JVM, ran it out of memory or crashed it.
+     *
+     * @param output the end of what the process wrote, which says why
+     */
+    public static TestingException endedWithoutReport(String output) {
+        return new TestingException(GeneratorException.badRequest(TestingErrorKey.RUN_FAILED)
+                .message("The process of the tests ended with no report: a test stopped the JVM, ran out of memory or"
+                        + " crashed it. What it wrote last: " + output)
+                .addParameter("output", output));
+    }
+
+    /**
+     * The process of the tests could not be started.
+     *
+     * @param cause what failed
+     */
+    public static TestingException notStarted(Exception cause) {
+        return new TestingException(GeneratorException.internalServerError(TestingErrorKey.RUN_FAILED)
+                .message("The process of the tests could not be started: " + cause.getMessage())
+                .cause(cause));
     }
 
     static TestingException readFailed(Path file, Exception cause) {

@@ -9,6 +9,7 @@ import eu.gabier.protocol.CodeActions;
 import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FoundReferences;
+import eu.gabier.protocol.RanTests;
 import eu.gabier.protocol.SelectedTests;
 import eu.gabier.shared.error.domain.GeneratorException;
 import java.math.BigDecimal;
@@ -118,6 +119,7 @@ public final class OperationRunner {
             case REFERENCED -> new OperationResult.Referenced(FoundReferences.of(result));
             case OFFERED -> new OperationResult.Offered(CodeActions.of(result));
             case SELECTED -> new OperationResult.Selected(SelectedTests.of(result));
+            case RAN -> new OperationResult.Ran(RanTests.of(result));
             case CHANGED -> new OperationResult.Changed(ChangedFiles.of(result));
         };
     }
@@ -129,6 +131,7 @@ public final class OperationRunner {
         REFERENCED,
         OFFERED,
         SELECTED,
+        RAN,
         CHANGED
     }
 
@@ -139,6 +142,7 @@ public final class OperationRunner {
             case "references" -> Kind.REFERENCED;
             case "actions" -> Kind.OFFERED;
             case "affected-tests", "affected-tests-changed" -> Kind.SELECTED;
+            case "test", "test-changed" -> Kind.RAN;
             case "rename",
                     "rename-token",
                     "organize-imports",

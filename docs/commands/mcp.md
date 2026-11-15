@@ -53,13 +53,13 @@ is up does not wait for it.
 
 The operations of gabier that work on the code or report on it are **tools**, named as the operation: `diagnostics`,
 `diagnostics-all`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`,
-`extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions`, `apply-action`, `affected-tests`, `affected-tests-changed` and `status`.
+`extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions`, `apply-action`, `affected-tests`, `affected-tests-changed`, `test`, `test-changed` and `status`.
 `start` and `stop` are operations of the daemon but not tools: the server starts the daemon itself when the host
 connects (below), and an agent that stopped it would lose the tools that need it. `watch`, `watch-all` and `watch-affected-tests` are not tools either: they answer more than once, and a tool answers once. An agent that works through MCP calls `affected-tests-changed` after each edit, in place of `gabier affected-tests --watch` (the same changes, answered once; the decision is the one made for the problems: `ToolsTest` and `OperationRunnerTest` keep `watch-affected-tests` off the list of tools). Each tool is generated from its descriptor in `eu.gabier.cli.domain.Operations`: its description is the summary and the
 notes of the operation, its input schema is its parameters (a text, a whole number, a position, `true` or `false`, a list of
 texts), all required. A **position is an integer counted from 1**, as on the command line; a list is a JSON array
 (`files` of `move`, `cleanUps` of `cleanup`). A parameter added to an operation shows in its tool with no other file
-edited. `diagnostics`, `diagnostics-all`, `references`, `actions`, `affected-tests` and `status` are annotated `readOnlyHint` (`affected-tests-changed` is not: it writes no file, but it uses up what the daemon remembers of the changes, so a host should not repeat it). Starting the server asks no
+edited. `diagnostics`, `diagnostics-all`, `references`, `actions`, `affected-tests` and `status` are annotated `readOnlyHint` (`affected-tests-changed` is not: it writes no file, but it uses up what the daemon remembers of the changes, so a host should not repeat it; `test` and `test-changed` are not either: they run the code of the project, and `test-changed` uses up the changes as well). The result of `test` and `test-changed` is the counts and the failed tests, with the object of `--json` beside it, and a test that fails is a normal result, never `isError`: a call is an error only when it is refused. Starting the server asks no
 daemon; its first handshake starts one (below).
 
 ## The project of a call

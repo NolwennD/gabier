@@ -24,6 +24,7 @@ import eu.gabier.protocol.FoundReferences;
 import eu.gabier.protocol.FoundReferences.Place;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.Json;
+import eu.gabier.protocol.RanTests;
 import eu.gabier.protocol.SelectedTests;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import java.io.ByteArrayOutputStream;
@@ -34,6 +35,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -281,6 +283,33 @@ class CallingToolsTest {
 
             assertThat(content(answer)).isEqualTo("demo.LedgerTest");
             assertThat(at(answer, "result", "structuredContent")).isEqualTo(Json.parse(selected.toJson()));
+        }
+
+        @Test
+        void runsTheTestsAndAnswersAFailingTestAsAResultNotAsAnError() {
+            var ran = new RanTests(
+                    1,
+                    0,
+                    List.of(new RanTests.Failure(
+                            "demo.LedgerTest",
+                            Optional.of("withdraws"),
+                            "java.lang.AssertionError",
+                            "no",
+                            Optional.of("demo.Ledger.withdraw(Ledger.java:17)"))));
+            var daemon = new StubDaemon().answering(ran.toJson());
+
+            var answer = exchange(daemon, modernCall("test", """
+                {"classes":["demo.LedgerTest"],"timeout":60}\
+                """)).getFirst();
+
+            assertThat(content(answer)).isEqualTo("""
+                ran 2 tests: 1 passed, 1 failed, 0 skipped
+                FAILED demo.LedgerTest withdraws
+                  java.lang.AssertionError: no
+                  at demo.Ledger.withdraw(Ledger.java:17)\
+                """);
+            assertThat(at(answer, "result", "structuredContent")).isEqualTo(Json.parse(ran.toJson()));
+            assertThat(at(answer, "result", "isError")).isEqualTo(false);
         }
 
         @Test

@@ -4,6 +4,7 @@ import eu.gabier.editing.domain.JavaLanguageServer;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.testing.domain.ProjectBuild;
+import eu.gabier.testing.domain.TestRunner;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -16,6 +17,14 @@ interface ServedProject extends JavaLanguageServer, ProjectBuild, AutoCloseable 
 
     /** The root of the project, absolute and normalized. */
     Path root();
+
+    /**
+     * What runs the tests of the project: a JVM of its own, started with the {@code java} of the daemon (the fake of a
+     * test, and of the daemon served by the fake, replaces it).
+     */
+    default TestRunner testRunner() {
+        return ProcessTestRunner.ofThisDaemon();
+    }
 
     /** Where the language server is. Asking it never starts the server. */
     JdtlsState state();

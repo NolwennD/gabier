@@ -1,10 +1,10 @@
 # The daemon
 
-One daemon runs per project. `gabier diagnostics`, `gabier rename`, `gabier organize-imports`, `gabier cleanup`, `gabier extract-variable`, `gabier extract-method`, `gabier extract-constant`, `gabier extract-field`, `gabier move-type-to-file`, `gabier move`, `gabier inline`, `gabier create`, `gabier references`, `gabier actions`, `gabier apply-action`, `gabier affected-tests` and `gabier start` **start it when nothing answers on the socket**, so an
+One daemon runs per project. `gabier diagnostics`, `gabier rename`, `gabier organize-imports`, `gabier cleanup`, `gabier extract-variable`, `gabier extract-method`, `gabier extract-constant`, `gabier extract-field`, `gabier move-type-to-file`, `gabier move`, `gabier inline`, `gabier create`, `gabier references`, `gabier actions`, `gabier apply-action`, `gabier affected-tests`, `gabier test` and `gabier start` **start it when nothing answers on the socket**, so an
 agent runs them in a project folder and gets the answer; `gabier status` and `gabier stop` never start one (see status and stop).
 It can also be started by hand, with `gabier-daemon` from the installed distribution (`./gradlew :daemon:installDist`,
 then `modules/daemon/build/install/gabier-daemon/bin/gabier-daemon`), and runs until `gabier stop`, a SIGTERM, or the delay with no client below; it
-answers `status`, `start`, `stop`, `diagnostics`, `diagnostics-all`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions`, `apply-action`, `affected-tests` and `affected-tests-changed`, and nothing else yet.
+answers `status`, `start`, `stop`, `diagnostics`, `diagnostics-all`, `rename`, `rename-token`, `organize-imports`, `cleanup`, `extract-variable`, `extract-method`, `extract-constant`, `extract-field`, `move-type-to-file`, `move`, `inline`, `create`, `references`, `actions`, `apply-action`, `affected-tests`, `affected-tests-changed`, `test` and `test-changed`, and nothing else yet.
 
 **Installing both by name.** `mise run install` builds the native cli and the daemon of the checkout it is run in,
 **copies** them into `~/.local/share/gabier/<version>` (`<version>` is the one `gabier --version` prints; the folder is
@@ -99,6 +99,7 @@ another job; a first run under a heavier load took 105 s to be ready, and `04-11
 | ready | `ServiceReady`, then the list of the projects jdtls imported | about 0.1 s |
 | diagnostics | `diagnostics`: the file is opened, jdtls publishes, and the daemon waits for jdtls to be quiet for 5 seconds. `diagnostics-all`: no file is opened; the daemon waits for jdtls to register the files it watches (the end of its initialization, which publishes the problems of the whole workspace), tells it of the changes on disk, asks for an incremental build, and waits 1 second in which nothing is published | 7 to 9 s for one file; 1.2 s for the whole project (532 files) once jdtls is started, 50 s for the first call right after the start of the daemon |
 | affected-tests | `affected-tests` and `affected-tests-changed`: jdtls is told of the files on disk, asked for an incremental build, and awaited; then the daemon reads the class folders and the jars of the test classpath | 1 to 3 s on a small project once jdtls is started (about 1.1 s after the first call), plus the reading of the class files |
+| test | `test` and `test-changed`: the build as for `affected-tests`, then a JVM of its own runs the tests (below) | on this checkout, one small class of 6 tests: 35 s for the first call after the daemon was ready (jdtls builds what it has not built yet), then 3.1 s for each next call, of which about 1.3 s is the build and the rest the JVM |
 
 so the first `gabier diagnostics` of a session answers after about a minute (69 s in the measure, 112 s in the heavier run), the same call warm
 after 6 to 9 s (the 5 seconds of quiet are in it), and a command that does not wait for the diagnostics (`rename`,
@@ -151,6 +152,24 @@ client sends, as the protocol expects of a client, and not from the disk. Its ow
 workspace (`refresh.enabled`), which can only be set in a file of its data folder, whose monitor on Linux is a poll of 4
 seconds at the least, and which was slow when it was tried: 2 to 8 seconds on a small project and 7 to 23 seconds on this
 checkout, against 1.1 to 1.3 seconds and 12 to 16 seconds with the events the daemon sends.
+
+**How `test` runs the tests.** The daemon never loads a test. For `test` and `test-changed` it asks the build as `affected-tests`
+does, refuses when the file of a test class to run does not compile, then starts a JVM of its own: the `java` of the daemon, in
+the root of the project, on the class path jdtls gives for the tests (the class folders and the libraries of every project of
+the build, together) followed by the daemon's own jar. A small class of the daemon, `TestRunnerMain`, runs in that JVM and calls
+the JUnit Platform **of the project** by reflection (`LauncherFactory`, the engines it holds): gabier adds no JUnit to the class
+path and no jar to itself, so the versions are the project's. It writes the report (counts, and for each failure the class,
+method, exception, message and the first stack frame whose class file is in a class folder of the project) to a file, which the
+daemon reads; what the tests print goes to a log kept only to say why a JVM ended with no report. The JVM is killed, with its
+descendants, when the time limit passes (`testing-test-timeout`) or when it ends with no report (`testing-run-failed`).
+Limits: the class path is the union of the projects of the build, so a build whose projects need different versions of a
+library runs a test with one of them (observed on this checkout: the Gradle API jars of `build-logic` are on it); the JVM is
+the daemon's, not the one the project is built for; the class path needs the launcher (`org.junit.platform:junit-platform-launcher`),
+which Maven and Gradle projects often do not declare, since Surefire and the Gradle test task bring their own (the
+engine and the platform engine jars do not depend on it): without it the call is refused (`testing-no-test-launcher`); this
+checkout declares it, and a project with only JUnit 4 has none. A Java file with an error other than a test class does not
+refuse the call (jdtls flags dozens of files of this checkout, such as test fixtures it cannot see across modules): a test that
+reaches the class it wrote for such a file fails with "Unresolved compilation problem".
 
 **What the daemon remembers of the disk, for `affected-tests`.** `gabier affected-tests` with no file
 (affected-tests) is answered from a list the daemon keeps in memory: the Java files that were

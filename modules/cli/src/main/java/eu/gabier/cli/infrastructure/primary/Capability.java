@@ -22,6 +22,7 @@ sealed interface Capability
                 Actions,
                 ApplyAction,
                 AffectedTests,
+                RunTests,
                 Start,
                 Status,
                 Stop,

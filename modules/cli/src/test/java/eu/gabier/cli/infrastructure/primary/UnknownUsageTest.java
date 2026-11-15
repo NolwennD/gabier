@@ -130,7 +130,11 @@ class UnknownUsageTest extends CliTest {
     }
 
     private static List<List<String>> affectedTestsWithoutAFile() {
-        return List.of(List.of("affected-tests", "--dry-run"), List.of("affected-tests", "--dry-run", "A.java"));
+        return List.of(
+                List.of("affected-tests", "--dry-run"),
+                List.of("affected-tests", "--dry-run", "A.java"),
+                List.of("test", "--dry-run"),
+                List.of("test", "--dry-run", "demo.ATest"));
     }
 
     private static List<List<String>> applyActionWithoutAFileTwoPositionsAndATitle() {

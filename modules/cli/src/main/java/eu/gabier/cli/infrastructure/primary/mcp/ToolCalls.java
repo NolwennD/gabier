@@ -270,6 +270,8 @@ final class ToolCalls {
                 answer(
                         ResultText.lines(selected.selected()),
                         selected.selected().toJson());
+            case OperationResult.Ran ran ->
+                answer(ResultText.lines(ran.ran()), ran.ran().toJson());
             case OperationResult.Changed changed ->
                 answer(
                         ResultText.report(changed.changed(), dryRun, true),

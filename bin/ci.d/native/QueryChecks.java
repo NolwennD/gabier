@@ -3,7 +3,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-/** {@code references}, {@code actions}, {@code apply-action} and {@code affected-tests} against the daemon served by the fake language server. */
+/** {@code references}, {@code actions}, {@code apply-action}, {@code affected-tests} and {@code test} against the daemon served by the fake language server. */
 final class QueryChecks extends Checks {
 
     QueryChecks(Session session) {
@@ -240,6 +240,40 @@ final class QueryChecks extends Checks {
         expect(
                 changedAsJson.exit() == 0 && changedAsJson.out().equals("{\"tests\":[\"shop.ArchitectureTest\"]}"),
                 "gabier --json affected-tests with no file gives the result as the daemon gave it");
+
+        Run ran = gabier("test", "shop.GreeterTest", "--timeout=30");
+        expect(
+                ran.exit() == 3
+                        && ran.err().isEmpty()
+                        && ran.out()
+                                .startsWith("ran 2 tests: 1 passed, 1 failed, 1 skipped\n"
+                                        + "FAILED app.CounterTest resetsACounter\n"),
+                "gabier test prints the counts and the failed tests, and exits with 3 when a test failed");
+
+        Run ranAsJson = gabier("--json", "test", "shop.GreeterTest");
+        expect(
+                ranAsJson.exit() == 3
+                        && ranAsJson.out().startsWith("{\"ran\":2,\"passed\":1,\"failed\":1,\"skipped\":1,")
+                        && ranAsJson.out().contains("\"method\":\"resetsACounter\""),
+                "gabier --json test gives the result as the daemon gave it, exit 3");
+
+        Run noClass = gabier("test", "shop.Gone");
+        expect(
+                noClass.exit() == 2
+                        && noClass.out().isEmpty()
+                        && noClass.err().contains("(testing-no-such-test-class; "),
+                "a class the build does not hold is refused as a problem object, exit 2");
+
+        Files.writeString(project.resolve(".gabier-fake-changed"), "src/main/java/shop/Greeter.java\n");
+        Run ranChanged = gabier("test");
+        expect(
+                ranChanged.exit() == 3 && ranChanged.out().startsWith("ran 2 tests: "),
+                "gabier test with no class runs the tests of what changed");
+
+        Run nothingChanged = gabier("test");
+        expect(
+                nothingChanged.exit() == 0 && nothingChanged.out().equals("no tests ran"),
+                "a second gabier test with no new change runs nothing: no tests ran, exit 0");
 
         gabier("stop");
         expect(ends(process), "the daemon served by the fake stops after the affected tests");

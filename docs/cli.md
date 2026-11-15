@@ -116,3 +116,4 @@ The exit code is derived from the problem. These codes are stable, for `gabier` 
 | 0    | Success.                                                                                                  |
 | 1    | Internal error: gabier failed (a bug, or the environment), the request was not at fault.                  |
 | 2    | Request refused: a usage error, no daemon running, a socket path too long, any refusal of a request.      |
+| 3    | `gabier test` ran the tests and some failed: an answer, not a refusal, so no problem has this code.       |

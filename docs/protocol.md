@@ -72,6 +72,8 @@ it decided, whatever the method, with the refusal `daemon-stopping` (a server er
 | `apply-action`           | `file`, `startLine`, `startColumn`, `endLine`, `endColumn`, `title`, `dryRun` | apply-action             |
 | `affected-tests`         | `files` (absolute paths, one per line)                                        | affected-tests           |
 | `affected-tests-changed` | none                                                                          | affected-tests           |
+| `test`                   | `classes` (binary names, one per line), `timeout` (seconds, a whole number from 1) | test                     |
+| `test-changed`           | `timeout` (seconds, a whole number from 1)                                    | test                     |
 
 ## A method that answers more than once
 

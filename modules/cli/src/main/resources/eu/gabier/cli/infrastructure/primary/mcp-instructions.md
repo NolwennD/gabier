@@ -18,6 +18,10 @@ Gabier changes Java through the language server of the project. Use its tools in
   `affected-tests` lists the test classes to run again after a change to Java files; it runs none.
   `affected-tests-changed` does it for what changed on disk since its last answer, with no file to name: call it after
   your edits (it answers once; a second call with no new edit lists nothing).
+  `test` runs test classes you name, and `test-changed` runs the tests that what changed on disk affects, each in a JVM
+  of its own with no Maven or Gradle, within the seconds you give as timeout: the answer is how many tests ran,
+  passed, failed and were skipped, and for each failed test its class, method, message and the place in the project.
+  Failing tests are an answer, not an error; a project whose class path has no JUnit Platform launcher is refused.
 - The server starts the daemon when it connects, and jdtls imports the project meanwhile. The first call that asks the
   daemon waits for the import, about a minute for a Gradle project; the server goes on answering meanwhile, and `status`
   answers at once with where jdtls is and what it is importing. `status` starts no daemon: the connection has started

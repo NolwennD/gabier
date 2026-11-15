@@ -6,6 +6,7 @@ import eu.gabier.protocol.DaemonStatus;
 import eu.gabier.protocol.DiagnosedFiles;
 import eu.gabier.protocol.FoundReferences;
 import eu.gabier.protocol.FoundReferences.Place;
+import eu.gabier.protocol.RanTests;
 import eu.gabier.protocol.SelectedTests;
 import eu.gabier.protocol.TerminalText;
 import java.time.Duration;
@@ -108,6 +109,32 @@ public final class ResultText {
         }
 
         return neutralised(selected.tests());
+    }
+
+    /**
+     * What the tests did: a line with the counts ({@code ran 3 tests: 2 passed, 1 failed, 0 skipped}, {@code no tests
+     * ran} when none ran and none was skipped), then for each failure {@code FAILED <class> <method>} (the class alone
+     * when the class failed before its tests could run), the class of what was thrown and its message, the message one
+     * line to a line, indented, and {@code at <where>} when the stack has a frame in the project.
+     */
+    public static List<String> lines(RanTests ran) {
+        var lines = new ArrayList<String>();
+        if (ran.ran() == 0 && ran.skipped() == 0) {
+            lines.add("no tests ran");
+        } else {
+            lines.add("ran " + ran.ran() + (ran.ran() == 1 ? " test: " : " tests: ") + ran.passed() + " passed, "
+                    + ran.failed() + " failed, " + ran.skipped() + " skipped");
+        }
+        for (var failure : ran.failures()) {
+            lines.add("FAILED " + failure.testClass()
+                    + failure.method().map(method -> " " + method).orElse(""));
+            var message = failure.message().lines().toList();
+            lines.add("  " + failure.exception() + (message.isEmpty() ? "" : ": " + message.getFirst()));
+            message.stream().skip(1).forEach(line -> lines.add("  " + line));
+            failure.where().ifPresent(place -> lines.add("  at " + place));
+        }
+
+        return neutralised(lines);
     }
 
     /**

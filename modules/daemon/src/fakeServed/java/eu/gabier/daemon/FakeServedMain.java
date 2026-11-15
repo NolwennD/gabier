@@ -23,8 +23,11 @@ import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.testing.domain.BuiltProject;
 import eu.gabier.testing.domain.ChangedBuild;
+import eu.gabier.testing.domain.TestRunner;
 import eu.gabier.testing.fixtures.AffectedTestsCases;
 import eu.gabier.testing.fixtures.CompiledProject;
+import eu.gabier.testing.fixtures.FakeTestRunner;
+import eu.gabier.testing.fixtures.TestRunScenarios;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -83,8 +86,13 @@ public final class FakeServedMain {
         var edited = new FakeJavaLanguageServer(root)
                 .scripted(ProjectDiagnosticsScenarios.DIAGNOSTICS_OF_THE_WHOLE_PROJECT_AFTER_TWO_EDITS);
 
+        var tests = new FakeTestRunner().reporting(TestRunScenarios.ONE_PASSING_AND_ONE_FAILING_TEST);
+
         System.exit(Main.serve(
-                System.getenv(), Path.of("").toAbsolutePath(), System.out, new Served(root, server, edited, built)));
+                System.getenv(),
+                Path.of("").toAbsolutePath(),
+                System.out,
+                new Served(root, server, edited, built, tests)));
     }
 
     /**
@@ -189,8 +197,19 @@ public final class FakeServedMain {
     }
 
     /** The project of the fake: always ready, nothing to end. */
-    private record Served(Path root, FakeJavaLanguageServer server, FakeJavaLanguageServer edited, BuiltProject built)
+    private record Served(
+            Path root,
+            FakeJavaLanguageServer server,
+            FakeJavaLanguageServer edited,
+            BuiltProject built,
+            FakeTestRunner tests)
             implements ServedProject {
+
+        /** The tests of the fake report what the scenario of the one passing and one failing test says: no JVM runs. */
+        @Override
+        public TestRunner testRunner() {
+            return tests;
+        }
 
         private boolean isEdited() {
             return Files.exists(root.resolve(EDIT));

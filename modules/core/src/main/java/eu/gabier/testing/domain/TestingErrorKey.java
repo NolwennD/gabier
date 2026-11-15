@@ -7,8 +7,13 @@ public enum TestingErrorKey implements ErrorKey {
     COMPILATION_FAILED("testing-compilation-failed"),
     FILE_MISSING("testing-file-missing"),
     INVALID_TEST_FILTER("testing-invalid-test-filter"),
+    NO_SUCH_TEST_CLASS("testing-no-such-test-class"),
+    NO_TEST_ENGINE("testing-no-test-engine"),
+    NO_TEST_LAUNCHER("testing-no-test-launcher"),
     NOT_IN_A_SOURCE_FOLDER("testing-not-in-a-source-folder"),
-    READ_FAILED("testing-read-failed");
+    READ_FAILED("testing-read-failed"),
+    RUN_FAILED("testing-run-failed"),
+    TEST_TIMEOUT("testing-test-timeout");
 
     private final String key;
 

@@ -25,6 +25,7 @@ import eu.gabier.protocol.JdtlsState;
 import eu.gabier.protocol.ProtocolVersion;
 import eu.gabier.shared.generation.ExcludeFromGeneratedCodeCoverage;
 import eu.gabier.testing.application.AffectedTests;
+import eu.gabier.testing.application.RunTests;
 import eu.gabier.testing.infrastructure.secondary.NioProjectFiles;
 import java.io.IOException;
 import java.net.StandardProtocolFamily;
@@ -86,6 +87,7 @@ final class DaemonServer implements AutoCloseable {
         var rename = new Rename(project, new NioFileStore());
         var follow = new FollowProblems(project);
         var affectedTests = new AffectedTests(project, new NioProjectFiles(), project.root());
+        var runTests = new RunTests(project, new NioProjectFiles(), project.root(), project.testRunner());
         var followedTests = new FollowedTests(affectedTests);
         problems = new ProjectFeed(follow::read, followedTests::read, project::watchDisk);
         // The method table: to add a method, add it here (.claude/skills/add-daemon-method/SKILL.md).
@@ -117,7 +119,9 @@ final class DaemonServer implements AutoCloseable {
                         new ReferencesMethod(new FindReferences(project, new NioFileStore())),
                         new AffectedTestsMethod(affectedTests),
                         new AffectedTestsChangedMethod(affectedTests),
-                        new WatchAffectedTestsMethod(followedTests, problems)),
+                        new WatchAffectedTestsMethod(followedTests, problems),
+                        new TestMethod(runTests),
+                        new TestChangedMethod(runTests)),
                 log);
     }
 

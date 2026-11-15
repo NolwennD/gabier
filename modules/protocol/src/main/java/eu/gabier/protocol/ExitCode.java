@@ -8,13 +8,15 @@ package eu.gabier.protocol;
  *   <li>0: success;
  *   <li>1: internal error, gabier failed (a bug, or the environment), the request was not at fault;
  *   <li>2: request refused, a usage error (kept at 2 as it has always been), no daemon running, a socket path too long,
- *       any refusal of a request.
+ *       any refusal of a request;
+ *   <li>3: the command ran the tests and some failed: an answer, not a refusal, so no problem object has this code.
  * </ul>
  */
 public enum ExitCode {
     SUCCESS(0),
     INTERNAL_ERROR(1),
-    REFUSED(2);
+    REFUSED(2),
+    TESTS_FAILED(3);
 
     private final int value;
 

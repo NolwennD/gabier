@@ -1089,6 +1089,34 @@ goes on, and the tests of that change are printed once the code compiles (`gabie
 takes no file and no `--dry-run`. Nothing is executed. It ends when it is killed, and with a problem when the daemon
 ends it or goes away. See "The tests that a change affects" and `gabier help affected-tests`.
 
+### Run the tests and read the failures
+
+Words: run the tests, run tests, did the tests pass, test failures, failing test, retest after a change
+
+Ask: `gabier test <test-class>...` runs the classes named (the binary names `gabier affected-tests` prints); `gabier
+test` with no class runs the tests that what changed on disk affects. The time they may take in all has a default
+of 300 seconds, and an option to change it.
+
+Output, the counts, then each failed test with its class, method, what was thrown and the first frame in the project;
+the exit code is 3 when a test failed:
+
+```text
+ran 3 tests: 2 passed, 1 failed, 0 skipped
+FAILED demo.LedgerTest withdrawsMoreThanTheBalance
+  org.opentest4j.AssertionFailedError: expected: 10 but was: 5
+  at demo.Ledger.withdraw(Ledger.java:17)
+```
+
+Limits: no Maven or Gradle: the tests run in a JVM of their own on the classes jdtls compiled, with the JUnit
+Platform the project itself depends on. The class path of the tests must hold the launcher
+(`org.junit.platform:junit-platform-launcher`: declare it as a test runtime dependency; Surefire and the Gradle test
+task bring their own, so a project may lack it) and an engine (JUnit Jupiter, or JUnit Vintage for JUnit 4 and 3);
+without them the call is refused (`testing-no-test-launcher`, `testing-no-test-engine`) and nothing runs. The file of a
+test class that does not compile is refused (`testing-compilation-failed`): run `gabier diagnostics` on it; another
+file that does not compile makes the tests that reach it fail with "Unresolved compilation problem". A test that never
+ends is killed when the time limit passes (`testing-test-timeout`). What the tests print is not shown. See `gabier help
+test`.
+
 ### A new file for a new type
 
 Words: create a file, new class, new interface, new record, new enum, new Java file with its package, package-info

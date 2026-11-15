@@ -39,7 +39,9 @@ class OperationsTest {
                         "actions",
                         "apply-action",
                         "affected-tests",
-                        "affected-tests-changed");
+                        "affected-tests-changed",
+                        "test",
+                        "test-changed");
     }
 
     @Test

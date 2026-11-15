@@ -618,6 +618,66 @@ public final class Operations {
                     Refusals.NOT_READY),
             List.of());
 
+    public static final Operation TEST = new Operation(
+            "test",
+            "runs test classes in a JVM of their own, with no build tool, and gives the failures",
+            """
+            Runs the test classes given, as the binary names affected-tests lists (app.GreeterTest,\
+             app.Outer$InnerTest), on the classes the language server compiled and the class path it gives the tests:\
+             no Maven or Gradle is called, and the language server takes in the changes on disk first, so the tests\
+             run on the code as it is.
+            The answer says how many tests ran, passed, failed and were skipped (a test that ran passed or failed; one\
+             that is disabled, or whose assumption did not hold, is skipped and did not run), and for each failure its\
+             class and method (no method for a class that failed before its tests could run: a @BeforeAll, a\
+             constructor), the class of what was thrown, its message and the first frame of its stack that is in the\
+             project, as app.Ledger.withdraw(Ledger.java:17). Tests that fail are an answer, not a refusal.
+            The tests run in a JVM started with the java of the daemon, in the root of the project, with the class path\
+             of all the projects of the build together. They are run by the JUnit Platform that class path holds: gabier\
+             brings none, so the launcher (org.junit.platform:junit-platform-launcher) and the engines (JUnit Jupiter;\
+             JUnit Vintage for JUnit 4 and 3) are the project's own. A class that no engine recognises as a test refuses\
+             the call, and nothing runs. Output of the tests is not shown.
+            The file of a test class that does not compile refuses the call: the class the language server writes for\
+             it is not the class of its text. Another file that does not compile does not refuse it: a test that\
+             reaches it fails with "Unresolved compilation problem" (run diagnostics to see the errors).
+            The time limit is in seconds, for all the classes together: the JVM is killed when it passes.\
+            """,
+            List.of(
+                    Refusals.TESTING_COMPILATION_FAILED,
+                    Refusals.TESTING_NO_SUCH_TEST_CLASS,
+                    Refusals.TESTING_NO_TEST_ENGINE,
+                    Refusals.TESTING_NO_TEST_LAUNCHER,
+                    Refusals.TESTING_TEST_TIMEOUT,
+                    Refusals.TESTING_RUN_FAILED,
+                    Refusals.REQUEST_FAILED,
+                    Refusals.NOT_READY),
+            List.of(
+                    Parameter.array("classes", "the binary names of the test classes to run, at least one"),
+                    Parameter.integer("timeout", "the seconds the tests may take in all, from 1")));
+
+    public static final Operation TEST_CHANGED = new Operation(
+            "test-changed",
+            "runs the tests that what changed on disk since the last answer affects, with no class to name",
+            """
+            The tests are those affected-tests-changed lists, run as test runs them, with the same answer. The changes\
+             are the daemon's, as for affected-tests-changed: they are forgotten once the tests have run, whether they\
+             passed or not (a failing test is run again when what it depends on changes again, or by naming it), and\
+             kept when the call is refused. Nothing changed, or no test affected, answers that no test ran and starts no\
+             JVM. A daemon started by this very call has seen nothing change: start the daemon before editing.
+            A changed Java file that does not compile, or the file of a test to run that does not compile, refuses the\
+             call, as for affected-tests-changed and test.\
+            """,
+            List.of(
+                    Refusals.TESTING_COMPILATION_FAILED,
+                    Refusals.TESTING_INVALID_TEST_FILTER,
+                    Refusals.TESTING_READ_FAILED,
+                    Refusals.TESTING_NO_TEST_ENGINE,
+                    Refusals.TESTING_NO_TEST_LAUNCHER,
+                    Refusals.TESTING_TEST_TIMEOUT,
+                    Refusals.TESTING_RUN_FAILED,
+                    Refusals.REQUEST_FAILED,
+                    Refusals.NOT_READY),
+            List.of(Parameter.integer("timeout", "the seconds the tests may take in all, from 1")));
+
     private Operations() {}
 
     /** Every operation of the daemon, in the order of the table of {@code docs/protocol.md}. */
@@ -647,7 +707,9 @@ public final class Operations {
                 ACTIONS,
                 APPLY_ACTION,
                 AFFECTED_TESTS,
-                AFFECTED_TESTS_CHANGED);
+                AFFECTED_TESTS_CHANGED,
+                TEST,
+                TEST_CHANGED);
     }
 
     /** An extraction of a selection into something named: the four commands share their parameters and their refusals. */

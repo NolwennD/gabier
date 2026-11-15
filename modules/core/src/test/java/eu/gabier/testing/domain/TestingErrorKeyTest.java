@@ -14,7 +14,12 @@ class TestingErrorKeyTest {
                         "testing-compilation-failed",
                         "testing-file-missing",
                         "testing-invalid-test-filter",
+                        "testing-no-such-test-class",
+                        "testing-no-test-engine",
+                        "testing-no-test-launcher",
                         "testing-not-in-a-source-folder",
-                        "testing-read-failed");
+                        "testing-read-failed",
+                        "testing-run-failed",
+                        "testing-test-timeout");
     }
 }

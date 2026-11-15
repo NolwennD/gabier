@@ -40,6 +40,7 @@ class OperationParametersTest {
             Map.entry("<name>", List.of("name")),
             Map.entry("<identifier>", List.of("token")),
             Map.entry("<cleanup>...", List.of("cleanUps")),
+            Map.entry("<test-class>...", List.of("classes")),
             Map.entry("<package>", List.of("package")),
             Map.entry("<title>", List.of("title")),
             Map.entry("<class|interface|record|enum|package>", List.of("kind")));
@@ -47,6 +48,9 @@ class OperationParametersTest {
     /** The words of a usage line that choose a form of the command line or tune it, and are no parameter. */
     private static final Set<String> COMMAND_LINE_ONLY =
             Set.of("--token", "--all", "--watch", "--wait", "[--timeout=<seconds>]");
+
+    /** An option of a usage line that is a parameter of the operations that declare it, and a tuning of the others. */
+    private static final Map<String, String> OPTIONS_THAT_ARE_PARAMETERS = Map.of("[--timeout=<seconds>]", "timeout");
 
     private static final Pattern BACKTICKED = Pattern.compile("`([^`]+)`");
 
@@ -66,6 +70,9 @@ class OperationParametersTest {
                 positions++;
             } else if (PARAMETERS_OF_A_WORD.containsKey(word)) {
                 inTheUsage.addAll(PARAMETERS_OF_A_WORD.get(word));
+            } else if (OPTIONS_THAT_ARE_PARAMETERS.containsKey(word)
+                    && operation.parameterNames().contains(OPTIONS_THAT_ARE_PARAMETERS.get(word))) {
+                inTheUsage.add(OPTIONS_THAT_ARE_PARAMETERS.get(word));
             } else if (!COMMAND_LINE_ONLY.contains(word)) {
                 problems.add(operation.method() + ": the usage line has a word that no parameter stands for: " + word);
             }
