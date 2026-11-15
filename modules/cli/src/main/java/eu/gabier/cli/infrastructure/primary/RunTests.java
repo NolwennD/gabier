@@ -34,6 +34,17 @@ final class RunTests implements Capability {
                  prints. The tests print nothing: the answer is the counts, then each failed test.
                 --timeout=<seconds> is the time the tests may take in all, a whole number from 1; without it, 300\
                  seconds.
+                The JVM of the tests starts faster from an AOT cache of the dependency jars: about a quarter of the call\
+                 on a small class (1 s of 4 s). It is asked for when the daemon starts, with GABIER_TEST_AOT_CACHE=on in\
+                 its environment (a running daemon keeps the one it started with: run gabier stop first). The first call\
+                 makes the cache, which takes 6 to 8 seconds once and is not counted in --timeout; it is a file of about\
+                 20 MB in the cache folder of gabier (GABIER_CACHE, else $XDG_CACHE_HOME/gabier, else ~/.cache/gabier).\
+                 A jar, the JDK or the daemon that changes makes another cache, and the cache of a project that no\
+                 longer exists is removed. With it on, the jars that are not under the root of the project come first\
+                 on the class path and the class folders of the project after them: a class of the project with the\
+                 name of a class of a library is not the one that runs. A cache that cannot be made or used (a JDK\
+                 before 25, a full disk) never fails the call: the tests start with no cache, and the log of the daemon\
+                 says why.
                 The exit code is 0 when no test failed, 3 when some failed (the report is on the standard output, as\
                  with 0), and 2 or 1 when the call is refused, as for the other commands. With --json the standard\
                  output is {"ran":3,"passed":2,"failed":1,"skipped":0,"failures":[{"class":...,"method":...,\

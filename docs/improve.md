@@ -1095,7 +1095,8 @@ Words: run the tests, run tests, did the tests pass, test failures, failing test
 
 Ask: `gabier test <test-class>...` runs the classes named (the binary names `gabier affected-tests` prints); `gabier
 test` with no class runs the tests that what changed on disk affects. The time they may take in all has a default
-of 300 seconds, and an option to change it.
+of 300 seconds, and an option to change it. The JVM of the tests starts faster from an AOT cache of the dependency jars
+when the daemon is started with `GABIER_TEST_AOT_CACHE=on` (see "A JVM that runs the tests starts slowly").
 
 Output, the counts, then each failed test with its class, method, what was thrown and the first frame in the project;
 the exit code is 3 when a test failed:
@@ -1164,8 +1165,14 @@ the code and run `gabier diagnostics` again. See `gabier help actions` and `gabi
 
 Words: make the test JVM start faster, JVM startup time, AOT cache, class loading cache, slow start of the tests, CDS
 
-By hand: no command makes it yet. On JDK 25 or later, create an AOT cache (JEP 483) of the dependency jars once, then
-start each test JVM with it. The project classes come after the cached jars on the class path, as folders or jars:
+Ask: `gabier test <test-class>` makes and uses an AOT cache (JEP 483) of the dependency jars by itself, when the
+daemon is started with `GABIER_TEST_AOT_CACHE=on` in its environment: the daemon reads it at its start, so stop a
+daemon that runs first. The first call makes the cache (6 to 8 s, 20 MB, once), the next ones start about a quarter
+faster (1 to 1.3 s of 4 s on a small class), on JDK 25 and later; a JDK before that, or a cache that cannot be made,
+runs the tests as before. The help of `test` says the rest.
+
+By hand, for a JVM that gabier does not start: create the cache of the dependency jars once, then start each test
+JVM with it. The project classes come after the cached jars on the class path, as folders or jars:
 
 ```text
 java -XX:AOTCacheOutput=deps.aot -cp <dependency jars only> <a main that runs a sample test>

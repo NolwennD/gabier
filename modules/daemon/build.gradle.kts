@@ -39,6 +39,15 @@ tasks.processResources {
 // The version the build was given, for the test that proves it reaches JdtlsLocation.
 tasks.test {
   systemProperty("gabier.jdtlsVersion", jdtlsVersion.get())
+  // The JDK the tests of the AOT cache start their JVMs with: the Java 25 of the build, whatever JDK the daemon runs on (it
+  // does not check the jars a cache was made from, which is the case the cache has to get right). `-PgabierTestJdk=<home>`
+  // gives another one, to try the same tests on a JDK that does (27).
+  systemProperty(
+    "gabier.testJdk",
+    providers.gradleProperty("gabierTestJdk")
+      .orElse(javaToolchains.launcherFor(java.toolchain).map { it.metadata.installationPath.asFile.path })
+      .get()
+  )
 }
 
 // Starts the installed daemon (not the classes of the build): what a user runs, on the module path. A self-check run

@@ -16,6 +16,7 @@ import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
 import eu.gabier.testing.domain.BuiltProject;
 import eu.gabier.testing.domain.ChangedBuild;
+import eu.gabier.testing.domain.TestRunner;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -51,13 +52,15 @@ final class ProjectServer implements ServedProject {
 
     private final Path root;
     private final Starter starter;
+    private final TestRunner testRunner;
     private final Consumer<String> log;
     private volatile @Nullable StartedLanguageServer current;
     private boolean closed;
 
-    ProjectServer(Path root, Starter starter, Consumer<String> log) {
+    ProjectServer(Path root, Starter starter, TestRunner testRunner, Consumer<String> log) {
         this.root = root;
         this.starter = starter;
+        this.testRunner = testRunner;
         this.log = log;
     }
 
@@ -86,7 +89,10 @@ final class ProjectServer implements ServedProject {
         };
 
         return new ProjectServer(
-                root, () -> JdtlsLanguageServer.start(jdtls, settings, JdtlsLanguageServer.QUIET, log), log);
+                root,
+                () -> JdtlsLanguageServer.start(jdtls, settings, JdtlsLanguageServer.QUIET, log),
+                ProcessTestRunner.ofThisDaemon(AotCache.asked(environment, home, log)),
+                log);
     }
 
     /**
@@ -112,6 +118,11 @@ final class ProjectServer implements ServedProject {
     @Override
     public Path root() {
         return root;
+    }
+
+    @Override
+    public TestRunner testRunner() {
+        return testRunner;
     }
 
     @Override

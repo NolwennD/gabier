@@ -99,7 +99,7 @@ another job; a first run under a heavier load took 105 s to be ready, and `04-11
 | ready | `ServiceReady`, then the list of the projects jdtls imported | about 0.1 s |
 | diagnostics | `diagnostics`: the file is opened, jdtls publishes, and the daemon waits for jdtls to be quiet for 5 seconds. `diagnostics-all`: no file is opened; the daemon waits for jdtls to register the files it watches (the end of its initialization, which publishes the problems of the whole workspace), tells it of the changes on disk, asks for an incremental build, and waits 1 second in which nothing is published | 7 to 9 s for one file; 1.2 s for the whole project (532 files) once jdtls is started, 50 s for the first call right after the start of the daemon |
 | affected-tests | `affected-tests` and `affected-tests-changed`: jdtls is told of the files on disk, asked for an incremental build, and awaited; then the daemon reads the class folders and the jars of the test classpath | 1 to 3 s on a small project once jdtls is started (about 1.1 s after the first call), plus the reading of the class files |
-| test | `test` and `test-changed`: the build as for `affected-tests`, then a JVM of its own runs the tests (below) | on this checkout, one small class of 6 tests: 35 s for the first call after the daemon was ready (jdtls builds what it has not built yet), then 3.1 s for each next call, of which about 1.3 s is the build and the rest the JVM |
+| test | `test` and `test-changed`: the build as for `affected-tests`, then a JVM of its own runs the tests (below) | on this checkout, one small class of 6 tests: 35 s for the first call after the daemon was ready (jdtls builds what it has not built yet), then 3.1 s for each next call, of which about 1.3 s is the build and the rest the JVM; 25 % less on the next calls with the AOT cache (below) |
 
 so the first `gabier diagnostics` of a session answers after about a minute (69 s in the measure, 112 s in the heavier run), the same call warm
 after 6 to 9 s (the 5 seconds of quiet are in it), and a command that does not wait for the diagnostics (`rename`,
@@ -170,6 +170,61 @@ engine and the platform engine jars do not depend on it): without it the call is
 checkout declares it, and a project with only JUnit 4 has none. A Java file with an error other than a test class does not
 refuse the call (jdtls flags dozens of files of this checkout, such as test fixtures it cannot see across modules): a test that
 reaches the class it wrote for such a file fails with "Unresolved compilation problem".
+
+**The AOT cache of the test JVM.** Started with `GABIER_TEST_AOT_CACHE=on` in its environment (read when the daemon starts; the
+cli passes its own to the daemon it starts), the daemon starts the JVM of the tests with `-XX:AOTCache=<file>`, a cache (JEP 483) of
+the classes of the dependency jars: the launcher, the engines, the libraries of the tests. `gabier help test` says what the agent
+sees. It is a setting of the daemon and not an option of `test` because a request has no optional parameter (an option would be
+required of every client, the MCP tools included) and the cache is a choice for a machine, not for a call; its cost is that a
+daemon that runs does not see a change of the variable.
+
+- **What is cached.** The dependency jars of the class path of the tests (the files that are not under the root of the project: a
+  jar that a build writes in the project is rewritten at each build, so it stays out) and the jar of the daemon, which holds
+  `TestRunnerMain`. A class folder cannot be on the class path of a cache's creation (`Cannot have non-empty directory in
+  paths`, observed), so the class path of the tests is, with the setting on, the dependency jars, the jar of the daemon, then the
+  rest of the class path of the project in its order (the class folders): the cache is a prefix of it, as the JVM asks. The
+  order is the same whether the cache exists yet or not. Its cost is that a class of the project that has the name of a class
+  of a library, or of the daemon's jar (the sources of gabier itself: its tests of `eu.gabier.daemon.TestRunnerMain` run the
+  installed copy), is shadowed by the jar's.
+- **How it is made.** At the first call (or the first after a change), before the tests and not counted in their time limit, a JVM
+  of its own, `java -XX:AOTCacheOutput=<file> -cp <those jars> TestRunnerMain <report> ""`, runs the runner with no test class,
+  which loads the classes of the launcher and the Jupiter engine, and the JDK assembles the cache at its end (about 6 to 8 s,
+  2 minutes at the most, then it is killed). The classes of the tests themselves are not in the cache (a training run cannot
+  have the class folders), so a library that only the tests load, AssertJ for instance, starts as it did: 2104 of 3236 classes
+  of a run of `RenameTest` came from the cache in the measure below. The file is written under a temporary name and moved in
+  place, so two daemons never see half of one.
+- **When it is stale, it is not used.** JDK 25 and 26 do not check the jars a cache was made from (observed: a jar rebuilt at
+  the same path runs from the old cache, with no warning), so the file is named by a key that holds everything it is valid
+  for: the `release` file of the JDK (its build), the path, size and date of each cached jar in their order, and the same of
+  the daemon's jar. A change to any of them is another key, so another cache; a JDK that does check (27) is never asked. The
+  tests of `ProcessTestRunnerAotCacheTest` show each case on a real JDK 25 (`gabier.testJdk`, the Java 25 of the build; the same
+  tests pass on JDK 27 with `-PgabierTestJdk=<home>`): a library, a runner and a jar of the daemon that change in size, or in
+  date alone, are not run from the old cache, which holds the class that changed.
+- **When it cannot be made or used, the run goes on with no cache.** A JDK before 25 (`release` says so: the one-step creation
+  needs `-XX:AOTCacheOutput`), a daemon that does not run from a jar, a creation that fails (its last line of output is in the
+  log of the daemon), a folder of the cache that cannot be written (a full disk, a file where the folder should be), a creation
+  that takes too long: the log says `the tests start with no AOT cache: <why>`, and a failed key is written in `<key>.refused` so
+  the creation is not tried at each call (a jar, the JDK or the daemon that changes is another key). A JVM that is given a cache
+  and cannot use it (ZGC, observed; a very large heap or a `-javaagent` are named by the JEP) prints a warning and runs on without it
+  (`-XX:AOTMode=auto`, the default).
+- **Where, and how they are removed.** `<cache>/test-jvm/<project>/<key>.aot` (`<cache>` as for the shared indexes above, `<project>`
+  as for the workspaces), about 20 MB, and the file `root` that names the project. A project keeps the cache of its current key:
+  when a new one is made, the files of the other keys are removed, and so are the folders of the projects whose root no longer
+  exists (a deleted worktree). That happens when a cache is made, so a machine that no longer asks for one keeps what it has; `rm -r
+  <cache>/test-jvm` empties it.
+
+Measured through the daemon (`gabier test eu.gabier.testing.domain.TestFiltersTest`, 12 tests, on this checkout; the daemon
+started on JDK 25.0.2 and JDK 27, Temurin, neither GraalVM; 16 cores, load average 7 to 10 from other work; the first call of
+each daemon not counted, then 10 calls, medians; `GABIER_TEST_AOT_CACHE` unset against `on`):
+
+| JDK | no cache | cache | first call with the cache | cache size |
+| --- | --- | --- | --- | --- |
+| 25.0.2 | 4.16 s (3.96 to 4.53) | 3.12 s (2.89 to 3.24) | 28.7 s against 21.2 s (+7.5 s) | 20 MB |
+| 27 | 4.31 s (3.84 to 4.44) | 3.04 s (2.84 to 3.06) | 25.0 s against 19.2 s (+5.8 s) | 20 MB |
+
+A call is 1.0 to 1.3 s faster (25 to 30 %), about what the closed ticket measured on the JVM alone (0.65 s of 1.6 s), and the
+build, the socket and the protocol (about 2 s) are what is left. To measure again: start the daemon twice, once with the
+setting, with its own `GABIER_SOCKET` and `GABIER_CACHE`, and time `gabier test <class>` against each.
 
 **What the daemon remembers of the disk, for `affected-tests`.** `gabier affected-tests` with no file
 (affected-tests) is answered from a list the daemon keeps in memory: the Java files that were

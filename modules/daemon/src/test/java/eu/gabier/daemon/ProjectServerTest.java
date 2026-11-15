@@ -25,6 +25,7 @@ import eu.gabier.shared.error.domain.ErrorStatus;
 import eu.gabier.testing.domain.BuiltProject;
 import eu.gabier.testing.domain.ChangedBuild;
 import eu.gabier.testing.domain.ClassFolder;
+import eu.gabier.testing.domain.TestRun;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -61,7 +62,7 @@ class ProjectServerTest {
 
     private final CountingStarter starter = new CountingStarter();
     private final List<String> log = new CopyOnWriteArrayList<>();
-    private final ProjectServer project = new ProjectServer(ROOT, starter, log::add);
+    private final ProjectServer project = new ProjectServer(ROOT, starter, ProcessTestRunner.ofThisDaemon(), log::add);
 
     /** Hands out the language servers it is given, in turn, and counts the starts. */
     private static final class CountingStarter implements ProjectServer.Starter {
@@ -881,6 +882,31 @@ class ProjectServerTest {
             assertThat(Files.readString(arguments))
                     .contains(" --jvm-arg=-Djdt.core.sharedIndexLocation=" + cache
                             + "/jdtls-1.63.0.202610191322/indexes");
+        }
+
+        private void runTheTestsOf(ProjectServer served) throws IOException {
+            var classes = TestedProject.compiledIn(directory);
+            var classpath = new ArrayList<>(List.of(classes));
+            classpath.addAll(TestedProject.junit());
+
+            var report = served.testRunner().run(new TestRun(List.of("app.MixedTest"), classpath, directory, LONG));
+
+            assertThat(report.passed()).isEqualTo(2);
+        }
+
+        @Test
+        void startsTheJvmOfTheTestsFromAnAotCacheWhenTheEnvironmentAsksForIt() throws IOException {
+            runTheTestsOf(served(Map.of("GABIER_TEST_AOT_CACHE", "on")));
+
+            // The runner of this test runs from a folder, so no cache can be made: the log is how the setting shows.
+            assertThat(logged).singleElement().asString().contains("the tests start with no AOT cache");
+        }
+
+        @Test
+        void startsTheJvmOfTheTestsWithNoAotCacheUnlessTheEnvironmentAsksForIt() throws IOException {
+            runTheTestsOf(served(Map.of()));
+
+            assertThat(logged).isEmpty();
         }
 
         /** The pinned jdtls as {@code mise run jdtls:install} leaves it under the home folder, writing its arguments. */

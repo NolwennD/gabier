@@ -31,26 +31,45 @@ final class ProcessTestRunner implements TestRunner {
 
     private final Path java;
     private final Path runnerEntry;
+    private final Optional<AotCache> aotCache;
 
     /**
-     * Creates a runner.
+     * Creates a runner that starts the JVM of the tests with no AOT cache.
      *
      * @param java the {@code java} launcher the tests run with
      * @param runnerEntry the jar or the folder that holds {@link TestRunnerMain}, which goes last on the class path
      */
     ProcessTestRunner(Path java, Path runnerEntry) {
-        this.java = java;
-        this.runnerEntry = runnerEntry;
+        this(java, runnerEntry, Optional.empty());
     }
 
-    /** The runner of this daemon: its own {@code java}, and the jar it was started from. */
+    /**
+     * Creates a runner that starts the JVM of the tests from an AOT cache of the dependency jars, when it has one.
+     *
+     * @param java the {@code java} launcher the tests run with
+     * @param runnerEntry the jar or the folder that holds {@link TestRunnerMain}, which goes right after the dependency
+     *     jars on the class path with a cache, last without
+     * @param aotCache the caches of the dependency jars; none to start with no cache
+     */
+    ProcessTestRunner(Path java, Path runnerEntry, Optional<AotCache> aotCache) {
+        this.java = java;
+        this.runnerEntry = runnerEntry;
+        this.aotCache = aotCache;
+    }
+
+    /** The runner of this daemon: its own {@code java}, and the jar it was started from; no AOT cache. */
     static ProcessTestRunner ofThisDaemon() {
+        return ofThisDaemon(Optional.empty());
+    }
+
+    /** The runner of this daemon, which starts the JVM of the tests from the AOT cache given, if any. */
+    static ProcessTestRunner ofThisDaemon(Optional<AotCache> aotCache) {
         Path java = Path.of(System.getProperty("java.home"), "bin", "java");
         var source = Objects.requireNonNull(
                 TestRunnerMain.class.getProtectionDomain().getCodeSource(), "the daemon has a code source");
 
         return new ProcessTestRunner(
-                java, Path.of(URI.create(source.getLocation().toString())));
+                java, Path.of(URI.create(source.getLocation().toString())), aotCache);
     }
 
     @Override
@@ -81,15 +100,14 @@ final class ProcessTestRunner implements TestRunner {
     }
 
     private Process start(TestRun run, Path report, Path output) throws IOException {
-        List<Path> classpath = new ArrayList<>(run.classpath());
-        classpath.add(runnerEntry);
+        Launch launch = aotCache.map(caches -> cached(caches, run)).orElseGet(() -> plain(run));
         String folders = run.classpath().stream()
                 .filter(Files::isDirectory)
                 .map(Path::toString)
                 .collect(Collectors.joining(File.pathSeparator));
         List<String> command = new ArrayList<>();
         command.add(java.toString());
-        command.addAll(jvmArguments(classpath));
+        command.addAll(jvmArguments(launch));
         command.addAll(List.of(TestRunnerMain.class.getName(), report.toString(), folders));
         command.addAll(run.classes());
 
@@ -100,12 +118,49 @@ final class ProcessTestRunner implements TestRunner {
                 .start();
     }
 
+    /** The class path of the project, then the runner, and no AOT cache. */
+    private Launch plain(TestRun run) {
+        List<Path> classpath = new ArrayList<>(run.classpath());
+        classpath.add(runnerEntry);
+
+        return new Launch(classpath, Optional.empty());
+    }
+
+    /**
+     * With the cache option on, the dependency jars first, then the runner, then what is left of the class path of the
+     * project, in its order; and the AOT cache of those jars when there is one. The order is the same whether the cache
+     * could be made or not, so that what a test finds does not depend on it. The dependency jars are the jars that are not
+     * under the root of the project: a jar that a build writes there is rewritten at each build and stays in its place.
+     */
+    private Launch cached(AotCache caches, TestRun run) {
+        Path root = run.workingDirectory().toAbsolutePath().normalize();
+        List<Path> libraries = run.classpath().stream()
+                .filter(entry -> Files.isRegularFile(entry)
+                        && !entry.toAbsolutePath().normalize().startsWith(root))
+                .toList();
+        List<Path> classpath = new ArrayList<>(libraries);
+        classpath.add(runnerEntry);
+        run.classpath().stream().filter(entry -> !libraries.contains(entry)).forEach(classpath::add);
+
+        return new Launch(classpath, caches.forRun(java, libraries, runnerEntry, root));
+    }
+
+    /** What the JVM of the tests starts from: its class path, and the AOT cache of the first jars of it, if any. */
+    private record Launch(List<Path> classpath, Optional<Path> cache) {}
+
     /**
      * The arguments of the JVM of the tests, before the main class: the one place they are built, so that an option of
-     * the JVM (a cache of classes, a limit of memory) is added here and nowhere else. Only the class path for now.
+     * the JVM (a cache of classes, a limit of memory) is added here and nowhere else: the class path, and the AOT cache
+     * when there is one. A JVM that cannot use a cache goes on without it ({@code -XX:AOTMode=auto}, the default), and
+     * {@link AotCache} gives no cache that is stale.
      */
-    private static List<String> jvmArguments(List<Path> classpath) {
-        return List.of("-cp", classpath.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
+    private static List<String> jvmArguments(Launch launch) {
+        List<String> arguments = new ArrayList<>();
+        launch.cache().ifPresent(file -> arguments.add("-XX:AOTCache=" + file));
+        arguments.add("-cp");
+        arguments.add(launch.classpath().stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
+
+        return arguments;
     }
 
     /** Waits for the process to end; one that does not within the time limit is killed, with what it started. */
@@ -124,7 +179,8 @@ final class ProcessTestRunner implements TestRunner {
         return false;
     }
 
-    private static void kill(Process process) {
+    /** Kills the process and what it started. */
+    static void kill(Process process) {
         process.descendants().forEach(ProcessHandle::destroyForcibly);
         process.destroyForcibly();
     }
