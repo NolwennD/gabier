@@ -4,7 +4,7 @@ Opened: 15-11-2026 11:12
 
 An agent that starts gabier on a project waits for jdtls to import and build it, at every start, because the jdtls
 workspace is removed at each stop. The need: a restart on a project already opened is ready in a few seconds. The
-worker proposes how, and returns to the supervisor with its proposal before it writes the code.
+worker chooses the mechanism, implements it, and says in its report why that one.
 
 What was measured on gabier itself (15-11-2026, jdtls built from its `main` branch, quiet machine):
 
