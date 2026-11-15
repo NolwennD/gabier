@@ -245,13 +245,13 @@ imported, its build of them, its indexes) in a folder of its own for each projec
 `<version>` the version of jdtls (a workspace of one version is not readable by another) and `<project>` the name of the
 socket of the project without its `.sock` (`<name>-<hash>`, from the path of the project). **The daemon keeps it from one
 daemon to the next**, so that a daemon that starts on a project the previous one opened has jdtls import and build nothing
-again: the start measured below goes from about a minute to a few seconds.
+again: the start measured below goes from about a minute to 12 to 14 s.
 
 What makes a workspace reusable, and what makes the daemon start jdtls on an empty folder instead (a first start, which is
 what a project with no workspace gets):
 
 - **A clean end.** The daemon writes the file `.gabier-state` in the workspace only when jdtls was ready and left by itself
-  after the shutdown (it exited, with nothing to kill), and removes the file when it starts on the workspace. A jdtls that
+  after the shutdown (it exited by itself in time), and removes the file when it starts on the workspace. A jdtls that
   was killed, a daemon that was killed (SIGKILL, a crash, a power cut), a start that failed or that was stopped before
   jdtls was ready leave no state file, so the next start empties the folder.
 - **The same jdtls and the same JDK.** The state holds a fingerprint: the version of jdtls and the JDK it runs under (the
@@ -281,7 +281,7 @@ than a new one when it was first tried. jdtls keeps in its workspace the JDK tha
 (`java.configuration.runtimes`) as its default, whatever order it finds the JDKs in. The daemon therefore asks jdtls, once
 it is ready, which JDK each project is bound to (`java.project.getSettings`, `org.eclipse.jdt.ls.core.vm.location`), declares
 them to it when the workspace is new, and writes them in the state, with the version of each JDK (its `release` file).
-The declaration changes nothing jdtls had bound, so it builds nothing. What the client says in its initialization is not
+On a first start the declaration makes jdtls build again (the 7 builds after the import, in the background); on a restart it is not sent again, so nothing is built. What the client says in its initialization is not
 enough: a jdtls that starts on a workspace builds before it reads it, with what the workspace kept.
 
 *What is removed, and when.* A workspace is the user's cache, a folder of the cache of gabier. A daemon that opens a workspace

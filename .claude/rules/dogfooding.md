@@ -65,7 +65,7 @@ daemon of another worktree with `GABIER_PROJECT=<worktree> gabier stop`. The ski
 stopped before it could.
 
 The jdtls workspace of a project is kept between two daemons, in `~/.cache/gabier/jdtls-<version>/workspaces/<project>`
-(`GABIER_CACHE` moves the cache): a `gabier start` on a project already opened is ready in seconds, not a minute, and
+(`GABIER_CACHE` moves the cache): a `gabier start` on a project already opened is ready in about ten seconds, not a minute, and
 `gabier diagnostics` answers as after a first start, the files changed while the daemon was stopped included. A daemon or a
 jdtls that was killed, a start that failed, another jdtls or another JDK start on an empty workspace (a first start), and
 a start that fails on a kept workspace is run again on an empty one, so a worker never clears anything by hand;
