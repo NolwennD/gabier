@@ -16,8 +16,9 @@ Done when:
 - The answer says, for each failed test, enough for the agent to act without reading a log: its class and method, the failure
   message, and where it failed; and says how many tests ran, passed, failed and were skipped. A `--json` form exists, as for
   the other commands.
-- A failing test makes the command end with a failure status that the agent can tell from a refusal; code that does not
-  compile, and a test that cannot be run (no engine for it), are refusals with a key each, not a failure of the tests.
+- A failing test makes the command end with a failure status that the agent can tell from a refusal; a test class whose
+  own file does not compile (amended by the supervisor at the review, see the resolution), and a test that cannot be run (no
+  engine for it), are refusals with a key each, not a failure of the tests.
 - A test that never ends does not hang the command: it ends with a refusal after a time limit that the agent can change.
 - Proven on the real jdtls (`integrationTest` or the scenario replay) with a project that holds one passing and one failing JUnit
   test, and in the core against the fake (`.claude/rules/workflow.md`, "Fake it until you run it").
