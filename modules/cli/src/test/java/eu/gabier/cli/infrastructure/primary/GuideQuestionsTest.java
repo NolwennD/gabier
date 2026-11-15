@@ -98,6 +98,8 @@ class GuideQuestionsTest {
                         "list every error in every Java file of the whole project",
                         "The errors of the whole project, without a build"),
                 question("list references", "Where a symbol is used"),
+                question("make the test JVM start faster", "A JVM that runs the tests starts slowly"),
+                question("use an AOT cache to speed up the JVM startup", "A JVM that runs the tests starts slowly"),
                 question("new file", "A new file for a new type"),
                 question("which tests are affected by my change", "The tests that a change affects"),
                 question("select the tests to rerun", "The tests that a change affects"),

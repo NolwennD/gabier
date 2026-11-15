@@ -1132,6 +1132,48 @@ After `gabier apply-action ... "Create class 'Missing'"`, the file `demo/Missing
 Limits: the title is the text of jdtls, so read it in `gabier actions`. An error with no fix is listed with none: edit
 the code and run `gabier diagnostics` again. See `gabier help actions` and `gabier help apply-action`.
 
+### A JVM that runs the tests starts slowly
+
+Words: make the test JVM start faster, JVM startup time, AOT cache, class loading cache, slow start of the tests, CDS
+
+By hand: no command makes it yet. On JDK 25 or later, create an AOT cache (JEP 483) of the dependency jars once, then
+start each test JVM with it. The project classes come after the cached jars on the class path, as folders or jars:
+
+```text
+java -XX:AOTCacheOutput=deps.aot -cp <dependency jars only> <a main that runs a sample test>
+java -XX:AOTCache=deps.aot -cp <the same jars>:<project folders and jars> <your test runner> <test classes>
+```
+
+Measured on the `:core` tests of gabier (JDK 25.0.2 and 27, 16 cores, machine load 5 to 9, medians of 12 to 15 runs;
+one JVM, one test class of 32 tests): 1.6 s with no cache, 0.8 s with a cache of the whole class path (half), 0.95 s
+with the cache of the dependency jars only (40% less), the same on both JDKs. The 927 tests of the module in one JVM:
+14.7 s down to 11.6 s on JDK 25 (20% less), the gain is a fixed 1 to 3 s. The cache of the dependency jars takes about
+5 s to create (a training run, then the assembly) and holds 24 MB; it is made once and a rebuild of the project leaves
+it valid.
+The method profiles that JDK 25 adds (JEP 515) gave nothing on runs this short, and a cache with profiles trained on
+all the tests was slower than one without (0.97 s against 0.8 s): train on a small sample, or leave the profiles out
+with `-XX:+UnlockDiagnosticVMOptions -XX:-AOTRecordTraining` when creating.
+
+Limits: each point says whether it was observed (on this machine, JDK 25.0.2, 25+36, 26.0.1 and 27) or only read from
+the JEP.
+- Observed, a folder in the class path of the creation: it fails (exit 1, `Cannot have non-empty directory in paths`,
+  no cache). JEP 483 says the same: jars only. A folder appended after the cached jars is accepted, and an empty one.
+- Observed, JDK 25 and 26 do not check the jars: with a cache made for a jar, the jar rebuilt at the same path, a jar
+  touched, or another class path, the JVM runs the old classes from the cache with no warning, also with
+  `-XX:AOTMode=on`. JDK 27 refuses (timestamp, size, missing entry). The JEP promises a warning: it does not hold on 25
+  and 26. So on those, never cache a jar that a build rewrites, and make a new cache when a dependency jar changes
+  (a key of the JDK build with the path, size and date of each jar).
+- Observed, a cache of another JDK build is refused, even 25.0.2 against 25+36: the JVM runs without it and says
+  nothing; with `-XX:AOTMode=on` it exits instead, which is how to check that the cache is used. JEP 483: same release,
+  architecture and operating system.
+- Observed, with a `-javaagent` (a no-op agent; a coverage agent such as JaCoCo is not tried) the cache is refused. ZGC,
+  or a heap that turns the compressed pointers off (`-Xmx64g`), refuse it too; G1, Serial and Parallel work. JEP 483
+  also names the module options (`--add-exports`...) and the agents that rewrite classes.
+- Classes of a class loader of the project (JEP 483: not cached): on JDK 27 such a class loads from its jar. The
+  proxies, the JFR events and the classes ByteBuddy defines are left out: 3199 of 3268 classes of a run came from the
+  cache.
+- Read from the JEP only: training and later runs may differ in the main class and in the collector.
+
 ## What jdtls does not offer
 
 jdtls 1.63.0 builds its code actions in two places (`RefactorProcessor` and `QuickAssistProcessor`) and wires only a
