@@ -1,10 +1,15 @@
 package eu.gabier.daemon;
 
+import eu.gabier.daemon.JdtlsRuntimes.Jdk;
+import eu.gabier.daemon.JdtlsWorkspace.Remembered;
+import eu.gabier.editing.domain.LanguageServerException;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -20,6 +25,7 @@ import org.eclipse.lsp4j.InitializeParams;
 import org.eclipse.lsp4j.InitializedParams;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
 import org.eclipse.lsp4j.launch.LSPLauncher;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A jdtls that is ready: started on a project root with a data folder of its own, initialized, and done with importing
@@ -31,7 +37,8 @@ import org.eclipse.lsp4j.launch.LSPLauncher;
  * was awaited.
  *
  * <p>Closing the session asks jdtls to shut down, ends the whole process tree and releases the data folder
- * ({@link JdtlsWorkspace}: a temporary one is deleted); it does so too when the start fails. The launcher starts a java process in turn, and the tree of a process that died cannot be
+ * ({@link JdtlsWorkspace}: a temporary one is deleted, a kept one is written down for the next start when jdtls left
+ * by itself and was ready, and emptied otherwise); it does so too when the start fails. The launcher starts a java process in turn, and the tree of a process that died cannot be
  * read any more: the session therefore records the tree from the moment the process started, again every tree interval
  * of the settings (a quarter of a second), and a last time at the close. What the launcher started and stopped between
  * two readings, or started and left behind in less than that before dying, is not seen.
@@ -49,10 +56,14 @@ final class JdtlsSession implements AutoCloseable {
     private final JdtlsWatch watch;
     private final Future<Void> listening;
     private List<Path> projects = List.of();
+    /** The JDKs jdtls bound the projects to, as it said when it was ready: what the next start declares. */
+    private List<Jdk> bound = List.of();
+
     private final Set<ProcessHandle> started = ConcurrentHashMap.newKeySet();
     private final Thread recorder;
     private final Future<Void> exitLog;
     private boolean closed;
+    private volatile boolean ready;
 
     private JdtlsSession(
             JdtlsSettings settings,
@@ -88,7 +99,7 @@ final class JdtlsSession implements AutoCloseable {
 
     /**
      * Starts jdtls and waits until it is ready. Nothing is left behind when this fails: the process tree is ended and
-     * the data folder deleted before the failure is thrown.
+     * the data folder deleted (or emptied, when it is kept) before the failure is thrown.
      *
      * @param starter starts the jdtls process, given the data folder
      * @param log receives a line for what happens (the start, the statuses of jdtls, a shutdown that did not go well)
@@ -116,9 +127,35 @@ final class JdtlsSession implements AutoCloseable {
             StartProgress progress,
             Consumer<PublishDiagnosticsParams> diagnostics)
             throws IOException, InterruptedException {
-        // The state of the disk that jdtls starts from, before it reads anything.
-        WatchedFiles watched = WatchedFiles.of(settings.projectRoot());
-        JdtlsWorkspace.Opened opened = settings.workspace().open(settings.timeout(), log);
+        JdtlsWorkspace.Opened opened = open(starter, settings, log);
+        try {
+            return start(opened, starter, settings, log, progress, diagnostics);
+        } catch (JdtlsException failure) {
+            // A start on a workspace of a previous run that fails is run again on an empty one: the failure may be what
+            // that run left (the workspace was emptied when the failed session closed).
+            if (opened.remembered().isEmpty()) {
+                throw failure;
+            }
+            log.accept("jdtls did not start on the kept workspace, it starts again on an empty one: "
+                    + failure.getMessage());
+
+            return start(open(starter, settings, log), starter, settings, log, progress, diagnostics);
+        }
+    }
+
+    private static JdtlsSession start(
+            JdtlsWorkspace.Opened opened,
+            JdtlsStarter starter,
+            JdtlsSettings settings,
+            Consumer<String> log,
+            StartProgress progress,
+            Consumer<PublishDiagnosticsParams> diagnostics)
+            throws IOException, InterruptedException {
+        // The state of the disk that jdtls starts from, before it reads anything: the one the kept workspace was left
+        // with, when it is reused.
+        WatchedFiles watched = opened.remembered()
+                .map(remembered -> WatchedFiles.of(settings.projectRoot(), remembered.disk()))
+                .orElseGet(() -> WatchedFiles.of(settings.projectRoot()));
         JdtlsConnection connection;
         try {
             connection = starter.start(opened.data());
@@ -127,7 +164,8 @@ final class JdtlsSession implements AutoCloseable {
             throw failure;
         }
         var session = new JdtlsSession(settings, opened, connection, log, progress, diagnostics, watched);
-        log.accept("jdtls started, pid " + session.pid() + ", data " + opened.data());
+        log.accept("jdtls started, pid " + session.pid() + ", data " + opened.data()
+                + (opened.remembered().isPresent() ? " (kept from the previous run)" : ""));
         session.recordTheTree();
         try {
             session.awaitReady();
@@ -139,7 +177,17 @@ final class JdtlsSession implements AutoCloseable {
             }
             throw failure;
         }
+        session.ready = true;
         return session;
+    }
+
+    private static JdtlsWorkspace.Opened open(JdtlsStarter starter, JdtlsSettings settings, Consumer<String> log)
+            throws IOException {
+        Optional<KeptWorkspace> kept = starter.keptWorkspace(settings.projectRoot());
+
+        return kept.isPresent()
+                ? settings.workspace().open(kept.get(), settings.timeout(), log)
+                : settings.workspace().open(settings.timeout(), log);
     }
 
     /** The types jdtls could not choose an import for, in the request being answered. */
@@ -263,6 +311,49 @@ final class JdtlsSession implements AutoCloseable {
             return client.serviceReady();
         });
         projects = importedProjects();
+        bound = boundRuntimes();
+        pinTheRuntimes();
+    }
+
+    /**
+     * Declares to jdtls the JDKs it bound the projects to ({@link JdtlsRuntimes}), unless the workspace was already
+     * pinned to the same ones: jdtls then makes each the default of its execution environment and keeps that in the
+     * workspace, so that the next start, which builds before the client says anything, binds them the same. The
+     * declaration that does not change what jdtls bound builds nothing (measured).
+     */
+    private void pinTheRuntimes() {
+        List<Jdk> pinned = workspace.remembered().map(Remembered::runtimes).orElse(List.of());
+        if (!bound.isEmpty() && !bound.equals(pinned)) {
+            configure(JdtlsRuntimes.settings(bound));
+        }
+    }
+
+    /**
+     * The JDKs jdtls bound the projects to ({@code java.project.getSettings}, {@value JdtlsRuntimes#VM_LOCATION}), for the
+     * next start to declare. A start does not fail for it: when jdtls does not say, nothing is declared next time. A
+     * workspace that is not kept is not asked: nothing is remembered from it.
+     */
+    private List<Jdk> boundRuntimes() throws InterruptedException {
+        if (workspace.kept().isEmpty()) {
+            return List.of();
+        }
+
+        List<@Nullable Object> answers = new ArrayList<>();
+        for (Path project : projects) {
+            var command = new ExecuteCommandParams(
+                    "java.project.getSettings",
+                    List.of(project.toUri().toString(), List.of(JdtlsRuntimes.VM_LOCATION)));
+            try {
+                answers.add(watch.await(
+                        "the JDK of " + project + " (java.project.getSettings)",
+                        () -> server.getWorkspaceService().executeCommand(command)));
+            } catch (JdtlsException | LanguageServerException failure) {
+                log.accept("the JDK of " + project + " is not known: " + failure.getMessage());
+                return List.of();
+            }
+        }
+
+        return JdtlsRuntimes.boundIn(answers);
     }
 
     /**
@@ -301,8 +392,8 @@ final class JdtlsSession implements AutoCloseable {
     }
 
     /**
-     * Asks jdtls to shut down, ends whatever is left of its process tree and deletes the data folder, even when the
-     * shutdown fails or this thread is interrupted. Closing a session already closed does nothing.
+     * Asks jdtls to shut down, ends whatever is left of its process tree and releases the data folder (a kept one is
+     * written down when jdtls left by itself), even when the shutdown fails or this thread is interrupted. Closing a session already closed does nothing.
      */
     @Override
     public void close() throws IOException, InterruptedException {
@@ -317,10 +408,9 @@ final class JdtlsSession implements AutoCloseable {
         started.addAll(process.descendants().toList());
         started.add(process.toHandle());
         List<ProcessHandle> tree = List.copyOf(started);
+        boolean ended = false;
         try {
-            if (askToLeave()) {
-                process.waitFor(settings.shutdownTimeout().toMillis(), TimeUnit.MILLISECONDS);
-            }
+            ended = askToLeave() && process.waitFor(settings.shutdownTimeout().toMillis(), TimeUnit.MILLISECONDS);
         } finally {
             try {
                 tree.forEach(ProcessHandle::destroyForcibly);
@@ -329,8 +419,24 @@ final class JdtlsSession implements AutoCloseable {
                 }
             } finally {
                 listening.cancel(true);
-                settings.workspace().release(workspace);
+                try {
+                    // Only a jdtls that was ready and left by itself has saved its workspace: the others empty it.
+                    if (ended && ready && workspace.kept().isPresent()) {
+                        keep();
+                    }
+                } finally {
+                    settings.workspace().release(workspace);
+                }
             }
+        }
+    }
+
+    /** Writes down what the next start on this workspace needs; a workspace that cannot is released empty. */
+    private void keep() {
+        try {
+            settings.workspace().keep(workspace, new Remembered(watched.remembered(), bound));
+        } catch (IOException failure) {
+            log.accept("the workspace " + workspace.data() + " cannot be kept: " + failure);
         }
     }
 

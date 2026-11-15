@@ -160,4 +160,91 @@ class StaleWorkspacesTest {
             assertThat(log).anySatisfy(line -> assertThat(line).startsWith("could not clean up " + stuck));
         }
     }
+
+    @Nested
+    class OfGoneProjects {
+
+        private void sweep(UserPrincipal user) {
+            StaleWorkspaces.removeOfGoneProjects(folder, user, log::add);
+        }
+
+        /** A kept workspace, with the name of its project in {@code .gabier-root}. */
+        private Path keptFor(String name, Path project) throws IOException {
+            Path workspace = workspace(name);
+            Files.writeString(workspace.resolve(".gabier-root"), project.toString());
+            return workspace;
+        }
+
+        @Test
+        void removesTheWorkspaceOfAProjectThatIsGone() throws IOException {
+            Path gone = keptFor("project-1", folder.resolve("deleted"));
+
+            sweep(me());
+
+            assertThat(gone).doesNotExist();
+            assertThat(log).containsExactly("removed " + gone + ", the workspace of a project that is gone");
+        }
+
+        @Test
+        void keepsTheWorkspaceOfAProjectThatExists() throws IOException {
+            Path present = keptFor("project-1", Files.createDirectories(folder.resolve("project")));
+
+            sweep(me());
+
+            assertThat(present).isDirectory();
+            assertThat(log).isEmpty();
+        }
+
+        @Test
+        void keepsTheWorkspaceOfAGoneProjectThatADaemonHolds() throws IOException {
+            Path held = keptFor("project-1", folder.resolve("deleted"));
+
+            try (var lock = WorkspaceLock.acquire(held).orElseThrow()) {
+                sweep(me());
+
+                assertThat(lock).isNotNull();
+            }
+
+            assertThat(held).isDirectory();
+        }
+
+        @Test
+        void keepsWhatIsNotTheUsersAndWhatNamesNoProject() throws IOException {
+            Path another = keptFor("project-1", folder.resolve("deleted"));
+            Path unnamed = workspace("project-2");
+            Path file = Files.writeString(folder.resolve("project-3"), "not a folder");
+            Path linked = Files.createSymbolicLink(folder.resolve("project-4"), another);
+
+            sweep(somebodyElse());
+            StaleWorkspaces.removeOfGoneProjects(folder.resolve("unnamed"), me(), log::add);
+            Files.delete(another.resolve(".gabier-root"));
+            sweep(me());
+
+            assertThat(another).isDirectory();
+            assertThat(unnamed).isDirectory();
+            assertThat(file).exists();
+            assertThat(linked).isSymbolicLink();
+            assertThat(log).isEmpty();
+        }
+
+        @Test
+        void tellsWhatItCannotReadOrRemoveAndGoesOnWithTheOthers() throws IOException {
+            Path badName = keptFor("project-1", folder.resolve("deleted"));
+            Files.writeString(badName.resolve(".gabier-root"), "a\0name");
+            Path stuck = keptFor("project-2", folder.resolve("deleted"));
+            Path locked = Files.createDirectories(stuck.resolve("locked"));
+            Path gone = keptFor("project-3", folder.resolve("deleted"));
+            Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("---------"));
+
+            try {
+                sweep(me());
+            } finally {
+                Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("rwx------"));
+            }
+
+            assertThat(gone).doesNotExist();
+            assertThat(log).anySatisfy(line -> assertThat(line).startsWith("could not clean up " + badName));
+            assertThat(log).anySatisfy(line -> assertThat(line).startsWith("could not clean up " + stuck));
+        }
+    }
 }

@@ -3,6 +3,8 @@ package eu.gabier.daemon;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import java.io.File;
+import java.net.URI;
+import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import org.eclipse.lsp4j.FileChangeType;
 import org.eclipse.lsp4j.FileEvent;
@@ -44,7 +47,7 @@ final class WatchedFiles {
     private record Watcher(PathMatcher glob, int kinds) {}
 
     /** What tells that a file changed. */
-    private record Stamp(long modified, long size) {}
+    record Stamp(long modified, long size) {}
 
     private final Path root;
     private final Map<String, List<Watcher>> registrations = new HashMap<>();
@@ -61,6 +64,59 @@ final class WatchedFiles {
     static WatchedFiles of(Path root) {
         Path folder = root.toAbsolutePath().normalize();
         return new WatchedFiles(folder, scan(folder));
+    }
+
+    /**
+     * The state a stopped daemon left, which the changes are compared to: what jdtls was told of before it stopped, so
+     * that what changed on disk since is reported once jdtls registers its watchers, as it is for a file that changes
+     * while jdtls imports the project. For a jdtls that starts again on the workspace it kept.
+     *
+     * @param remembered what {@link #remembered} gave, or what {@link #parse} read of what {@link #format} wrote
+     */
+    static WatchedFiles of(Path root, Map<Path, Stamp> remembered) {
+        return new WatchedFiles(root.toAbsolutePath().normalize(), new TreeMap<>(remembered));
+    }
+
+    /**
+     * What jdtls knows of the files it watches, to write down when the daemon stops ({@link #format}): the state of the
+     * watched files as of the last call of {@link #changes}, so a change that jdtls was not told of is reported at the
+     * next start.
+     */
+    synchronized Map<Path, Stamp> remembered() {
+        Map<Path, Stamp> watched = new TreeMap<>(known);
+        watched.keySet().removeIf(file -> !watches(file));
+
+        return watched;
+    }
+
+    /**
+     * What {@link #remembered} gives, as a line for each file: its modification time, its size and its URI, separated by
+     * tabs (a URI holds no line break and no tab).
+     */
+    static List<String> format(Map<Path, Stamp> remembered) {
+        return remembered.entrySet().stream()
+                .map(entry -> entry.getValue().modified() + "\t"
+                        + entry.getValue().size() + "\t" + entry.getKey().toUri())
+                .toList();
+    }
+
+    /** What {@link #format} wrote, or nothing when a line is not one of its own (the state is then not trusted). */
+    static Optional<Map<Path, Stamp>> parse(List<String> lines) {
+        Map<Path, Stamp> stamps = new TreeMap<>();
+        for (String line : lines) {
+            String[] parts = line.split("\t", -1);
+            try {
+                if (parts.length != 3) {
+                    return Optional.empty();
+                }
+                stamps.put(
+                        Path.of(URI.create(parts[2])), new Stamp(Long.parseLong(parts[0]), Long.parseLong(parts[1])));
+            } catch (IllegalArgumentException | FileSystemNotFoundException unreadable) {
+                return Optional.empty();
+            }
+        }
+
+        return Optional.of(stamps);
     }
 
     /** Takes the watchers of a registration of {@code workspace/didChangeWatchedFiles}; any other method is not ours. */

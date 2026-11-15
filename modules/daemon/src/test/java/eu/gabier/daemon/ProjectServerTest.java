@@ -20,6 +20,7 @@ import eu.gabier.editing.domain.ReferenceLocations;
 import eu.gabier.editing.domain.TypeKind;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.SocketLocation;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import eu.gabier.testing.domain.BuiltProject;
 import eu.gabier.testing.domain.ChangedBuild;
@@ -830,16 +831,18 @@ class ProjectServerTest {
         }
 
         @Test
-        void startsJdtlsOnATemporaryDataFolderByDefault() throws IOException {
+        void startsJdtlsOnTheKeptWorkspaceOfTheProjectInTheCacheFolder() throws IOException {
             var arguments = directory.resolve("arguments");
-            var served =
-                    served(Map.of("GABIER_JDTLS", recordingLauncher(arguments).toString()));
+            var cache = directory.resolve("cache");
+            var served = served(
+                    Map.of("GABIER_JDTLS", recordingLauncher(arguments).toString(), "GABIER_CACHE", cache.toString()));
 
             assertThatThrownBy(() -> served.diagnostics(List.of(directory.resolve("A.java"))))
                     .isInstanceOf(JdtlsStartException.class);
 
             assertThat(Files.readString(arguments))
-                    .contains("-data " + Path.of(System.getProperty("java.io.tmpdir")) + "/gabier-jdtls-data-");
+                    .contains("-data " + cache + "/jdtls-1.63.0.202610191322/workspaces/"
+                            + SocketLocation.projectKey(directory));
         }
 
         @Test
@@ -856,10 +859,13 @@ class ProjectServerTest {
             assertThatThrownBy(() -> served.diagnostics(List.of(directory.resolve("A.java"))))
                     .isInstanceOf(JdtlsStartException.class);
 
-            assertThat(Files.readString(arguments)).doesNotContain("sharedIndexLocation");
+            assertThat(Files.readString(arguments))
+                    .doesNotContain("sharedIndexLocation")
+                    .contains("-data " + Path.of(System.getProperty("java.io.tmpdir")) + "/gabier-jdtls-data-");
             assertThat(logged)
-                    .contains("the indexes of the libraries are not shared: " + launcher
-                            + " is not in a distribution of jdtls that tells its version");
+                    .contains("the indexes of the libraries are not shared, and the workspace of the project is not"
+                            + " kept: "
+                            + launcher + " is not in a distribution of jdtls that tells its version");
         }
 
         @Test

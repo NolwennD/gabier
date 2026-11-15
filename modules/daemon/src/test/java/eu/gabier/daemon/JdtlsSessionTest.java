@@ -8,23 +8,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import eu.gabier.editing.fixtures.FakeOnly;
 import eu.gabier.protocol.WorkspaceLock;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import org.eclipse.lsp4j.ExecuteCommandParams;
 import org.eclipse.lsp4j.PublishDiagnosticsParams;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -776,6 +783,309 @@ class JdtlsSessionTest {
 
                 Files.writeString(project.resolve("Greeter.java"), "class Greeter {}");
                 assertThat(disk.await(Duration.ofSeconds(10))).isEqualTo(DiskChanges.Signal.CHANGED);
+            }
+        }
+    }
+
+    @Nested
+    class KeptWorkspaces {
+
+        @TempDir
+        Path folder;
+
+        private final List<FakeJdtls> others = new ArrayList<>();
+
+        private Path project;
+        private Path kept;
+
+        @BeforeEach
+        void aProject() throws IOException {
+            project = Files.createDirectories(folder.resolve("project")).toRealPath();
+            Files.writeString(project.resolve("Greeter.java"), "class Greeter {}\n");
+            kept = folder.resolve("cache/workspace");
+        }
+
+        /** The starters take the runs one after the other; the workspace is the kept one, whoever starts jdtls. */
+        private JdtlsStarter keeping(JdtlsStarter... runs) {
+            var started = new AtomicInteger();
+
+            return new JdtlsStarter() {
+                @Override
+                public JdtlsConnection start(Path data) throws IOException {
+                    return runs[started.getAndIncrement()].start(data);
+                }
+
+                @Override
+                public Optional<KeptWorkspace> keptWorkspace(Path root) {
+                    return Optional.of(new KeptWorkspace(kept, "jdtls 1", root));
+                }
+            };
+        }
+
+        private JdtlsSession start(JdtlsStarter starter) throws Exception {
+            var settings = new JdtlsSettings(
+                    project,
+                    List.of(),
+                    LONG,
+                    Duration.ofMillis(20),
+                    Duration.ofMillis(300),
+                    new JdtlsWorkspace(Files.createDirectories(folder.resolve("tmp"))));
+
+            return JdtlsSession.start(starter, settings, log::add, published::add);
+        }
+
+        @AfterEach
+        void closeTheOtherFakes() throws Exception {
+            for (FakeJdtls other : others) {
+                other.close();
+            }
+        }
+
+        private FakeJdtls aJdtls() {
+            return another(new FakeJdtls().listsProjects(URI_A).registersWatchersFor("**/*.java"));
+        }
+
+        private FakeJdtls another(FakeJdtls other) {
+            others.add(other);
+
+            return other;
+        }
+
+        private static void awaitWatchers(JdtlsSession session) {
+            long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            while (!session.watchersRegistered() && System.nanoTime() < deadline) {
+                Thread.onSpinWait();
+            }
+        }
+
+        /** A run that ends cleanly and leaves a file jdtls wrote. */
+        private void aCleanRun(JdtlsStarter starter) throws Exception {
+            try (var session = start(starter)) {
+                Files.writeString(session.dataDirectory().resolve("imported"), "yes");
+            }
+        }
+
+        @Test
+        void keepsTheWorkspaceOfAJdtlsThatLeftByItself() throws Exception {
+            aCleanRun(keeping(aJdtls()));
+
+            assertThat(kept.resolve("imported")).hasContent("yes");
+            assertThat(kept.resolve(".gabier-state")).exists();
+            assertThat(WorkspaceLock.isHeld(kept)).isFalse();
+        }
+
+        @Test
+        void startsOnTheKeptWorkspaceAndSaysSo() throws Exception {
+            var second = aJdtls();
+            var starter = keeping(aJdtls(), second);
+            aCleanRun(starter);
+
+            try (var session = start(starter)) {
+                assertThat(session.dataDirectory()).isEqualTo(kept);
+                assertThat(kept.resolve("imported")).hasContent("yes");
+                assertThat(log).anyMatch(line -> line.contains("(kept from the previous run)"));
+            }
+        }
+
+        @Test
+        void tellsJdtlsOnItsNextStartOfWhatChangedOnDiskWhileTheDaemonWasStopped() throws Exception {
+            var starter = keeping(aJdtls(), aJdtls());
+            aCleanRun(starter);
+            Files.writeString(project.resolve("Greeter.java"), "class Greeter { int x; }\n");
+            Files.writeString(project.resolve("Welcomer.java"), "class Welcomer {}\n");
+
+            try (var session = start(starter)) {
+                awaitWatchers(session);
+
+                assertThat(session.changesOnDisk())
+                        .extracting(event -> event.getType() + " "
+                                + Path.of(URI.create(event.getUri())).getFileName())
+                        .containsExactlyInAnyOrder("Changed Greeter.java", "Created Welcomer.java");
+            }
+        }
+
+        @Test
+        void tellsJdtlsNothingWhenNothingChangedOnDiskWhileTheDaemonWasStopped() throws Exception {
+            var starter = keeping(aJdtls(), aJdtls());
+            aCleanRun(starter);
+
+            try (var session = start(starter)) {
+                awaitWatchers(session);
+
+                assertThat(session.changesOnDisk()).isEmpty();
+            }
+        }
+
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
+        @Test
+        void emptiesTheWorkspaceOfAJdtlsThatDidNotLeaveByItself() throws Exception {
+            var starter = keeping(aJdtls().shutdown(FakeJdtls.Shutdown.NEVER_ANSWERS));
+
+            aCleanRun(starter);
+
+            assertThat(kept.resolve("imported")).doesNotExist();
+            assertThat(kept.resolve(".gabier-state")).doesNotExist();
+        }
+
+        @FakeOnly(reason = NO_ANSWER_IN_TIME)
+        @Test
+        void emptiesTheWorkspaceOfAJdtlsThatAnsweredShutdownButDidNotLeave() throws Exception {
+            var starter = keeping(aJdtls().shutdown(FakeJdtls.Shutdown.STAYS_ALIVE));
+
+            aCleanRun(starter);
+
+            assertThat(kept.resolve("imported")).doesNotExist();
+            assertThat(kept.resolve(".gabier-state")).doesNotExist();
+        }
+
+        @Test
+        void saysThatTheWorkspaceCannotBeKeptWhenItsStateCannotBeWritten() throws Exception {
+            try (var session = start(keeping(aJdtls()))) {
+                // A folder where the state is written first: the write fails.
+                Files.createDirectory(session.dataDirectory().resolve(".gabier-state.tmp"));
+            }
+
+            assertThat(log).anyMatch(line -> line.contains("cannot be kept"));
+            assertThat(kept.resolve(".gabier-state")).doesNotExist();
+        }
+
+        @FakeOnly(reason = JDTLS_DIED)
+        @Test
+        void startsAgainOnAnEmptyWorkspaceWhenTheStartOnTheKeptOneFails() throws Exception {
+            var dying = another(new FakeJdtls().child("sh", "-c", "exit 3"));
+            var starter = keeping(aJdtls(), dying, aJdtls());
+            aCleanRun(starter);
+
+            try (var session = start(starter)) {
+                assertThat(session.dataDirectory()).isEqualTo(kept);
+                assertThat(kept.resolve("imported")).doesNotExist();
+                assertThat(log)
+                        .anyMatch(line -> line.contains(
+                                "jdtls did not start on the kept workspace, it starts again on an empty one"));
+            }
+        }
+
+        @FakeOnly(reason = JDTLS_DIED)
+        @Test
+        void doesNotStartAgainWhenTheWorkspaceWasNotReused() {
+            var starter = keeping(another(new FakeJdtls().child("sh", "-c", "exit 3")));
+
+            assertThatThrownBy(() -> start(starter)).isInstanceOf(JdtlsException.class);
+
+            assertThat(log).noneMatch(line -> line.contains("starts again"));
+            assertThat(WorkspaceLock.isHeld(kept)).isFalse();
+        }
+
+        private Path jdk(String version) throws IOException {
+            Path home = Files.createDirectories(folder.resolve("jdk-" + version));
+            Files.writeString(home.resolve("release"), "JAVA_VERSION=\"" + version + "\"\n");
+
+            return home;
+        }
+
+        private static JsonElement runtimesSentTo(FakeJdtls jdtls) {
+            return new Gson()
+                    .toJsonTree(jdtls.configurations().getFirst())
+                    .getAsJsonObject()
+                    .getAsJsonObject("java")
+                    .getAsJsonObject("configuration")
+                    .get("runtimes");
+        }
+
+        private static void awaitConfigurations(FakeJdtls jdtls, int count) {
+            long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            while (jdtls.configurations().size() < count && System.nanoTime() < deadline) {
+                Thread.onSpinWait();
+            }
+        }
+
+        private static JsonElement declaring(Path home, String name) {
+            return JsonParser.parseString("[{\"name\":\"" + name + "\",\"path\":\"" + home + "\"}]");
+        }
+
+        @Test
+        void tellsJdtlsTheJdkItBoundTheProjectsToOnceItIsReadyOnAWorkspaceThatIsNew() throws Exception {
+            Path home = jdk("25.0.2");
+            var first = aJdtls().boundToJdk(home);
+
+            try (var session = start(keeping(first))) {
+                awaitConfigurations(first, 1);
+
+                assertThat(runtimesSentTo(first)).isEqualTo(declaring(home, "JavaSE-25"));
+                assertThat(first.configurations()).hasSize(1);
+            }
+        }
+
+        @Test
+        void tellsJdtlsNothingOfTheJdkOfAWorkspaceThatIsBoundToTheSameJdkAsBefore() throws Exception {
+            Path home = jdk("25.0.2");
+            var second = aJdtls().boundToJdk(home);
+            var starter = keeping(aJdtls().boundToJdk(home), second);
+            aCleanRun(starter);
+
+            try (var session = start(starter)) {
+                assertThat(session.dataDirectory()).isEqualTo(kept);
+                assertThat(second.configurations()).isEmpty();
+            }
+        }
+
+        @Test
+        void tellsJdtlsTheJdkAgainWhenItBoundTheProjectsToAnotherOne() throws Exception {
+            Path before = jdk("25.0.2");
+            Path after = jdk("25.0.4");
+            var second = aJdtls().boundToJdk(after);
+            var starter = keeping(aJdtls().boundToJdk(before), second);
+            aCleanRun(starter);
+
+            try (var session = start(starter)) {
+                awaitConfigurations(second, 1);
+
+                assertThat(runtimesSentTo(second)).isEqualTo(declaring(after, "JavaSE-25"));
+            }
+        }
+
+        @Test
+        void tellsJdtlsNothingOfTheJdkOfATemporaryWorkspace() throws Exception {
+            Path home = jdk("25.0.2");
+            fake.listsProjects(URI_A).boundToJdk(home);
+
+            try (var session = start(fake)) {
+                assertThat(fake.configurations()).isEmpty();
+            }
+        }
+
+        @Test
+        void startsOnAnEmptyWorkspaceWhenTheJdkTheProjectsWereBoundToChanged() throws Exception {
+            Path home = jdk("25.0.2");
+            var starter = keeping(aJdtls().boundToJdk(home), aJdtls().boundToJdk(home));
+            aCleanRun(starter);
+            Files.writeString(home.resolve("release"), "JAVA_VERSION=\"25.0.4\"\n");
+
+            try (var session = start(starter)) {
+                assertThat(kept.resolve("imported")).doesNotExist();
+                assertThat(log).noneMatch(line -> line.contains("(kept from the previous run)"));
+            }
+        }
+
+        @FakeOnly(reason = JDTLS_FAILS)
+        @Test
+        void startsAndPinsNothingWhenJdtlsDoesNotTellTheJdkOfAProject() throws Exception {
+            var first = aJdtls().failsToTellTheJdk();
+            var starter = keeping(first, aJdtls());
+
+            aCleanRun(starter);
+
+            assertThat(log).anyMatch(line -> line.contains("is not known: "));
+            assertThat(first.configurations()).isEmpty();
+            assertThat(kept.resolve(".gabier-state")).exists();
+        }
+
+        @Test
+        void usesATemporaryWorkspaceWhenTheStarterKeepsNone() throws Exception {
+            fake.listsProjects(URI_A);
+
+            try (var session = start(fake)) {
+                assertThat(session.dataDirectory()).hasParent(folder.resolve("tmp"));
             }
         }
     }

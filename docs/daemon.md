@@ -64,8 +64,8 @@ exceptions and nothing else: the parameters of the request (the file, the positi
 are not written on purpose, but those words may hold a path (a file that could not be read) or a type or symbol name (the
 data of a jdtls error), and control characters are written as escapes like the lines of jdtls.
 
-**Stopping when nobody uses it.** A daemon stops by itself, the way `gabier stop` stops it (jdtls and its workspace
-folder are ended and removed, the socket is given back), once **no client has been connected for 60 minutes**: the delay
+**Stopping when nobody uses it.** A daemon stops by itself, the way `gabier stop` stops it (jdtls is ended and its workspace
+is kept or removed as at `gabier stop`, the socket is given back), once **no client has been connected for 60 minutes**: the delay
 is `GABIER_IDLE_TIMEOUT`, in whole minutes, read when the daemon starts (`0` turns the rule off; anything else that is not a
 whole number of minutes, 0 or more, is a `usage-error` that names the variable and starts nothing). The cli opens one
 connection per call, so a call in progress holds the daemon up however long it lasts, and the delay is counted from
@@ -94,7 +94,7 @@ another job; a first run under a heavier load took 105 s to be ready, and `04-11
 
 | Part | What happens | Time |
 | --- | --- | --- |
-| launch | the daemon opens the data folder and starts the jdtls process; jdtls starts its JVM and its OSGi runtime, up to its first `language/status` (`Init...`) | about 6 s |
+| launch | the daemon opens the workspace of jdtls and starts the jdtls process; jdtls starts its JVM and its OSGi runtime, up to its first `language/status` (`Init...`) | about 6 s |
 | import | jdtls imports the project: for a Gradle project it starts a Gradle daemon and runs the build (compile of `build-logic`, evaluation of the settings, configuration of every module, the model of each); this is nearly all of the wait, and its `language/status` messages (`70% Starting Java Language Server - Configure project :core`) name the task | about 54 s |
 | ready | `ServiceReady`, then the list of the projects jdtls imported | about 0.1 s |
 | diagnostics | `diagnostics`: the file is opened, jdtls publishes, and the daemon waits for jdtls to be quiet for 5 seconds. `diagnostics-all`: no file is opened; the daemon waits for jdtls to register the files it watches (the end of its initialization, which publishes the problems of the whole workspace), tells it of the changes on disk, asks for an incremental build, and waits 1 second in which nothing is published | 7 to 9 s for one file; 1.2 s for the whole project (532 files) once jdtls is started, 50 s for the first call right after the start of the daemon |
@@ -106,6 +106,27 @@ after 6 to 9 s (the 5 seconds of quiet are in it), and a command that does not w
 build file jdtls can read is refused at once, and a small Eclipse or Maven project imports in seconds. A Gradle daemon
 that is still running from an earlier import shortens the import a great deal: a cold start of the daemon and of jdtls with
 one warm answered the first `diagnostics` in 32 s.
+
+**What a restart costs.** This is for the first call of a daemon that starts on a project the previous daemon opened: it
+is a first start only once, because jdtls keeps its workspace between two daemons (see "The workspace of jdtls" below).
+Measured on 15-11-2026 with the pinned jdtls (1.63.0) on this checkout, on a machine of 16 cores with other jobs running (load
+average 7 to 12), a warm Gradle daemon and warm shared indexes, with `JAVA_HOME` on a JDK 27 and several JDK 25 installed
+(SDKMAN! and mise: the case that made a kept workspace slow):
+
+| Start | `gabier start --wait` | Full builds of the project (trace of the Java builder of jdtls) |
+| --- | --- | --- |
+| first start, empty workspace | 68 and 69 s | 14: 7 for the import, 7 after it, once the daemon pinned the JDKs (12 s more, in the background, after the start is ready) |
+| restart on the kept workspace, three in a row | 14, 12 and 12 s | 0 |
+| restart after Java files were created, changed and deleted while the daemon was stopped | 8 s | not measured; `gabier diagnostics --all` then answers the same problems as after a first start (1409 lines, only their order differs), the new and the changed files with their errors and the deleted one with none |
+| a start after the daemon was killed, on a jdtls that still runs on the workspace | 84 s | the start is a first start, on a temporary data folder |
+
+What the figures are made of, from jdtls alone (a probe that starts the pinned jdtls on a data folder: its `initialize`, its
+`ServiceReady` and the end of its build jobs, the file watchers registered): a new data folder is ready at the `ServiceReady`
+after 14 to 37 s and its build jobs end after 67 to 83 s; a kept data folder that jdtls rebuilds as a whole (the JDK of the
+projects changed from one start to the next, with no JDK declared) is ready after 36 to 45 s, which is the 30 s of the build
+plus the start; a kept data folder it does not rebuild is ready after 9 to 12 s. That is the difference between the two
+measures of `02-11-2026-1223` (a restart slower than a first start) and the ones above: jdtls rebuilt everything at
+each restart because it bound the projects to another JDK of the same version, and the workspace now keeps the choice.
 
 **Following the files while a client watches.** `gabier diagnostics --watch` (diagnostics) and
 `gabier affected-tests --watch` (affected-tests) make the daemon look at the disk, and only
@@ -218,16 +239,61 @@ path of the jar, under a folder of the version of the index format) and is only 
 follows the import, not the import: the first `diagnostics` of a project is not faster (about 31 s for this checkout
 with and without), the first `references` or `rename` that has to wait for the indexes is (about 29 s instead of 47 s).
 
-**The data folder of jdtls.** jdtls keeps its workspace (its `-data` folder, about 210 Mo for this checkout) in a folder
-of its own in the temporary folder, `gabier-jdtls-data-<random>`, which the daemon removes when it ends jdtls (`stop`,
-SIGTERM, a failed start). A daemon that is killed (SIGKILL, a crash, a power cut) cannot, and `/tmp` is a memory file
-system on many machines, so **when it starts jdtls the daemon removes the `gabier-jdtls-data-*` folders that no live jdtls
-uses**: the daemon holds a lock on the file `.gabier-lock` of the data folder as long as it runs jdtls on it, and the
-system releases it when the daemon dies, killed or not (jdtls takes no lock of its own: the `.metadata/.lock` of Eclipse
-is the one of its IDE, absent from the data folder of a running jdtls 1.63). It never touches the folder of a running jdtls (the daemon of another project holds its lock), a folder
-that is not the user's, a link, nor a folder that has no lock file yet and is younger than 5 minutes (the time a jdtls
-may take to start: it is the folder of a jdtls that is starting). What it cannot remove is told in its log, and does not
-stop jdtls from starting.
+**The workspace of jdtls.** jdtls keeps its workspace (its `-data` folder, about 210 Mo for this checkout: the projects it
+imported, its build of them, its indexes) in a folder of its own for each project,
+`<cache>/jdtls-<version>/workspaces/<project>`, where `<cache>` is the folder of the shared indexes above (`GABIER_CACHE`, ...),
+`<version>` the version of jdtls (a workspace of one version is not readable by another) and `<project>` the name of the
+socket of the project without its `.sock` (`<name>-<hash>`, from the path of the project). **The daemon keeps it from one
+daemon to the next**, so that a daemon that starts on a project the previous one opened has jdtls import and build nothing
+again: the start measured below goes from about a minute to a few seconds.
+
+What makes a workspace reusable, and what makes the daemon start jdtls on an empty folder instead (a first start, which is
+what a project with no workspace gets):
+
+- **A clean end.** The daemon writes the file `.gabier-state` in the workspace only when jdtls was ready and left by itself
+  after the shutdown (it exited, with nothing to kill), and removes the file when it starts on the workspace. A jdtls that
+  was killed, a daemon that was killed (SIGKILL, a crash, a power cut), a start that failed or that was stopped before
+  jdtls was ready leave no state file, so the next start empties the folder.
+- **The same jdtls and the same JDK.** The state holds a fingerprint: the version of jdtls and the JDK it runs under (the
+  one of the daemon: its folder and its version). Another jdtls or another JDK, and a JDK that a project is bound to and
+  that is not the one it was (see below: its folder holds another build, or none), empties the folder. A state that
+  cannot be read does too.
+- **A start that fails on a kept workspace is run again once on an empty one**, and says so in the log, so that no start
+  fails or answers wrongly because of what a previous one left. The start that follows, on an empty folder, is a first
+  start. A folder with nothing jdtls can import is refused at once, as before, without a second try.
+- **One daemon at a time.** The daemon holds the lock `.gabier-lock` of the workspace (see below) as long as it runs
+  jdtls on it. A workspace that another daemon holds (two daemons on one project: a socket given by `GABIER_SOCKET`),
+  that cannot be made or emptied, or of a jdtls whose distribution tells no version, is not kept: the daemon says why in
+  its log and uses a temporary data folder (`gabier-jdtls-data-<random>` in the temporary folder), which it removes when it
+  ends jdtls (`stop`, SIGTERM, a failed start), as the daemon did before it kept workspaces.
+
+*The files changed while the daemon was stopped.* jdtls does not look at the disk by itself (see "Following the files"
+above), and the files an editor or a `git checkout` changed while it was stopped are not in its workspace. The daemon
+writes with the state what jdtls was told of the files it watches (their modification time and size, as it keeps them
+while it runs), and a daemon that starts on the workspace compares the disk with that, not with the disk of its start:
+created, changed and deleted files are told to jdtls as soon as it registers its watchers, which is what the first request
+does for a file that changes while jdtls imports. So `gabier diagnostics` answers as after a first start.
+
+*The JDK of the projects.* A project asks for an execution environment (`JavaSE-25`), and jdtls binds it to one of the JDKs
+it finds of that version; with several of them on the machine (SDKMAN!, mise, the system) the one it picks changes from one
+start to the next, and a project bound to another JDK is built again as a whole. That is what made a kept workspace slower
+than a new one when it was first tried. jdtls keeps in its workspace the JDK that a client declares for an environment
+(`java.configuration.runtimes`) as its default, whatever order it finds the JDKs in. The daemon therefore asks jdtls, once
+it is ready, which JDK each project is bound to (`java.project.getSettings`, `org.eclipse.jdt.ls.core.vm.location`), declares
+them to it when the workspace is new, and writes them in the state, with the version of each JDK (its `release` file).
+The declaration changes nothing jdtls had bound, so it builds nothing. What the client says in its initialization is not
+enough: a jdtls that starts on a workspace builds before it reads it, with what the workspace kept.
+
+*What is removed, and when.* A workspace is the user's cache, a folder of the cache of gabier. A daemon that opens a workspace
+removes the ones of projects whose folder no longer exists (a deleted worktree) and that no daemon holds. `rm -r
+<cache>/jdtls-*/workspaces` removes them all, which only makes the next starts first starts. The temporary data folders
+of daemons that were killed are removed as before: when it starts jdtls the daemon removes the `gabier-jdtls-data-*`
+folders that no live jdtls uses. The daemon holds a lock on the file `.gabier-lock` of the data folder as long as it runs
+jdtls on it, and the system releases it when the daemon dies, killed or not (jdtls takes no lock of its own: the
+`.metadata/.lock` of Eclipse is the one of its IDE, absent from the data folder of a running jdtls 1.63). It never touches the
+folder of a running jdtls (the daemon of another project holds its lock), a folder that is not the user's, a link, nor a
+temporary folder that has no lock file yet and is younger than 5 minutes (the time a jdtls may take to start: it is the
+folder of a jdtls that is starting). What it cannot remove is told in its log, and does not stop jdtls from starting.
 
 Two things to know before pointing the daemon at a folder. The project is **the root of the directory the daemon is started in**
 (the nearest folder above it that holds a `.git`, else that directory) when no folder and no `GABIER_PROJECT` is given, so

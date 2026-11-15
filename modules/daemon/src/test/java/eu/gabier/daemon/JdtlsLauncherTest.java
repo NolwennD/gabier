@@ -2,11 +2,14 @@ package eu.gabier.daemon;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import eu.gabier.protocol.SocketLocation;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -63,5 +66,58 @@ class JdtlsLauncherTest {
         assertThat(new String(connection.fromJdtls().readAllBytes(), StandardCharsets.UTF_8).strip())
                 .isEqualTo("heard hello");
         connection.process().waitFor();
+    }
+
+    /** A launcher of a distribution of jdtls as the archive of Eclipse unpacks it, of the version given. */
+    private Path launcherOfVersion(String version) throws IOException {
+        Files.createDirectories(folder.resolve("jdtls/bin"));
+        Files.createDirectories(folder.resolve("jdtls/plugins"));
+        Files.createFile(folder.resolve("jdtls/plugins/org.eclipse.jdt.ls.core_" + version + ".jar"));
+        return Files.createFile(folder.resolve("jdtls/bin/jdtls"));
+    }
+
+    @Test
+    void keepsTheWorkspaceOfAProjectInTheCacheOfTheVersionOfJdtlsWithTheNameOfTheProject() throws IOException {
+        Path cache = folder.resolve("cache");
+        Path project = folder.resolve("work/project");
+        var launcher =
+                new JdtlsLauncher(launcherOfVersion("1.63.0"), folder.resolve("jdk"), List.of(), Optional.of(cache));
+
+        var kept = launcher.keptWorkspace(project).orElseThrow();
+
+        assertThat(kept.folder())
+                .isEqualTo(cache.resolve("jdtls-1.63.0/workspaces").resolve(SocketLocation.projectKey(project)));
+        assertThat(kept.projectRoot()).isEqualTo(project);
+        assertThat(kept.fingerprint())
+                .isEqualTo("jdtls 1.63.0, Java " + System.getProperty("java.runtime.version") + " in "
+                        + folder.resolve("jdk"));
+    }
+
+    @Test
+    void keepsTheFolderOfAProjectWhateverTheJdkAndChangesTheFingerprintWithIt() throws IOException {
+        Path cache = folder.resolve("cache");
+        var project = folder.resolve("work/project");
+        Path distribution = launcherOfVersion("1.63.0");
+
+        var first = new JdtlsLauncher(distribution, folder.resolve("jdk25"), List.of(), Optional.of(cache))
+                .keptWorkspace(project)
+                .orElseThrow();
+        var second = new JdtlsLauncher(distribution, folder.resolve("jdk27"), List.of(), Optional.of(cache))
+                .keptWorkspace(project)
+                .orElseThrow();
+
+        assertThat(second.folder()).isEqualTo(first.folder());
+        assertThat(second.fingerprint()).isNotEqualTo(first.fingerprint());
+    }
+
+    @Test
+    void keepsNoWorkspaceWithoutACacheFolderOrWhenItsDistributionTellsNoVersion() throws IOException {
+        var project = folder.resolve("work/project");
+
+        assertThat(new JdtlsLauncher(launcherOfVersion("1.63.0"), folder, List.of()).keptWorkspace(project))
+                .isEmpty();
+        assertThat(new JdtlsLauncher(folder.resolve("nowhere/jdtls"), folder, List.of(), Optional.of(folder))
+                        .keptWorkspace(project))
+                .isEmpty();
     }
 }

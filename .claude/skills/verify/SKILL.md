@@ -123,7 +123,9 @@ number of tests run, the number of failures and `BUILD SUCCESSFUL` in the output
     (`-Djdt.core.sharedIndexLocation`, `SharedIndexes`): the second builds none of the indexes of the first.
     `WorkspaceLockOfJdtlsTest` shows that a real jdtls takes no lock on its data folder, and that the daemon's own
     (`WorkspaceLock`, `.gabier-lock`) is held while it runs.
-  `JdtlsSession` stops jdtls (the whole process tree) and deletes the data directory in every case (`JdtlsWorkspace`). jdtls leaves its
+  `JdtlsSession` stops jdtls (the whole process tree) and, in `JdtlsWorkspace`, deletes a temporary data directory in every
+  case and keeps the workspace of the project (`KeptWorkspace`, `.gabier-state`) only when jdtls was ready and left by itself:
+  the others are emptied at the next start. jdtls leaves its
   Eclipse files (`.project`, `.classpath`, `.settings/`, `bin/`) in a folder it is started on: when that is the checkout,
   they are git-ignored.
 

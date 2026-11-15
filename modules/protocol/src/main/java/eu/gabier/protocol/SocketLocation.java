@@ -92,7 +92,7 @@ public final class SocketLocation {
             return Path.of(override);
         }
 
-        return folder(environment, uid).resolve(name(projectRoot(environment, workingDirectory)));
+        return folder(environment, uid).resolve(projectKey(projectRoot(environment, workingDirectory)) + ".sock");
     }
 
     private static Path folder(Map<String, String> environment, String uid) {
@@ -107,8 +107,11 @@ public final class SocketLocation {
         return Path.of("/tmp", "gabier-" + uid);
     }
 
-    /** {@code <name of the folder>-<hash of its path>.sock}: the name in plain characters, and short. */
-    private static String name(Path root) {
+    /**
+     * {@code <name of the folder>-<hash of its path>}: the name in plain characters, and short, which tells the files
+     * of a project (its socket, the workspace of its jdtls) from those of another project of the same name.
+     */
+    public static String projectKey(Path root) {
         var folderName =
                 Optional.ofNullable(root.getFileName()).map(Path::toString).orElse("root");
         var plain = folderName.replaceAll("[^A-Za-z0-9._-]", "_");
@@ -117,6 +120,6 @@ public final class SocketLocation {
                 .replace("-", "")
                 .substring(0, HASH_LENGTH);
 
-        return plain.substring(0, Math.min(plain.length(), NAME_LENGTH)) + "-" + hash + ".sock";
+        return plain.substring(0, Math.min(plain.length(), NAME_LENGTH)) + "-" + hash;
     }
 }

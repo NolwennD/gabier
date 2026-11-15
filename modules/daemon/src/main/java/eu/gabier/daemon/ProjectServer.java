@@ -73,26 +73,40 @@ final class ProjectServer implements ServedProject {
     static ProjectServer jdtls(Path root, Map<String, String> environment, Path home, Consumer<String> log) {
         var settings = JdtlsSettings.of(root, List.of(), TIMEOUT);
         // Looked for at each start, not once: a jdtls installed after the daemon began is found by the next request.
-        JdtlsStarter jdtls = data -> launcher(JdtlsLocation.launcher(environment, home), environment, home, log)
-                .start(data);
+        JdtlsStarter jdtls = new JdtlsStarter() {
+            @Override
+            public JdtlsConnection start(Path data) throws IOException {
+                return launcher(environment, home, log).start(data);
+            }
+
+            @Override
+            public Optional<KeptWorkspace> keptWorkspace(Path projectRoot) throws IOException {
+                return launcher(environment, home, ignored -> {}).keptWorkspace(projectRoot);
+            }
+        };
 
         return new ProjectServer(
                 root, () -> JdtlsLanguageServer.start(jdtls, settings, JdtlsLanguageServer.QUIET, log), log);
     }
 
-    /** The launcher, with the option that makes jdtls share the indexes of its libraries when its version is known. */
-    private static JdtlsLauncher launcher(
-            Path launcher, Map<String, String> environment, Path home, Consumer<String> log) {
+    /**
+     * The launcher, with the option that makes jdtls share the indexes of its libraries when its version is known, and
+     * the folder where it keeps the workspace of a project.
+     */
+    private static JdtlsLauncher launcher(Map<String, String> environment, Path home, Consumer<String> log)
+            throws IOException {
+        Path launcher = JdtlsLocation.launcher(environment, home);
         var indexes = SharedIndexes.of(launcher, environment, home);
         if (indexes.isEmpty()) {
-            log.accept("the indexes of the libraries are not shared: " + launcher
-                    + " is not in a distribution of jdtls that tells its version");
+            log.accept("the indexes of the libraries are not shared, and the workspace of the project is not kept: "
+                    + launcher + " is not in a distribution of jdtls that tells its version");
         }
 
         return new JdtlsLauncher(
                 launcher,
                 Path.of(System.getProperty("java.home")),
-                indexes.map(SharedIndexes::jvmArgument).stream().toList());
+                indexes.map(SharedIndexes::jvmArgument).stream().toList(),
+                Optional.of(SharedIndexes.cache(environment, home)));
     }
 
     @Override

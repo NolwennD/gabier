@@ -42,7 +42,9 @@ public final class Operations {
             "start the daemon and jdtls, so that the first command finds them ready",
             """
             Start it first thing in a session, in the background, and work on something else: jdtls takes about a
-            minute to start and import a Gradle project, and the first command that needs it waits for all of it.
+            minute to start and import a Gradle project, and the first command that needs it waits for all of it. A
+            project that an earlier daemon opened on this machine and stopped cleanly is ready in about ten seconds,
+            since what jdtls imported is kept.
             The answer is at once, unless the call asks to wait for jdtls: the daemon is started if none runs (its log
             is named then), jdtls starts in it unless it is already starting or ready, and the answer says where jdtls
             is. A call that waits is answered when jdtls is ready, after at most a time-out (300 seconds by default);

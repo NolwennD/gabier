@@ -2,7 +2,8 @@
 
 Change Java through a language server with `gabier`, not by editing text. `gabier help` lists the commands.
 
-- At the start of a session, run `gabier start` in the background: jdtls takes about a minute to import the project.
+- At the start of a session, run `gabier start` in the background: jdtls takes about a minute to import the project,
+  a few seconds when an earlier daemon already did.
 - Before editing Java by hand, ask `gabier help --for="<the task, in English>"`: it says if a command does it.
 - Rename, extract, move, inline or create with `gabier rename`, `gabier extract-method`, `gabier move`, `gabier inline`
   and `gabier create`, not by editing every occurrence.

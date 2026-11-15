@@ -306,4 +306,67 @@ class WatchedFilesTest {
 
         assertThat(described(files.changes())).containsExactly("Created A.java");
     }
+
+    @Test
+    void remembersTheWatchedFilesAsJdtlsWasToldOfThem() throws IOException {
+        var files = watching(glob("**/*.java"));
+        write("src/Notes.txt", "notes\n");
+        rewrite(greeter, "class Greeter { int x; }\n", 5);
+        files.changes();
+        rewrite(greeter, "class Greeter { int x; int y; }\n", 10);
+
+        var remembered =
+                WatchedFiles.parse(WatchedFiles.format(files.remembered())).orElseThrow();
+
+        assertThat(remembered).containsOnlyKeys(greeter);
+        assertThat(remembered.get(greeter).size()).isEqualTo("class Greeter { int x; }\n".length());
+    }
+
+    @Test
+    void reportsWhatChangedWhileTheDaemonWasStoppedOnceJdtlsRegistersItsWatchers() throws IOException {
+        var removed = write("src/Removed.java", "class Removed {}\n");
+        var remembered = WatchedFiles.parse(
+                        WatchedFiles.format(watching(glob("**/*.java")).remembered()))
+                .orElseThrow();
+        rewrite(greeter, "class Greeter { int x; }\n", 5);
+        Files.delete(removed);
+        write("src/Welcomer.java", "class Welcomer {}\n");
+
+        var resumed = WatchedFiles.of(root, remembered);
+
+        assertThat(resumed.changes()).isEmpty();
+        resumed.register(registration("1", glob("**/*.java")));
+        assertThat(described(resumed.changes()))
+                .containsExactly("Changed Greeter.java", "Created Welcomer.java", "Deleted Removed.java");
+    }
+
+    @Test
+    void reportsNothingOfWhatDidNotChangeWhileTheDaemonWasStopped() throws IOException {
+        var remembered = WatchedFiles.parse(
+                        WatchedFiles.format(watching(glob("**/*.java")).remembered()))
+                .orElseThrow();
+        var resumed = WatchedFiles.of(root, remembered);
+        resumed.register(registration("1", glob("**/*.java")));
+
+        assertThat(resumed.changes()).isEmpty();
+    }
+
+    @Test
+    void remembersAPathWithASpaceOrALineBreakInItsName() throws IOException {
+        var odd = write("src/odd name\nwith break.java", "class Odd {}\n");
+        var remembered = WatchedFiles.parse(
+                        WatchedFiles.format(watching(glob("**/*.java")).remembered()))
+                .orElseThrow();
+
+        assertThat(remembered).containsKey(odd);
+    }
+
+    @Test
+    void takesNoMemoryThatItCannotReadFully() {
+        assertThat(WatchedFiles.parse(List.of("12\t34"))).isEmpty();
+        assertThat(WatchedFiles.parse(List.of("twelve\t34\tfile:///a.java"))).isEmpty();
+        assertThat(WatchedFiles.parse(List.of("12\t34\tfile:///a.java\textra"))).isEmpty();
+        assertThat(WatchedFiles.parse(List.of("12\t34\t%zz"))).isEmpty();
+        assertThat(WatchedFiles.parse(List.of())).contains(java.util.Map.of());
+    }
 }

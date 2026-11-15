@@ -93,7 +93,9 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     enum Shutdown {
         ANSWERS,
         FAILS,
-        NEVER_ANSWERS
+        NEVER_ANSWERS,
+        /** Answers {@code shutdown}, then does not leave when told to exit. */
+        STAYS_ALIVE
     }
 
     private static final String METHOD = "workspace/didChangeWatchedFiles";
@@ -162,6 +164,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private volatile Runnable onBuild = () -> {};
     private final Map<String, Function<String, Object>> projectCommandAnswers = new ConcurrentHashMap<>();
     private final List<String> projectCommands = new CopyOnWriteArrayList<>();
+    private volatile @Nullable RuntimeException settingsFail;
     private CompletableFuture<Object> sourcePathsAnswer = new CompletableFuture<>();
     private final AtomicInteger sourcePathRequests = new AtomicInteger();
     private final List<List<String>> registeredWatchers = new ArrayList<>();
@@ -449,6 +452,18 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     FakeJdtls answersForEachProject(String command, Function<String, Object> answer) {
         this.projectCommandAnswers.put(command, answer);
         return this;
+    }
+
+    /** Fails the settings of a project that are not scripted (the JDK jdtls bound it to, asked when it is ready). */
+    FakeJdtls failsToTellTheJdk() {
+        this.settingsFail = new IllegalStateException("no settings");
+        return this;
+    }
+
+    /** The JDK every project is bound to, as {@code java.project.getSettings} tells it ({@link JdtlsRuntimes}). */
+    FakeJdtls boundToJdk(Path home) {
+        return answersForEachProject(
+                "java.project.getSettings", uri -> Map.of(JdtlsRuntimes.VM_LOCATION, home.toString()));
     }
 
     /** The commands of a project received, each with its arguments as JSON, in the order they came. */
@@ -851,6 +866,7 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                 case ANSWERS -> CompletableFuture.completedFuture(null);
                 case FAILS -> CompletableFuture.failedFuture(new IllegalStateException("shutdown refused"));
                 case NEVER_ANSWERS -> new CompletableFuture<>();
+                case STAYS_ALIVE -> CompletableFuture.completedFuture(null);
             };
         }
 
@@ -858,7 +874,9 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         public void exit() {
             exitNotifications.incrementAndGet();
             // Like jdtls, which leaves when it is told to exit.
-            process.destroyForcibly();
+            if (shutdown != Shutdown.STAYS_ALIVE) {
+                process.destroyForcibly();
+            }
             exited.countDown();
         }
 
@@ -978,6 +996,12 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                         return sourcePathsAnswer;
                     }
                     var forTheProject = projectCommandAnswers.get(params.getCommand());
+                    if (forTheProject == null && params.getCommand().equals("java.project.getSettings")) {
+                        // The JDK of a project, asked when jdtls is ready: not scripted, jdtls says nothing of it.
+                        return settingsFail == null
+                                ? CompletableFuture.completedFuture(Map.of())
+                                : scripted("java.project.getSettings", CompletableFuture.failedFuture(settingsFail));
+                    }
                     if (forTheProject != null) {
                         commands.add(params.getCommand());
                         projectCommands.add(params.getCommand() + " " + params.getArguments());

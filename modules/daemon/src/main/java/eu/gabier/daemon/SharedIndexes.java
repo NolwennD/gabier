@@ -44,7 +44,8 @@ record SharedIndexes(Path folder) {
         return "-Djdt.core.sharedIndexLocation=" + folder;
     }
 
-    private static Path cache(Map<String, String> environment, Path home) {
+    /** The folder gabier keeps what it caches for a user in: {@code GABIER_CACHE}, else {@code $XDG_CACHE_HOME/gabier}, else {@code ~/.cache/gabier}. */
+    static Path cache(Map<String, String> environment, Path home) {
         return absolute(environment.get(CACHE_VARIABLE))
                 .or(() -> absolute(environment.get(XDG_CACHE_VARIABLE)).map(base -> base.resolve("gabier")))
                 .orElseGet(() -> home.resolve(".cache/gabier"));
@@ -57,7 +58,8 @@ record SharedIndexes(Path folder) {
                 .filter(Path::isAbsolute);
     }
 
-    private static Optional<String> version(Path launcher) {
+    /** The version of the jdtls whose launcher is given, nothing when its distribution does not tell it. */
+    static Optional<String> version(Path launcher) {
         Path plugins = launcher.toAbsolutePath().resolveSibling("../plugins");
         // No such folder: the launcher is not in a distribution, there is no version and so no folder.
         String[] bundles =

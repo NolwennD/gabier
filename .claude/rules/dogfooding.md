@@ -64,8 +64,14 @@ daemon of another worktree with `GABIER_PROJECT=<worktree> gabier stop`. The ski
 `scripts/stop-stray-daemons.sh`, which stops the daemon of a worktree that no longer exists, for a worker that was
 stopped before it could.
 
-The jdtls workspace is temporary (a folder of `/tmp` removed at each stop; a daemon that starts jdtls removes the ones that
-killed daemons left). The jars that every jdtls indexes are shared in `~/.cache/gabier` (`GABIER_CACHE` moves it).
+The jdtls workspace of a project is kept between two daemons, in `~/.cache/gabier/jdtls-<version>/workspaces/<project>`
+(`GABIER_CACHE` moves the cache): a `gabier start` on a project already opened is ready in seconds, not a minute, and
+`gabier diagnostics` answers as after a first start, the files changed while the daemon was stopped included. A daemon or a
+jdtls that was killed, a start that failed, another jdtls or another JDK start on an empty workspace (a first start), and
+a start that fails on a kept workspace is run again on an empty one, so a worker never clears anything by hand;
+`rm -r ~/.cache/gabier/jdtls-*/workspaces` removes them all. The jars that every jdtls indexes are shared in the same cache
+folder. When a workspace cannot be used (another daemon holds it), the daemon uses a temporary one in `/tmp`.
+`docs/daemon.md` says how.
 
 **A friction met while using gabier is a ticket**: a wrong answer, a refusal that is not explained, a command that is
 missing, a slow answer. The worker reports it to its supervisor with the command, the file and the answer, as for any

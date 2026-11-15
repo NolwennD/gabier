@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.attribute.UserPrincipal;
@@ -59,6 +60,40 @@ final class StaleWorkspaces {
                 log.accept("could not clean up " + workspace + ": " + failure);
             }
         }
+    }
+
+    /**
+     * Removes the kept workspaces of the projects that are gone (a deleted worktree), which no daemon will ever start
+     * again: a folder of {@code folder} that names a project folder ({@link JdtlsWorkspace#ROOT}) that does not exist
+     * any more, and that no daemon uses.
+     *
+     * @param folder the folder the kept workspaces are in
+     * @param user whose folders may be removed: the others are not ours
+     * @param log receives a line for each folder removed or that could not be
+     */
+    static void removeOfGoneProjects(Path folder, UserPrincipal user, Consumer<String> log) {
+        for (File entry : Optional.ofNullable(folder.toFile().listFiles()).stream()
+                .flatMap(Arrays::stream)
+                .toList()) {
+            Path workspace = entry.toPath();
+            try {
+                if (Files.isDirectory(workspace, LinkOption.NOFOLLOW_LINKS)
+                        && user.equals(Files.getOwner(workspace, LinkOption.NOFOLLOW_LINKS))
+                        && isOfAGoneProject(workspace)
+                        && !WorkspaceLock.isHeld(workspace)) {
+                    Directories.delete(workspace);
+                    log.accept("removed " + workspace + ", the workspace of a project that is gone");
+                }
+            } catch (IOException | UncheckedIOException | InvalidPathException failure) {
+                log.accept("could not clean up " + workspace + ": " + failure);
+            }
+        }
+    }
+
+    private static boolean isOfAGoneProject(Path workspace) throws IOException {
+        Path root = workspace.resolve(JdtlsWorkspace.ROOT);
+
+        return Files.isRegularFile(root, LinkOption.NOFOLLOW_LINKS) && Files.notExists(Path.of(Files.readString(root)));
     }
 
     private static boolean isDataFolder(Path workspace, UserPrincipal user) throws IOException {
