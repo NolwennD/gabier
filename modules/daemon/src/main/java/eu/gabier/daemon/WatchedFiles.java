@@ -42,6 +42,7 @@ final class WatchedFiles {
     private static final int CHANGE = 2;
     private static final int DELETE = 4;
     private static final int ALL = CREATE | CHANGE | DELETE;
+    private static final String DEPENDENCIES = "node_modules";
 
     /** A glob jdtls asks to have watched, and the kinds of change it wants to hear of (a mask). */
     private record Watcher(PathMatcher glob, int kinds) {}
@@ -210,7 +211,10 @@ final class WatchedFiles {
 
     /**
      * Every regular file below the folder (a link is not followed, a folder that cannot be listed is not seen: it holds
-     * nothing as far as this goes, so does a folder that does not exist).
+     * nothing as far as this goes, so does a folder that does not exist). Two kinds of folder below it are left out,
+     * with all they hold: one named {@value #DEPENDENCIES} (by its name only, whatever it is), and one that has a {@code
+     * .git} of its own, file or folder (a nested worktree or repository: its files are not the project's). The folder
+     * itself is scanned whatever it holds, since it is the project.
      */
     private static Map<Path, Stamp> scan(Path folder) {
         Map<Path, Stamp> files = new TreeMap<>();
@@ -229,10 +233,16 @@ final class WatchedFiles {
                 continue;
             }
             if (child.isDirectory()) {
-                scan(path, files);
+                if (!leftOut(child)) {
+                    scan(path, files);
+                }
             } else if (child.isFile()) {
                 files.put(path, new Stamp(child.lastModified(), child.length()));
             }
         }
+    }
+
+    private static boolean leftOut(File folder) {
+        return DEPENDENCIES.equals(folder.getName()) || new File(folder, ".git").exists();
     }
 }

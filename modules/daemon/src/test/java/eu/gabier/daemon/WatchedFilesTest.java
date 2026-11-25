@@ -278,6 +278,93 @@ class WatchedFilesTest {
     }
 
     @Test
+    void doesNotScanANestedWorktreeWhoseGitIsAFile() throws IOException {
+        var kept = write("worktrees/one/src/Kept.java", "class Kept {}\n");
+        write("worktrees/one/.git", "gitdir: " + root.resolve(".git/worktrees/one") + "\n");
+        var files = watching(glob("**"));
+
+        write("worktrees/one/src/Created.java", "class Created {}\n");
+        rewrite(kept, "class Kept { int x; }\n", 5);
+
+        assertThat(files.changes()).isEmpty();
+
+        Files.delete(kept);
+
+        assertThat(files.changes()).isEmpty();
+        assertThat(files.fingerprint()).isEqualTo(watching(glob("**")).fingerprint());
+    }
+
+    @Test
+    void doesNotScanANestedRepositoryWhoseGitIsAFolder() throws IOException {
+        var kept = write("vendor/library/src/Kept.java", "class Kept {}\n");
+        write("vendor/library/.git/HEAD", "ref: refs/heads/main\n");
+        var files = watching(glob("**"));
+
+        write("vendor/library/src/Created.java", "class Created {}\n");
+        rewrite(kept, "class Kept { int x; }\n", 5);
+        write("vendor/library/.git/index", "changed\n");
+
+        assertThat(files.changes()).isEmpty();
+
+        Files.delete(kept);
+
+        assertThat(files.changes()).isEmpty();
+    }
+
+    @Test
+    void doesNotScanANodeModulesFolderAtAnyDepth() throws IOException {
+        var top = write("node_modules/left-pad/index.js", "module.exports = 1;\n");
+        var deep = write("web/node_modules/left-pad/index.js", "module.exports = 1;\n");
+        var files = watching(glob("**"));
+
+        write("node_modules/left-pad/created.js", "module.exports = 2;\n");
+        rewrite(top, "module.exports = 3;\n", 5);
+        Files.delete(deep);
+
+        assertThat(files.changes()).isEmpty();
+        assertThat(files.fingerprint()).isEqualTo(watching(glob("**")).fingerprint());
+    }
+
+    @Test
+    void stillReportsTheFilesOfTheProjectWhoseRootHasAGitAndThoseNextToTheFoldersItLeavesOut() throws IOException {
+        write(".git/HEAD", "ref: refs/heads/main\n");
+        write("node_modules/left-pad/index.js", "module.exports = 1;\n");
+        write("worktrees/one/.git", "gitdir: elsewhere\n");
+        var files = watching(glob("**"));
+
+        write("src/Welcomer.java", "class Welcomer {}\n");
+        rewrite(greeter, "class Greeter { int x; }\n", 5);
+        write(".git/index", "changed\n");
+
+        assertThat(described(files.changes()))
+                .containsExactlyInAnyOrder("Created Welcomer.java", "Changed Greeter.java", "Created index");
+    }
+
+    @Test
+    void stillScansFoldersNamedLikeTheOnesItLeavesOutThatAreNotThose() throws IOException {
+        var scripts = write("scripts/.gitignore", "build\n");
+        var backup = write("node_modules_backup/Backup.java", "class Backup {}\n");
+        var workflow = write(".github/workflows/ci.yml", "name: ci\n");
+        var files = watching(glob("**"));
+
+        rewrite(scripts, "build\nout\n", 5);
+        rewrite(backup, "class Backup { int x; }\n", 5);
+        rewrite(workflow, "name: build\n", 5);
+
+        assertThat(described(files.changes()))
+                .containsExactlyInAnyOrder("Changed .gitignore", "Changed Backup.java", "Changed ci.yml");
+    }
+
+    @Test
+    void leavesOutAFolderByItsNameOnlySoASourcePackageCalledNodeModulesIsNotScanned() throws IOException {
+        var files = watching(glob("**/*.java"));
+
+        write("src/node_modules/Package.java", "class Package {}\n");
+
+        assertThat(files.changes()).isEmpty();
+    }
+
+    @Test
     void skipsAFolderItCannotReadAndReportsTheOthers() throws IOException {
         Path closed = root.resolve("closed");
         Files.createDirectories(closed);

@@ -129,6 +129,14 @@ plus the start; a kept data folder it does not rebuild is ready after 9 to 12 s.
 measures of `02-11-2026-1223` (a restart slower than a first start) and the ones above: jdtls rebuilt everything at
 each restart because it bound the projects to another JDK of the same version, and the workspace now keeps the choice.
 
+**The files the daemon tells jdtls of.** The daemon reads the state of the project folder before it starts jdtls and at each
+request, and tells jdtls of the files that are new, changed or gone (`workspace/didChangeWatchedFiles`, `WatchedFiles`). That
+scan leaves out, with everything below them, the folders named `node_modules` (by name only: a source package of that name is
+left out too) and the folders that have a `.git` of their own, file or folder (a nested worktree, a git submodule or a cloned
+repository: `.claude/worktrees/*` is the usual case). The folder of the project is scanned whatever it holds. A file below
+a folder left out is never reported to jdtls as created, changed or deleted, so it is not read for the problems or the tests
+that follow a change. The scan is not what the watching below registers: that one still takes every folder, these included.
+
 **Following the files while a client watches.** `gabier diagnostics --watch` (diagnostics) and
 `gabier affected-tests --watch` (affected-tests) make the daemon look at the disk, and only
 while a client watches (one thread and one watcher for the clients of both, a thread `gabier-problems`): the first
