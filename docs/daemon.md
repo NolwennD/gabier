@@ -134,8 +134,9 @@ request, and tells jdtls of the files that are new, changed or gone (`workspace/
 scan leaves out, with everything below them, the folders named `node_modules` (by name only: a source package of that name is
 left out too) and the folders that have a `.git` of their own, file or folder (a nested worktree, a git submodule or a cloned
 repository: `.claude/worktrees/*` is the usual case). The folder of the project is scanned whatever it holds. A file below
-a folder left out is never reported to jdtls as created, changed or deleted, so it is not read for the problems or the tests
-that follow a change. The scan is not what the watching below registers: that one still takes every folder, these included.
+a folder left out is never reported to jdtls as created or changed, so it is not read for the problems or the tests
+that follow a change. One exception: a daemon that starts on the state a daemon of an earlier version kept reports once, as
+deleted, the files of that state that lie below a folder now left out. The scan is not what the watching below registers: that one still takes every folder, these included.
 
 **Following the files while a client watches.** `gabier diagnostics --watch` (diagnostics) and
 `gabier affected-tests --watch` (affected-tests) make the daemon look at the disk, and only
