@@ -10,6 +10,8 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -65,6 +67,21 @@ class JdtlsLauncherTest {
 
         assertThat(new String(connection.fromJdtls().readAllBytes(), StandardCharsets.UTF_8).strip())
                 .isEqualTo("heard hello");
+        connection.process().waitFor();
+    }
+
+    @Test
+    void givesWhatTheLauncherWritesOnItsStandardErrorToTheConsumerLineByLine() throws Exception {
+        Path launcher = folder.resolve("jdtls");
+        Files.writeString(launcher, "#!/bin/sh\necho \"first problem\" >&2\necho \"second problem\" >&2\n");
+        Files.setPosixFilePermissions(launcher, PosixFilePermissions.fromString("rwx------"));
+        var lines = new LinkedBlockingQueue<String>();
+
+        JdtlsConnection connection = new JdtlsLauncher(launcher, folder, List.of(), Optional.empty(), lines::add)
+                .start(folder.resolve("data"));
+
+        assertThat(lines.poll(10, TimeUnit.SECONDS)).isEqualTo("first problem");
+        assertThat(lines.poll(10, TimeUnit.SECONDS)).isEqualTo("second problem");
         connection.process().waitFor();
     }
 

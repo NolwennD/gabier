@@ -28,7 +28,12 @@ so it serves the project the daemon rules below give (`GABIER_PROJECT`, else the
 `GABIER_JDTLS` reach it too). It runs on after the command (no input; it stays in the process group of the cli, so a
 Ctrl-C of the terminal during a later command also stops it), and its standard output and error go to
 a log next to the socket, `<socket>.log` (`demo-6f1c0d4e.sock.log`; private to the user, replaced at each start, in the
-socket's folder, which the cli creates private if it is missing). The cli waits until the socket accepts a connection,
+socket's folder, which the cli creates private if it is missing). Every line the daemon writes there begins with the
+time it was written, in the local time of the machine with its offset, to the second (`2026-11-26T09:43:12+01:00 jdtls
+started, pid 4242, ...`): its own lines, what jdtls reports and writes on its standard error, and what the libraries
+of the daemon log (one line each, as text), so that the time between two lines, such as the duration of a start, is
+read from the log alone.
+The cli waits until the socket accepts a connection,
 **20 seconds** at most (the daemon binds first; jdtls starts later, at the first request, and that wait is the one
 described below), then sends the request. A daemon that is not found, cannot be launched, exits before it listens (its
 exit code is reported) or is silent for 20 seconds is the problem object `daemon-start-failed` (exit code 1; `socket`,
@@ -49,9 +54,9 @@ that does not start within **5 minutes** (the time of the whole start, then of e
 missing or that exits is not a hang: the request gets the problem object `jdtls-start-failed` (exit code 1), whose
 message says why, and the next request tries again. A launcher that exits at once is reported with its exit code. A
 request that waits while the daemon stops is told that the daemon is stopping: its answer is written before its
-connection ends (the daemon gives the clients 5 seconds to end, then cuts them). What jdtls says of itself goes to the
-standard error of the daemon, prefixed with `jdtls:`, with control characters written as escapes like in the text of
-`gabier diagnostics`.
+connection ends (the daemon gives the clients 5 seconds to end, then cuts them). What jdtls says of itself, its reports and what it writes on its standard error, goes to the standard error of the
+daemon, dated and prefixed with `jdtls:`, with control characters written as escapes like in the text of `gabier
+diagnostics`.
 
 **The cause of a failure is in the log.** A request that fails with an exception gabier does not know is answered with the
 generic `internal-server-error`, with no description (the exception may hold a path or a secret). The daemon writes the

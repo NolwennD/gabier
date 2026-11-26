@@ -11,7 +11,9 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,12 +33,15 @@ public final class Main {
             reason = "The entry point ends in System.exit, which a unit test cannot cover: "
                     + "all its logic is in run, which is tested")
     public static void main(String[] args) {
+        var clock = Clock.system(ZoneId.systemDefault());
+        JulLog.install(new DatedLines(clock, System.err));
         System.exit(run(
                 args,
                 System.getenv(),
                 Path.of("").toAbsolutePath(),
                 Path.of(System.getProperty("user.home")),
                 SelfCheck.ofThisRuntime(),
+                clock,
                 System.out,
                 System.err));
     }
@@ -52,6 +57,7 @@ public final class Main {
      * @param workingDirectory where the daemon was started: the project by default, and what a relative argument is
      *     relative to
      * @param home the home folder of the user, where the pinned jdtls and the shared indexes are looked for
+     * @param clock the time and the zone that begin each line the daemon writes while it serves a project, its log
      */
     static int run(
             String[] args,
@@ -59,13 +65,19 @@ public final class Main {
             Path workingDirectory,
             Path home,
             SelfCheck selfCheck,
+            Clock clock,
             PrintStream out,
             PrintStream err) {
         try {
-            return execute(List.of(args), environment, workingDirectory, home, selfCheck, out, err);
+            return execute(List.of(args), environment, workingDirectory, home, selfCheck, clock, out, err);
         } catch (IOException | RuntimeException failure) {
             var problem = ProblemMapper.toProblem(failure);
-            err.println(problem.toText());
+            // A refusal of the daemon that serves a project is a line of its log, like the others.
+            if (servesAProject(List.of(args))) {
+                new DatedLines(clock, err).accept(problem.toText());
+            } else {
+                err.println(problem.toText());
+            }
 
             return ExitCode.of(problem).value();
         }
@@ -77,6 +89,7 @@ public final class Main {
             Path workingDirectory,
             Path home,
             SelfCheck selfCheck,
+            Clock clock,
             PrintStream out,
             PrintStream err)
             throws IOException {
@@ -84,12 +97,15 @@ public final class Main {
             var root = projectRoot(arguments, environment, workingDirectory);
 
             // What jdtls says is shown as text: a terminal that tails the log must not obey it.
+            var errors = new DatedLines(clock, err);
+
             return serve(
                     socketEnvironment(arguments, environment, root),
                     workingDirectory,
+                    clock,
                     out,
                     ProjectServer.jdtls(
-                            root, environment, home, line -> err.println("jdtls: " + TerminalText.neutralise(line))));
+                            root, environment, home, line -> errors.accept("jdtls: " + TerminalText.neutralise(line))));
         }
         if (arguments.equals(List.of(VERSION_OPTION))) {
             out.println("gabier-daemon " + ProtocolVersion.CURRENT);
@@ -142,19 +158,22 @@ public final class Main {
      * native} stage of {@code bin/ci} runs calls it (source set {@code fakeServed}, with the fake language server): the
      * way the daemon picks its server is not in its command line nor in its requests.
      */
-    static int serve(Map<String, String> environment, Path workingDirectory, PrintStream out, ServedProject project)
+    static int serve(
+            Map<String, String> environment, Path workingDirectory, Clock clock, PrintStream out, ServedProject project)
             throws IOException {
         var idleDelay = idleDelay(environment);
         var uid = UserId.current();
         var socket = SocketLocation.resolve(environment, uid, workingDirectory);
-        // The log of the daemon is its output: what the failure of a request says is written there, with the rest.
+        // The log of the daemon is its output: what the failure of a request says is written there, with the rest, and
+        // each line begins with its time.
+        var log = new DatedLines(clock, out);
         var server = DaemonServer.open(
-                socket, uid, System::nanoTime, ProcessHandle.current().pid(), project, out::println);
+                socket, uid, System::nanoTime, ProcessHandle.current().pid(), project, log);
         idleDelay.ifPresent(server::stoppingWhenIdleFor);
         // A signal (SIGTERM) ends the JVM without serve() returning: the hook removes the socket.
         Runtime.getRuntime().addShutdownHook(server.shutdownHook());
-        out.println("gabier-daemon " + ProtocolVersion.CURRENT + " listening on " + socket);
-        out.println("serving the project " + project.root());
+        log.accept("gabier-daemon " + ProtocolVersion.CURRENT + " listening on " + socket);
+        log.accept("serving the project " + project.root());
         server.serve();
 
         return ExitCode.SUCCESS.value();

@@ -29,7 +29,8 @@ final class Start implements Capability {
             .withNotes("""
                 The line says "started" when this call started the daemon, and only then names its log, where a failed\
                  start leaves its reason; else it says "running". With --json, the member daemon says the same and the\
-                 member log is present only when it started. The state of jdtls is the one status shows; a jdtls that\
+                 member log is present only when it started. Each line of the log begins with the time it was written,\
+                 in the local time of the machine with its offset, to the second. The state of jdtls is the one status shows; a jdtls that\
                  had failed is started again, and one that fails at once is answered ("jdtls failed (reason)", the\
                  member jdtlsFailure with --json).
                 --timeout is a whole number of seconds from 1 and is a usage error without --wait.

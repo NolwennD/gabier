@@ -112,7 +112,8 @@ final class ProjectServer implements ServedProject {
                 launcher,
                 Path.of(System.getProperty("java.home")),
                 indexes.map(SharedIndexes::jvmArgument).stream().toList(),
-                Optional.of(SharedIndexes.cache(environment, home)));
+                Optional.of(SharedIndexes.cache(environment, home)),
+                log);
     }
 
     @Override

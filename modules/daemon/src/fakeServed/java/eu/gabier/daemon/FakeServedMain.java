@@ -33,7 +33,9 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -91,6 +93,7 @@ public final class FakeServedMain {
         System.exit(Main.serve(
                 System.getenv(),
                 Path.of("").toAbsolutePath(),
+                Clock.system(ZoneId.systemDefault()),
                 System.out,
                 new Served(root, server, edited, built, tests)));
     }

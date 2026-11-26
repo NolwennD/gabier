@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * Starts the jdtls launcher of the distribution, which talks the protocol on its standard input and output.
@@ -16,12 +17,19 @@ import java.util.Optional;
  *     --jvm-arg=<option>}
  * @param cache the folder gabier caches in ({@link SharedIndexes#cache}), where the workspace of a project is kept;
  *     none for a jdtls whose workspace is never kept
+ * @param output receives each line the launcher writes on its standard error, as it is written: the daemon writes them
+ *     to its log, dated
  */
-record JdtlsLauncher(Path launcher, Path javaHome, List<String> jvmArguments, Optional<Path> cache)
+record JdtlsLauncher(
+        Path launcher, Path javaHome, List<String> jvmArguments, Optional<Path> cache, Consumer<String> output)
         implements JdtlsStarter {
 
     JdtlsLauncher(Path launcher, Path javaHome, List<String> jvmArguments) {
         this(launcher, javaHome, jvmArguments, Optional.empty());
+    }
+
+    JdtlsLauncher(Path launcher, Path javaHome, List<String> jvmArguments, Optional<Path> cache) {
+        this(launcher, javaHome, jvmArguments, cache, System.err::println);
     }
 
     /**
@@ -45,9 +53,10 @@ record JdtlsLauncher(Path launcher, Path javaHome, List<String> jvmArguments, Op
     public JdtlsConnection start(Path dataDirectory) throws IOException {
         List<String> line = new ArrayList<>(List.of(launcher.toString(), "-data", dataDirectory.toString()));
         jvmArguments.forEach(argument -> line.add("--jvm-arg=" + argument));
-        ProcessBuilder command = new ProcessBuilder(line).redirectError(ProcessBuilder.Redirect.INHERIT);
+        ProcessBuilder command = new ProcessBuilder(line);
         command.environment().put("JAVA_HOME", javaHome.toString());
         Process process = command.start();
+        OutputRelay.relayInBackground("jdtls-output", process.getErrorStream(), output);
         return new JdtlsConnection(process, process.getInputStream(), process.getOutputStream());
     }
 }

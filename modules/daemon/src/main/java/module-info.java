@@ -5,6 +5,7 @@ module eu.gabier.daemon {
     requires eu.gabier.shared;
     requires org.eclipse.lsp4j;
     requires com.google.gson;
+    requires java.logging;
 
     // LSP4J finds the methods of the jdtls client (the language/status notification) and calls them by reflection, and
     // Gson fills the records of its messages: both need the package open, which a class path run never asks for.

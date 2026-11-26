@@ -23,7 +23,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -35,6 +38,8 @@ class MainTest {
 
     private static final SelfCheck PASSING = new SelfCheck("eu.gabier.daemon", "org.eclipse.lsp4j");
     private static final SelfCheck FAILING = new SelfCheck(null, null);
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-26T08:43:12Z"), ZoneOffset.ofHours(2));
+    private static final String TIME = "2026-11-26T10:43:12+02:00";
 
     @TempDir
     Path directory;
@@ -57,6 +62,7 @@ class MainTest {
                 workingDirectory,
                 directory.resolve("home"),
                 selfCheck,
+                CLOCK,
                 printStream(out),
                 printStream(err));
     }
@@ -137,8 +143,8 @@ class MainTest {
 
             assertThat(out()).isEmpty();
             assertThat(err())
-                    .isEqualTo("Usage error: The project " + file + " is not a folder (usage-error; project=" + file
-                            + ")" + System.lineSeparator());
+                    .isEqualTo(TIME + " Usage error: The project " + file + " is not a folder (usage-error; project="
+                            + file + ")" + System.lineSeparator());
         }
 
         @Test
@@ -249,8 +255,8 @@ class MainTest {
             assertThat(daemon.orTimeout(10, TimeUnit.SECONDS).join()).isZero();
             assertThat(socket).doesNotExist();
             assertThat(out())
-                    .isEqualTo("gabier-daemon " + ProtocolVersion.CURRENT + " listening on " + socket
-                            + System.lineSeparator() + "serving the project " + directory.toRealPath()
+                    .isEqualTo(TIME + " gabier-daemon " + ProtocolVersion.CURRENT + " listening on " + socket
+                            + System.lineSeparator() + TIME + " serving the project " + directory.toRealPath()
                             + System.lineSeparator());
             assertThat(err()).isEmpty();
         }
@@ -270,6 +276,7 @@ class MainTest {
                             return Main.serve(
                                     Map.of("GABIER_SOCKET", socketPath().toString()),
                                     directory,
+                                    CLOCK,
                                     printStream(out),
                                     project);
                         } catch (IOException e) {
@@ -283,7 +290,7 @@ class MainTest {
 
             daemon.orTimeout(10, TimeUnit.SECONDS).join();
             assertThat(out())
-                    .contains("request diagnostics failed: eu.gabier.daemon.JdtlsException: jdtls broke")
+                    .contains(TIME + " request diagnostics failed: eu.gabier.daemon.JdtlsException: jdtls broke")
                     .doesNotContain("A.java");
         }
 
@@ -407,7 +414,7 @@ class MainTest {
             ask(STOP);
 
             daemon.orTimeout(10, TimeUnit.SECONDS).join();
-            assertThat(err()).contains("jdtls: jdtls started, pid ");
+            assertThat(err()).contains(TIME + " jdtls: jdtls started, pid ");
         }
 
         @Test
@@ -431,8 +438,41 @@ class MainTest {
 
             daemon.orTimeout(10, TimeUnit.SECONDS).join();
             assertThat(err())
-                    .contains("jdtls: jdtls status Message: red\\u001b[2Jgone")
+                    .contains(TIME + " jdtls: jdtls status Message: red\\u001b[2Jgone")
                     .doesNotContain("\u001b");
+        }
+
+        @Test
+        void datesWhatJdtlsWritesOnItsStandardErrorBeforeItReachesTheLog() throws Exception {
+            var launcher = Files.writeString(directory.resolve("jdtls"), """
+                #!/bin/sh
+                echo "an exception of jdtls" >&2
+                echo "red\033[2Jgone" >&2
+                exit 3
+                """);
+            Files.setPosixFilePermissions(launcher, PosixFilePermissions.fromString("rwx------"));
+            var environment = Map.of("GABIER_SOCKET", socketPath().toString(), "GABIER_JDTLS", launcher.toString());
+            var daemon = start(() -> run(environment, PASSING), socketPath());
+
+            ask("""
+                {"jsonrpc":"2.0","id":3,"method":"diagnostics","params":{"files":"%s"}}
+                """.formatted(directory.resolve("File.java")));
+            ask(STOP);
+
+            daemon.orTimeout(10, TimeUnit.SECONDS).join();
+            assertThat(awaited(() -> err().contains("an exception of jdtls"))).isTrue();
+            assertThat(err())
+                    .contains(TIME + " jdtls: an exception of jdtls")
+                    .contains(TIME + " jdtls: red\\u001b[2Jgone")
+                    .doesNotContain("\u001b");
+        }
+
+        private static boolean awaited(java.util.function.BooleanSupplier condition) throws InterruptedException {
+            for (var attempt = 0; attempt < 500 && !condition.getAsBoolean(); attempt++) {
+                TimeUnit.MILLISECONDS.sleep(20);
+            }
+
+            return condition.getAsBoolean();
         }
 
         @Test
@@ -488,7 +528,7 @@ class MainTest {
 
             assertThat(out()).isEmpty();
             assertThat(err())
-                    .startsWith("Socket path too long: ")
+                    .startsWith(TIME + " Socket path too long: ")
                     .contains("(socket-path-too-long; ")
                     .contains("length=120")
                     .contains("limit=107")
@@ -533,8 +573,9 @@ class MainTest {
 
             assertThat(daemon.orTimeout(10, TimeUnit.SECONDS).join()).isEqualTo(1);
             assertThat(err())
-                    .isEqualTo("Internal server error: An internal error occurred, and it is not described here "
-                            + "(internal-server-error)" + System.lineSeparator());
+                    .isEqualTo(
+                            TIME + " Internal server error: An internal error occurred, and it is not described here "
+                                    + "(internal-server-error)" + System.lineSeparator());
         }
     }
 
