@@ -370,7 +370,35 @@ than a new one when it was first tried. jdtls keeps in its workspace the JDK tha
 it is ready, which JDK each project is bound to (`java.project.getSettings`, `org.eclipse.jdt.ls.core.vm.location`), declares
 them to it when the workspace is new, and writes them in the state, with the version of each JDK (its `release` file).
 On a first start the declaration makes jdtls build again (the 7 builds after the import, in the background); on a restart it is not sent again, so nothing is built. What the client says in its initialization is not
-enough: a jdtls that starts on a workspace builds before it reads it, with what the workspace kept.
+enough on a restart: a jdtls that starts on a workspace builds before it reads it, with what the workspace kept.
+
+**Choosing the JDK.** The project can say which JDK an environment is bound to, instead of leaving the draw to jdtls: the
+setting `java.configuration.runtimes` of `.vscode/settings.json`, the file the import preferences already come from (a list of
+`{"name": "JavaSE-25", "path": "<folder of a JDK>"}`, with the comments and trailing commas VS Code allows). It is the setting
+jdtls reads from its client for exactly this, a plain file of the project that a person or any agent edits, and it ties gabier
+to no tool: `JAVA_HOME` is not a choice of the project (it can be a JDK 27 for a project that asks for 25), and a lookup in
+mise or SDKMAN! would tie gabier to them. Each way of choosing is one `RuntimeSource`, and `RuntimeSources` lists them in their
+order of precedence, the first that chooses an environment winning; the file above is the only one today. What the real jdtls
+1.63.0 does with the setting (`JdtlsRuntimesReplayTest`, run by `./gradlew jdtlsProbe`): a new workspace that is given the JDKs
+in its initialization options binds the chosen one from its first import; a JDK declared with `workspace/didChangeConfiguration`
+is bound at once; a folder that does not exist is ignored without a word. A JDK of another version declared for an environment
+is bound to it as if it were right (observed once with a JDK 21 declared as `JavaSE-25`; not replayed, as it needs a JDK of
+another version on the machine). So the daemon checks each entry itself, with the file `release` of the JDK: an
+entry whose path is not absolute, is no JDK, or is a JDK of another version than its name is left out, and the cause is a
+warning in the log of the daemon and in `gabier status`; the JDK jdtls draws is then used. Only the first entry of an
+environment counts. The setting is read when jdtls starts: a change takes a restart of the daemon (`gabier stop`). The daemon
+gives the chosen JDKs in the initialization options and, once jdtls is ready, declares them again when jdtls is bound to
+another JDK than the chosen one (a kept workspace was bound to the previous choice), which builds the projects of that
+environment again, as a draw that changes does; a restart on the same choice declares nothing. Measured on a small project with
+the Java builder trace (`-debug` with `org.eclipse.jdt.core/debug/builder=true`, the full builds counted in
+`.metadata/trace.log`), two JDK 25 on the machine: first start, 1 full build (the import), ready in 21 s; restart on the same
+choice, 0 full builds, ready in 7 s; restart on another choice, 1 full build and the new JDK bound, ready in 13 s.
+
+`gabier status` shows what jdtls reports once it is ready (`java.project.getSettings` asked after any declaration), not what the
+file says: for each environment the JDK it is bound to and who chose it (`chosen in .vscode/settings.json`, or `bound by jdtls`),
+and the warnings, among them an environment that jdtls bound to another folder than the chosen one. It is the member `jdks` of
+the result of `status` (see [the protocol](protocol.md)). The daemon asks jdtls for the JDK of each project at every start, a
+workspace that is not kept included.
 
 *What is removed, and when.* A workspace is the user's cache, a folder of the cache of gabier. A daemon that opens a workspace
 removes the ones of projects whose folder no longer exists (a deleted worktree) and that no daemon holds. `rm -r

@@ -44,6 +44,9 @@ method added here is a tool by itself; the warm-up of the server sends the daemo
 A daemon that stops by itself when nobody uses it (see [the daemon](daemon.md)) answers a request that reaches it after
 it decided, whatever the method, with the refusal `daemon-stopping` (a server error, exit code 1) and runs nothing; the
 `status` result has the member `idle` (`timeoutMillis`, `leftMillis`) while that rule is on.
+Once jdtls is ready the `status` result has the member `jdks`, unless there is nothing to say: `bindings`, one for each execution
+environment the projects are bound to (`environment`, `home` the folder of its JDK, `source` who chose it, in words) and `warnings`
+(see [the daemon](daemon.md), "The JDK of the projects").
 
 | Method                   | Parameters                                                                    | Command                  |
 | ------------------------ | ----------------------------------------------------------------------------- | ------------------------ |

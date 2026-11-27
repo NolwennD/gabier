@@ -3,6 +3,7 @@ package eu.gabier.daemon;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import eu.gabier.daemon.JdtlsRuntimes.Jdk;
+import eu.gabier.protocol.ProjectJdks;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -142,5 +143,80 @@ class JdtlsRuntimesTest {
         answers.add(Map.of(JdtlsRuntimes.VM_LOCATION, known.toString()));
 
         assertThat(JdtlsRuntimes.boundIn(answers)).extracting(Jdk::home).containsExactly(known);
+    }
+
+    @Test
+    void declaresTheJdksChosenInPlaceOfTheOnesJdtlsBoundAndKeepsTheOthers() {
+        var drawn25 = new Jdk("JavaSE-25", Path.of("/drawn25"), "25.0.4");
+        var drawn17 = new Jdk("JavaSE-17", Path.of("/drawn17"), "17.0.10");
+        var chosen25 = new Jdk("JavaSE-25", Path.of("/chosen25"), "25.0.2");
+
+        assertThat(JdtlsRuntimes.overlay(List.of(drawn25, drawn17), List.of(chosen25)))
+                .containsExactly(chosen25, drawn17);
+        assertThat(JdtlsRuntimes.overlay(List.of(drawn25), List.of())).containsExactly(drawn25);
+    }
+
+    @Test
+    void declaresNoJdkForAnEnvironmentNoProjectIsBoundTo() {
+        var drawn25 = new Jdk("JavaSE-25", Path.of("/drawn25"), "25.0.4");
+        var chosen21 = new Jdk("JavaSE-21", Path.of("/chosen21"), "21.0.1");
+
+        assertThat(JdtlsRuntimes.overlay(List.of(drawn25), List.of(chosen21))).containsExactly(drawn25);
+        assertThat(JdtlsRuntimes.overlay(List.of(), List.of(chosen21))).isEmpty();
+    }
+
+    @Test
+    void tellsEachJdkBoundAndWhoChoseIt() {
+        var chosen25 = new Jdk("JavaSE-25", Path.of("/chosen25"), "25.0.2");
+        var drawn17 = new Jdk("JavaSE-17", Path.of("/drawn17"), "17.0.10");
+        var chosen = new RuntimeSources.Chosen(
+                List.of(new RuntimeSources.Choice(chosen25, "chosen in a file")), List.of("a source warns"));
+
+        var jdks = JdtlsRuntimes.describe(List.of(chosen25, drawn17), chosen);
+
+        assertThat(jdks.bindings())
+                .containsExactly(
+                        new ProjectJdks.Binding("JavaSE-25", Path.of("/chosen25"), "chosen in a file"),
+                        new ProjectJdks.Binding("JavaSE-17", Path.of("/drawn17"), "bound by jdtls"));
+        assertThat(jdks.warnings()).containsExactly("a source warns");
+    }
+
+    @Test
+    void warnsWhenJdtlsBoundAnEnvironmentToAnotherJdkThanTheOneChosen() {
+        var chosen25 = new Jdk("JavaSE-25", Path.of("/chosen25"), "25.0.2");
+        var drawn25 = new Jdk("JavaSE-25", Path.of("/drawn25"), "25.0.4");
+        var chosen =
+                new RuntimeSources.Chosen(List.of(new RuntimeSources.Choice(chosen25, "chosen in a file")), List.of());
+
+        var jdks = JdtlsRuntimes.describe(List.of(drawn25), chosen);
+
+        assertThat(jdks.bindings())
+                .containsExactly(new ProjectJdks.Binding("JavaSE-25", Path.of("/drawn25"), "bound by jdtls"));
+        assertThat(jdks.warnings())
+                .singleElement()
+                .asString()
+                .contains("JavaSE-25")
+                .contains("/drawn25")
+                .contains("/chosen25")
+                .contains("chosen in a file");
+    }
+
+    @Test
+    void saysNothingOfAChoiceForAnEnvironmentNoProjectIsBoundTo() {
+        var chosen21 = new Jdk("JavaSE-21", Path.of("/chosen21"), "21.0.1");
+        var chosen =
+                new RuntimeSources.Chosen(List.of(new RuntimeSources.Choice(chosen21, "chosen in a file")), List.of());
+
+        assertThat(JdtlsRuntimes.describe(List.of(), chosen)).isEqualTo(ProjectJdks.NONE);
+        assertThat(JdtlsRuntimes.describe(List.of(), new RuntimeSources.Chosen(List.of(), List.of("a source warns"))))
+                .isEqualTo(new ProjectJdks(List.of(), List.of("a source warns")));
+    }
+
+    @Test
+    void givesJdtlsTheJdksAsTheSectionConfigurationOfItsSettings() {
+        var jdk = new Jdk("JavaSE-25", Path.of("/jdk25"), "25.0.2");
+
+        assertThat(JdtlsRuntimes.configuration(List.of(jdk)))
+                .isEqualTo(Map.of("runtimes", List.of(Map.of("name", "JavaSE-25", "path", "/jdk25"))));
     }
 }

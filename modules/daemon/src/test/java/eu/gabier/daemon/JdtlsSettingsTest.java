@@ -85,4 +85,26 @@ class JdtlsSettingsTest {
                 .extractingByKey("java", as(InstanceOfAssertFactories.MAP))
                 .containsEntry("cleanup", Map.of("actions", List.of()));
     }
+
+    @Test
+    void thePreferencesAlsoDeclareTheJdksTheProjectChose() {
+        var jdk = new JdtlsRuntimes.Jdk("JavaSE-25", Path.of("/jdk25"), "25.0.2");
+
+        assertThat(JdtlsSettings.javaPreferences(List.of(jdk)))
+                .extractingByKey("java", as(InstanceOfAssertFactories.MAP))
+                .containsEntry("configuration", JdtlsRuntimes.configuration(List.of(jdk)))
+                .containsKeys("completion", "templates", "references")
+                .hasSize(4);
+        assertThat(JdtlsSettings.javaPreferences(List.of())).isEqualTo(JdtlsSettings.javaPreferences());
+    }
+
+    @Test
+    void choosesTheJdksAsTheDaemonDoesUnlessTheTestGivesOtherSources() {
+        var settings = JdtlsSettings.of(Path.of("/work/project"), List.of(), Duration.ofSeconds(1));
+        var others = new RuntimeSources(List.of());
+
+        assertThat(settings.runtimes()).isSameAs(RuntimeSources.STANDARD);
+        assertThat(settings.choosing(others).runtimes()).isSameAs(others);
+        assertThat(settings.choosing(others).projectRoot()).isEqualTo(settings.projectRoot());
+    }
 }

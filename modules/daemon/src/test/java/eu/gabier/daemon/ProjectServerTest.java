@@ -20,6 +20,7 @@ import eu.gabier.editing.domain.ReferenceLocations;
 import eu.gabier.editing.domain.TypeKind;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.ProjectJdks;
 import eu.gabier.protocol.SocketLocation;
 import eu.gabier.shared.error.domain.ErrorStatus;
 import eu.gabier.testing.domain.BuiltProject;
@@ -107,6 +108,7 @@ class ProjectServerTest {
         private volatile JdtlsState state = JdtlsState.STARTING;
         private volatile String failure;
         private volatile JdtlsProgress progress;
+        private volatile ProjectJdks jdks = ProjectJdks.NONE;
         private volatile Exception closeFailure;
         private final boolean held;
 
@@ -132,6 +134,11 @@ class ProjectServerTest {
             return server;
         }
 
+        /** The JDKs the server says the projects are bound to. */
+        void boundTo(ProjectJdks jdks) {
+            this.jdks = jdks;
+        }
+
         /** What the server says it is doing. */
         void doing(JdtlsProgress progress) {
             this.progress = progress;
@@ -152,6 +159,11 @@ class ProjectServerTest {
         @Override
         public Optional<JdtlsProgress> progress() {
             return Optional.ofNullable(progress);
+        }
+
+        @Override
+        public ProjectJdks jdks() {
+            return jdks;
         }
 
         @Override
@@ -310,6 +322,7 @@ class ProjectServerTest {
             assertThat(project.state()).isEqualTo(JdtlsState.NOT_STARTED);
             assertThat(project.jdtlsFailure()).isEmpty();
             assertThat(project.jdtlsProgress()).isEmpty();
+            assertThat(project.jdks()).isEqualTo(ProjectJdks.NONE);
             assertThat(starter.starts).hasValue(0);
         }
 
@@ -564,6 +577,17 @@ class ProjectServerTest {
             assertThat(project.jdtlsProgress()).contains(doing);
             held.finish(null);
             request.orTimeout(30, TimeUnit.SECONDS).join();
+        }
+
+        @Test
+        void saysTheJdksTheServerBoundTheProjectsTo() throws Exception {
+            var jdks = new ProjectJdks(
+                    List.of(new ProjectJdks.Binding("JavaSE-25", Path.of("/jdks/25"), "bound by jdtls")), List.of());
+            var server = starter.willStart(new ScriptedServer());
+            server.boundTo(jdks);
+            project.diagnostics(List.of(FILE));
+
+            assertThat(project.jdks()).isEqualTo(jdks);
         }
 
         @Test

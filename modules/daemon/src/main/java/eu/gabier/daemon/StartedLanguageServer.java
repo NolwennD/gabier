@@ -3,6 +3,7 @@ package eu.gabier.daemon;
 import eu.gabier.editing.domain.JavaLanguageServer;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.ProjectJdks;
 import eu.gabier.testing.domain.ProjectBuild;
 import java.io.IOException;
 import java.util.Optional;
@@ -18,6 +19,9 @@ interface StartedLanguageServer extends JavaLanguageServer, ProjectBuild, AutoCl
 
     /** What the server is doing while it is {@code STARTING}; empty in any other state. */
     Optional<JdtlsProgress> progress();
+
+    /** The JDKs the projects are bound to and who chose them, once the server is ready; none before. */
+    ProjectJdks jdks();
 
     /** Why the server is {@code FAILED} (the failure of its start, or its death); empty when it is not failed. */
     Optional<String> failure();

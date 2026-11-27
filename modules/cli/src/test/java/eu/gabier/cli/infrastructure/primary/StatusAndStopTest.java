@@ -97,6 +97,31 @@ class StatusAndStopTest extends CliTest {
         }
 
         @Test
+        void saysWhichJdkEachEnvironmentIsBoundToAndWhoChoseIt() throws IOException {
+            var status = """
+                {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"ready","imports":\
+                {"importOrder":{"value":["#",""],"source":".vscode"},\
+                "starThreshold":{"value":99,"source":"default"},\
+                "staticStarThreshold":{"value":99,"source":"default"}},\
+                "jdks":{"bindings":[\
+                {"environment":"JavaSE-25","home":"/jdks/25","source":"chosen in .vscode/settings.json"},\
+                {"environment":"JavaSE-17","home":"/jdks/17","source":"bound by jdtls"}],\
+                "warnings":["ignored JavaSE-21 of java.configuration.runtimes: there is no JDK at /nowhere"]}}\
+                """;
+            try (var daemon = daemonAnswering(status)) {
+                assertThat(runWithSocket("status")).isZero();
+
+                assertThat(out().lines())
+                        .containsSubsequence(
+                                "jdks:",
+                                "  JavaSE-25 /jdks/25 (chosen in .vscode/settings.json)",
+                                "  JavaSE-17 /jdks/17 (bound by jdtls)",
+                                "  warning: ignored JavaSE-21 of java.configuration.runtimes: there is no JDK at"
+                                        + " /nowhere");
+            }
+        }
+
+        @Test
         void showsTheImportOrderOfTheProjectWithItsControlCharactersEscaped() throws IOException {
             var status = """
                 {"version":"0.1","pid":4242,"uptimeMillis":65432,"project":"/work/demo","jdtls":"ready","imports":\

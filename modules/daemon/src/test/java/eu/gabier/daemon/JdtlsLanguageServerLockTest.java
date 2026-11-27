@@ -15,9 +15,9 @@ import org.junit.jupiter.api.Test;
  */
 class JdtlsLanguageServerLockTest {
 
-    /** What is public and answers without the lock: the state of the start, and the end. */
+    /** What is public and answers without the lock: the state of the start, what it found out (the JDKs), and the end. */
     private static final Set<String> WITHOUT_THE_LOCK =
-            Set.of("state", "progress", "awaitReady", "close", "watchDisk", "failure");
+            Set.of("state", "progress", "awaitReady", "close", "watchDisk", "failure", "jdks");
 
     @Test
     void everyOtherPublicMethodOfTheFacadeIsSynchronized() {

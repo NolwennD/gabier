@@ -10,7 +10,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import eu.gabier.daemon.JdtlsRuntimes.Jdk;
 import eu.gabier.editing.fixtures.FakeOnly;
+import eu.gabier.protocol.ProjectJdks;
 import eu.gabier.protocol.WorkspaceLock;
 import java.io.IOException;
 import java.net.URI;
@@ -795,6 +797,9 @@ class JdtlsSessionTest {
 
         private final List<FakeJdtls> others = new ArrayList<>();
 
+        /** The ways of choosing a JDK of the session: one of the test, so that no file of the project is read. */
+        private RuntimeSources sources = new RuntimeSources(List.of());
+
         private Path project;
         private Path kept;
 
@@ -824,12 +829,13 @@ class JdtlsSessionTest {
 
         private JdtlsSession start(JdtlsStarter starter) throws Exception {
             var settings = new JdtlsSettings(
-                    project,
-                    List.of(),
-                    LONG,
-                    Duration.ofMillis(20),
-                    Duration.ofMillis(300),
-                    new JdtlsWorkspace(Files.createDirectories(folder.resolve("tmp"))));
+                            project,
+                            List.of(),
+                            LONG,
+                            Duration.ofMillis(20),
+                            Duration.ofMillis(300),
+                            new JdtlsWorkspace(Files.createDirectories(folder.resolve("tmp"))))
+                    .choosing(sources);
 
             return JdtlsSession.start(starter, settings, log::add, published::add);
         }
@@ -1041,6 +1047,115 @@ class JdtlsSessionTest {
                 awaitConfigurations(second, 1);
 
                 assertThat(runtimesSentTo(second)).isEqualTo(declaring(after, "JavaSE-25"));
+            }
+        }
+
+        private void choosing(Path home) {
+            sources = new RuntimeSources(
+                    List.of(new ChosenByTheTest(List.of(Jdk.at(home).orElseThrow()), List.of())));
+        }
+
+        private void choosingNothingButWarning(String warning) {
+            sources = new RuntimeSources(List.of(new ChosenByTheTest(List.of(), List.of(warning))));
+        }
+
+        private record ChosenByTheTest(List<Jdk> jdks, List<String> warnings) implements RuntimeSource {
+
+            @Override
+            public String description() {
+                return "chosen by the test";
+            }
+
+            @Override
+            public Found read(Path root) {
+                return new Found(jdks, warnings);
+            }
+        }
+
+        @Test
+        void givesJdtlsTheJdkTheProjectChoseInItsInitializationOptionsAndSaysItIsTheOneBound() throws Exception {
+            Path drawn = jdk("25.0.4");
+            Path chosen = jdk("25.0.2");
+            choosing(chosen);
+            fake.listsProjects(URI_A).bindsAsJdtlsDoes(drawn);
+
+            try (var session = start(fake)) {
+                assertThat(new Gson().toJsonTree(fake.initializeParams().getInitializationOptions()))
+                        .isEqualTo(new Gson()
+                                .toJsonTree(Map.of(
+                                        "settings",
+                                        JdtlsSettings.javaPreferences(List.of(new Jdk("JavaSE-25", chosen, "25.0.2"))),
+                                        "extendedClientCapabilities",
+                                        JdtlsCapabilities.extended())));
+                assertThat(fake.configurations()).isEmpty();
+                assertThat(session.jdks().bindings())
+                        .containsExactly(new ProjectJdks.Binding("JavaSE-25", chosen, "chosen by the test"));
+                assertThat(session.jdks().warnings()).isEmpty();
+                assertThat(log).contains("JDK chosen for JavaSE-25, chosen by the test: " + chosen);
+            }
+        }
+
+        @Test
+        void bindsTheJdkJdtlsDrawsAndSaysWhyWhenASourceFoundTheChoiceWrong() throws Exception {
+            Path drawn = jdk("25.0.4");
+            choosingNothingButWarning("the test source names no JDK at /nowhere");
+            fake.listsProjects(URI_A).bindsAsJdtlsDoes(drawn);
+
+            try (var session = start(fake)) {
+                assertThat(session.jdks().bindings())
+                        .containsExactly(new ProjectJdks.Binding("JavaSE-25", drawn, "bound by jdtls"));
+                assertThat(session.jdks().warnings()).containsExactly("the test source names no JDK at /nowhere");
+                assertThat(log).contains("JDKs: the test source names no JDK at /nowhere");
+            }
+        }
+
+        @Test
+        void declaresTheChoiceAfterTheStartWhenAKeptWorkspaceIsBoundToAnotherJdk() throws Exception {
+            Path drawn = jdk("25.0.4");
+            Path chosen = jdk("25.0.2");
+            var ignoring = aJdtls().bindsAsJdtlsDoes(drawn).ignoringTheInitialization();
+            var starter = keeping(aJdtls().bindsAsJdtlsDoes(drawn), ignoring);
+            aCleanRun(starter);
+            choosing(chosen);
+
+            try (var session = start(starter)) {
+                awaitConfigurations(ignoring, 1);
+
+                assertThat(runtimesSentTo(ignoring)).isEqualTo(declaring(chosen, "JavaSE-25"));
+                assertThat(session.jdks().bindings())
+                        .containsExactly(new ProjectJdks.Binding("JavaSE-25", chosen, "chosen by the test"));
+            }
+        }
+
+        @Test
+        void tellsJdtlsNothingOnARestartWhenItIsBoundToTheJdkTheProjectChose() throws Exception {
+            Path drawn = jdk("25.0.4");
+            Path chosen = jdk("25.0.2");
+            choosing(chosen);
+            var second = aJdtls().bindsAsJdtlsDoes(chosen);
+            var starter = keeping(aJdtls().bindsAsJdtlsDoes(drawn), second);
+            aCleanRun(starter);
+
+            try (var session = start(starter)) {
+                assertThat(second.configurations()).isEmpty();
+                assertThat(session.jdks().bindings())
+                        .containsExactly(new ProjectJdks.Binding("JavaSE-25", chosen, "chosen by the test"));
+            }
+        }
+
+        @Test
+        void bindsTheNewChoiceOnARestartWhenTheProjectChoseAnotherJdkSinceTheLastStart() throws Exception {
+            Path before = jdk("25.0.2");
+            Path after = jdk("25.0.4");
+            choosing(before);
+            var second = aJdtls().bindsAsJdtlsDoes(before);
+            var starter = keeping(aJdtls().bindsAsJdtlsDoes(jdk("25.0.1")), second);
+            aCleanRun(starter);
+            choosing(after);
+
+            try (var session = start(starter)) {
+                assertThat(session.jdks().bindings())
+                        .containsExactly(new ProjectJdks.Binding("JavaSE-25", after, "chosen by the test"));
             }
         }
 

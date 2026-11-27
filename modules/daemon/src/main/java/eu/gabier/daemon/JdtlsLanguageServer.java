@@ -16,6 +16,7 @@ import eu.gabier.editing.domain.TypeKind;
 import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.ProjectJdks;
 import eu.gabier.testing.domain.BuiltProject;
 import eu.gabier.testing.domain.ChangedBuild;
 import java.io.IOException;
@@ -185,6 +186,11 @@ final class JdtlsLanguageServer implements StartedLanguageServer {
     @Override
     public Optional<JdtlsProgress> progress() {
         return state() == JdtlsState.STARTING ? Optional.of(progress.current()) : Optional.empty();
+    }
+
+    @Override
+    public ProjectJdks jdks() {
+        return state() == JdtlsState.READY ? starting.resultNow().jdks() : ProjectJdks.NONE;
     }
 
     @Override

@@ -14,6 +14,7 @@ import eu.gabier.editing.domain.ReferenceLocations;
 import eu.gabier.editing.domain.TypeKind;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.ProjectJdks;
 import eu.gabier.testing.domain.BuiltProject;
 import eu.gabier.testing.domain.ChangedBuild;
 import eu.gabier.testing.domain.ProjectBuild;
@@ -52,6 +53,7 @@ final class ScriptedProject implements ServedProject {
     private volatile JdtlsState state = JdtlsState.READY;
     private volatile Optional<String> failure = Optional.empty();
     private volatile Optional<JdtlsProgress> progress = Optional.empty();
+    private volatile ProjectJdks jdks = ProjectJdks.NONE;
     private volatile Requests requests = Requests.ARE_ANSWERED;
     private volatile boolean interrupted;
     private volatile ProjectBuild build;
@@ -94,6 +96,13 @@ final class ScriptedProject implements ServedProject {
     /** What jdtls is doing, as the project says it. */
     ScriptedProject doing(JdtlsProgress progress) {
         this.progress = Optional.of(progress);
+
+        return this;
+    }
+
+    /** The JDKs the projects are bound to, as the project says them. */
+    ScriptedProject boundTo(ProjectJdks jdks) {
+        this.jdks = jdks;
 
         return this;
     }
@@ -161,6 +170,11 @@ final class ScriptedProject implements ServedProject {
     @Override
     public Optional<JdtlsProgress> jdtlsProgress() {
         return progress;
+    }
+
+    @Override
+    public ProjectJdks jdks() {
+        return jdks;
     }
 
     @Override

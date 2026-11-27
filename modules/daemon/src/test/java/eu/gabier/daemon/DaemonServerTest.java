@@ -23,6 +23,7 @@ import eu.gabier.protocol.IdleStop;
 import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.ProjectJdks;
 import eu.gabier.protocol.ProtocolVersion;
 import eu.gabier.protocol.RpcMessage;
 import eu.gabier.protocol.RpcNotification;
@@ -503,6 +504,19 @@ class DaemonServerTest {
                             .as(state.text())
                             .isEmpty();
                 }
+            }
+        }
+
+        @Test
+        void statusSaysTheJdksTheProjectsAreBoundToAndWhoChoseThem() throws IOException {
+            var jdks = new ProjectJdks(
+                    List.of(new ProjectJdks.Binding("JavaSE-25", Path.of("/jdks/25"), "chosen in a file")),
+                    List.of("a warning"));
+            project.boundTo(jdks);
+            serving();
+
+            try (var client = connect(socket())) {
+                assertThat(statusOf(client).jdks()).isEqualTo(jdks);
             }
         }
 

@@ -315,7 +315,8 @@ final class DaemonServer implements AutoCloseable {
                 // Only a jdtls that is starting is doing anything to tell, whatever the project knows of an earlier
                 // start.
                 state == JdtlsState.STARTING ? project.jdtlsProgress() : Optional.empty(),
-                idle.map(watch -> new IdleStop(watch.timeout(), watch.left())));
+                idle.map(watch -> new IdleStop(watch.timeout(), watch.left())),
+                project.jdks());
     }
 
     /** How long the clients are given to end by themselves when the daemon stops; for a test to shorten. */

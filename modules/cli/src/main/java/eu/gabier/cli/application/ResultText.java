@@ -139,7 +139,8 @@ public final class ResultText {
 
     /**
      * The status of the daemon: its line, then the settings of the imports it follows for the project, each with its
-     * source, indented, and, when the daemon stops by itself once idle, the delay and the time left of it. What jdtls
+     * source, indented, then, once jdtls has bound the projects to JDKs, each JDK with who chose it and what is wrong
+     * with the choice, indented, and, when the daemon stops by itself once idle, the delay and the time left of it. What jdtls
      * said (the reason it failed, what it is doing) is neutralised.
      */
     public static List<String> lines(DaemonStatus status) {
@@ -152,6 +153,10 @@ public final class ResultText {
                 + status.jdtls().text() + failure + progress);
         lines.add("imports:");
         status.imports().lines().forEach(line -> lines.add("  " + line));
+        if (!status.jdks().isEmpty()) {
+            lines.add("jdks:");
+            status.jdks().lines().forEach(line -> lines.add("  " + line));
+        }
         status.idle()
                 .ifPresent(idle -> lines.add("idle stop: after " + span(idle.timeout()) + " with no request, "
                         + span(idle.left()) + " left"));

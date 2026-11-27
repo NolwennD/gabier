@@ -20,6 +20,10 @@ class DaemonStatusTest {
     private static final DaemonStatus STATUS =
             new DaemonStatus("0.1", 4242, Duration.ofMillis(65_432), Path.of("/work/demo"), JdtlsState.READY);
 
+    private static final ProjectJdks JDKS = new ProjectJdks(
+            List.of(new ProjectJdks.Binding("JavaSE-25", Path.of("/jdks/25"), "chosen in a file")),
+            List.of("a warning"));
+
     private static final String DEFAULT_IMPORTS_JSON = """
         {"importOrder":{"value":["java","javax","org","com"],"source":"default"},\
         "starThreshold":{"value":99,"source":"default"},\
@@ -380,5 +384,51 @@ class DaemonStatusTest {
                 .isThrownBy(() -> new IdleStop(Duration.ofMinutes(1), Duration.ofMillis(-1)));
         assertThatExceptionOfType(NumberValueTooHighException.class)
                 .isThrownBy(() -> new IdleStop(Duration.ofMinutes(1), Duration.ofMinutes(2)));
+    }
+
+    @Test
+    void saysTheJdksOfTheProjectsInAMemberThatIsOnlyThereWhenThereIsSomethingToSay() {
+        var status = new DaemonStatus(
+                "0.1",
+                4242,
+                Duration.ofMillis(65_432),
+                Path.of("/work/demo"),
+                JdtlsState.READY,
+                Optional.empty(),
+                ImportSettings.DEFAULTS,
+                Optional.empty(),
+                Optional.empty(),
+                JDKS);
+        var result = ((RpcResponse.Success) RpcResponse.parse(JsonRpc.success("1", status.toJson()))).result();
+
+        assertThat(status.toJson()).endsWith(",\"jdks\":" + JDKS.toJson() + "}");
+        assertThat(STATUS.toJson()).doesNotContain("jdks");
+        assertThat(STATUS.jdks()).isEqualTo(ProjectJdks.NONE);
+        assertThat(DaemonStatus.of(result)).isEqualTo(status);
+        StrictJson.parse(status.toJson());
+    }
+
+    @Test
+    void isRefusedWhenTheJdksAreNotWhatTheyAreWritten() {
+        assertThatExceptionOfType(InvalidResponseException.class)
+                .isThrownBy(() -> DaemonStatus.of(result("jdks", "JavaSE-25")));
+        assertThatExceptionOfType(InvalidResponseException.class)
+                .isThrownBy(() -> DaemonStatus.of(result("jdks", Map.of("bindings", "JavaSE-25"))));
+    }
+
+    @Test
+    void refusesMissingJdks() {
+        assertThatExceptionOfType(MissingMandatoryValueException.class)
+                .isThrownBy(() -> new DaemonStatus(
+                        "0.1",
+                        1,
+                        Duration.ZERO,
+                        Path.of("/p"),
+                        JdtlsState.READY,
+                        Optional.empty(),
+                        ImportSettings.DEFAULTS,
+                        Optional.empty(),
+                        Optional.empty(),
+                        null));
     }
 }

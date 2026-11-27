@@ -25,6 +25,7 @@ import org.jspecify.annotations.Nullable;
  *     is asked for
  * @param jdtlsProgress what jdtls is doing, while it is starting; empty in any other state
  * @param idle the rule by which the daemon stops when nobody uses it, with the time left; empty when it never does
+ * @param jdks the JDKs jdtls bound the projects to, once it is ready, and what is wrong with the choice of the project
  */
 public record DaemonStatus(
         String version,
@@ -35,7 +36,8 @@ public record DaemonStatus(
         Optional<String> jdtlsFailure,
         ImportSettings imports,
         Optional<JdtlsProgress> jdtlsProgress,
-        Optional<IdleStop> idle) {
+        Optional<IdleStop> idle,
+        ProjectJdks jdks) {
 
     public DaemonStatus {
         Assert.notBlank("version", version);
@@ -48,6 +50,21 @@ public record DaemonStatus(
         Assert.notNull("imports", imports);
         Assert.notNull("jdtlsProgress", jdtlsProgress);
         Assert.notNull("idle", idle);
+        Assert.notNull("jdks", jdks);
+    }
+
+    /** A status that says nothing of the JDKs of the projects. */
+    public DaemonStatus(
+            String version,
+            long pid,
+            Duration uptime,
+            Path project,
+            JdtlsState jdtls,
+            Optional<String> jdtlsFailure,
+            ImportSettings imports,
+            Optional<JdtlsProgress> jdtlsProgress,
+            Optional<IdleStop> idle) {
+        this(version, pid, uptime, project, jdtls, jdtlsFailure, imports, jdtlsProgress, idle, ProjectJdks.NONE);
     }
 
     /** A status of a daemon that never stops when idle. */
@@ -95,8 +112,9 @@ public record DaemonStatus(
                 .map(doing -> ",\"jdtlsProgress\":" + doing.toJson())
                 .orElse("");
         var idleStop = idle.map(rule -> ",\"idle\":" + rule.toJson()).orElse("");
+        var bound = jdks.isEmpty() ? "" : ",\"jdks\":" + jdks.toJson();
         return """
-            {"version":%s,"pid":%d,"uptimeMillis":%d,"project":%s,"jdtls":%s,"imports":%s%s%s%s}\
+            {"version":%s,"pid":%d,"uptimeMillis":%d,"project":%s,"jdtls":%s,"imports":%s%s%s%s%s}\
             """.formatted(
                         Json.quote(version),
                         pid,
@@ -106,7 +124,8 @@ public record DaemonStatus(
                         imports.toJson(),
                         failure,
                         progress,
-                        idleStop);
+                        idleStop,
+                        bound);
     }
 
     /**
@@ -128,7 +147,21 @@ public record DaemonStatus(
                 failure(result.get("jdtlsFailure")),
                 imports(result.get("imports")),
                 progress(result.get("jdtlsProgress")),
-                idle(result.get("idle")));
+                idle(result.get("idle")),
+                jdks(result.get("jdks")));
+    }
+
+    private static ProjectJdks jdks(@Nullable Object jdks) {
+        if (jdks == null) {
+            return ProjectJdks.NONE;
+        }
+        if (!(jdks instanceof Map<?, ?> members)) {
+            throw member("jdks");
+        }
+        var read = new LinkedHashMap<String, @Nullable Object>();
+        members.forEach((name, value) -> read.put(String.valueOf(name), value));
+
+        return ProjectJdks.of(read);
     }
 
     private static Optional<IdleStop> idle(@Nullable Object idle) {

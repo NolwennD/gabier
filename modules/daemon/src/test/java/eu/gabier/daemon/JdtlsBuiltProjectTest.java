@@ -37,6 +37,7 @@ class JdtlsBuiltProjectTest {
     private static final Duration QUIET = Duration.ofMillis(300);
     private static final Duration SETTLE = Duration.ofMillis(100);
 
+    private static final String VM_LOCATION = JdtlsRuntimes.VM_LOCATION;
     private static final String OUTPUT_PATH = "org.eclipse.jdt.ls.core.outputPath";
     private static final String CLASSPATH_ENTRIES = "org.eclipse.jdt.ls.core.classpathEntries";
 
@@ -158,6 +159,8 @@ class JdtlsBuiltProjectTest {
 
             assertThat(fake.projectCommandsReceived())
                     .containsExactly(
+                            // The one of the start, which asks the JDK the project is bound to.
+                            "java.project.getSettings [\"%s\", [\"%s\"]]".formatted(root.toUri(), VM_LOCATION),
                             "java.project.getSettings [\"%s\", [\"%s\",\"%s\"]]"
                                     .formatted(root.toUri(), OUTPUT_PATH, CLASSPATH_ENTRIES),
                             "java.project.getClasspaths [\"%s\", {\"scope\":\"test\"}]".formatted(root.toUri()));

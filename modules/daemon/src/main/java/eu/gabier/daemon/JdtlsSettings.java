@@ -1,5 +1,6 @@
 package eu.gabier.daemon;
 
+import eu.gabier.daemon.JdtlsRuntimes.Jdk;
 import eu.gabier.protocol.ImportSettings;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -18,6 +19,7 @@ import java.util.Map;
  * @param shutdownTimeout how long jdtls is given to answer the shutdown and to exit, and then each process of its tree
  *     to end once killed
  * @param workspace where jdtls keeps its workspace, and what becomes of it
+ * @param runtimes the ways of choosing the JDK of an execution environment, in their order of precedence
  */
 record JdtlsSettings(
         Path projectRoot,
@@ -25,7 +27,8 @@ record JdtlsSettings(
         Duration timeout,
         Duration treeInterval,
         Duration shutdownTimeout,
-        JdtlsWorkspace workspace) {
+        JdtlsWorkspace workspace,
+        RuntimeSources runtimes) {
 
     private static final Duration TREE_INTERVAL = Duration.ofMillis(250);
     private static final Duration SHUTDOWN_TIMEOUT = Duration.ofSeconds(10);
@@ -35,6 +38,23 @@ record JdtlsSettings(
         expectedProjects = expectedProjects.stream()
                 .map(project -> project.toAbsolutePath().normalize())
                 .toList();
+    }
+
+    /** The settings that choose the JDKs as the daemon does ({@link RuntimeSources#STANDARD}). */
+    JdtlsSettings(
+            Path projectRoot,
+            List<Path> expectedProjects,
+            Duration timeout,
+            Duration treeInterval,
+            Duration shutdownTimeout,
+            JdtlsWorkspace workspace) {
+        this(projectRoot, expectedProjects, timeout, treeInterval, shutdownTimeout, workspace, RuntimeSources.STANDARD);
+    }
+
+    /** The same settings, with these ways of choosing the JDKs: for a test of what a session does with a choice. */
+    JdtlsSettings choosing(RuntimeSources sources) {
+        return new JdtlsSettings(
+                projectRoot, expectedProjects, timeout, treeInterval, shutdownTimeout, workspace, sources);
     }
 
     static JdtlsSettings of(Path projectRoot, List<Path> expectedProjects, Duration timeout) {
@@ -76,6 +96,21 @@ record JdtlsSettings(
      */
     static Map<String, Object> javaPreferences() {
         return Map.of("java", javaSection());
+    }
+
+    /**
+     * The preferences of {@link #javaPreferences()} with the JDKs the project chose for its execution environments
+     * ({@code java.configuration.runtimes}, see {@link RuntimeSources}): jdtls then binds a new workspace to them from
+     * its first import.
+     */
+    static Map<String, Object> javaPreferences(List<Jdk> runtimes) {
+        if (runtimes.isEmpty()) {
+            return javaPreferences();
+        }
+        Map<String, Object> java = new HashMap<>(javaSection());
+        java.put("configuration", JdtlsRuntimes.configuration(runtimes));
+
+        return Map.of("java", java);
     }
 
     /**

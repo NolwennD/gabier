@@ -16,6 +16,7 @@ import eu.gabier.protocol.FoundReferences.Place;
 import eu.gabier.protocol.IdleStop;
 import eu.gabier.protocol.ImportSettings;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.ProjectJdks;
 import eu.gabier.protocol.RanTests;
 import eu.gabier.protocol.SelectedTests;
 import java.nio.file.Path;
@@ -213,6 +214,34 @@ class ResultTextTest {
 
             assertThat(lines.getLast()).isEqualTo("idle stop: after 60 min with no request, 35 min 12s left");
             assertThat(lines.get(1)).isEqualTo("imports:");
+        }
+
+        @Test
+        void givesTheJdksTheProjectsAreBoundToBetweenTheImportsAndTheIdleStopOnlyWhenThereAreSome() {
+            var jdks = new ProjectJdks(
+                    List.of(new ProjectJdks.Binding("JavaSE-25", Path.of("/jdks/25"), "chosen in a file")),
+                    List.of("a warning" + ESCAPE + "\nforged"));
+            var status = new DaemonStatus(
+                    "0.1",
+                    4242,
+                    Duration.ofMillis(65432),
+                    Path.of("/work/demo"),
+                    JdtlsState.READY,
+                    Optional.empty(),
+                    ImportSettings.DEFAULTS,
+                    Optional.empty(),
+                    Optional.of(new IdleStop(Duration.ofMinutes(60), Duration.ofMinutes(35))),
+                    jdks);
+
+            var lines = ResultText.lines(status);
+
+            assertThat(lines.subList(lines.indexOf("jdks:"), lines.size() - 1))
+                    .containsExactly(
+                            "jdks:",
+                            "  JavaSE-25 /jdks/25 (chosen in a file)",
+                            "  warning: a warning" + ESCAPED + "\\u000aforged");
+            assertThat(lines.getLast()).startsWith("idle stop");
+            assertThat(ResultText.lines(this.status)).doesNotContain("jdks:");
         }
 
         @Test

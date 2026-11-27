@@ -34,7 +34,16 @@ public final class Operations {
                  where it comes from, .settings (.settings/org.eclipse.jdt.ui.prefs), .vscode (.vscode/settings.json) or\
                  the default of the language server. The files are read when status is asked, so a file edited a moment\
                  ago is already in it. They are the member imports of the result (importOrder, starThreshold,\
-                 staticStarThreshold, each with its value and its source).\
+                 staticStarThreshold, each with its value and its source).
+                Once jdtls is ready it shows the JDK each execution environment of the projects (JavaSE-25) is bound\
+                 to, and who chose it: the project (chosen in .vscode/settings.json, the setting\
+                 java.configuration.runtimes, a list of {"name": "JavaSE-25", "path": "<folder of a JDK>"}) or the\
+                 language server (bound by jdtls: one of the JDKs of that version that the machine holds, which can\
+                 differ from one machine to another). The setting is read when jdtls starts, so a change counts\
+                 once the daemon is stopped and started again. An entry that names a folder that is no JDK, or a\
+                 JDK of another version than its name, is left out and shown as a warning with its cause; so is an environment bound\
+                 to another JDK than the one chosen. They are the member jdks of the result (bindings, each with\
+                 environment, home and source, and warnings), absent while there is nothing to say.\
                 """, List.of(), List.of());
 
     public static final Operation START = new Operation(

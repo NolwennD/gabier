@@ -3,6 +3,7 @@ package eu.gabier.daemon;
 import eu.gabier.editing.domain.JavaLanguageServer;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.ProjectJdks;
 import eu.gabier.testing.domain.ProjectBuild;
 import eu.gabier.testing.domain.TestRunner;
 import java.io.IOException;
@@ -31,6 +32,9 @@ interface ServedProject extends JavaLanguageServer, ProjectBuild, AutoCloseable 
 
     /** What the language server is doing while it is {@code STARTING}; empty in any other state. */
     Optional<JdtlsProgress> jdtlsProgress();
+
+    /** The JDKs the language server bound the projects to and who chose them; none until it is ready. */
+    ProjectJdks jdks();
 
     /**
      * Why the language server is {@code FAILED}, as it or the daemon said it; empty when it is not failed or the reason

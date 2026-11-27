@@ -21,6 +21,7 @@ import eu.gabier.editing.fixtures.Scenario;
 import eu.gabier.editing.fixtures.Scenarios;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.ProjectJdks;
 import eu.gabier.testing.domain.BuiltProject;
 import eu.gabier.testing.domain.ChangedBuild;
 import eu.gabier.testing.domain.TestRunner;
@@ -226,6 +227,11 @@ public final class FakeServedMain {
         @Override
         public Optional<JdtlsProgress> jdtlsProgress() {
             return Optional.empty();
+        }
+
+        @Override
+        public ProjectJdks jdks() {
+            return ProjectJdks.NONE;
         }
 
         @Override

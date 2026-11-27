@@ -3,6 +3,7 @@ package eu.gabier.daemon;
 import eu.gabier.daemon.JdtlsRuntimes.Jdk;
 import eu.gabier.daemon.JdtlsWorkspace.Remembered;
 import eu.gabier.editing.domain.LanguageServerException;
+import eu.gabier.protocol.ProjectJdks;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
@@ -58,6 +59,10 @@ final class JdtlsSession implements AutoCloseable {
     private List<Path> projects = List.of();
     /** The JDKs jdtls bound the projects to, as it said when it was ready: what the next start declares. */
     private List<Jdk> bound = List.of();
+    /** What the project chose for the JDKs of its environments ({@link RuntimeSources}), read when the start began. */
+    private RuntimeSources.Chosen chosen = new RuntimeSources.Chosen(List.of(), List.of());
+    /** The JDKs the projects are bound to and who chose them, as {@code status} says them. */
+    private volatile ProjectJdks jdks = ProjectJdks.NONE;
 
     private final Set<ProcessHandle> started = ConcurrentHashMap.newKeySet();
     private final Thread recorder;
@@ -240,6 +245,11 @@ final class JdtlsSession implements AutoCloseable {
         }
     }
 
+    /** The JDKs the projects are bound to and who chose them; none until the session is ready. */
+    ProjectJdks jdks() {
+        return jdks;
+    }
+
     /** The raw language server, for whoever keeps talking to jdtls. */
     JdtlsServer server() {
         return server;
@@ -301,8 +311,13 @@ final class JdtlsSession implements AutoCloseable {
         var initialize = new InitializeParams();
         initialize.setRootUri(settings.projectRoot().toUri().toString());
         initialize.setCapabilities(JdtlsCapabilities.forRefactoring());
+        chosen = settings.runtimes().read(settings.projectRoot());
+        chosen.warnings().forEach(warning -> log.accept("JDKs: " + warning));
+        chosen.choices()
+                .forEach(choice -> log.accept("JDK chosen for " + choice.jdk().name() + ", " + choice.source() + ": "
+                        + choice.jdk().home()));
         initialize.setInitializationOptions(Map.of(
-                "settings", JdtlsSettings.javaPreferences(),
+                "settings", JdtlsSettings.javaPreferences(chosen.jdks()),
                 "extendedClientCapabilities", JdtlsCapabilities.extended()));
         watch.await("the answer to initialize", () -> server.initialize(initialize));
         // Telling jdtls that the client is ready is part of the wait: writing to a jdtls that died throws.
@@ -313,31 +328,33 @@ final class JdtlsSession implements AutoCloseable {
         projects = importedProjects();
         bound = boundRuntimes();
         pinTheRuntimes();
+        jdks = JdtlsRuntimes.describe(bound, chosen);
     }
 
     /**
-     * Declares to jdtls the JDKs it bound the projects to ({@link JdtlsRuntimes}), unless the workspace was already
-     * pinned to the same ones: jdtls then makes each the default of its execution environment and keeps that in the
-     * workspace, so that the next start, which builds before the client says anything, binds them the same. The
-     * declaration that does not change what jdtls bound builds nothing (measured).
+     * Declares to jdtls the JDKs the projects are to be bound to ({@link JdtlsRuntimes}): jdtls makes each the default of
+     * its execution environment and keeps that in the workspace, so that the next start, which builds before the client
+     * says anything, binds them the same. They are the JDKs the project chose ({@link RuntimeSources}) in place of the
+     * ones jdtls drew, and, in a workspace that is kept, the draw of jdtls for the other environments, unless the
+     * workspace was already pinned to the same ones. A declaration that does not change what jdtls bound builds nothing
+     * (measured), so nothing is sent then. What jdtls binds afterwards is asked again: it is what the status says.
      */
-    private void pinTheRuntimes() {
+    private void pinTheRuntimes() throws InterruptedException {
+        List<Jdk> wanted = JdtlsRuntimes.overlay(bound, chosen.jdks());
         List<Jdk> pinned = workspace.remembered().map(Remembered::runtimes).orElse(List.of());
-        if (!bound.isEmpty() && !bound.equals(pinned)) {
-            configure(JdtlsRuntimes.settings(bound));
+        boolean pinTheDraw = workspace.kept().isPresent() && !bound.isEmpty() && !bound.equals(pinned);
+        if (!wanted.equals(bound) || pinTheDraw) {
+            configure(JdtlsRuntimes.settings(wanted));
+            bound = boundRuntimes();
         }
     }
 
     /**
-     * The JDKs jdtls bound the projects to ({@code java.project.getSettings}, {@value JdtlsRuntimes#VM_LOCATION}), for the
-     * next start to declare. A start does not fail for it: when jdtls does not say, nothing is declared next time. A
-     * workspace that is not kept is not asked: nothing is remembered from it.
+     * The JDKs jdtls bound the projects to ({@code java.project.getSettings}, {@value JdtlsRuntimes#VM_LOCATION}), for
+     * the status and for the next start to declare. A start does not fail for it: when jdtls does not say, nothing is
+     * known of them.
      */
     private List<Jdk> boundRuntimes() throws InterruptedException {
-        if (workspace.kept().isEmpty()) {
-            return List.of();
-        }
-
         List<@Nullable Object> answers = new ArrayList<>();
         for (Path project : projects) {
             var command = new ExecuteCommandParams(

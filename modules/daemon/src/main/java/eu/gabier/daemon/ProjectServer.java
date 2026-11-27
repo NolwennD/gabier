@@ -14,6 +14,7 @@ import eu.gabier.editing.domain.ReferenceLocations;
 import eu.gabier.editing.domain.TypeKind;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.ProjectJdks;
 import eu.gabier.testing.domain.BuiltProject;
 import eu.gabier.testing.domain.ChangedBuild;
 import eu.gabier.testing.domain.TestRunner;
@@ -138,6 +139,13 @@ final class ProjectServer implements ServedProject {
         var server = current;
 
         return server == null ? Optional.empty() : server.progress();
+    }
+
+    @Override
+    public ProjectJdks jdks() {
+        var server = current;
+
+        return server == null ? ProjectJdks.NONE : server.jdks();
     }
 
     @Override

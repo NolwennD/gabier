@@ -26,6 +26,7 @@ import eu.gabier.editing.domain.TypeKind;
 import eu.gabier.editing.fixtures.FakeOnly;
 import eu.gabier.protocol.JdtlsProgress;
 import eu.gabier.protocol.JdtlsState;
+import eu.gabier.protocol.ProjectJdks;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -677,12 +678,16 @@ class JdtlsLanguageServerTest {
     @Nested
     class WhereItIs {
 
+        @TempDir
+        Path folder;
+
         @Test
         void isStartingWhileJdtlsImports() throws Exception {
             fake.neverAnswersInitialize();
 
             try (var server = start()) {
                 assertThat(server.state()).isEqualTo(JdtlsState.STARTING);
+                assertThat(server.jdks()).isEqualTo(ProjectJdks.NONE);
                 assertThat(server.failure()).isEmpty();
             }
         }
@@ -734,6 +739,20 @@ class JdtlsLanguageServerTest {
                 Thread.sleep(10);
             }
             assertThat(server.progress().map(JdtlsProgress::phase)).contains(phase);
+        }
+
+        @Test
+        void saysTheJdksTheProjectsAreBoundToOnceItIsReadyAndNoneBefore() throws Exception {
+            Path home = Files.createDirectories(folder.resolve("jdk-25"));
+            Files.writeString(home.resolve("release"), "JAVA_VERSION=\"25.0.2\"\n");
+            fake.bindsAsJdtlsDoes(home);
+
+            try (var server = start()) {
+                server.awaitReady();
+
+                assertThat(server.jdks().bindings())
+                        .containsExactly(new ProjectJdks.Binding("JavaSE-25", home, "bound by jdtls"));
+            }
         }
 
         @Test

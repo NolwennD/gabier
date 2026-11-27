@@ -1,5 +1,6 @@
 package eu.gabier.daemon;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -153,6 +154,10 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     private CompletableFuture<WorkspaceEdit> cleanupAnswer = new CompletableFuture<>();
     private final List<TextDocumentIdentifier> cleanupRequests = new CopyOnWriteArrayList<>();
     private final List<Object> configurations = new CopyOnWriteArrayList<>();
+    /** The JDK the projects are bound to, for a fake that binds as jdtls does ({@link #bindsAsJdtlsDoes}). */
+    private volatile @Nullable Path boundJdk;
+
+    private volatile boolean readsInitializationOptions = true;
     private CompletableFuture<JdtlsServer.RefactorEdit> moveAnswer = new CompletableFuture<>();
     private final List<JdtlsServer.MoveParams> moveRequests = new CopyOnWriteArrayList<>();
     private volatile Consumer<JdtlsServer.MoveParams> onMove = params -> {};
@@ -464,6 +469,41 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
     FakeJdtls boundToJdk(Path home) {
         return answersForEachProject(
                 "java.project.getSettings", uri -> Map.of(JdtlsRuntimes.VM_LOCATION, home.toString()));
+    }
+
+    /**
+     * Binds the projects as the real jdtls does, which {@code JdtlsRuntimesReplayTest} replays: to the JDK it draws
+     * ({@code drawn}) until a client declares one in {@code java.configuration.runtimes}, in its initialization options
+     * (a new workspace is bound to it at once) or with {@code workspace/didChangeConfiguration} (the binding changes at
+     * once), and an entry whose folder does not exist is ignored. The fake has one environment: the first entry that
+     * can be used binds every project.
+     */
+    FakeJdtls bindsAsJdtlsDoes(Path drawn) {
+        this.boundJdk = drawn;
+        return answersForEachProject(
+                "java.project.getSettings", uri -> Map.of(JdtlsRuntimes.VM_LOCATION, String.valueOf(boundJdk)));
+    }
+
+    /**
+     * A jdtls on a kept workspace builds before it reads what the client says in its initialization (measured, see
+     * {@code docs/daemon.md}), so the JDKs it declares there bind nothing: only {@code didChangeConfiguration} does.
+     */
+    FakeJdtls ignoringTheInitialization() {
+        this.readsInitializationOptions = false;
+        return this;
+    }
+
+    private void declares(JsonObject java) {
+        if (!java.has("configuration")) {
+            return;
+        }
+        for (JsonElement runtime : java.getAsJsonObject("configuration").getAsJsonArray("runtimes")) {
+            Path declared = Path.of(runtime.getAsJsonObject().get("path").getAsString());
+            if (declared.toFile().exists()) {
+                boundJdk = declared;
+                return;
+            }
+        }
     }
 
     /** The commands of a project received, each with its arguments as JSON, in the order they came. */
@@ -791,6 +831,13 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
         @Override
         public CompletableFuture<InitializeResult> initialize(InitializeParams params) {
             initializeParams.complete(params);
+            if (boundJdk != null && readsInitializationOptions) {
+                declares(new Gson()
+                        .toJsonTree(params.getInitializationOptions())
+                        .getAsJsonObject()
+                        .getAsJsonObject("settings")
+                        .getAsJsonObject("java"));
+            }
             onInitialize.run();
             if (!answersInitialize) {
                 return new CompletableFuture<>();
@@ -1021,6 +1068,12 @@ final class FakeJdtls implements JdtlsStarter, AutoCloseable {
                 public void didChangeConfiguration(DidChangeConfigurationParams params) {
                     received.add("didChangeConfiguration");
                     configurations.add(params.getSettings());
+                    if (boundJdk != null) {
+                        declares(new Gson()
+                                .toJsonTree(params.getSettings())
+                                .getAsJsonObject()
+                                .getAsJsonObject("java"));
+                    }
                 }
 
                 @Override
