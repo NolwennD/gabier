@@ -385,7 +385,7 @@ is bound at once; a folder that does not exist is ignored without a word. A JDK 
 is bound to it as if it were right (observed once with a JDK 21 declared as `JavaSE-25`; not replayed, as it needs a JDK of
 another version on the machine). So the daemon checks each entry itself, with the file `release` of the JDK: an
 entry whose path is not absolute, is no JDK, or is a JDK of another version than its name is left out, and the cause is a
-warning in the log of the daemon and in `gabier status`; the JDK jdtls draws is then used. Only the first entry of an
+warning in the log of the daemon and in `gabier status`; the JDK jdtls draws is then used. Only the first valid entry of an
 environment counts. The setting is read when jdtls starts: a change takes a restart of the daemon (`gabier stop`). The daemon
 gives the chosen JDKs in the initialization options and, once jdtls is ready, declares them again when jdtls is bound to
 another JDK than the chosen one (a kept workspace was bound to the previous choice), which builds the projects of that

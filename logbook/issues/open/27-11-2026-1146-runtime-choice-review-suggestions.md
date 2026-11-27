@@ -1,6 +1,6 @@
 # The JDK choice declares what it says, and keeps test conveniences out of main code
 
-Opened: 27-11-2026 12:00
+Opened: 27-11-2026 11:46
 On hold: findings of the review of `27-11-2026-1011-the-jdk-of-an-environment-can-be-chosen`, no real use shows them yet.
 
 Hardening of the JDK choice (`JdtlsRuntimes.overlay`, `JdtlsSession`, `JdtlsSettings`, `DaemonStatus`).
