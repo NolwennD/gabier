@@ -12,6 +12,8 @@ answered `diagnostics --all` in 3 s.
 An agent that opens a new worktree of a big project gets either a ready jdtls, or a failure that says what to do, instead
 of a start that times out and a first call that fails for a different reason.
 
+Depends on: the issue `jdtls-budget-15-minutes-and-settable` (the budget of a start is raised and set by a variable there).
+
 Done when:
 - The cause is established first, on a real run of such a project: where the 300 s go (the import, the Maven resolution,
   the machine), with the figures in the resolution; the documentation of jdtls is read for a setting before any code.
