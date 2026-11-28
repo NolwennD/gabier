@@ -8,7 +8,7 @@ version = "2.98.0.6"
 # ripwire: a read-only map of a codebase (links by name, not semantics) to orient an agent before it reads code.
 # Never run its install.sh: it activates skills for the whole account.
 [tools."github:redhat-et/ripwire"]
-version = "0.6.9"
+version = "0.7.0"
 
 [vars]
 # jdtls (the Eclipse JDT language server) has no mise registry entry and no GitHub release: Eclipse publishes tarballs.
