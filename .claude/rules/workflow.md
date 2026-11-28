@@ -113,10 +113,11 @@ say in the answer that the worktree is still standing, and where).
 The repository is published on GitHub (`origin`, `github.com/NolwennD/gabier`, decision of the user, 02-11-2026), and
 `main` is protected. Only the supervisor pushes; a worker never pushes. `main` is never rewritten; a ticket's branch is pushed
 again only with `--force-with-lease`, after a rebase. Code (anything but `.md`
-files) reaches `main` through a pull request: the supervisor pushes the branch of the ticket and opens it with `gh pr
+files and that pin) reaches `main` through a pull request: the supervisor pushes the branch of the ticket and opens it with `gh pr
 create`, merges it fast-forward on the local `main` once its check is green, and pushes `main`, which GitHub marks as the
 merge of the pull request, so the hashes the resolutions cite stay true. A commit of `.md` files only (issues, rules,
-skills, documents) is pushed to `main` directly, through the bypass of the protection that the owner holds. The rulesets
+skills, documents), or one that changes only the pin of ripwire (`.config/mise/conf.d/ripwire.toml`: a tool that orients the
+agent, which reaches no code and no gate; decision of the user, 28-11-2026), is pushed to `main` directly, through the bypass of the protection that the owner holds. The rulesets
 of GitHub are `main` (a pull request, the check `bin-ci`, a linear history, no force-push or deletion) and `release tags`
 (no `v*` tag is created, moved or deleted but by the owner, whose push of a tag publishes a release, `release.yml`); both
 let the admin role bypass them. A tag is pushed by the supervisor only, with the user's go, and only once `docs/releases/<version>.md` (what changed in the

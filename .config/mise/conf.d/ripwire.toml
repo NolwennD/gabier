@@ -1,0 +1,6 @@
+# ripwire: a read-only map of a codebase (links by name, not semantics) to orient an agent before it reads code.
+# Never run its install.sh: it activates skills for the whole account.
+# Its pin has a file of its own, so that a bump reaches no build and no workflow (the caches of the CI are warmed when
+# `mise.toml` changes): it goes to `main` directly, with no pull request and no check (`.claude/rules/workflow.md`).
+[tools."github:redhat-et/ripwire"]
+version = "0.7.0"
